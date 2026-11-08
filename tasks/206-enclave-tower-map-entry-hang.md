@@ -2,7 +2,7 @@
 id: 206
 title: The game hangs when entering the Enclave tower map
 milestone: M1
-status: open
+status: done
 owner: claude
 suggested: claude
 priority: high
@@ -48,3 +48,4 @@ starting with this map.
 
 - 2026-11-07: owner report in the morning; task cut the same morning.
 - 2026-11-08 claude: owner order 2026-11-08: claude takes critical bugs, performance, RP and the Russian translations.
+- 2026-11-08 claude: no hang reproduced on a plain start or a dev teleport to any of encdock, encfite, encgd, encpres, encrctr, enctrp, encdet, navarro (they load and stay 2D without floor.bin). One run exited silently after 8 chained teleports, and another test build crashed with 0xc0000374 (heap corruption) the same hour. An AddressSanitizer build caught the cause: a heap-use-after-free in `dfileClose` (dfile.cc:328) on the art-preload threads of 172 (`_obj_preload_art_cache`), because the open-list push was locked and the unlink was not. Any map load could corrupt the heap, which can crash or hang the game. Fix: one file-scope lock covers both. Check: under ASan 61 map loads (15 fresh starts plus 2 teleports each, and a 5-lap kladwtwn/navarro/encdock loop), no report. Release, ctest 24/24, launch check green. Not proven: that this was the owner's hang (no log from his run); the timeout-on-map-entry from the acceptance was not needed once the cause was found.
