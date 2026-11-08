@@ -209,6 +209,8 @@ extern int gSceneShadowIdsLocation;
 extern int gSceneShadowOccupancyLocation;
 extern int gSceneShadowOccupancyOnLocation;
 extern int gSceneShadowStrengthLocation;
+extern int gSceneMoonStrengthLocation;
+extern int gSceneMoonDirectionLocation;
 extern int gSceneShadowDensityLocation;
 extern int gSceneShadowLightLocation;
 extern int gSceneShadowStepLocation;
@@ -234,6 +236,11 @@ extern int gSceneShadowFeetLocation;
 // their world-space wind offset.
 extern int gSceneCloudOnLocation;
 extern int gSceneCloudOffsetLocation;
+// The ground's baked light and shadow (157): 1 captures it into the
+// half-resolution buffer (unit 7), 2 has the floor tiles sample it, 0 the
+// usual per-pixel path for everything else.
+extern int gSceneGroundBakeModeLocation;
+extern int gSceneGroundBakeMapLocation;
 
 bool createSceneShader(std::string* error);
 void destroySceneShader();
@@ -244,6 +251,11 @@ extern unsigned int gFloorVao;
 extern unsigned int gFloorTexture;
 extern int gFloorVertexCount;
 extern bool gFloorLoaded;
+// The sea past the map's water edges (168): the vertex range in the floor's
+// buffer, drawn in flight and turned views only, flat in gFloorSeaColor.
+extern int gFloorExtensionFirst;
+extern int gFloorExtensionCount;
+extern float gFloorSeaColor[3];
 
 void destroyStaticFloor();
 
