@@ -175,3 +175,26 @@ vctyctyd 13e788383eff / cave0 71f851ba8218; before rows from
 | newr1 | 295/297 -> 46/48 | 2609/2524 | 2397/2319 |
 | vctyctyd | 260 -> 45 | 1827 | 1508 |
 | cave0 | 0.1 -> 0.8 | 638 | 619 |
+
+## the scene PNG decodes in parallel (2026-11-08, glm)
+
+Walls: the pages decode over up to 4 workers (read + decode + alpha
+validation on private buffers), the upload loop is untouched. The
+walls_decode scope now reads as the longest page (157 ms on newr1)
+instead of the sum of the pages (~240 ms). Floor: roof_fringe.png
+decodes in one worker while tiles.png decodes on the main path.
+
+Second chain, warm OS cache (kladwtwn 95bda9a8ea6f / newr1 b13ecbf0a06c
++ b3cdd3edee9a / vctyctyd 12e4225a3ff2 / cave0 a9e8a1beca8b; before rows
+from 5d5d0b2cd2e4 / 5a825a4592af / 13e788383eff / 71f851ba8218):
+
+| map | walls before | walls after | scene_total before | scene_total after | first_frame before | first_frame after |
+| --- | --- | --- | --- | --- | --- | --- |
+| kladwtwn | 313 (decode 240ish) | 221 | 408 | 337 | 1793 | 1710 |
+| newr1 | 320 | 212/181 | 437 | 329/280 | 2397/2319 | 2280/2230 |
+| vctyctyd | 176 | 182 | 247 | 280 | 1508 | 1637 |
+| cave0 | 12 | 37 | 60 | 113 | 619 | 701 |
+
+The first_frame column swings +-100 ms between identical runs (driver and
+OS cache); the scene stage's own drop of ~90-110 ms on the big maps is
+the lever. Pixel-identical: 0 changed px on all four maps.
