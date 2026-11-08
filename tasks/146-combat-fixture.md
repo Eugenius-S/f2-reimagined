@@ -118,3 +118,5 @@ header; kept main's current board fields (`todo`, `any`, tier 3) and preserved
 the combat task text and blocker log. No new runtime attempt was made after
 the two documented startup timeouts. PR #220 stays draft; four-phase 3D and
 Classic captures remain outstanding.
+
+- 2026-11-08 glm: the fixture tooling landed as PR #220 (conflicts with main's save-preview fixture resolved by keeping both). The fixture's own captures still stall after preview startup; tasks 135/149 acceptance wait on it.

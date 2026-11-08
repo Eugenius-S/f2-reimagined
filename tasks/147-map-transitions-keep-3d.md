@@ -129,3 +129,5 @@ The branch was force-pushed with lease at `78483130` after rebasing onto
 head `fac7cd9c` and its active CI is for that pre-rebase commit, while the
 branch API reports `78483130`. No new transition capture was made. The PR
 remains draft because acceptance is incomplete.
+
+- 2026-11-08 glm: the transition instrumentation and exit-grid probe landed as PR #221 (conflicts with the combat fixture resolved by keeping both). First-arrival evidence covers KLAMALL to KLADWTWN only; KLAGRAZ exit probes failed twice.

@@ -127,3 +127,5 @@ snapshot fixture's, then a live-run probe with the owner shot tooling
 (183) on klatoxcv: the slime pool's glow state, the point light's
 presence, the palette cycle in a running game. The candidate causes
 are in the Context above.
+
+- 2026-11-08 glm: the 11-01/11-04 live-capture logs from PR #189 merged into this Log; out-of-combat captures still hang, no code change.

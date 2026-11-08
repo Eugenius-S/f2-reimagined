@@ -85,3 +85,5 @@ Blocked: The combat fixture PR #220 is draft after two startup failures, and the
 Check: `runs/149-combat-overlays-follow-view/devhero-20261105-153127-000-zoom2-unturned-bark.jpg` and sidecar; #220 is still draft at 3751e138, #300 remains draft.
 
 - 2026-11-08 glm: the fly-camera projection work landed as PR #300 (6e65fccb); what 149 still owes (matched combat captures at zoom 0.5/1/2, turns 0/+30/-30) waits on task 146's fixture.
+
+- 2026-11-08 glm: the fly-camera projection work landed as PR #300 (6e65fccb). Still owed: matched combat captures at zoom 0.5/1/2 and turns 0/+30/-30, waiting on task 146's fixture.

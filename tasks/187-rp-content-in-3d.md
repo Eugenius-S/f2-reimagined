@@ -126,3 +126,5 @@ Check: `build/rp-export-refresh-20261106.log`, `build/tour/before/sfsheng-e0/`,
 `build/test-run/runs/98a736374b6f/`; Release build, CTest 20/20 and exporter
 tests 137/137 passed.
 - 2026-11-08 claude: folded into 186; what is left is in its Acceptance.
+
+- 2026-11-08 glm: landed as PR #289 (71f9d9481): PID -1 helpers no longer render, the reset-floor light is not an emitter, RP tour spots and startup shipped; a full vanilla-map scan proved the exporter change affects no exported vanilla map (epamain1/2 and epax are outside every export group; the Klamath export is byte-identical). Still owed: RP live acceptance (SFSHENG e1 after timed out at 132 s).
