@@ -763,6 +763,8 @@ static void renderPresentBody()
     const Uint64 sharpStart = SDL_GetPerformanceCounter();
     const bool sharpTextReady = scene_renderer::prepareSharpTextForPresent(gSdlSurface, gSdlTextureSurface, uiVisible);
     const Uint64 sharpEnd = SDL_GetPerformanceCounter();
+    // 172: the chain's split of the first present (the between-presents gap).
+    scene_renderer::perfLoadMark("ff_sharp_done");
     // A frame without the 3D scene (combat, dialog, ...) lands the fly camera
     // before the game takes input again.
     if (scene_renderer::staticFlyCameraActive()
@@ -776,6 +778,8 @@ static void renderPresentBody()
             const Uint64 refreshStart = SDL_GetPerformanceCounter();
             devtools::scenePresented(scene::refreshForPresent());
             const Uint64 refreshEnd = SDL_GetPerformanceCounter();
+            // 172: the chain's split of the first present (the between-presents gap).
+            scene_renderer::perfLoadMark("ff_refresh_done");
             const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
             syncMs += static_cast<double>(syncEnd - presentStart) * toMs;
             sharpMs += static_cast<double>(sharpEnd - sharpStart) * toMs;

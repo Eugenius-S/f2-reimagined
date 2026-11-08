@@ -224,3 +224,39 @@ Dead ends measured and dropped:
   idle), so the cap stays at 4.
 - objects_load (~560 ms on newr1) is the engine's serial objectRead over
   one stream; splitting it needs a restructure, not a warm.
+
+## the proto .lst miss re-read, cached (2026-11-08, glm)
+
+The probes first split the object loop (PerfSum spans, one line per
+section) and the first-present gap. objects_read was 552 of the 560 ms
+of objects_load on newr1, and the ~450 ms between the scene's first
+draw and the Full present is the devshot's own takeSnapshot (frame
+readback plus PNG encode, dev tooling; the owner's game does not pay
+it). A buffered section (one bulk read, then the section parsed from a
+memory stream) left objects_read at 547 ms - the tiny reads were not
+the cost. It was protoGetProto's misses: every miss re-read and
+re-walked the type's .lst to find the .pro's name (~2 ms each), and
+objectDataRead misses once per unique item or scenery pid (the parse
+needs the proto's subtype to know its tail's field count).
+
+The fix: each type's .lst table loads once into memory, with the same
+space and end-of-line cuts as the old walk, so a miss pays the .pro
+read alone. The buffer experiment came back out. Second chain, warm OS
+cache (newr1 before = cf2d297ba33a, after = 7dbe555c6173; kladwtwn
+c43402292bd3, vctyctyd d7be2063d99d, cave0 ada9387d42e3; before
+first_frame from the PNG-decode table above, whose runs predate this
+one by only the mark-only #364):
+
+| map | objects_read before | objects_read after | map_load before | map_load after | first_frame before | first_frame after |
+| --- | --- | --- | --- | --- | --- | --- |
+| kladwtwn | - | 48.29 (n=9204) | - | 606 | 1710 | 1306 |
+| newr1 | 551.72 (n=10472) | 78.08 | 1304 | 806 | 2089 | 1668 |
+| vctyctyd | - | 42.67 (n=7130) | - | 462 | 1637 | 1242 |
+| cave0 | - | 6.95 (n=1904) | - | 183 | ~700 | 597 |
+
+All four maps hold the 2 s budget with the dev-shot overhead included;
+the owner's side sits under it by half a second and more. The chain's
+next candidates: the ~150 ms between map_objects and map_elevation
+(critter combat data fix plus mapSetElevation), art_preload ~390 ms
+(capped at 4 threads), the object-card atlas rebuild on the first
+refresh (~57 ms). ctest 24/24.

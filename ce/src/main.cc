@@ -51,6 +51,7 @@
 #include "devtools/devtools.h"
 #include "devtools/owner_shot.h"
 #include "scene/scene_view.h"
+#include "scene_renderer/perf.h"
 #include "worldmap.h"
 
 namespace fallout {
@@ -499,9 +500,14 @@ static void mainLoop()
             continue;
         }
 
+        // 172: the loop's stages in the load chain, so the gap between the
+        // scene's first draw and the first Full present reads as its owner.
+        scene_renderer::perfLoadMark("loop_input");
         scriptsHandleRequests();
+        scene_renderer::perfLoadMark("loop_scripts");
 
         mapHandleTransition();
+        scene_renderer::perfLoadMark("loop_transition");
 
         // Sprite-lighting mod: dev-panel pending elevation corrections are
         // applied here - after a completed mapHandleTransition, in the main
@@ -511,6 +517,7 @@ static void mainLoop()
         if (devtools::sceneStartupReady()) {
             scene::syncSettings(devtools::suppressInitialSceneEnable());
         }
+        scene_renderer::perfLoadMark("loop_sync");
 
         if (_main_game_paused != 0) {
             _main_game_paused = 0;
@@ -530,6 +537,7 @@ static void mainLoop()
         // loop at whatever the render costs. The world itself advances by
         // real time, so a faster picture does not speed the game up.
         sharedFpsLimiter.throttle(settings.scene3d.fps_limit);
+        scene_renderer::perfLoadMark("loop_present");
 
         const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
         inputMs += static_cast<double>(inputEnd - loopStart) * toMs;

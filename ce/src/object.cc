@@ -542,6 +542,12 @@ static int objectLoadAllInternal(File* stream)
         memset(gObjectFids, 0, sizeof(*gObjectFids) * objectCount);
     }
 
+    // 172: the object loop's split, one summary line per span (the reads
+    // against everything else), not a write per object.
+    scene_renderer::PerfSum allocSum("objects_alloc");
+    scene_renderer::PerfSum readSum("objects_read");
+    scene_renderer::PerfSum restSum("objects_rest");
+
     for (MapElevation elevation = ELEVATION_FIRST; elevation < ELEVATION_COUNT; elevation++) {
         int objectCountAtElevation;
         if (fileReadInt32(stream, &objectCountAtElevation) == -1) {
@@ -558,6 +564,7 @@ static int objectLoadAllInternal(File* stream)
         for (int objectIndex = 0; objectIndex < objectCountAtElevation; objectIndex++) {
             ObjectListNode* objectListNode;
 
+            allocSum.start();
             // NOTE: Uninline.
             if (objectListNodeCreate(&objectListNode) == -1) {
                 return -1;
@@ -568,16 +575,19 @@ static int objectLoadAllInternal(File* stream)
                 objectListNodeDestroy(&objectListNode);
                 return -1;
             }
+            allocSum.stop();
 
+            readSum.start();
             if (objectRead(objectListNode->obj, stream) != 0) {
-                    // NOTE: Uninline.
-                    objectDeallocate(&(objectListNode->obj));
+                // NOTE: Uninline.
+                objectDeallocate(&(objectListNode->obj));
 
-                    // NOTE: Uninline.
-                    objectListNodeDestroy(&objectListNode);
+                // NOTE: Uninline.
+                objectListNodeDestroy(&objectListNode);
 
-                    return -1;
-                }
+                return -1;
+            }
+            readSum.stop();
             objectListNode->obj->outline = OUTLINE_TYPE_NONE;
             gObjectFids[gObjectFidsLength++] = objectListNode->obj->fid;
 
@@ -602,6 +612,7 @@ static int objectLoadAllInternal(File* stream)
             }
 
             Inventory* inventory = &(objectListNode->obj->data.inventory);
+            readSum.start();
             if (inventory->length != 0) {
                 inventory->items = (InventoryItem*)internal_malloc(sizeof(InventoryItem) * inventory->capacity);
                 if (inventory->items == nullptr) {
@@ -636,6 +647,7 @@ static int objectLoadAllInternal(File* stream)
                 inventory->capacity = 0;
                 inventory->items = nullptr;
             }
+            readSum.stop();
         }
     }
 

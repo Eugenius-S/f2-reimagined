@@ -142,3 +142,24 @@ Frame rate in play (157), settings changes (156).
   between-presents chunk, then the serial objectRead. Pixel-identical
   marks, ctest 23/23. Evidence: runs/172-location-load-time/phases.md.
 - 2026-11-08 claude: owner order 2026-11-08: glm, second after 239.
+- 2026-11-08, glm. The probes found the real cost, and it was not the
+  stream: objects_read was 552 of the 560 ms of objects_load on newr1
+  (PerfSum spans, one line per section), and the ~450 ms between the
+  scene's first draw and the Full present is the devshot's own
+  takeSnapshot - dev tooling, the owner's game does not pay it, so the
+  owner-side first frame was already ~1.6 s. A buffered object section
+  (bulk read + memory stream, since reverted) proved the tiny dfile
+  reads were ~5 ms; the cost was protoGetProto's misses -
+  objectDataRead needs each item's and scenery's proto subtype to know
+  its tail's field count, and every miss re-read and re-walked the
+  type's .lst (~2 ms each) to find the .pro's name. Fix: the .lst
+  tables load once per type into memory (same cuts as the old walk,
+  mutex-held: the parse warm parses from worker threads), a miss pays
+  the .pro read alone. objects_read 551.72 -> 78.08 ms and first_frame
+  2089 -> 1668 ms on newr1 (dev-shot overhead included), kladwtwn
+  1710 -> 1306, vctyctyd 1637 -> 1242, cave0 ~700 -> 597: all four
+  hold the 2 s budget. ctest 24/24, pixel regression pending on the
+  PR. Next candidates in runs/172-location-load-time/phases.md: the
+  ~150 ms map_objects -> map_elevation gap, art_preload ~390 ms, the
+  first-refresh object-card atlas ~57 ms. Evidence:
+  runs/172-location-load-time/phases.md.
