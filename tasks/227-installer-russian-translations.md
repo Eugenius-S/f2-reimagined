@@ -5,11 +5,11 @@ milestone: M1
 status: todo
 owner: any
 suggested: gpt
-priority: medium
-tier: 1
+priority: high
+tier: 0
 claude-only: no
 user-check: yes
-depends-on: []
+depends-on: [186]
 reviewed: no
 ---
 
@@ -71,3 +71,4 @@ translation's content.
 ## Log
 
 - 2026-11-08 claude: cut at the owner's request.
+- 2026-11-08 claude: goes right after 186 (the owner): depends on it, priority high.
