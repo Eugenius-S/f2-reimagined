@@ -336,3 +336,4 @@ first: a new task only when no open task or batch fits (AGENTS.md, Tasks).
   say 70% (-> 220, with the launcher fix); merged 183, 203, 208-210 and
   213-215 were still open on the board (closed); 218 had no header (added).
   Map coverage checked: the export groups hold all 152 playable maps.
+- 2026-11-08 (-> 191, find 1) The owner: the Den's chain-link fences are black walls with specks; the mesh holes should show what is behind.
