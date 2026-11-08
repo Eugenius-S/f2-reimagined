@@ -167,6 +167,9 @@ param(
     [switch]$FollowHero,
     [switch]$WalkProbe,
     [switch]$SkipScriptBlocking,
+    # Scan the active game root's loose scripts and DAT archives for sfall
+    # opcodes, metarules and hooks the current build does not register.
+    [switch]$ScanUnimplemented,
     [ValidateRange(0, 1000)]
     [int]$EffectFrame = -1,
     # -Shadows: keep sun and cloud shadows on in this background run (they are
@@ -480,6 +483,7 @@ if ($DevLoadGameSlot -gt 0) {
 }
 $arguments = @('--dev-tools')
 $arguments += '--dev-watchdog'
+if ($ScanUnimplemented) { $arguments += '--scan-unimplemented' }
 if ($SavePreviewFixture) { $arguments += '--dev-save-preview-fixture' }
 if ($ExistingSavePreviewFixture) { $arguments += '--dev-existing-save-preview-fixture' }
 if ($DevInput) { $arguments += "--dev-input=$([System.IO.Path]::GetFullPath($DevInput))" }
