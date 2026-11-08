@@ -38,8 +38,9 @@ constexpr const char* kDefaultUpdateBase =
     "https://github.com/Eugenius-S/f2-reimagined/releases/download/latest";
 constexpr const char* kDefaultReleaseInfoUrl =
     "https://api.github.com/repos/Eugenius-S/f2-reimagined/releases/tags/latest";
-constexpr const char* kRpuLatestApiUrl =
-    "https://api.github.com/repos/BGforgeNet/Fallout2_Restoration_Project/releases/latest";
+// The web page answers 302 to .../releases/tag/<tag>; unlike api.github.com it has no 60 requests/hour limit.
+constexpr const char* kRpuLatestUrl =
+    "https://github.com/BGforgeNet/Fallout2_Restoration_Project/releases/latest";
 constexpr const char* kGameExe = "fallout2-ce.exe";
 constexpr const char* kCfg = "fallout2.cfg";
 constexpr const char* kVersionTxt = "version.txt";
@@ -288,6 +289,58 @@ bool httpGet(const std::string& urlString, std::string* body, const char** error
         }
         ok = !body->empty();
         if (!ok) *errorText = "empty response";
+    }
+    if (request != nullptr) WinHttpCloseHandle(request);
+    if (connect != nullptr) WinHttpCloseHandle(connect);
+    WinHttpCloseHandle(session);
+    return ok;
+}
+
+// GET one url without following redirects and return the Location header of the answer.
+bool httpRedirectLocation(const std::string& urlString, std::string* location, const char** errorText)
+{
+    Url url;
+    if (!crackUrlWide(utf8ToWide(urlString), &url)) {
+        *errorText = "cannot parse url";
+        return false;
+    }
+    *errorText = nullptr;
+    HINTERNET session = WinHttpOpen(L"fallout2-ce-3d-launcher", proxyFor(url),
+        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (session == nullptr) {
+        *errorText = "WinHttpOpen failed";
+        return false;
+    }
+    WinHttpSetTimeouts(session, 10000, 15000, 30000, 300000);
+    HINTERNET connect = WinHttpConnect(session, url.host.c_str(), url.port, 0);
+    if (connect == nullptr) {
+        *errorText = "cannot connect";
+        WinHttpCloseHandle(session);
+        return false;
+    }
+    HINTERNET request = WinHttpOpenRequest(connect, L"GET", url.path.c_str(), nullptr, WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES, url.https ? WINHTTP_FLAG_SECURE : 0);
+    bool ok = request != nullptr;
+    if (!ok) {
+        *errorText = "cannot open request";
+    } else {
+        DWORD disable = WINHTTP_DISABLE_REDIRECTS;
+        WinHttpSetOption(request, WINHTTP_OPTION_DISABLE_FEATURE, &disable, sizeof(disable));
+        ok = WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+        if (!ok) *errorText = "send failed";
+    }
+    if (ok) {
+        ok = WinHttpReceiveResponse(request, nullptr);
+        if (!ok) *errorText = "receive failed";
+    }
+    if (ok) {
+        wchar_t buffer[2048] = {};
+        DWORD size = sizeof(buffer) - sizeof(wchar_t);
+        ok = WinHttpQueryHeaders(request, WINHTTP_QUERY_LOCATION, WINHTTP_HEADER_NAME_BY_INDEX,
+                 buffer, &size, WINHTTP_NO_HEADER_INDEX)
+            != FALSE;
+        if (ok) *location = wideToUtf8(buffer);
+        else *errorText = "no redirect from the release page";
     }
     if (request != nullptr) WinHttpCloseHandle(request);
     if (connect != nullptr) WinHttpCloseHandle(connect);
@@ -713,13 +766,15 @@ bool installRussianTranslation(const fs::path& root)
     fs::path translation = root / "mods" / "rpu_russian.dat";
     if (!fs::exists(translation)) {
         const char* networkError = nullptr;
-        std::string release;
-        if (!httpGet(kRpuLatestApiUrl, &release, &networkError)) {
+        std::string location;
+        if (!httpRedirectLocation(kRpuLatestUrl, &location, &networkError)) {
             logf("cannot reach the official RPU release (%s)",
                 networkError != nullptr ? networkError : "network error");
             return false;
         }
-        std::string tag = jsonStringValue(release, "tag_name");
+        const std::string marker = "/releases/tag/";
+        size_t at = location.find(marker);
+        std::string tag = at == std::string::npos ? std::string() : trim(location.substr(at + marker.size()));
         if (tag.empty()) {
             log("the official RPU release did not provide a version tag");
             return false;
@@ -848,6 +903,9 @@ bool fetchReleaseInfo(const std::string& updateBase, const std::string& releaseI
         std::string response;
         if (httpGet(releaseInfoUrl, &response, &error)) {
             *notes = shortNotes(jsonStringValue(response, "body"));
+        } else {
+            logf("release notes are unavailable (GitHub API rate limit or network: %s)",
+                error != nullptr ? error : "network error");
         }
     }
     return !version->empty();
