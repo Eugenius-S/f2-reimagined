@@ -58,6 +58,9 @@ unsigned int gTexture = 0;
 unsigned int gSharpTextTexture = 0;
 int gSharpTextTextureWidth = 0;
 int gSharpTextTextureHeight = 0;
+unsigned int gPatchTexture = 0; // 219: the small overlays (mark rectangles) keep their own texture
+int gPatchTextureWidth = 0;
+int gPatchTextureHeight = 0;
 int gTextureUniformLocation = -1;
 int gRectUniformLocation = -1;
 
@@ -307,6 +310,12 @@ void shutdown()
             gSharpTextTextureWidth = 0;
             gSharpTextTextureHeight = 0;
         }
+        if (gPatchTexture != 0) {
+            glDeleteTextures(1, &gPatchTexture);
+            gPatchTexture = 0;
+            gPatchTextureWidth = 0;
+            gPatchTextureHeight = 0;
+        }
         if (gVbo != 0) {
             glDeleteBuffers(1, &gVbo);
             gVbo = 0;
@@ -351,8 +360,34 @@ void drawSceneOverlay(const unsigned char* rgba, int width, int height, int pitc
 {
     if (!gInitialized || rgba == nullptr || width <= 0 || height <= 0) return;
     glViewport(0, 0, gWindowWidth, gWindowHeight);
-    drawOverlay(rgba, width, height, pitch, 0, 0, gLogicalWidth, gLogicalHeight);
+    // The game's own picture IS the quad texture's content: the cache's
+    // redraw (drawSceneOverlayCached) and the snapshots (presentStaticPreview)
+    // both read it back from here, so it must land in gTexture and never in
+    // the side patch texture - that one stays the mark rectangles' alone.
+    glEnable(kBlend);
+    glBlendFunc(1 /* GL_ONE */, kOneMinusSrcAlpha);
+    drawQuad(width, height, pitch, rgba, 0, 0, gLogicalWidth, gLogicalHeight);
+    glDisable(kBlend);
     gSceneOverlayReady = true;
+}
+
+// 219: the sharp-text cache hit redraws the game overlay already in the quad
+// texture - no blit, no rebuild, no upload (the frame's picture is unchanged).
+void drawSceneOverlayCached()
+{
+    if (!gInitialized || gTexture == 0) return;
+    glViewport(0, 0, gWindowWidth, gWindowHeight);
+    drawTextureQuad(gTexture, 0, 0, gLogicalWidth, gLogicalHeight);
+    gSceneOverlayReady = true;
+}
+
+void updateSceneOverlayRegion(const unsigned char* rgba, int pitch, int dstX, int dstY, int width, int height)
+{
+    if (!gInitialized || gTexture == 0 || rgba == nullptr || width <= 0 || height <= 0) return;
+    glBindTexture(kTexture2D, gTexture);
+    glPixelStorei(kUnpackRowLength, pitch / 4);
+    glTexSubImage2D(kTexture2D, 0, dstX, dstY, width, height, kRGBA, kUnsignedByte, rgba);
+    glPixelStorei(kUnpackRowLength, 0);
 }
 
 void drawOverlay(const unsigned char* rgba, int width, int height, int pitch, int dstX, int dstY, int dstW, int dstH)
@@ -361,10 +396,56 @@ void drawOverlay(const unsigned char* rgba, int width, int height, int pitch, in
         return;
     }
 
+    // 219: a patch of its own. The mark rectangles ride this path every
+    // frame; through the shared quad texture they would replace the cached
+    // game overlay the cache hit redraws.
+    if (width != gPatchTextureWidth || height != gPatchTextureHeight) {
+        if (gPatchTexture == 0) glGenTextures(1, &gPatchTexture);
+        glBindTexture(kTexture2D, gPatchTexture);
+        glPixelStorei(kUnpackRowLength, pitch / 4);
+        glTexImage2D(kTexture2D, 0, kRgba8, width, height, 0, kRGBA, kUnsignedByte, nullptr);
+        glTexParameteri(kTexture2D, kTextureMinFilter, kNearest);
+        glTexParameteri(kTexture2D, kTextureMagFilter, kNearest);
+        glTexParameteri(kTexture2D, kTextureWrapS, kClampToEdge);
+        glTexParameteri(kTexture2D, kTextureWrapT, kClampToEdge);
+        gPatchTextureWidth = width;
+        gPatchTextureHeight = height;
+    }
+    glBindTexture(kTexture2D, gPatchTexture);
+    glPixelStorei(kUnpackRowLength, pitch / 4);
+    glTexSubImage2D(kTexture2D, 0, 0, 0, width, height, kRGBA, kUnsignedByte, rgba);
+    glPixelStorei(kUnpackRowLength, 0);
+
     glEnable(kBlend);
     glBlendFunc(1 /* GL_ONE */, kOneMinusSrcAlpha);
-    drawQuad(width, height, pitch, rgba, dstX, dstY, dstW, dstH);
+    drawTextureQuad(gPatchTexture, dstX, dstY, dstW, dstH);
     glDisable(kBlend);
+}
+
+bool overlayLogicalToWindow(int logicalX, int logicalY, int* windowX, int* windowY)
+{
+    if (!gInitialized || windowX == nullptr || windowY == nullptr) return false;
+    int fitX;
+    int fitY;
+    int fitW;
+    int fitH;
+    if (!fitRect(gLogicalWidth, gLogicalHeight, gWindowWidth, gWindowHeight, &fitX, &fitY, &fitW, &fitH)) {
+        return false;
+    }
+    *windowX = fitX + logicalX * fitW / gLogicalWidth;
+    *windowY = fitY + logicalY * fitH / gLogicalHeight;
+    return true;
+}
+
+bool readPresentPixels(int windowX, int windowY, int width, int height, std::vector<unsigned char>& out)
+{
+    if (!gInitialized || width <= 0 || height <= 0) return false;
+    out.assign(static_cast<size_t>(width) * height * 4, 0);
+    // The caller speaks top-down window coordinates; GL reads bottom-up.
+    glPixelStorei(kPackAlignment, 1);
+    glReadPixels(windowX, gWindowHeight - windowY - height, width, height, kRGBA, kUnsignedByte, out.data());
+    glPixelStorei(kPackAlignment, kDefaultPackAlignment);
+    return glGetError() == 0;
 }
 
 bool sharpTextOutputSize(int* width, int* height)
@@ -380,7 +461,7 @@ bool uploadSharpTextOverlay(const unsigned char* rgba, int width, int height, in
 {
     if (!gInitialized || rgba == nullptr || width <= 0 || height <= 0 || pitch < width * 4
         || pitch % 4 != 0 || gSharpTextTexture == 0) return false;
-    while (glGetError() != 0) {
+    if (glErrorChecksEnabled()) while (glGetError() != 0) {
     }
     glActiveTexture(kTexture0);
     if (width != gSharpTextTextureWidth || height != gSharpTextTextureHeight) {
@@ -397,19 +478,19 @@ bool uploadSharpTextOverlay(const unsigned char* rgba, int width, int height, in
     glPixelStorei(kUnpackRowLength, pitch / 4);
     glTexSubImage2D(kTexture2D, 0, 0, 0, width, height, kRGBA, kUnsignedByte, rgba);
     glPixelStorei(kUnpackRowLength, 0);
-    return glGetError() == 0;
+    return !glErrorChecksEnabled() || glGetError() == 0;
 }
 
 bool drawSharpTextOverlay()
 {
     if (!gInitialized || gSharpTextTexture == 0 || gSharpTextTextureWidth <= 0 || gSharpTextTextureHeight <= 0) return false;
-    while (glGetError() != 0) {
+    if (glErrorChecksEnabled()) while (glGetError() != 0) {
     }
     glEnable(kBlend);
     glBlendFunc(1 /* GL_ONE */, kOneMinusSrcAlpha);
     drawTextureQuad(gSharpTextTexture, 0, 0, gLogicalWidth, gLogicalHeight);
     glDisable(kBlend);
-    return glGetError() == 0;
+    return !glErrorChecksEnabled() || glGetError() == 0;
 }
 
 void swap()
