@@ -439,6 +439,12 @@ if(BUILD_TESTING)
     target_include_directories(camera_turn_tests PRIVATE "src/scene")
     add_test(NAME camera_turn_tests COMMAND camera_turn_tests)
 
+    add_executable(launcher_progress_tests
+        "tests/launcher_progress/launcher_progress_test.cc"
+    )
+    target_include_directories(launcher_progress_tests PRIVATE "src")
+    add_test(NAME launcher_progress_tests COMMAND launcher_progress_tests)
+
     add_executable(preview_policy_tests
         "src/scene/preview_policy.cc"
         "tests/preview_policy/preview_policy_test.cc"

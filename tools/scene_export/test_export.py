@@ -5,6 +5,9 @@ import base64
 import gzip
 import json
 import struct
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
+from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -186,6 +189,25 @@ class TargetTests(unittest.TestCase):
             parse_args(["--map", "../kladwtwn"])
         with self.assertRaises(SystemExit):
             parse_args(["--maps", "kladwtwn,a/b"])
+
+    def test_maps_run_announces_its_scene_total_first(self):
+        # The launcher's progress bar counts the scene lines against this line.
+        class Fake:
+            tiles = {0: None, 1: None}
+        def load(name, _files):
+            if name == "bad":
+                raise ValueError("no such map")
+            return Fake()
+        def current(_gf, _root, name, _elevation, _out):
+            return name == "b"
+        out, err = StringIO(), StringIO()
+        with TemporaryDirectory() as tmp, mock.patch.object(export, "ReadOnlyGameFiles"),                 mock.patch.object(export.MapFile, "load", side_effect=load),                 mock.patch.object(export, "scene_current", side_effect=current),                 mock.patch.object(export, "export_scene"),                 redirect_stdout(out), redirect_stderr(err):
+            code = main(["--game-root", tmp, "--maps", "a,bad,b"])
+        lines = [json.loads(line) for line in out.getvalue().splitlines()]
+        self.assertEqual(lines[0], {"maps_total": 2, "scenes_total": 4})
+        self.assertEqual([line.get("current") for line in lines[1:]], [True, True])  # map b is up to date
+        self.assertIn("FAILED bad: no such map", err.getvalue())
+        self.assertEqual(code, 1)
 
     def test_force_flag(self):
         self.assertFalse(parse_args(["--maps", "all"]).force)
