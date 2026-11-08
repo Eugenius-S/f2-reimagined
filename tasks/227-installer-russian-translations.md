@@ -3,8 +3,8 @@ id: 227
 title: The installer offers every major Russian translation, not only RPU
 milestone: M1
 status: todo
-owner: any
-suggested: gpt
+owner: claude
+suggested: claude
 priority: high
 tier: 0
 claude-only: no
@@ -72,3 +72,4 @@ translation's content.
 
 - 2026-11-08 claude: cut at the owner's request.
 - 2026-11-08 claude: goes right after 186 (the owner): depends on it, priority high.
+- 2026-11-08 claude: owner order 2026-11-08: claude takes critical bugs, performance, RP and the Russian translations.

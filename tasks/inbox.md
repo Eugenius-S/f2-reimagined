@@ -337,13 +337,13 @@ first: a new task only when no open task or batch fits (AGENTS.md, Tasks).
   213-215 were still open on the board (closed); 218 had no header (added).
   Map coverage checked: the export groups hold all 152 playable maps.
 - 2026-11-08 (-> 191, find 1) The owner: the Den's chain-link fences are black walls with specks; the mesh holes should show what is behind.
-- 2026-11-08 (-> reopen 218 or a new task; 213/217/218 are done) The owner: the screenshot region mark stays drawn on the bottom panel and is never erased.
+- 2026-11-08 (-> 239 part 3) The owner: the screenshot region mark stays drawn on the bottom panel and is never erased.
 - 2026-11-08 (-> 193 part A) The owner: message window bullets - bullet, gap, text; wrapped lines align with the text, not the bullet; one straight left edge.
-- 2026-11-08 (-> new task, launcher/package) The owner: in the player install from the GitHub release the background art (splash/menus) shows 4:3, while the dev game shows it widescreen. Find which file gives the wide art in the dev game folder and ship or generate it for players.
+- 2026-11-08 (-> 128) The owner: in the player install from the GitHub release the background art (splash/menus) shows 4:3, while the dev game shows it widescreen. Find which file gives the wide art in the dev game folder and ship or generate it for players.
 - 2026-11-08 (-> 234) The launcher says "no network" when GitHub release downloads answer 504 (seen through a VPN exit, even for RPU's releases); say "GitHub does not answer" and show the error.
 - 2026-11-08 (-> new task, tier 0, after 234/235) The owner on main 0f0f1823 (video "Запись 2026-11-08 160620.mp4" on his desktop): sharp text is fixed, but the screen flickers black.
 - 2026-11-08 (-> same task) The owner: in 3D camera mode the movement controls do nothing and the mouse does not aim the camera.
 - 2026-11-08 (-> 239) The owner, shot game/shots/dev/2026-11-08/20261108-181235 (kladwtwn): the hex move cursor has dotted ghost outlines (halo rings) around it in 3D.
-- 2026-11-08 (-> 240) The owner, shot 20261108-181055 (kladwtwn, rect 880,309,85,62): graffiti of an inner wall draws over the outer wall in front of it.
+- 2026-11-08 (-> 224, was 240) The owner, shot 20261108-181055 (kladwtwn, rect 880,309,85,62): graffiti of an inner wall draws over the outer wall in front of it.
 - 2026-11-08 (-> 239) The owner, shot 20261108-181209 (kladwtwn, top edge rect 482,0,157,82): the scroll-edge cursor (arrow with red X) has an opaque black box, no transparency.
 - 2026-11-08 (-> 193 part A) The owner, shot 20261108-181342: the bullet alignment went the wrong way; text lines now start left of the window edge and get clipped. Shift the whole text block right: bullet, gap, text, wrapped lines aligned with the text.

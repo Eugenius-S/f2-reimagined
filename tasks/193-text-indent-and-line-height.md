@@ -5,7 +5,7 @@ milestone: M1
 status: doing
 owner: gpt
 suggested: any
-priority: normal
+priority: high
 tier: 3
 claude-only: no
 user-check: yes
@@ -163,3 +163,4 @@ Check: `tools/configure-build.ps1 Release`, CTest and scene-export tests on
 the merged branch.
 - 2026-11-08 claude: owner find (open): in the message window the left edge is ragged, as in the original. Wanted: bullet, a gap, then the text; a wrapped line starts level with the text, not with the bullet; the bullet does not count toward the text's left edge, so every text line of a block shares one straight edge. Crop: `runs/193-text-indent-and-line-height/owner-bullets-ragged-edge.jpg` (his shot `20261108-153908-kladwtwn-e0`).
 - 2026-11-08 claude: owner find 2 (open): after part A the alignment went the wrong way. The text lines now start left of the message window edge and the first letters are clipped. Shift the whole block right so the bullet sits inside the window, then the gap, then the text; wrapped lines level with the text. Crop: `runs/193-text-indent-and-line-height/owner-status-text-clipped.jpg` (his shot `20261108-181342-kladwtwn-e0`).
+- 2026-11-08 claude: priority high - the owner sees the clipped message log text on every screen.

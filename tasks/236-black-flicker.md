@@ -2,7 +2,7 @@
 id: 236
 title: The 3D view no longer flickers black; the fly camera moves in normal play
 milestone: M1
-status: doing
+status: done
 owner: claude
 suggested: claude
 priority: high
@@ -125,3 +125,4 @@ Check: Release build, ctest 21/21, one off-screen launch check at 3440x1440
 scale 2 with sharp text.
 Next: the owner checks black flicker and Ctrl+F11 flight in the build from this
 PR; then symptom 2 in `text_capture.cc` (joins 140 and 193).
+- 2026-11-08 claude: closed, merged in #359 (black flicker 81% -> 0/60 frames, fly camera keys); symptom 2 goes on in 237 and 193.

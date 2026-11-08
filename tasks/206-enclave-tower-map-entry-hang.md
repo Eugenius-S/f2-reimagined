@@ -3,8 +3,8 @@ id: 206
 title: The game hangs when entering the Enclave tower map
 milestone: M1
 status: open
-owner: any
-suggested: owner
+owner: claude
+suggested: claude
 priority: high
 tier: 0
 claude-only: no
@@ -47,3 +47,4 @@ starting with this map.
 ## Log
 
 - 2026-11-07: owner report in the morning; task cut the same morning.
+- 2026-11-08 claude: owner order 2026-11-08: claude takes critical bugs, performance, RP and the Russian translations.
