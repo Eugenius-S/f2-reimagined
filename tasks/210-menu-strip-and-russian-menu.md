@@ -2,7 +2,7 @@
 id: 210
 title: No stray strip in the menu at any resolution, and the settings menu speaks Russian
 milestone: M1
-status: open
+status: done
 owner: gpt
 suggested: owner
 priority: high

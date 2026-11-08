@@ -2,7 +2,7 @@
 id: 215
 title: The build's hotkeys work like a set, and F1 lists them
 milestone: M1
-status: open
+status: done
 owner: gpt
 suggested: owner
 priority: high

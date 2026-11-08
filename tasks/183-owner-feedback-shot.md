@@ -2,7 +2,7 @@
 id: 183
 title: One key in the game saves a screenshot with everything an agent needs to read it
 milestone: M1
-status: doing
+status: done
 owner: glm
 suggested: any
 priority: high

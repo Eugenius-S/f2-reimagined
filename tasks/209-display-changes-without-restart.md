@@ -2,7 +2,7 @@
 id: 209
 title: Display changes apply without a restart
 milestone: M1
-status: open
+status: done
 owner: gpt
 suggested: owner
 priority: high
