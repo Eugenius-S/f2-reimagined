@@ -89,6 +89,39 @@ void endStaticObjects();
 void clearStaticObjects();
 unsigned int staticObjectCount();
 
+// 157: the cheap state a built card depends on, read before any art lookup.
+// An object whose snapshot is unchanged reuses the card built before: the
+// game view's card geometry comes from these fields and the frame-wide modes
+// alone, so the art locks, the decodes and the projection rebuild are
+// skipped for the thousands of things that did not move.
+struct StaticObjectSnapshot {
+    unsigned int fid;
+    int frame;
+    int rotation;
+    int tile;
+    int x;
+    int y;
+    int pid;
+    unsigned int flags;
+    int stack;
+    bool seeThrough;
+    bool flat;
+    bool flyActive;
+    int turnOffset;
+    bool shadowsOn;
+    bool spriteSidesOn;
+    bool clipEnabled;
+};
+
+// True when the card built for `key` still answers this snapshot. The caller
+// then appends it (appendStaticObjectCard) instead of building the frame.
+bool staticObjectCardFresh(const void* key, const StaticObjectSnapshot& snapshot);
+// Appends the cached card for `key` with this frame's pick id.
+void appendStaticObjectCard(const void* key, int pickId);
+// Builds the card for `key` from the frame and stores it under the snapshot.
+bool addStaticObjectCached(const void* key, const StaticObjectSnapshot& snapshot,
+    const StaticObjectFrame& frame, std::string* error);
+
 } // namespace scene_renderer
 } // namespace fallout
 
