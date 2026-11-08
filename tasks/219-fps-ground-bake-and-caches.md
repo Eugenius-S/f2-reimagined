@@ -10,7 +10,7 @@ tier: 2
 claude-only: no
 user-check: no
 depends-on: [157, 218]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -68,3 +68,8 @@ round's flags.
 - 2026-11-07/08 Built on top of 218's branch; ctest 20/20; the black-screen
   hunt (poisoned re-exported demo scene caches + the gTexture regression)
   documented in the session notes.
+
+### 2026-11-08 claude
+Done: rescued #336 onto fresh main; the 157 one-shot GL probes left a GL error that failed every launch snapshot ("static wall draw failed before snapshot"), removed. Release, ctest 20/20, launch snapshots on kladwtwn, klamall, klatoxcv pass, world on screen. Test config (vsync) holds ~57 fps with gpu 1.9 ms, cpu 2.9 ms on kladwtwn.
+Next: nothing.
+Check: `tools/dev-snapshot.ps1 -Map kladwtwn` with `F2CE_PERF=1`.
