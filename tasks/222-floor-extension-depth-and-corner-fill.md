@@ -2,7 +2,7 @@
 id: 222
 title: The floor extension pass: depth semantics on the fly camera, the quadrant sea fill, marker colours
 milestone: M1
-status: doing
+status: done
 owner: glm
 suggested: glm
 priority: high
@@ -122,3 +122,7 @@ The re-run launched in the meantime finished the same: 154/154, 0
 changed px (runs/regression/20261106-234216) - the stills never draw
 the extension, as expected. ctest 20/20. The gate's verdict on the
 fill: clean. What #320 still owes before a merge is 205's fly tour.
+
+## Log
+
+- 2026-11-08 glm: landed as PR #320 (squash, 5943d865) with tasks 202-205 renumbered to 222-225; the fly-tour evidence (task 225) is still owed: the PR shipped the 225 spec, the tour run follows as task 225.
