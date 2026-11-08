@@ -341,3 +341,5 @@ first: a new task only when no open task or batch fits (AGENTS.md, Tasks).
 - 2026-11-08 (-> 193 part A) The owner: message window bullets - bullet, gap, text; wrapped lines align with the text, not the bullet; one straight left edge.
 - 2026-11-08 (-> new task, launcher/package) The owner: in the player install from the GitHub release the background art (splash/menus) shows 4:3, while the dev game shows it widescreen. Find which file gives the wide art in the dev game folder and ship or generate it for players.
 - 2026-11-08 (-> 234) The launcher says "no network" when GitHub release downloads answer 504 (seen through a VPN exit, even for RPU's releases); say "GitHub does not answer" and show the error.
+- 2026-11-08 (-> new task, tier 0, after 234/235) The owner on main 0f0f1823 (video "Запись 2026-11-08 160620.mp4" on his desktop): sharp text is fixed, but the screen flickers black.
+- 2026-11-08 (-> same task) The owner: in 3D camera mode the movement controls do nothing and the mouse does not aim the camera.
