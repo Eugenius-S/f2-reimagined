@@ -338,7 +338,7 @@ void refreshStatusFromRelease()
         return;
     }
     if (!g_installed) {
-        setStatus(tr(L"Choose Install / Update to install the latest build.", L"Нажмите «Установить / обновить», чтобы установить последнюю сборку."));
+        setStatus(tr(L"Press Install / Update. The first install takes about 20 minutes.", L"Нажмите «Установить / обновить». Первая установка идёт около 20 минут."));
         return;
     }
     std::ifstream installed(fs::path(root) / L"version.txt");
@@ -457,7 +457,9 @@ void startOperation(bool rollback)
     g_operationCompleted = false;
     setBusy(true);
     setStatus(rollback ? tr(L"Restoring the previous build...", L"Восстанавливаем предыдущую сборку...")
-                       : tr(L"Installing or updating the game...", L"Устанавливаем или обновляем игру..."));
+                       : g_installed ? tr(L"Installing or updating the game...", L"Устанавливаем или обновляем игру...")
+                       : tr(L"Installing: building 3D for every map, about 20 minutes.",
+                             L"Устанавливаем: строим 3D для всех карт, около 20 минут."));
     std::vector<std::wstring> args = workerArguments(rollback);
     std::thread([args = std::move(args), rollback]() {
         DWORD result = runChild(args);
@@ -891,7 +893,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             } else if (g_autoUpdates && g_installed && installedVersion != wideToUtf8(g_releaseVersion)) {
                 startOperation(false);
             } else if (!g_installed) {
-                setStatus(tr(L"Choose Install / Update to install the latest build.", L"Нажмите «Установить / обновить», чтобы установить последнюю сборку."));
+                setStatus(tr(L"Press Install / Update. The first install takes about 20 minutes.", L"Нажмите «Установить / обновить». Первая установка идёт около 20 минут."));
             } else if (installedVersion != wideToUtf8(g_releaseVersion)) {
                 setStatus(tr(L"A newer build is available.", L"Доступна новая сборка."));
             } else {

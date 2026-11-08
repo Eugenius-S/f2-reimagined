@@ -1194,6 +1194,7 @@ int runConsole(Options options)
                 + "\" --maps " + mapList;
             if (options.forceExport) command += " --force";
             logf("making the 3D scene data for: %s", mapList.c_str());
+            if (freshInstall) log("  the first install builds every map: about 20 minutes; later updates take seconds");
             if (!runTool(utf8ToWide(command), root.wstring())) {
                 log("the exporter failed; the game will start in 2D");
             }

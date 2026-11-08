@@ -50,3 +50,6 @@ running that exe with no `--game-root` took its own folder, updated v1 to v2
 (including itself, `.old` left), and `--rollback` restored v1 and the launcher.
 Icon extracted from the installed exe is the radiation icon.
 Next: none.
+
+### 2026-11-08 claude
+The owner: the launcher must warn that the first install is long. The GUI status says the first install takes about 20 minutes before and during it (short, to fit the one-line status), and the console log says so when it starts building every map. Release build and ctest 20/20.
