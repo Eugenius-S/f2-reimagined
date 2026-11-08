@@ -129,7 +129,7 @@ jobs:
           Set-Location $dist
           git init -q -b dist
           git config user.name github-actions
-          git config user.email github-actions@users.noreply.github.com
+          git config user.email "$($env:GITHUB_ACTOR_ID)+$($env:GITHUB_ACTOR)@users.noreply.github.com"
           git add .
           git commit -q -m "dist $env:GITHUB_SHA"
           git push -q --force "https://x-access-token:$($env:GH_TOKEN)@github.com/$($env:GITHUB_REPOSITORY).git" dist
