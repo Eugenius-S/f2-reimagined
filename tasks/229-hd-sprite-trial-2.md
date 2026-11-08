@@ -40,6 +40,11 @@ In `runs/229-hd-sprite-trial-2/`, never in game data, each file under 1 MB:
   as the reference. The prompt asks for a realistic look (real materials,
   fabric folds, skin, believable light from the original's direction) while
   keeping the pose, silhouette, proportions and colours of the frame.
+- The vault jumpsuit's fabric reads like the Fallout 4 vault suit (the
+  owner, 2026-11-08): a fitted blue suit of thick, slightly glossy
+  synthetic cloth with stitched, padded panels, ribbed seams and yellow
+  trim. The prompt describes the material in these words; it copies no
+  Fallout 4 image.
 - Each output is cut to its frame's original size times x2 and x4 and
   aligned to the original frame offsets; the Log gives the anchor shift per
   frame, as 197's `metrics.json` did.
