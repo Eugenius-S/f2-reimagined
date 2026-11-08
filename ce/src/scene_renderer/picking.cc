@@ -104,7 +104,6 @@ int pickStaticObjects(int logicalX, int logicalY, bool (*wanted)(int pickId, voi
     // whole): the cards as drawn, each in its id's colour. Peeling off the
     // nearest and drawing again lists what lies under it, like the engine's
     // intersect list.
-    constexpr unsigned int kScissorTest = 0x0C11;
     constexpr unsigned int kDither = 0x0BD0;
     glViewport(x, y, width, height);
     glEnable(kScissorTest);
