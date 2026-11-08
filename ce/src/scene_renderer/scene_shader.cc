@@ -162,6 +162,11 @@ uniform vec4 uShadowGround;
 uniform float uShadowFeet;
 uniform bool uCloudOn;
 uniform vec2 uCloudOffset;
+// The ground's baked light and sun shadow (157): 1 captures it into the
+// half-resolution buffer, 2 has the floor tiles sample it instead of the
+// per-pixel light loop and the 25-tap shadow disk.
+uniform int uGroundBakeMode;
+uniform sampler2D uGroundBakeMap;
 out vec4 outColor;
 // What a texel shines by itself for the glow (task 022): the colour a
 // full-bright texel keeps, premultiplied by its shown coverage; black
@@ -776,6 +781,16 @@ void main() {
         // (082 round 5). The scene's own draws leave the attribute at 0 and
         // discard as always.
         if (vShadowSolid < 0.5 && texel.a < uCutoff && (uShadowPass == 0 || !shadowArtSolid())) discard;
+        if (uGroundBakeMode == 1) {
+            // The ground bake pass (157): the plane's light and sun shadow at
+            // half resolution, alpha already darkened, for the floor tiles to
+            // sample instead of the per-pixel light loop and the shadow disk.
+            vec4 captured = sceneLighting();
+            captured.a = shadowDarken(captured.a);
+            outColor = captured;
+            outEmissive = vec4(0.0);
+            return;
+        }
         // Smooth magnified native art only in the fly view. Keep the nearest
         // texel's alpha: it carries material IDs, transparency and pick data.
         if (uCloseupFilter != 0 && uPick == 0 && uTranslucent == 0) {
@@ -836,8 +851,17 @@ void main() {
             outColor.a = 1.0;
             // _dark_trans_buf_to_buf: the engine darkens a texel by its light in
             // 128 steps, on its 5-bit colour rounded down (setIntensityTableColor).
-            vec4 lit = fullBright ? vec4(1.0) : sceneLighting();
-            if (!effectCore) lit.a = shadowDarken(lit.a);
+            vec4 lit;
+            if (uGroundBakeMode == 2) {
+                // The floor tiles (157): the light and shadow baked this frame
+                // at half resolution, alpha already darkened.
+                vec2 bakeUv = (gl_FragCoord.xy - uViewport.xy) / uViewport.zw;
+                vec4 baked = texture(uGroundBakeMap, bakeUv);
+                lit = vec4(baked.rgb, baked.a);
+            } else {
+                lit = fullBright ? vec4(1.0) : sceneLighting();
+                if (!effectCore) lit.a = shadowDarken(lit.a);
+            }
             if (uShadowDebug == 2) {
                 // The face test itself: white where the sun hits the face and
                 // the map is read, black where the face takes the flat
@@ -907,7 +931,7 @@ void main() {
             }
 )" R"(
             float steps = floor(lit.a * 128.0 + 0.0001);
-            if (uShadowOn && uCloudOn && (uLightMode == 1 || uLightMode == 2)) {
+            if (uShadowOn && uCloudOn && uGroundBakeMode != 2 && (uLightMode == 1 || uLightMode == 2)) {
                 float baseSteps = floor(gUncloudedLight * 128.0 + 0.0001);
                 float cloudSteps = floor(max(gUncloudedLight - gCloudDarkening, 0.0) * 128.0 + 0.0001);
                 float sunSteps = floor(gSunOnlyLight * 128.0 + 0.0001);
@@ -1051,6 +1075,8 @@ int gSceneShadowGroundLocation = -1;
 int gSceneShadowFeetLocation = -1;
 int gSceneCloudOnLocation = -1;
 int gSceneCloudOffsetLocation = -1;
+int gSceneGroundBakeModeLocation = -1;
+int gSceneGroundBakeMapLocation = -1;
 
 bool createSceneShader(std::string* error)
 {
@@ -1122,6 +1148,8 @@ bool createSceneShader(std::string* error)
     gSceneSeeThroughObjectsLocation = glGetUniformLocation(gSceneProgram, "uSeeThroughObjects");
     gSceneEggPassLocation = glGetUniformLocation(gSceneProgram, "uEggPass");
     gSceneShadowOnLocation = glGetUniformLocation(gSceneProgram, "uShadowOn");
+    gSceneGroundBakeModeLocation = glGetUniformLocation(gSceneProgram, "uGroundBakeMode");
+    gSceneGroundBakeMapLocation = glGetUniformLocation(gSceneProgram, "uGroundBakeMap");
     gSceneShadowMatrixLocation = glGetUniformLocation(gSceneProgram, "uShadowMatrix");
     gSceneShadowMapLocation = glGetUniformLocation(gSceneProgram, "uShadowMap");
     gSceneShadowIdsLocation = glGetUniformLocation(gSceneProgram, "uShadowIds");
@@ -1158,6 +1186,7 @@ bool createSceneShader(std::string* error)
         || gSceneLightPosLocation < 0 || gSceneLightColorLocation < 0 || gSceneLightWindowLocation < 0
         || gSceneMoonStrengthLocation < 0 || gSceneMoonDirectionLocation < 0
         || gSceneCloudOnLocation < 0 || gSceneCloudOffsetLocation < 0
+        || gSceneGroundBakeModeLocation < 0 || gSceneGroundBakeMapLocation < 0
         || gSceneClipEnabledLocation < 0
         || gSceneClipPlaneLocations[0] < 0 || gSceneClipPlaneLocations[1] < 0
         || gSceneClipPlaneLocations[2] < 0 || gSceneClipPlaneLocations[3] < 0

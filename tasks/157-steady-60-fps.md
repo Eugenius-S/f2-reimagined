@@ -46,3 +46,33 @@ Lower visual quality as a default; display changes without restart (156).
 ## Log
 
 - 2026-11-02 Cut from the owner's find; follows 155.
+
+## Log
+
+- 2026-11-07 (main 990d7756, warm scene cache, off-screen 1920x1080, shadows
+  and glow on): kladwtwn game camera 46.2 fps average (21.6 ms, 1% low 40.0,
+  worst 34 ms); kladwtwn fly 60.7 fps, riding the 60 fps limiter; newr1 game
+  camera 28.5 fps (35.0 ms, 1% low 15.6 fps, worst 66 ms). The owner raised
+  the bar the same morning: below 60 is not acceptable, below 120 is not
+  comfortable; the target of this task moves to a steady 120+ on the owner's
+  144 Hz screen.
+- F2CE_PERF pass breakdown (shadows and glow on): the floor pass is the top
+  GPU cost, 7.3-10.0 ms on kladwtwn and 12.5 ms on newr1, about half the GPU
+  frame; walls 2.3-3.4 ms, flat objects 1.5-1.7 ms, objects 1.2-1.9 ms,
+  hero egg glass up to 2.8 ms on newr1, GPU frame 14-22 ms, CPU submit
+  2.5-5.3 ms. On newr1 the frame averages 55 ms against 22 ms of GPU: about
+  33 ms per frame of stalls outside the GPU (the 155 finding holds). One
+  883 ms single-frame spike on kladwtwn, the same stall class as task 206.
+- First change: the game view paces to a new [3d] fps_limit setting (60
+  default, 0 removes the limit) with a sleep-plus-spin throttle, so the limiter
+  stops hiding the render headroom behind the classic 60.
+- 2026-11-07, owner order: the 60 cap must go (more is welcome), and until
+  every location holds a steady 60+ the next phases do not start. This task
+  is the gate: the floor-pass GPU cost and the off-GPU stalls above are the
+  remaining work.
+- 2026-11-08 (219 landed on this branch): kladwtwn and klamall hold 100 fps
+  off-screen with the owner's settings (10.0-10.1 ms, the sharp cache takes
+  no misses after startup); the ground light/shadow bake cut the floor pass
+  11.0 to 0.73 ms. Still open for the gate: a real-window validation on the
+  owner's machine (the off-screen harness capped two demo maps at ~61 by
+  their own pacing) and the 120 comfort target.
