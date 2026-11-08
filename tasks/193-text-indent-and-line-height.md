@@ -161,3 +161,4 @@ Next: keep the task open until those acceptance items are implemented and
 captured; this merge only refreshes the base and verifies the existing code.
 Check: `tools/configure-build.ps1 Release`, CTest and scene-export tests on
 the merged branch.
+- 2026-11-08 claude: owner find (open): in the message window the left edge is ragged, as in the original. Wanted: bullet, a gap, then the text; a wrapped line starts level with the text, not with the bullet; the bullet does not count toward the text's left edge, so every text line of a block shares one straight edge. Crop: `runs/193-text-indent-and-line-height/owner-bullets-ragged-edge.jpg` (his shot `20261108-153908-kladwtwn-e0`).
