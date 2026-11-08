@@ -117,3 +117,27 @@ Frame rate in play (157), settings changes (156).
   (same noise). Pixel-identical, 0 changed px on all four maps; ctest
   23/23. newr1 needs the per-object script link cost and the first-frame
   chunk next. Evidence: runs/172-location-load-time/phases.md.
+- 2026-11-08, glm. The scene PNG decodes left the serial path (walls:
+  one decode per page registered by the batch loop, up to 4 workers read
+  and decode them on private buffers, the upload loop untouched; floor:
+  roof_fringe.png decodes in one worker while tiles.png decodes on the
+  main path). Walls 320 -> 212 ms and scene_total 437 -> 330 on newr1;
+  the walls_decode scope now reads as the longest page (157 ms) instead
+  of the sum (~240 ms). First frame: kladwtwn 1793 -> 1710, newr1
+  2319-2397 -> 2230-2280, vctyctyd/cave0 unchanged within their noise.
+  Pixel-identical, ctest 23/23. Evidence:
+  runs/172-location-load-time/phases.md.
+- 2026-11-08, glm. Probes that cut the next lever candidates: the
+  per-object script link is free (6341 objects at 0.00 ms; the old Log's
+  ~590 ms was the lazy proto loads, already fixed), so lever 3 from the
+  list is dead. The art warm does not scale past 4 threads (8 threads:
+  390 -> 370 ms on newr1, noise) - the cap stays. objects_load ~560 ms
+  is the engine's serial objectRead over one stream. New load-chain
+  marks (ff_present_top, ff_sync_done, ff_draw_begin, ff_shadow_done,
+  ff_bake_done) split the scene_loaded -> first_frame gap: on newr1 the
+  shadow map + first scene draw cost ~65 ms and the remaining ~450 ms is
+  the game loop's own work between presents (in a dev-snapshot run that
+  includes the preview policy and the travel retry - the owner's live
+  game may differ). The remaining lever list: attribute the ~450 ms
+  between-presents chunk, then the serial objectRead. Pixel-identical
+  marks, ctest 23/23. Evidence: runs/172-location-load-time/phases.md.

@@ -135,6 +135,8 @@ void drawStaticPreview(bool withWalls, bool withHero)
     perfMark("sky_light");
     const bool shadowed = withWalls && bindStaticShadows(mvp);
     perfMark("shadow");
+    // 172: the load chain's split of the first scene draw.
+    perfLoadMark("ff_shadow_done");
     if (!withWalls) glUniform1i(gSceneCloudOnLocation, 0);
     glUniform1i(gSceneShadowOnLocation, shadowed ? 1 : 0);
     // Nobody's own texels count as empty, until a draw says otherwise (the
@@ -199,6 +201,8 @@ void drawStaticPreview(bool withWalls, bool withHero)
         glUniform1i(gSceneGroundBakeMapLocation, 7);
         glActiveTexture(kTexture0);
     }
+    // 172: the load chain's split of the first scene draw.
+    perfLoadMark("ff_bake_done");
 
     // Nothing lies below the floor, so it is painted first and hides nothing
     // (the donor's game view): cards and solids take the depth of their hex

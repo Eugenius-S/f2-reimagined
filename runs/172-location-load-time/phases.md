@@ -198,3 +198,29 @@ from 5d5d0b2cd2e4 / 5a825a4592af / 13e788383eff / 71f851ba8218):
 The first_frame column swings +-100 ms between identical runs (driver and
 OS cache); the scene stage's own drop of ~90-110 ms on the big maps is
 the lever. Pixel-identical: 0 changed px on all four maps.
+
+## the first-frame split and the dead ends (2026-11-08, glm, probes)
+
+Load-chain marks now split the scene_loaded -> first_frame gap
+(ff_present_top, ff_sync_done, ff_draw_begin, ff_shadow_done,
+ff_bake_done; deduped per chain like the rest).
+
+newr1 (fd78cf6af0d6): scene_loaded 1629 -> shadow done 1693 (the shadow
+map render, +64) -> bake done 1694 (+1) -> ff_draw_begin 2142 (+448: the
+game loop's own frame work between presents, which in a dev-snapshot run
+includes the preview policy and the travel retry) -> first_frame 2145
+(the Full draw itself, +3).
+
+Dead ends measured and dropped:
+- The per-object script link block (objectLoadAll's scriptGetScript tail)
+  is free: 6341 objects, every construction at 0.00 ms. The old Log's
+  "~590 ms of per-object script links" was wrong (it was the lazy proto
+  loads, fixed above). The probe itself poisoned the run: per-object
+  PerfScope constructions cost ~0.09 ms each, 12k of them added ~1.1 s
+  (the same trap as the per-read perf writes).
+- The art warm at 8 threads instead of 4: art_preload 390 -> 370 ms on
+  newr1 (noise), 325 -> 328 on kladwtwn, 166 -> 152 on vctyctyd. The
+  warm stops scaling past 4 threads on this machine (16 logical cores
+  idle), so the cap stays at 4.
+- objects_load (~560 ms on newr1) is the engine's serial objectRead over
+  one stream; splitting it needs a restructure, not a warm.
