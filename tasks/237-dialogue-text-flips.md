@@ -2,7 +2,7 @@
 id: 237
 title: Dialogue replies keep their sharp text; text records no longer pile up
 milestone: M1
-status: review
+status: done
 owner: claude
 suggested: claude
 priority: high
@@ -53,3 +53,4 @@ the probe. The owner should hover replies in the live game and report.
 - Probe measured, root cause found, fix and test added. Barter and pipboy
   snapshots were not obtained (the fixtures gave no UI screen); the message
   log snapshot is in `after-log.jpg`.
+- 2026-11-08 claude: closed, merged in #361 (text records merge instead of piling up); the owner's bold flip was not reproduced, a new sighting goes to 193.
