@@ -10,7 +10,7 @@ tier: 0
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -80,3 +80,5 @@ One PR at a time, in the order below. For each:
 ## Log
 
 - 2026-11-08 glm: the sweep is complete, no open PRs remain. Merged: #320 (202, tasks 202-205 renumbered to 222-225), #272 (173), #300 (149), #296 (135 notes), #289 (187), #284 (185), #220 (146), #206 (140), #221 (147), #208 (143 notes), #189 (111 notes), #298 (128 notes), #302 (189 walls, brokenhills references retaken on the merged tree, full regression 0 px elsewhere), #292 (130), #310 (193 part A, full regression 0 px). Closed with reasons: #308 (191: the light rule rewrites unaccepted enclave pixels, full regression evidence in the task Log), #227 (156: #329 covers window mode live, the live resolution/scale transaction is runtime-blocked, task 209 owns the slice; the branch notes preserved under task 156). #336 was skipped by owner order and then merged by the owner; its launch-check finding (static wall draw GL error) is on the PR and did not reproduce on final main (ed939119b, build + ctest 20/20 + launch check green).
+
+- 2026-11-08 claude: checked. No open PRs; every one merged or closed with a reason. Board statuses match main except 140, set to blocked as #206's merge says (it waits for a dialogue fixture). Main after the sweep and after #347/#349: Release, ctest 20/20, launch check green.

@@ -2,7 +2,7 @@
 id: 140
 title: Letters in the dialogue answers are not cut at the top or bottom
 milestone: M1
-status: todo
+status: blocked
 owner: any
 suggested: any
 priority: normal
