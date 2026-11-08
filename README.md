@@ -34,6 +34,11 @@ from the rolling [latest release](https://github.com/Eugenius-S/f2-reimagined/re
    launcher to install a newer build when it starts. Press **Play** when the
    installation finishes. **Roll back** restores the previous build.
 
+The download is the launcher. After the install your Fallout 2 folder holds
+a copy of it named `Fallout 2 Reimagined.exe` (with the radiation icon): run
+that file to start the game and to update it. Ignore the other `.exe` files
+in the folder.
+
 An internet connection is needed for a new install, updates and the optional
 Russian text download.
 
