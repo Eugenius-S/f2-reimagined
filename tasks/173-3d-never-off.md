@@ -98,3 +98,5 @@ The world map, dialogs, menus.
   stop promptly and report the actual route/availability instead of waiting
   for an impossible snapshot count. The eight independent map captures and
   full regression remain valid.
+
+- 2026-11-08 glm: the incomplete-map fallback landed as PR #272 (e274f59b): a map whose walls or projection sidecar cannot load keeps its 3D ground plane; activeView() reports the loaded level. Still owed: the missing-floor path (no floor data cannot be replaced) and the scripted tour acceptance.
