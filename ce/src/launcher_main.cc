@@ -44,7 +44,7 @@ constexpr const char* kGameExe = "fallout2-ce.exe";
 constexpr const char* kCfg = "fallout2.cfg";
 constexpr const char* kVersionTxt = "version.txt";
 constexpr const char* kExporterExe = "scene-exporter.exe";
-constexpr const char* kDefaultMaps = "klamath";
+constexpr const char* kDefaultMaps = "all";
 
 struct Options {
     std::string gameRoot;
@@ -870,7 +870,7 @@ Options parseOptions(int argc, char** argv)
             log("  --game-root <dir>   the Fallout 2 folder (default: registry lookup, then a picker)");
             log("  --update-url <url>  where version.txt and the zip live (default: the latest release)");
             log("  --release-info-url <url>  release API for the version notes");
-            log("  --maps <list>       maps the exporter covers, comma separated (default: klamath)");
+            log("  --maps <list>       maps the exporter covers, comma separated (default: all, every map)");
             log("  --force-export      rebuild the 3D scene data even if it looks current");
             log("  --no-start          do everything except starting the game");
             log("  --rollback          restore the most recent backed-up game build");
@@ -1064,7 +1064,7 @@ int runConsole(Options options)
     } else {
         bool needExport = options.forceExport || freshInstall || updated;
         if (!needExport) {
-            // The exporter owns the map groups: "klamath" is its name, only
+            // The exporter owns the map groups: "all" is its name, only
             // it knows which scene directories that covers.  Exit 0 = every
             // base scene exists, anything else = make them.
             std::string command = "\"" + exporter.string() + "\" --game-root \"" + root.string()

@@ -16,7 +16,7 @@ from baked_sidecar import (ENTRY as BAKED_ENTRY, GL_MAP_OFFSET, HEADER as BAKED_
                            NOCAST as BAKED_NOCAST, SKIP as BAKED_SKIP, FLAT as BAKED_FLAT, FLY_FLAT as BAKED_FLY_FLAT,
                            FIXED_CARD as BAKED_FIXED_CARD, FLY_SKIP as BAKED_FLY_SKIP, PLANE as BAKED_PLANE,
                            baked_objects, decode_baked_sidecar, encode_baked_sidecar)
-from export import ReadOnlyGameFiles, choose_source, main, parse_args, patch_paths, scene_directory, validate_output_contents
+from export import MAP_GROUPS, ReadOnlyGameFiles, choose_source, main, parse_args, patch_paths, scene_directory, validate_output_contents
 from floor_sidecar import HEADER, MAGIC, VERSION, cell_content_rect, decode_floor_sidecar, encode_floor_sidecar
 from roof_fringe import (boundary_edges, components_of, donor_tiles, inner_edge, cut_to_walls, own_strip, donate, foot_cover, lay_donor, roof_sides, whole_sides, BELT_LAP, BELT_ROWS, EDGE_ROWS, STRIP_ROWS, belt_art, compose_band, is_fringe, outward, resolve_runs, runs_of,
                          split_tile, tidy_cell, unproject_cell, unroll, wall_under, write_fringe_art)
@@ -165,6 +165,18 @@ class TargetTests(unittest.TestCase):
     def test_group_and_list(self):
         self.assertEqual(len(parse_args(["--maps", "klamath"]).map_names), 7)
         self.assertEqual(parse_args(["--maps", "kladwtwn, klatrap"]).map_names, ["kladwtwn", "klatrap"])
+
+    def test_groups_in_a_list_and_all(self):
+        # Groups mix with maps in one list, and a map two groups share (vault15) comes once.
+        names = parse_args(["--maps", "klamath,vault15,ncr,artemple"]).map_names
+        self.assertEqual(names[:7], list(MAP_GROUPS["klamath"]))
+        self.assertEqual(names.count("vault15"), 1)
+        self.assertIn("ncrent", names)
+        self.assertEqual(names[-1], "artemple")
+        every = parse_args(["--maps", "all"]).map_names
+        self.assertEqual(len(every), len(set(every)))
+        self.assertEqual(set(every), {name for group in MAP_GROUPS.values() for name in group})
+        self.assertGreaterEqual(len(every), 152)
 
     def test_rejects_unsafe_map_names(self):
         with self.assertRaises(SystemExit):

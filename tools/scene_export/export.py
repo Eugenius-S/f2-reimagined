@@ -402,8 +402,8 @@ def parse_args(argv=None):
     roots.add_argument("--game-root", type=Path, help="game directory containing DAT files and data/")
     targets = parser.add_mutually_exclusive_group()
     targets.add_argument("--map", default=DEFAULT_MAP, help=f"one map, without .map (default: {DEFAULT_MAP})")
-    targets.add_argument("--maps", help="every elevation of several maps: a group (" + ", ".join(MAP_GROUPS)
-                         + ") or a comma-separated list")
+    targets.add_argument("--maps", help="every elevation of several maps: a comma-separated list of maps and "
+                         "groups (all, " + ", ".join(MAP_GROUPS) + ")")
     parser.add_argument("--elevation", type=int, choices=(0, 1, 2), default=0,
                         help="the elevation of --map (default: 0)")
     parser.add_argument("--cache-root", type=Path,
@@ -413,12 +413,28 @@ def parse_args(argv=None):
                         help="report whether every requested map's base scene exists and exit: 0 all present, "
                              "3 some missing (the 091 launcher asks before spending minutes on an export)")
     args = parser.parse_args(argv)
-    names = MAP_GROUPS.get(args.maps.lower(), args.maps.split(",")) if args.maps else [args.map]
-    args.map_names = [name.strip().lower() for name in names]
+    args.map_names = expand_maps(args.maps) if args.maps else [args.map.strip().lower()]
     for name in args.map_names:
         if not re.fullmatch(r"[a-z0-9_]+", name):
             parser.error(f"invalid map name: {name!r}")
     return args
+
+
+def expand_maps(spec: str) -> list[str]:
+    """Map names of a --maps value: each comma-separated item is a map, a group, or "all" (every group),
+    in order, each map once."""
+    names = []
+    for item in (part.strip().lower() for part in spec.split(",")):
+        if not item:
+            continue
+        if item == "all":
+            group = [name for members in MAP_GROUPS.values() for name in members]
+        else:
+            group = MAP_GROUPS.get(item, (item,))
+        for name in group:
+            if name not in names:
+                names.append(name)
+    return names
 
 
 def check_scenes(game_root: Path, map_names: list[str], cache_root: Path = None) -> list[str]:
