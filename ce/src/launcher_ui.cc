@@ -16,6 +16,7 @@
 namespace fs = std::filesystem;
 
 std::string findGameRootForUi();
+std::string ownGameRoot();
 
 namespace {
 
@@ -966,6 +967,8 @@ int runLauncherUi(int argc, char** argv)
 {
     ShowWindow(GetConsoleWindow(), SW_HIDE);
     g_args = parseUiArgs(argc, argv);
+    // Run from inside a game root: that folder wins over the stored one.
+    if (g_args.gameRoot.empty()) g_args.gameRoot = utf8ToWide(ownGameRoot());
     loadSettings();
     if (g_args.gameRoot.empty()) {
         const std::string detected = findGameRootForUi();
