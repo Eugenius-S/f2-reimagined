@@ -2,7 +2,7 @@
 id: 208
 title: No stray edge strip in the menu, and the window behaves like a window
 milestone: M1
-status: open
+status: done
 owner: gpt
 suggested: owner
 priority: high

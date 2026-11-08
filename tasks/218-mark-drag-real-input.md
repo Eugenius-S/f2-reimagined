@@ -1,6 +1,18 @@
-# 218 — the region mark takes the owner's real drag (the -2 mouse frames)
+---
+id: 218
+title: The region mark takes the owner's real drag (the -2 mouse frames)
+milestone: M1
+status: done
+owner: any
+suggested: any
+priority: high
+tier: 0
+claude-only: no
+user-check: yes
+depends-on: []
+reviewed: no
+---
 
-Status: in_progress
 Owner report 2026-11-07 (their Ctrl+F12 shots 20261107-1747*: both JSONs
 `"regions": null`, first attempt «рамка отменена», second «рамка сохранена»
 with an empty marked PNG): the mark mode opened (the Russian hint showed) but
