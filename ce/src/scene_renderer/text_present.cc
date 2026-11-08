@@ -7,6 +7,7 @@
 #include <SDL.h>
 
 #include "../color.h"
+#include "../dev_output.h"
 #include "../map.h"
 #include "../scene/scene_overlay.h"
 #include "../scene/scene_view.h"
@@ -404,8 +405,14 @@ void disableSharpText(const char* message)
     gSharpGlyphKeyValid = false;
     if (gSharpTextFailureLogged) return;
     gSharpTextFailureLogged = true;
-    fprintf(stderr, "sharp text: %s; using pixel text\n", message != nullptr ? message : "rendering failed");
+    const char* reason = message != nullptr ? message : "rendering failed";
+    fprintf(stderr, "sharp text: %s; using pixel text\n", reason);
     fflush(stderr);
+    // The owner never sees stderr: the failure also goes to the logs folder.
+    if (FILE* log = fopen((dev_output::outputDirectory("logs") / "scene.log").string().c_str(), "a")) {
+        fprintf(log, "sharp text: %s; using pixel text\n", reason);
+        fclose(log);
+    }
 }
 
 bool prepareSharpTextForPresent(SDL_Surface* indexedSurface, SDL_Surface* rgbaSurface, bool enabled)
@@ -513,6 +520,9 @@ bool prepareSharpTextForPresent(SDL_Surface* indexedSurface, SDL_Surface* rgbaSu
         // frame copies and the restore are still good - rebuild the glyphs.
         gSharpGlyphKeyValid = true;
         gSharpGlyphKey = glyphKey;
+        // 233: the top of this function cleared active; without this the draw
+        // below found the frame inactive and switched sharp text off.
+        output.active = true;
         output.cached = true;
         if (!renderGlyphOverlay(records, output, physicalWidth, physicalHeight, paletteRgb, paletteEntries)) {
             disableSharpText("capture or glyph rendering failed");
