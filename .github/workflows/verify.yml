@@ -115,6 +115,24 @@ jobs:
           # The release page shows the creation date, so the title carries the build day.
           gh release edit latest --repo $env:GITHUB_REPOSITORY --title "Latest build $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))" `
             --notes "Rolling build of main. Run Install-F2R.exe to install it onto your Fallout 2; afterwards start the game with Fallout 2 Reimagined.exe in the game folder; the launcher makes the 3D scene data from your own game files."
+      - name: Mirror the release on the dist branch
+        # Task 235: through some VPNs github.com/.../releases/download answers
+        # 504 while raw.githubusercontent.com works, so the launcher's last
+        # route reads these two files from an orphan branch.  One commit,
+        # force-pushed, so history does not grow.  GitHub refuses files over
+        # 100 MB; the zip is about 34 MB.
+        run: |
+          if ((Get-Item fallout2-ce-3d-win64.zip).Length -gt 90MB) { throw "the release zip is too big for the dist mirror" }
+          $dist = Join-Path $env:RUNNER_TEMP 'dist'
+          New-Item -ItemType Directory $dist | Out-Null
+          Copy-Item fallout2-ce-3d-win64.zip, staging/version.txt $dist
+          Set-Location $dist
+          git init -q -b dist
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add .
+          git commit -q -m "dist $env:GITHUB_SHA"
+          git push -q --force "https://x-access-token:$($env:GH_TOKEN)@github.com/$($env:GITHUB_REPOSITORY).git" dist
   exporter:
     runs-on: ubuntu-latest
     steps:

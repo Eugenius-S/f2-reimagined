@@ -29,16 +29,20 @@
 #include <string>
 #include <vector>
 
+#include "launcher_routes.h"
+
 namespace fs = std::filesystem;
 
 namespace {
 
+constexpr const char* kDefaultRepo = "Eugenius-S/f2-reimagined";
 constexpr const char* kZipAsset = "fallout2-ce-3d-win64.zip";
 constexpr const char* kDefaultUpdateBase =
     "https://github.com/Eugenius-S/f2-reimagined/releases/download/latest";
 constexpr const char* kDefaultReleaseInfoUrl =
     "https://api.github.com/repos/Eugenius-S/f2-reimagined/releases/tags/latest";
 // The web page answers 302 to .../releases/tag/<tag>; unlike api.github.com it has no 60 requests/hour limit.
+constexpr const char* kRpuRepo = "BGforgeNet/Fallout2_Restoration_Project";
 constexpr const char* kRpuLatestUrl =
     "https://github.com/BGforgeNet/Fallout2_Restoration_Project/releases/latest";
 constexpr const char* kGameExe = "fallout2-ce.exe";
@@ -240,7 +244,8 @@ DWORD proxyFor(const Url& url)
 }
 
 // GET one url; the failure reason lands in errorText when set.
-bool httpGet(const std::string& urlString, std::string* body, const char** errorText)
+bool httpGet(const std::string& urlString, std::string* body, const char** errorText,
+    const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS)
 {
     Url url;
     if (!crackUrlWide(utf8ToWide(urlString), &url)) {
@@ -267,7 +272,7 @@ bool httpGet(const std::string& urlString, std::string* body, const char** error
     if (!ok) {
         *errorText = "cannot open request";
     } else {
-        ok = WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+        ok = WinHttpSendRequest(request, headers, headers == WINHTTP_NO_ADDITIONAL_HEADERS ? 0 : static_cast<DWORD>(-1L), WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
         if (!ok) *errorText = "send failed";
     }
     if (ok) {
@@ -351,7 +356,8 @@ bool httpRedirectLocation(const std::string& urlString, std::string* location, c
     return ok;
 }
 
-bool httpDownload(const std::string& urlString, const fs::path& destination, const char** errorText)
+bool httpDownload(const std::string& urlString, const fs::path& destination, const char** errorText,
+    const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS)
 {
     Url url;
     if (!crackUrlWide(utf8ToWide(urlString), &url)) {
@@ -376,7 +382,7 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
         if (!ok) *errorText = "cannot open request";
     }
     if (ok) {
-        ok = WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+        ok = WinHttpSendRequest(request, headers, headers == WINHTTP_NO_ADDITIONAL_HEADERS ? 0 : static_cast<DWORD>(-1L), WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
         if (!ok) *errorText = "send failed";
     }
     if (ok) {
@@ -425,6 +431,61 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
     if (request != nullptr) WinHttpCloseHandle(request);
     if (connect != nullptr) WinHttpCloseHandle(connect);
     WinHttpCloseHandle(session);
+    return ok;
+}
+
+std::string joinUrl(const std::string& base, const char* name);
+
+// --- download routes (task 235) -------------------------------------------
+// Through some VPNs github.com/.../releases/download answers 504 while the API
+// and raw.githubusercontent.com work, so every file tries three routes in turn.
+
+// Where one asset of a repo's release can be had.  Only the official release
+// has the mirror (the CI branch `dist`); a custom --update-url gets its one url.
+std::vector<launcher_routes::Route> releaseRoutes(const std::string& base, const char* file)
+{
+    std::vector<launcher_routes::Route> routes = { { "github.com", joinUrl(base, file), "" } };
+    if (base == kDefaultUpdateBase) {
+        std::string repo = kDefaultRepo;
+        routes.push_back({ "api", "https://api.github.com/repos/" + repo + "/releases/tags/latest", file });
+        routes.push_back({ "mirror", "https://raw.githubusercontent.com/" + repo + "/dist/" + file, "" });
+    }
+    return routes;
+}
+
+// Fetch into body (text) or into dest (a file); the console names the route that worked.
+bool fetchRoutes(const std::vector<launcher_routes::Route>& routes, std::string* body, const fs::path* dest,
+    std::string* error)
+{
+    std::string worked;
+    bool ok = launcher_routes::tryRoutes(routes, [&](const launcher_routes::Route& route, std::string* why) {
+        std::string url = route.url;
+        const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS;
+        const char* e = nullptr;
+        if (!route.apiAsset.empty()) {
+            std::string json;
+            if (!httpGet(url, &json, &e)) {
+                *why = std::string(e != nullptr ? e : "network error") + " (release info)";
+                logf("  route %s failed: %s", route.label.c_str(), why->c_str());
+                return false;
+            }
+            url = launcher_routes::assetApiUrl(json, route.apiAsset);
+            if (url.empty()) {
+                *why = "the asset is not in the release";
+                logf("  route %s failed: %s", route.label.c_str(), why->c_str());
+                return false;
+            }
+            headers = L"Accept: application/octet-stream";
+        }
+        if (body != nullptr) body->clear();
+        bool got = body != nullptr ? httpGet(url, body, &e, headers) : httpDownload(url, *dest, &e, headers);
+        if (!got) {
+            *why = e != nullptr ? e : "network error";
+            logf("  route %s failed: %s", route.label.c_str(), why->c_str());
+        }
+        return got;
+    }, &worked, error);
+    if (ok) logf("  route that worked: %s", worked.c_str());
     return ok;
 }
 
@@ -814,21 +875,31 @@ bool installRussianTranslation(const fs::path& root)
     if (!fs::exists(translation)) {
         const char* networkError = nullptr;
         std::string location;
-        if (!httpRedirectLocation(kRpuLatestUrl, &location, &networkError)) {
-            logf("cannot reach the official RPU release (%s)",
-                networkError != nullptr ? networkError : "network error");
-            return false;
+        std::string tag;
+        if (httpRedirectLocation(kRpuLatestUrl, &location, &networkError)) {
+            const std::string marker = "/releases/tag/";
+            size_t at = location.find(marker);
+            if (at != std::string::npos) tag = trim(location.substr(at + marker.size()));
+        } else {
+            logf("  RPU release page failed: %s", networkError != nullptr ? networkError : "network error");
         }
-        const std::string marker = "/releases/tag/";
-        size_t at = location.find(marker);
-        std::string tag = at == std::string::npos ? std::string() : trim(location.substr(at + marker.size()));
         if (tag.empty()) {
+            std::string json;
+            if (httpGet(std::string("https://api.github.com/repos/") + kRpuRepo + "/releases/latest", &json, &networkError)) {
+                tag = jsonStringValue(json, "tag_name");
+            }
+        }
+        if (tag.empty()) {
+            log("GitHub does not answer: cannot read the official RPU release version");
             log("the official RPU release did not provide a version tag");
             return false;
         }
         std::string filename = "rpu_" + tag + "_translations.zip";
-        std::string url = "https://github.com/BGforgeNet/Fallout2_Restoration_Project/releases/download/"
-            + tag + "/" + filename;
+        // RPU has no license that allows a copy, so there is no mirror route for it.
+        std::vector<launcher_routes::Route> rpuRoutes = {
+            { "github.com", std::string("https://github.com/") + kRpuRepo + "/releases/download/" + tag + "/" + filename, "" },
+            { "api", std::string("https://api.github.com/repos/") + kRpuRepo + "/releases/tags/" + tag, filename },
+        };
         char tempPath[MAX_PATH] = {};
         GetTempPathA(MAX_PATH, tempPath);
         fs::path work = fs::path(tempPath) / ("f2ce3d-russian-" + std::to_string(GetCurrentProcessId()));
@@ -841,9 +912,12 @@ bool installRussianTranslation(const fs::path& root)
         }
         fs::path zip = work / filename;
         logf("downloading the official Russian translation from RPU %s", tag.c_str());
-        if (!httpDownload(url, zip, &networkError) || !unpackZip(zip, work / "stage")) {
-            logf("the Russian translation download failed (%s)",
-                networkError != nullptr ? networkError : "unpack failed");
+        std::string routeError;
+        bool downloaded = fetchRoutes(rpuRoutes, nullptr, &zip, &routeError);
+        if (!downloaded || !unpackZip(zip, work / "stage")) {
+            if (downloaded) log("the Russian translation archive could not be unpacked");
+            else logf("GitHub does not answer, the Russian translation could not be downloaded (%s); "
+                "it has no mirror, so try again later or use another network", routeError.c_str());
             fs::remove_all(work, error);
             return false;
         }
@@ -939,11 +1013,11 @@ std::string shortNotes(const std::string& body)
 }
 
 bool fetchReleaseInfo(const std::string& updateBase, const std::string& releaseInfoUrl,
-    std::string* version, std::string* notes)
+    std::string* version, std::string* notes, std::string* routeError)
 {
     const char* error = nullptr;
     std::string versionBody;
-    if (!httpGet(joinUrl(updateBase, kVersionTxt), &versionBody, &error)) return false;
+    if (!fetchRoutes(releaseRoutes(updateBase, kVersionTxt), &versionBody, nullptr, routeError)) return false;
     *version = trim(versionBody);
     notes->clear();
     if (!releaseInfoUrl.empty()) {
@@ -1048,8 +1122,10 @@ int runConsole(Options options)
     if (options.checkRelease) {
         std::string version;
         std::string notes;
-        if (!fetchReleaseInfo(options.updateBase, options.releaseInfoUrl, &version, &notes)) {
-            log("release check failed");
+        std::string routeError;
+        if (!fetchReleaseInfo(options.updateBase, options.releaseInfoUrl, &version, &notes, &routeError)) {
+            logf("RELEASE_ERROR:%s", routeError.c_str());
+            log("release check failed: GitHub does not answer");
             return 1;
         }
         logf("RELEASE_VERSION:%s", version.c_str());
@@ -1097,12 +1173,10 @@ int runConsole(Options options)
 
     // --- what does the release hold? ---
     std::string remoteVersion;
-    const char* networkError = nullptr;
-    std::string versionUrl = joinUrl(options.updateBase, kVersionTxt);
-    if (!httpGet(versionUrl, &remoteVersion, &networkError)) {
+    std::string routeError;
+    if (!fetchRoutes(releaseRoutes(options.updateBase, kVersionTxt), &remoteVersion, nullptr, &routeError)) {
         remoteVersion.clear();
-        logf("cannot reach the release (%s: %s)", versionUrl.c_str(),
-            networkError != nullptr ? networkError : "network error");
+        logf("GitHub does not answer (%s)", routeError.c_str());
     } else {
         remoteVersion = trim(remoteVersion);
         logf("release build: %s", remoteVersion.c_str());
@@ -1131,12 +1205,11 @@ int runConsole(Options options)
         fs::path stage = work / "stage";
         fs::create_directories(stage, error);
 
-        const char* downloadError = nullptr;
-        std::string zipUrl = joinUrl(options.updateBase, kZipAsset);
-        logf("downloading %s", zipUrl.c_str());
-        if (!httpDownload(zipUrl, zip, &downloadError)) {
+        std::string downloadError;
+        logf("downloading %s", kZipAsset);
+        if (!fetchRoutes(releaseRoutes(options.updateBase, kZipAsset), nullptr, &zip, &downloadError)) {
             fs::remove_all(work, error);
-            die(std::string("download failed: ") + (downloadError != nullptr ? downloadError : "network error"));
+            die("GitHub does not answer, download failed (" + downloadError + ")");
         }
         log("unpacking");
         if (!unpackZip(zip, stage)) {

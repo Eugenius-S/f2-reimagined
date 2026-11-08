@@ -2,7 +2,7 @@
 id: 235
 title: The launcher downloads work with and without a VPN
 milestone: M1
-status: open
+status: done
 owner: any
 suggested: claude
 priority: high
@@ -61,3 +61,4 @@ not answer" with the error, not "no network".
 ## Log
 
 - 2026-11-08 claude: cut from the owner's report; measurements above.
+- 2026-11-08 claude: done in the PR. Every launcher download (version.txt, the release zip, the RPU zip) tries github.com, then the API asset route (`Accept: application/octet-stream`), then, for our release only, the `dist` mirror on raw.githubusercontent.com (CI force-pushes an orphan `dist` branch with version.txt and the zip, about 34 MB, under the 100 MB limit). RPU has no license file and no stated terms, so it is not mirrored: it keeps routes 1 and 2 and the error says it has no mirror. The log names the route that worked; all routes failing shows "GitHub does not answer" plus the errors. Test: `launcher_routes_tests`. On this VPN machine route 1 gave 504, the API gave 403 (limit used up) and `dist` does not exist until CI runs on main, so routes 2 and 3 were not seen working end to end here; user-check stays yes (after the merge, check the release check with the VPN on and off).

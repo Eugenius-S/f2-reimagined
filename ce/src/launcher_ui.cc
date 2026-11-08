@@ -55,6 +55,7 @@ struct ReleaseInfo {
     std::wstring version;
     std::wstring notes;
     bool online = false;
+    std::wstring error; // why every route failed
 };
 
 HWND g_window = nullptr;
@@ -90,6 +91,7 @@ bool g_russianInstall = false;
 bool g_logDragging = false;
 bool g_busy = false;
 bool g_haveRelease = false;
+std::wstring g_releaseError;
 bool g_installed = false;
 bool g_operationCompleted = false;
 bool g_lastRollback = false;
@@ -319,6 +321,15 @@ void setStatus(const std::wstring& text)
     if (g_status != nullptr) SetWindowTextW(g_status, text.c_str());
 }
 
+// The release check failed on every route: say GitHub is the one not answering.
+std::wstring noReleaseStatus()
+{
+    std::wstring why = g_releaseError.empty() ? L"" : L" (" + g_releaseError + L")";
+    return g_installed
+        ? tr(L"GitHub does not answer", L"GitHub не отвечает") + why + tr(L". You can play the installed build.", L". Можно запустить установленную сборку.")
+        : tr(L"GitHub does not answer", L"GitHub не отвечает") + why + tr(L". Try again later or use another network.", L". Попробуйте позже или другую сеть.");
+}
+
 void refreshStatusFromRelease()
 {
     if (g_busy) return;
@@ -335,9 +346,7 @@ void refreshStatusFromRelease()
         return;
     }
     if (!g_haveRelease) {
-        setStatus(g_installed
-            ? tr(L"Offline: you can play the installed build.", L"Нет сети: можно запустить установленную сборку.")
-            : tr(L"Connect to the internet to install the game.", L"Для установки игры нужно подключение к интернету."));
+        setStatus(noReleaseStatus());
         return;
     }
     if (!g_installed) {
@@ -544,6 +553,7 @@ void checkReleaseAsync()
             info->version = utf8ToWide(value("RELEASE_VERSION:"));
             info->notes = utf8ToWide(value("RELEASE_NOTES:"));
             info->online = code == 0 && !info->version.empty();
+            info->error = utf8ToWide(value("RELEASE_ERROR:"));
         }
         CloseHandle(readPipe);
         if (!PostMessageW(g_window, WM_RELEASE_INFO, 0, reinterpret_cast<LPARAM>(info))) delete info;
@@ -897,6 +907,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         g_releaseVersion = info->version;
         g_releaseNotes = info->notes;
         g_haveRelease = info->online;
+        g_releaseError = info->error;
         updateLabels();
         wchar_t root[32768] = {};
         GetWindowTextW(g_root, root, static_cast<int>(std::size(root)));
@@ -911,8 +922,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             std::string installedVersion;
             if (installed) installedVersion.assign((std::istreambuf_iterator<char>(installed)), std::istreambuf_iterator<char>());
             if (!g_haveRelease) {
-                setStatus(g_installed ? tr(L"Offline: you can play the installed build.", L"Нет сети: можно запустить установленную сборку.")
-                                      : tr(L"Connect to the internet to install the game.", L"Для установки игры нужно подключение к интернету."));
+                setStatus(noReleaseStatus());
             } else if (g_autoUpdates && g_installed && installedVersion != wideToUtf8(g_releaseVersion)) {
                 startOperation(false);
             } else if (!g_installed) {
