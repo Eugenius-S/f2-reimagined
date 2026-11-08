@@ -297,9 +297,16 @@ void addObjectCard(Object* object, void* context)
         return;
     }
     const FrmId objectFid(object);
-    if (scene::isCleanEdgesBoundaryMask(scene::cleanEdges(), scene_renderer::staticMapClip().enabled,
-            objectFid.objectType() == OBJ_TYPE_SCENERY, objectFid.filePath())) {
-        return;
+    if (objectFid.objectType() == OBJ_TYPE_SCENERY && scene::cleanEdges() && scene_renderer::staticMapClip().enabled) {
+        // The art name depends on the fid alone: build its path once per fid,
+        // not once per object per frame.
+        static std::map<int, bool> boundaryMask;
+        auto found = boundaryMask.find(object->fid);
+        if (found == boundaryMask.end()) {
+            found = boundaryMask.emplace(object->fid,
+                scene::isCleanEdgesBoundaryMask(true, true, true, objectFid.filePath())).first;
+        }
+        if (found->second) return;
     }
     const int pickId = static_cast<int>(gPickObjects.size());
     gPickObjects.push_back({ object, object->tile });
@@ -357,7 +364,10 @@ void addObjectCard(Object* object, void* context)
         settings.scene3d.shadows, settings.scene3d.sprite_sides,
         scene_renderer::staticMapClip().enabled,
     };
-    if (SDL_getenv("F2CE_NO_CARDS") == nullptr && scene_renderer::staticObjectCardFresh(object, snapshot)) {
+    // Read once: an environment lookup for each of thousands of objects cost
+    // milliseconds a frame.
+    static const bool noCards = SDL_getenv("F2CE_NO_CARDS") != nullptr;
+    if (!noCards && scene_renderer::staticObjectCardFresh(object, snapshot)) {
         scene_renderer::appendStaticObjectCard(object, pickId);
         return;
     }
