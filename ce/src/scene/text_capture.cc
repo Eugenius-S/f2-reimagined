@@ -69,20 +69,24 @@ struct TextOwnerCopySnapshot {
 
 std::map<std::uintptr_t, BufferRange>& ranges()
 {
-    static std::map<std::uintptr_t, BufferRange> value;
-    return value;
+    // The memory free hook (memory.cc textCaptureAllocationDestroyed) runs
+    // while the process exits, after function-local statics are destroyed:
+    // a destroyed map here double-frees and corrupts the heap. Leak it on
+    // purpose, the OS reclaims it.
+    static std::map<std::uintptr_t, BufferRange>* value = new std::map<std::uintptr_t, BufferRange>();
+    return *value;
 }
 
 std::recursive_mutex& captureMutex()
 {
-    static std::recursive_mutex value;
-    return value;
+    static std::recursive_mutex* value = new std::recursive_mutex();
+    return *value;
 }
 
 scene::TextLayer& layer()
 {
-    static scene::TextLayer value;
-    return value;
+    static scene::TextLayer* value = new scene::TextLayer();
+    return *value;
 }
 
 std::uint64_t& nextBufferId()
@@ -521,6 +525,25 @@ void textCaptureUnregisterExternalBuffer(void* buffer)
         layer().eraseBuffer(it->second.id);
         ranges().erase(it);
     }
+}
+
+void textCaptureEraseTextRuns(unsigned char* buffer, const char* prefix)
+{
+    if (buffer == nullptr || prefix == nullptr || *prefix == '\0') return;
+    std::lock_guard<std::recursive_mutex> lock(captureMutex());
+    BufferRange* range = findRange(buffer);
+    if (range == nullptr || range->pitch <= 0) return;
+    const std::string runPrefix(prefix);
+    const std::vector<scene::TextRecord> records = layer().records();
+    for (const scene::TextRecord& record : records) {
+        if (record.buffer != range->id || record.run.text.compare(0, runPrefix.size(), runPrefix) != 0) continue;
+        for (const scene::TextPixelRecord& pixel : record.pixels) {
+            if (pixel.x < 0 || pixel.y < 0 || pixel.x >= range->width || pixel.y >= range->height) continue;
+            unsigned char& current = buffer[static_cast<std::size_t>(pixel.y) * range->pitch + pixel.x];
+            if (current == pixel.after) current = pixel.before;
+        }
+    }
+    layer().eraseTextRuns(range->id, runPrefix);
 }
 
 void textCaptureMarkBufferOwned(void* buffer)
