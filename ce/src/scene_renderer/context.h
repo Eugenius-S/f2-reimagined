@@ -25,6 +25,15 @@ void presentFrame(const unsigned char* rgba, int width, int height, int pitch);
 // the scene include it.
 void drawSceneOverlay(const unsigned char* rgba, int width, int height, int pitch);
 
+// 219: redraws the game overlay already in the quad texture, no upload. The
+// sharp-text cache hit uses it when the frame's picture is unchanged.
+void drawSceneOverlayCached();
+
+// 219: replaces a rectangle of the game overlay in the quad texture (the
+// cycling palette colors' box, patched over the cached layers each frame).
+// `rgba` points at the box's first pixel, `pitch` is the full frame's.
+void updateSceneOverlayRegion(const unsigned char* rgba, int pitch, int dstX, int dstY, int width, int height);
+
 // Optional overlay drawn over the last presented frame (movie frames): an
 // RGBA image mapped into `dstX/dstY/dstW/dstH` in LOGICAL coordinates.
 void drawOverlay(const unsigned char* rgba, int width, int height, int pitch, int dstX, int dstY, int dstW, int dstH);

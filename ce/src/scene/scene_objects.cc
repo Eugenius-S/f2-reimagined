@@ -208,13 +208,16 @@ bool updateHeroFromGame()
     if (gDude->rotation < ROTATION_FIRST || gDude->rotation >= ROTATION_COUNT) {
         return unavailable("player rotation is invalid");
     }
+    const Uint64 heroStart = SDL_GetPerformanceCounter();
 
     const ShownArt shown = shownArt(gDude, (gDude->flags & OBJECT_FLAT) != OBJECT_NONE);
+    const Uint64 shownDone = SDL_GetPerformanceCounter();
     FrmImage image;
     const FrmId frmId(shown.fid);
     if (!image.lock(frmId, gDude->frame, static_cast<Rotation>(shown.rotation))) {
         return unavailable("current player FRM frame could not be locked");
     }
+    const Uint64 lockedDone = SDL_GetPerformanceCounter();
     const int width = image.getWidth();
     const int height = image.getHeight();
     if (width <= 0 || height <= 0 || width > 2048 || height > 2048
@@ -247,8 +250,20 @@ bool updateHeroFromGame()
     };
     frame.stack = gHeroStack;
     frame.pickId = gHeroPickId;
+    const Uint64 decodedDone = SDL_GetPerformanceCounter();
     std::string error;
     if (!scene_renderer::updateStaticHero(frame, &error)) return unavailable(error.c_str());
+    const Uint64 builtDone = SDL_GetPerformanceCounter();
+    static int reports = 0;
+    if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
+        const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+        printf("perf hero shown=%.2f lock=%.2f decode=%.2f build=%.2f\n",
+            static_cast<double>(shownDone - heroStart) * toMs,
+            static_cast<double>(lockedDone - shownDone) * toMs,
+            static_cast<double>(decodedDone - lockedDone) * toMs,
+            static_cast<double>(builtDone - decodedDone) * toMs);
+        fflush(stdout);
+    }
     gHeroUnavailableLogged = false;
     return true;
 }
@@ -329,8 +344,24 @@ void addObjectCard(Object* object, void* context)
         if (handle != nullptr) artUnlock(handle);
         if (frames > 1 && object->frame == frames - 1) return;
     }
-    const bool flat = (object->flags & OBJECT_FLAT) != OBJECT_NONE
+    // 157: an object whose cheap state is unchanged reuses the card built
+    // before - the art locks, the decodes and the projection rebuild only
+    // ran for the things that moved, turned or changed frame.
+    const bool flatNow = (object->flags & OBJECT_FLAT) != OBJECT_NONE
         || scene_renderer::staticObjectFlat(object->tile, object->fid);
+    const scene_renderer::StaticObjectSnapshot snapshot = {
+        static_cast<unsigned int>(object->fid), object->frame, object->rotation,
+        object->tile, object->x, object->y, object->pid,
+        static_cast<unsigned int>(object->flags), stack, seeThrough, flatNow,
+        scene_renderer::staticFlyCameraActive(), scene_renderer::staticShownRotation(0),
+        settings.scene3d.shadows, settings.scene3d.sprite_sides,
+        scene_renderer::staticMapClip().enabled,
+    };
+    if (SDL_getenv("F2CE_NO_CARDS") == nullptr && scene_renderer::staticObjectCardFresh(object, snapshot)) {
+        scene_renderer::appendStaticObjectCard(object, pickId);
+        return;
+    }
+    const bool flat = flatNow;
     const bool flyFlat = scene_renderer::staticFlyCameraActive()
         && scene_renderer::staticObjectFlyFlat(object->tile, object->fid);
     const ShownArt shown = shownArt(object, flat || flyFlat || pickOnly);
@@ -433,7 +464,7 @@ void addObjectCard(Object* object, void* context)
         frame.tint[2] = (rgb & 0x1F) / 31.0f;
     }
     std::string error;
-    if (!scene_renderer::addStaticObject(frame, &error)) pass.skipped++;
+    if (!scene_renderer::addStaticObjectCached(object, snapshot, frame, &error)) pass.skipped++;
 }
 
 struct PickFilter {
@@ -470,14 +501,24 @@ bool objectArtOffsetForInspection(Object* object,int* x,int* y)
 
 bool updateObjectsFromGame()
 {
+    const Uint64 start = SDL_GetPerformanceCounter();
     scene_renderer::beginStaticObjects();
     scene_renderer::beginStaticWallSeeThrough();
     gPickObjects.clear();
     gHeroPickId = -1;
     ObjectCardPass pass = { directDrawGetPalette(), {}, 0, -1, 0 };
     if (pass.palette != nullptr) objectForEachAtElevation(gElevation, addObjectCard, &pass);
+    const Uint64 walked = SDL_GetPerformanceCounter();
     scene_renderer::endStaticObjects();
     scene_renderer::endStaticWallSeeThrough();
+    const Uint64 ended = SDL_GetPerformanceCounter();
+    static int reports = 0;
+    if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
+        const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+        printf("perf objwalk walk=%.2f upload=%.2f\n",
+            static_cast<double>(walked - start) * toMs, static_cast<double>(ended - walked) * toMs);
+        fflush(stdout);
+    }
     gObjectCardsSkipped = pass.skipped;
     return updateHeroFromGame();
 }

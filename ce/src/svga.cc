@@ -672,7 +672,25 @@ static void renderPresentBody()
 {
     // The frame ring feeds the owner shot's fps block (183); the pump takes a
     // pending --dev-owner-shot-once at the first present that can hold it.
+    {
+        static Uint32 lastPresentTicks = 0;
+        static int sameFrameReports = 0;
+        const Uint32 now = SDL_GetTicks();
+        if (lastPresentTicks != 0 && now - lastPresentTicks < 3
+            && getenv("F2CE_PERF") != nullptr && ++sameFrameReports % 60 == 0) {
+            printf("perf present double within %u ms\n", now - lastPresentTicks);
+            fflush(stdout);
+        }
+        lastPresentTicks = now;
+    }
     scene_renderer::perfFrameTick();
+    // 157: the present's own CPU spans, next to the GL timers. A plain
+    // SDL-ticks window over the parts before the render's perfBegin.
+    static double syncMs = 0.0;
+    static double sharpMs = 0.0;
+    static double refreshMs = 0.0;
+    static int presentFrames = 0;
+    const Uint64 presentStart = SDL_GetPerformanceCounter();
     // 127: the frame-time log samples the same present cadence.
     fpsCounterOnFrame();
     owner_shot::pump();
@@ -682,6 +700,7 @@ static void renderPresentBody()
         scene::syncToMap();
         devtools::sceneOverlaySynced(scene::syncOverlay());
     }
+    const Uint64 syncEnd = SDL_GetPerformanceCounter();
     // 127: the player's frame rate readout. It draws after the tile window's
     // own redraw (syncToMap above), which restores every captured text pixel
     // in its region: a readout drawn before that redraw was erased the same
@@ -737,7 +756,9 @@ static void renderPresentBody()
     owner_shot::draw(static_cast<unsigned char*>(gSdlSurface->pixels), gSdlSurface->w, gSdlSurface->h, gSdlSurface->pitch);
     const bool uiVisible = scene_renderer::isActive() && !scene_renderer::staticFlyCameraActive()
         && (!scene::shouldPresent() || scene::activeView() == scene::View::Full);
+    const Uint64 sharpStart = SDL_GetPerformanceCounter();
     const bool sharpTextReady = scene_renderer::prepareSharpTextForPresent(gSdlSurface, gSdlTextureSurface, uiVisible);
+    const Uint64 sharpEnd = SDL_GetPerformanceCounter();
     // A frame without the 3D scene (combat, dialog, ...) lands the fly camera
     // before the game takes input again.
     if (scene_renderer::staticFlyCameraActive()
@@ -748,7 +769,26 @@ static void renderPresentBody()
         if (scene::shouldPresent()) {
             // Read the current hero frame at each scene presentation; nested
             // modal presents yield below and never advance movement observers.
+            const Uint64 refreshStart = SDL_GetPerformanceCounter();
             devtools::scenePresented(scene::refreshForPresent());
+            const Uint64 refreshEnd = SDL_GetPerformanceCounter();
+            const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+            syncMs += static_cast<double>(syncEnd - presentStart) * toMs;
+            sharpMs += static_cast<double>(sharpEnd - sharpStart) * toMs;
+            refreshMs += static_cast<double>(refreshEnd - refreshStart) * toMs;
+            presentFrames++;
+            {
+                static Uint64 windowStart = 0;
+                if (windowStart == 0) windowStart = refreshEnd;
+                if (static_cast<double>(refreshEnd - windowStart) / SDL_GetPerformanceFrequency() >= 2.0) {
+                    printf("perf present sync=%.2f sharp=%.2f refresh=%.2f frames=%d\n",
+                        syncMs / presentFrames, sharpMs / presentFrames, refreshMs / presentFrames, presentFrames);
+                    fflush(stdout);
+                    syncMs = sharpMs = refreshMs = 0.0;
+                    presentFrames = 0;
+                    windowStart = refreshEnd;
+                }
+            }
             const scene::View view = scene::activeView();
             if (view == scene::View::Full) {
                 // With the glow on, the scene renders into its own
