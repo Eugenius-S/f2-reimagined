@@ -16,7 +16,7 @@ reviewed: no
 ## Goal
 
 A Russian player picks the translation they grew up with in the installer:
-1C (with Russian speech), Fargus, Levy Corporation (it also replaces part of
+1C and Fargus (both with Russian speech), Levy Corporation (it also replaces part of
 the sound and the music), or the RPU translation the installer has today.
 
 ## Context
@@ -31,8 +31,8 @@ Google Drive the owner hosts or from the sites that publish them.
 
 - The installer's Russian option becomes two independent choices: text
   from one translation (RPU as today, 1C, Fargus, Levy Corporation), and
-  sound from one (original English, 1C speech, Levy Corporation's sound and
-  music, or what else a translation carries). Any text goes with any sound,
+  sound from one (original English, 1C speech, Fargus speech, Levy
+  Corporation's sound and music, or what else a translation carries). Any text goes with any sound,
   e.g. RPU text with 1C speech. The UI says in one line what each choice
   changes.
 - Each is downloaded from its URL at the player's request, checked by size
@@ -45,8 +45,8 @@ Google Drive the owner hosts or from the sites that publish them.
   installer warns.
 - Nothing of these translations is in the repo, its history or a release.
 - One launch check per translation on the demo copy: the main menu and one
-  dialogue are in Russian; for 1C one spoken line; for Levy Corporation its
-  music plays.
+  dialogue are in Russian; for 1C and Fargus one spoken line; for Levy
+  Corporation its music plays.
 - One mixed check: RPU text with 1C speech.
 - Both READMEs list the text and sound options.
 
