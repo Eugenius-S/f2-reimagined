@@ -14,6 +14,10 @@
 
 namespace fallout {
 
+// The art preload opens and closes files on several threads at once (172):
+// every push to and unlink from a DBase's open list takes this lock.
+static std::mutex gOpenListMutex;
+
 // The size of decompression buffer for reading compressed [DFile]s.
 #define DFILE_DECOMPRESSION_BUFFER_SIZE (0x1000)
 
@@ -317,6 +321,7 @@ int dfileClose(DFile* stream)
     // from linked list.
     //
     // NOTE: Compiled code is slightly different.
+    std::unique_lock<std::mutex> guard(gOpenListMutex);
     DFile* curr = stream->dbase->dfileHead;
     DFile* prev = nullptr;
     while (curr != nullptr) {
@@ -335,6 +340,7 @@ int dfileClose(DFile* stream)
             prev->next = stream->next;
         }
     }
+    guard.unlock();
 
     memset(stream, 0, sizeof(*stream));
 
@@ -951,10 +957,7 @@ static DFile* dfileOpenInternal(DBase* dbase, const char* filePath, const char* 
 
         memset(dfile, 0, sizeof(*dfile));
         dfile->dbase = dbase;
-        // The warm thread pool opens files concurrently (172): the open list
-        // push takes its own lock, the reads themselves never share a stream.
-        static std::mutex openListMutex;
-        std::lock_guard<std::mutex> guard(openListMutex);
+        std::lock_guard<std::mutex> guard(gOpenListMutex);
         dfile->next = dbase->dfileHead;
         dbase->dfileHead = dfile;
     } else {
