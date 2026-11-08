@@ -150,3 +150,28 @@ perf load scene_total ms=49.66
 perf load first_frame ms=462.01 since chain start
 ```
 
+
+## the parallel proto warm (2026-11-08, glm)
+
+The planned lever (the light spread on worker threads) turned out to be
+aimed at the wrong cost: with the protos warm the whole spread walk is
+~2 ms. The rebuild's real cost was the lazy proto loads - the walk reads
+wall extendedFlags per visited tile and every miss pays a .lst and a .pro
+file read (~2 ms each, 219 unique wall protos on newr1). So this round
+parallelizes the proto warm instead: the unique wall pids parse over up to
+4 threads (pure file reads, no list touches), the inserts stay on the main
+thread, the spread keeps the vanilla shape. The spread result is
+pixel-identical (0 changed px against the before runs' snapshots on all
+four maps).
+
+Second chain, warm OS cache, view tile 25075, elevation 0
+(kladwtwn 5d5d0b2cd2e4 / newr1 5a825a4592af + 21a04d543180 /
+vctyctyd 13e788383eff / cave0 71f851ba8218; before rows from
+5fe157771fa3 / 6ebfe956afba / 4daf112f8c99 / df764d284470):
+
+| map | objects_light | first_frame before | first_frame after |
+| --- | --- | --- | --- |
+| kladwtwn | 238 -> 48 | 1933 | 1793 |
+| newr1 | 295/297 -> 46/48 | 2609/2524 | 2397/2319 |
+| vctyctyd | 260 -> 45 | 1827 | 1508 |
+| cave0 | 0.1 -> 0.8 | 638 | 619 |
