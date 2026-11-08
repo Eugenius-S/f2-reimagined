@@ -46,11 +46,13 @@
 #include "../version.h"
 #include "../platform/git_version.h"
 #include "../scene/scene_view.h"
+#include "../scene/menu_text.h"
 #include "../scene_renderer/camera.h"
 #include "../scene_renderer/context.h"
 #include "../scene_renderer/game_view.h"
 #include "../scene_renderer/perf.h"
 #include "../scene_renderer/scene_draw.h"
+#include "preferences_probe.h"
 #include "snapshot_rows.h"
 
 namespace fallout {
@@ -81,6 +83,20 @@ int gMarkAttempts = 0;
 Uint32 gMarkReadyAt = 0;
 int gMarkDelaySeconds = 0;
 
+// 218: the drag bench (--dev-owner-mark-drag=N). The 217 bench pushed its
+// rectangles straight into the list, so the real input path - where the
+// owner's drag actually broke - was never exercised. This one replays a drag
+// through the SDL queue and asserts the rectangle registered and the green
+// outline reached the presented pixels.
+bool gMarkDragPending = false;
+int gMarkDragDelaySeconds = 0;
+Uint32 gMarkDragReadyAt = 0;
+int gMarkDragAttempts = 0;
+int gMarkDragState = 0;
+int gMarkDragFrame = 0;
+int gMarkDragGreenBaseline = -1;
+bool gMarkDragPixelVerified = false;
+
 // The region mark (step 2): the game holds on the frame the entry captured,
 // the owner drags rectangles, Enter or a second press saves the clean PNG,
 // the marked PNG and the JSON with the regions, Esc cancels.
@@ -97,6 +113,7 @@ struct MarkRect {
 };
 std::vector<MarkRect> gMarkRects;
 MarkRect gMarkDrag;
+MarkRect gMarkDragPlanned; // 218: the drag bench's rectangle, before the drag
 bool gMarkDragging = false;
 int gMarkMouseX = 0;
 int gMarkMouseY = 0;
@@ -132,25 +149,58 @@ void jsonEscape(const char* in, std::string& out)
     }
 }
 
+// 217: the game's strings arrive in the game's own encoding (cp1251 on a
+// Russian install); the JSON is UTF-8, so convert instead of keeping raw
+// bytes that read as mojibake ("╓хэЄЁ уюЁюфр" for "Центр города").
+void cp1251ToUtf8(const char* in, std::string& out)
+{
+    for (const unsigned char* p = reinterpret_cast<const unsigned char*>(in); *p != 0; p++) {
+        unsigned int code = *p;
+        if (code >= 0xC0 && code <= 0xFF) {
+            code = 0x410 + (code - 0xC0); // А-я
+        } else if (code == 0xA8) {
+            code = 0x401; // Ё
+        } else if (code == 0xB8) {
+            code = 0x451; // ё
+        } else if (code == 0x96) {
+            code = 0x2013; // –
+        } else if (code == 0x97) {
+            code = 0x2014; // —
+        }
+        if (code < 0x80) {
+            out += static_cast<char>(code);
+        } else if (code < 0x800) {
+            out += static_cast<char>(0xC0 | (code >> 6));
+            out += static_cast<char>(0x80 | (code & 0x3F));
+        } else {
+            out += static_cast<char>(0xE0 | (code >> 12));
+            out += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+            out += static_cast<char>(0x80 | (code & 0x3F));
+        }
+    }
+}
+
 std::string protoNameOf(const Object* object)
 {
     std::string name;
     char* text = protoGetName(object);
     if (text != nullptr && text[0] != '\0') {
-        jsonEscape(text, name);
+        std::string utf8;
+        cp1251ToUtf8(text, utf8);
+        jsonEscape(utf8.c_str(), name);
     } else {
         name = "unnamed";
     }
     return name;
 }
 
-// The game's strings stay in the game's own encoding (cp1251 on a Russian
-// install); the JSON keeps the raw bytes so nothing is lost in translation.
 std::string jsonText(const char* text)
 {
     std::string out;
     if (text != nullptr && text[0] != '\0') {
-        jsonEscape(text, out);
+        std::string utf8;
+        cp1251ToUtf8(text, utf8);
+        jsonEscape(utf8.c_str(), out);
         return out;
     }
     return "unknown";
@@ -306,11 +356,15 @@ void assembleContext(ShotContext& out)
     int capturedHeight = gSdlSurface != nullptr ? gSdlSurface->h : 0;
     {
         char piece[256];
+        // 217: name the actual window mode - the old boolean read "false"
+        // for borderless, which hid the owner's fullscreen reports.
+        const char* windowMode = "windowed";
+        if (settings.screen.windowed == WindowMode::Fullscreen) windowMode = "fullscreen";
+        else if (settings.screen.windowed == WindowMode::WindowedFullscreen) windowMode = "borderless";
         snprintf(piece, sizeof(piece),
-            "\"resolution\":\"%dx%d\",\"logical_resolution\":\"%dx%d\",\"scale\":%d,\"scale_factor\":%.1f,\"windowed\":%s",
+            "\"resolution\":\"%dx%d\",\"logical_resolution\":\"%dx%d\",\"scale\":%d,\"scale_factor\":%.1f,\"window_mode\":\"%s\"",
             capturedWidth, capturedHeight, screenGetWidth(), screenGetHeight(), settings.screen.scale,
-            settings.screen.scale_factor,
-            settings.screen.windowed == WindowMode::Windowed ? "true" : "false");
+            settings.screen.scale_factor, windowMode);
         out.resolutionJson = piece;
     }
 
@@ -474,7 +528,7 @@ bool takeShot()
 
     char message[128];
     snprintf(message, sizeof(message), "shot saved: %s", imageFile.c_str());
-    displayMonitorAddMessage(message);
+    displayMonitorAddMessage(scene::menuStatusText(message, settings.system.language).c_str());
     return true;
 }
 
@@ -735,7 +789,7 @@ bool saveMark()
 
     char message[160];
     snprintf(message, sizeof(message), "mark saved: %s-marked.png", gMarkStem);
-    displayMonitorAddMessage(message);
+    displayMonitorAddMessage(scene::menuStatusText(message, settings.system.language).c_str());
     return true;
 }
 
@@ -744,7 +798,7 @@ void enterMarkMode()
     if (gMarkMode) return;
     if (!(scene_renderer::isActive() && scene::shouldPresent()
             && scene::activeView() == scene::View::Full)) {
-        displayMonitorAddMessage("mark failed: the 3D view is not up");
+        displayMonitorAddMessage(scene::menuStatusText("mark failed: the 3D view is not up", settings.system.language).c_str());
         return;
     }
 
@@ -753,7 +807,7 @@ void enterMarkMode()
         std::time_t t = time(nullptr);
         struct tm* tmv = localtime(&t);
         if (tmv == nullptr || strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", tmv) == 0) {
-            displayMonitorAddMessage("mark failed: clock unavailable");
+            displayMonitorAddMessage(scene::menuStatusText("mark failed: clock unavailable", settings.system.language).c_str());
             return;
         }
     }
@@ -766,7 +820,7 @@ void enterMarkMode()
         directory.clear();
     }
     if (directory.empty()) {
-        displayMonitorAddMessage("mark failed: no output folder");
+        displayMonitorAddMessage(scene::menuStatusText("mark failed: no output folder", settings.system.language).c_str());
         return;
     }
     char mapBase[32] = "map";
@@ -787,7 +841,7 @@ void enterMarkMode()
         }
     }
     if (gMarkStem[0] == '\0') {
-        displayMonitorAddMessage("mark failed: no free file name");
+        displayMonitorAddMessage(scene::menuStatusText("mark failed: no free file name", settings.system.language).c_str());
         return;
     }
 
@@ -796,7 +850,7 @@ void enterMarkMode()
     std::vector<unsigned char> palette;
     std::string failure;
     if (!readFrame(pixels, indexed, palette, &gMarkWidth, &gMarkHeight, &failure)) {
-        displayMonitorAddMessage("mark failed: capture unavailable");
+        displayMonitorAddMessage(scene::menuStatusText("mark failed: capture unavailable", settings.system.language).c_str());
         return;
     }
     gMarkClean = std::move(pixels);
@@ -815,6 +869,40 @@ void exitMarkMode()
     gMarkClean.shrink_to_fit();
     gMarkRects.clear();
     gMarkDragging = false;
+}
+
+// The scripted input's fake mouse device (preferences_probe.h): its events
+// feed the game's mouse through the same device layer a real mouse uses,
+// without touching the owner's cursor.
+void pushScriptedMouse(Uint32 type, int x, int y)
+{
+    SDL_Event event = {};
+    event.type = type;
+    if (type == SDL_MOUSEMOTION) {
+        event.motion.which = devtools::kScriptMouse;
+        event.motion.x = x;
+        event.motion.y = y;
+    } else {
+        event.button.which = devtools::kScriptMouse;
+        event.button.button = SDL_BUTTON_LEFT;
+        event.button.x = x;
+        event.button.y = y;
+        event.button.state = type == SDL_MOUSEBUTTONDOWN ? SDL_PRESSED : SDL_RELEASED;
+    }
+    SDL_PushEvent(&event);
+}
+
+void pushScriptedReturnKey()
+{
+    SDL_Event down = {};
+    down.type = SDL_KEYDOWN;
+    down.key.keysym.scancode = SDL_SCANCODE_RETURN;
+    down.key.state = SDL_PRESSED;
+    SDL_Event up = down;
+    up.type = SDL_KEYUP;
+    up.key.state = SDL_RELEASED;
+    SDL_PushEvent(&down);
+    SDL_PushEvent(&up);
 }
 
 void handleMarkMouse()
@@ -852,33 +940,40 @@ bool handleKey(int key)
     // F9 stays the dev snapshot and never reaches here.
     if (gMarkMode) {
         // The mark holds the whole input: the game gets nothing.
-        if (key == -1) {
+        //
+        // 218: inputGetInput answers -2, not -1, on every frame a mouse
+        // button goes down, repeats or comes up - it checks the same flags
+        // itself. The mark only ever watched -1, so a real drag could not
+        // register; the pump above pushed its rectangles past the input and
+        // never noticed.
+        if (key == -1 || key == -2) {
             handleMarkMouse();
             return true;
         }
-        if (key == KEY_RETURN || key == KEY_F9 || key == KEY_CTRL_F9 || key == KEY_ALT_F9) {
+        if (key == KEY_RETURN || key == KEY_F9 || key == KEY_CTRL_F9 || key == KEY_ALT_F9
+            || key == KEY_F12 || key == KEY_CTRL_F12) {
             std::string failure;
             if (!saveMark()) {
-                displayMonitorAddMessage("mark failed: save failed");
+                displayMonitorAddMessage(scene::menuStatusText("mark failed: save failed", settings.system.language).c_str());
             }
             exitMarkMode();
             return true;
         }
         if (key == KEY_ESCAPE) {
             exitMarkMode();
-            displayMonitorAddMessage("mark cancelled");
+            displayMonitorAddMessage(scene::menuStatusText("mark cancelled", settings.system.language).c_str());
             return true;
         }
         return true;
     }
-    if (key == KEY_CTRL_F9 || key == KEY_ALT_F9) {
+    if (key == KEY_CTRL_F9 || key == KEY_ALT_F9 || key == KEY_CTRL_F12) {
         enterMarkMode();
         return true;
     }
-    if (key != KEY_F9) return false;
+    if (key != KEY_F9 && key != KEY_F12) return false;
     std::string failure;
     if (!takeShot()) {
-        displayMonitorAddMessage("shot failed");
+        displayMonitorAddMessage(scene::menuStatusText("shot failed", settings.system.language).c_str());
         return false;
     }
     return true;
@@ -913,8 +1008,60 @@ void draw(unsigned char* surface, int width, int height, int pitch)
     }
     ScopedFont scopedFont(101);
     const int lineHeight = fontGetLineHeight();
-    fontDrawText(surface + pitch * (height - lineHeight - 4) + 8,
-        "MARK: drag rectangles, Enter saves, Esc cancels", width - 16, pitch, COLOR_GREEN);
+    // Top-left, not the bottom corner: the game's own monitor messages share
+    // the bottom-left corner and the two texts landed on top of each other.
+    fontDrawText(surface + pitch * 8 + 8,
+        scene::menuText("MARK: drag rectangles, Enter saves, Esc cancels", settings.system.language),
+        width - 16, pitch, COLOR_GREEN);
+}
+
+// 217: the sharp-text present path rebuilds the screen from captured text
+// runs only, so the raw outline pixels drawn into the indexed surface never
+// reach a 3D frame - the owner dragged rectangles and saw nothing. This
+// re-draws the same rectangles as RGBA patches straight over the presented
+// scene, the way the fly-camera FPS readout does.
+void drawSceneOverlay()
+{
+    if (!gMarkMode || gSdlSurface == nullptr) return;
+    if (gMarkRects.empty() && !gMarkDragging) return;
+    const int width = gSdlSurface->w;
+    const int height = gSdlSurface->h;
+    const auto outlinePatch = [&](const MarkRect& rect) {
+        int x0 = std::max(0, std::min(std::min(rect.x0, rect.x1), width - 2));
+        int x1 = std::max(0, std::min(std::max(rect.x0, rect.x1), width - 1));
+        int y0 = std::max(0, std::min(std::min(rect.y0, rect.y1), height - 2));
+        int y1 = std::max(0, std::min(std::max(rect.y0, rect.y1), height - 1));
+        if (x1 < x0 || y1 < y0) return;
+        const int w = x1 - x0 + 1;
+        const int h = y1 - y0 + 1;
+        std::vector<unsigned char> rgba(static_cast<size_t>(w) * h * 4, 0);
+        const auto put = [&rgba, w, h](int x, int y) {
+            unsigned char* pixel = rgba.data() + (static_cast<size_t>(y) * w + x) * 4;
+            pixel[0] = 0;
+            pixel[1] = 255;
+            pixel[2] = 0;
+            pixel[3] = 255;
+        };
+        for (int x = 0; x < w; x++) {
+            put(x, 0);
+            put(x, h - 1);
+            if (h > 1) put(x, 1);
+            if (h > 2) put(x, h - 2);
+        }
+        for (int y = 0; y < h; y++) {
+            put(0, y);
+            put(w - 1, y);
+            if (w > 1) put(1, y);
+            if (w > 2) put(w - 2, y);
+        }
+        scene_renderer::drawOverlay(rgba.data(), w, h, w * 4, x0, y0, w, h);
+    };
+    for (const MarkRect& rect : gMarkRects) {
+        outlinePatch(rect);
+    }
+    if (gMarkDragging) {
+        outlinePatch(gMarkDrag);
+    }
 }
 
 bool markMode()
@@ -949,6 +1096,13 @@ void parseOption(const char* arg)
         gMarkDelaySeconds = atoi(arg + 23);
         if (gMarkDelaySeconds < 0) gMarkDelaySeconds = 0;
         if (gMarkDelaySeconds > 3600) gMarkDelaySeconds = 3600;
+        return;
+    }
+    if (strncmp(arg, "--dev-owner-mark-drag=", 22) == 0) {
+        gMarkDragPending = true;
+        gMarkDragDelaySeconds = atoi(arg + 22);
+        if (gMarkDragDelaySeconds < 0) gMarkDragDelaySeconds = 0;
+        if (gMarkDragDelaySeconds > 3600) gMarkDragDelaySeconds = 3600;
     }
 }
 
@@ -999,11 +1153,136 @@ void pumpMark()
     gMarkAttempts = 0;
 }
 
+// 218: one drag replayed through the real input path - scripted mouse events
+// in the SDL queue, so the flags cross inputGetInput exactly as the owner's
+// drag does - then Enter to save. The printed verdict is the bench's
+// assertion: the rectangle registered, and the green outline is in the
+// presented pixels.
+void pumpDrag()
+{
+    if (!gMarkDragPending) return;
+    if (gMarkDragState == 0) {
+        if (gDude == nullptr || gMapHeader.name[0] == '\0') return;
+        if (!(scene_renderer::isActive() && scene::shouldPresent()
+                && scene::activeView() == scene::View::Full)) return;
+        if (gMarkDragReadyAt == 0) gMarkDragReadyAt = SDL_GetTicks() + gMarkDragDelaySeconds * 1000;
+        if (SDL_GetTicks() < gMarkDragReadyAt) return;
+        enterMarkMode();
+        if (!gMarkMode) {
+            if (++gMarkDragAttempts > 600) {
+                gMarkDragPending = false;
+                gMarkDragAttempts = 0;
+                devtools::scriptedInputSetExternalMouse(false);
+                printf("owner shot: mark drag gave up waiting for a ready view\n");
+                fflush(stdout);
+            }
+            return;
+        }
+        // The rectangle spans the view's middle third, as the pump mark does.
+        gMarkDragPlanned.x0 = gMarkWidth / 3;
+        gMarkDragPlanned.y0 = gMarkHeight / 3;
+        gMarkDragPlanned.x1 = gMarkWidth * 2 / 3;
+        gMarkDragPlanned.y1 = gMarkHeight * 2 / 3;
+        devtools::scriptedInputSetExternalMouse(true);
+        gMarkDragState = 1;
+        gMarkDragFrame = 0;
+        return;
+    }
+
+    gMarkDragFrame++;
+    switch (gMarkDragState) {
+    case 1:
+        if (gMarkDragFrame < 5) return;
+        pushScriptedMouse(SDL_MOUSEMOTION, gMarkDragPlanned.x0, gMarkDragPlanned.y0);
+        gMarkDragState = 2;
+        break;
+    case 2:
+        pushScriptedMouse(SDL_MOUSEBUTTONDOWN, gMarkDragPlanned.x0, gMarkDragPlanned.y0);
+        gMarkDragState = 3;
+        gMarkDragFrame = 0;
+        break;
+    case 3:
+        if (gMarkDragFrame <= 12) {
+            const int x = gMarkDragPlanned.x0 + (gMarkDragPlanned.x1 - gMarkDragPlanned.x0) * gMarkDragFrame / 12;
+            const int y = gMarkDragPlanned.y0 + (gMarkDragPlanned.y1 - gMarkDragPlanned.y0) * gMarkDragFrame / 12;
+            pushScriptedMouse(SDL_MOUSEMOTION, x, y);
+        } else {
+            gMarkDragState = 4;
+        }
+        break;
+    case 4:
+        pushScriptedMouse(SDL_MOUSEBUTTONUP, gMarkDragPlanned.x1, gMarkDragPlanned.y1);
+        gMarkDragState = 5;
+        gMarkDragFrame = 0;
+        break;
+    case 5:
+        if (gMarkDragFrame < 6) return;
+        printf("owner shot: mark drag %s (%d rectangles)\n",
+            gMarkRects.empty() ? "FAILED: drag never registered" : "rect registered",
+            static_cast<int>(gMarkRects.size()));
+        fflush(stdout);
+        pushScriptedReturnKey();
+        gMarkDragState = 6;
+        gMarkDragFrame = 0;
+        break;
+    case 6:
+        if (gMarkDragFrame < 30) return;
+        printf("owner shot: mark drag done (overlay green %s)\n",
+            gMarkDragPixelVerified ? "verified on screen" : "NOT verified");
+        fflush(stdout);
+        devtools::scriptedInputSetExternalMouse(false);
+        exitMarkMode();
+        gMarkDragPending = false;
+        gMarkDragState = 0;
+        break;
+    default:
+        gMarkDragState = 0;
+        break;
+    }
+}
+
+// The presented-frame readback for the drag bench: before the press it counts
+// the strip's green as the scene's baseline, after it the overlay's outline
+// must raise that count by most of the strip. Pure (0,255,0) is the overlay's
+// own color, blended straight over the frame.
+void verifySceneOverlayPresented()
+{
+    if (!gMarkDragPending || gMarkDragState < 1 || gMarkDragState > 5) return;
+    int x0 = 0;
+    int y0 = 0;
+    if (!scene_renderer::overlayLogicalToWindow(gMarkDragPlanned.x0, gMarkDragPlanned.y0, &x0, &y0)) return;
+    int x1 = 0;
+    int y1 = 0;
+    if (!scene_renderer::overlayLogicalToWindow(gMarkDragPlanned.x1, gMarkDragPlanned.y0, &x1, &y1)) return;
+    const int stripWidth = x1 - x0 + 1;
+    if (stripWidth <= 0) return;
+    std::vector<unsigned char> pixels;
+    if (!scene_renderer::readPresentPixels(x0, y0, stripWidth, 1, pixels)) return;
+    int green = 0;
+    for (int index = 0; index < stripWidth; index++) {
+        const unsigned char* pixel = pixels.data() + static_cast<size_t>(index) * 4;
+        if (pixel[0] < 32 && pixel[1] >= 250 && pixel[2] < 32) green++;
+    }
+    if (gMarkDragState <= 2) {
+        // Before the press: whatever green the scene itself has is the baseline.
+        gMarkDragGreenBaseline = green;
+        return;
+    }
+    if (!gMarkDragPixelVerified && gMarkDragGreenBaseline >= 0
+        && green - gMarkDragGreenBaseline >= stripWidth / 2) {
+        gMarkDragPixelVerified = true;
+        printf("owner shot: overlay pixels verified on screen (green %d, baseline %d, strip %d)\n",
+            green, gMarkDragGreenBaseline, stripWidth);
+        fflush(stdout);
+    }
+}
+
 
 void pump()
 {
     pumpTeleport();
     pumpMark();
+    pumpDrag();
     if (!gShotPending) return;
     // The plain shot waits for the game itself: a map loaded and the hero on
     // it. In the 3D view it waits for the scene's own present too, so the PNG
@@ -1273,7 +1552,7 @@ void pumpTeleport()
     char message[128];
     snprintf(message, sizeof(message), "teleported: %s e%d hex %d", gMapHeader.name,
         gTeleport.elevation, gDude->tile);
-    displayMonitorAddMessage(message);
+    displayMonitorAddMessage(scene::menuStatusText(message, settings.system.language).c_str());
     printf("owner teleport: arrived, %s\n", message);
     fflush(stdout);
     gTeleport.active = false;

@@ -99,6 +99,8 @@ double cloudPhaseRequested(); // --dev-cloud-phase, game minutes, -1 when unset
 // The fly camera lands (a frame is presented without the 3D scene: combat,
 // dialog, a movie).
 void landFlight();
+// 215: Ctrl+F11 in normal play — take off or land the fly camera.
+void toggleFly();
 // A new or loaded game: a view restore queued by the last one is dropped.
 void gameReset();
 bool staticWalkPreviewActive();
@@ -111,6 +113,7 @@ void sceneOverlaySynced(bool on);
 // when no 3D view is active.
 void vanillaPresented();
 void sceneOverlayPresented();
+void sceneLiveFrameReady();
 bool handleClick(int mouseX, int mouseY);
 
 // Draws the panel into the 8-bit framebuffer (before palette expansion).
@@ -119,6 +122,11 @@ void draw(unsigned char* surface, int width, int height, int pitch);
 // Saves a PNG of the current frame plus a JSON sidecar with the metadata
 // of the actual state.
 bool takeSnapshot();
+// Background verification of the save-window thumbnail, without writing a save slot.
+bool savePreviewFixtureActive();
+bool savePreviewFixtureLoadActive();
+void savePreviewFixtureComplete(bool captured);
+void savePreviewFixtureLoadComplete(bool captured);
 
 // Metadata helpers.
 void currentMapName(char* buffer, size_t size);
