@@ -2,7 +2,7 @@
 id: 185
 title: Every sfall opcode, hook and ini key RP needs and CE lacks, counted
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: any
 priority: high
@@ -80,3 +80,4 @@ from verified findings.
 Check: `build/rp-gap-run-3/process.stdout.log`, its seven sidecars under
 `build/rp-gap-run-3/runs/3d6a34a69fd1/shots/dev/2026-11-06/`, the cache
 fingerprint output, Release build, CTest 20/20 and exporter tests 135/135.
+- 2026-11-08 claude: folded into 186; what is left is in its Acceptance.

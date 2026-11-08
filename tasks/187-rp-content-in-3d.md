@@ -2,7 +2,7 @@
 id: 187
 title: RP's new and changed maps build in 3D under the same rules
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: any
 priority: high
@@ -125,3 +125,4 @@ Check: `build/rp-export-refresh-20261106.log`, `build/tour/before/sfsheng-e0/`,
 `build/tour/before/sfsheng-e1/`, `build/tour/after/sfsheng-e0/`, and
 `build/test-run/runs/98a736374b6f/`; Release build, CTest 20/20 and exporter
 tests 137/137 passed.
+- 2026-11-08 claude: folded into 186; what is left is in its Acceptance.
