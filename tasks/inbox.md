@@ -338,3 +338,4 @@ first: a new task only when no open task or batch fits (AGENTS.md, Tasks).
   Map coverage checked: the export groups hold all 152 playable maps.
 - 2026-11-08 (-> 191, find 1) The owner: the Den's chain-link fences are black walls with specks; the mesh holes should show what is behind.
 - 2026-11-08 (-> reopen 218 or a new task; 213/217/218 are done) The owner: the screenshot region mark stays drawn on the bottom panel and is never erased.
+- 2026-11-08 (-> 193 part A) The owner: message window bullets - bullet, gap, text; wrapped lines align with the text, not the bullet; one straight left edge.
