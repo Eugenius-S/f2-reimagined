@@ -16,7 +16,8 @@ from baked_sidecar import (ENTRY as BAKED_ENTRY, GL_MAP_OFFSET, HEADER as BAKED_
                            NOCAST as BAKED_NOCAST, SKIP as BAKED_SKIP, FLAT as BAKED_FLAT, FLY_FLAT as BAKED_FLY_FLAT,
                            FIXED_CARD as BAKED_FIXED_CARD, FLY_SKIP as BAKED_FLY_SKIP, PLANE as BAKED_PLANE,
                            baked_objects, decode_baked_sidecar, encode_baked_sidecar)
-from export import MAP_GROUPS, ReadOnlyGameFiles, choose_source, main, parse_args, patch_paths, scene_directory, validate_output_contents
+import export
+from export import MAP_GROUPS, ReadOnlyGameFiles, check_scenes, choose_source, main, parse_args, patch_paths, scene_current, scene_directory, validate_output_contents
 from floor_sidecar import HEADER, MAGIC, VERSION, cell_content_rect, decode_floor_sidecar, encode_floor_sidecar
 from roof_fringe import (boundary_edges, components_of, donor_tiles, inner_edge, cut_to_walls, own_strip, donate, foot_cover, lay_donor, roof_sides, whole_sides, BELT_LAP, BELT_ROWS, EDGE_ROWS, STRIP_ROWS, belt_art, compose_band, is_fringe, outward, resolve_runs, runs_of,
                          split_tile, tidy_cell, unproject_cell, unroll, wall_under, write_fringe_art)
@@ -185,6 +186,53 @@ class TargetTests(unittest.TestCase):
             parse_args(["--map", "../kladwtwn"])
         with self.assertRaises(SystemExit):
             parse_args(["--maps", "kladwtwn,a/b"])
+
+    def test_force_flag(self):
+        self.assertFalse(parse_args(["--maps", "all"]).force)
+        self.assertTrue(parse_args(["--maps", "all", "--force"]).force)
+
+    def test_check_finds_a_map_whose_only_scene_is_elevation_1(self):
+        with TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            (cache / "newr1a" / "1").mkdir(parents=True)
+            (cache / "newr1a" / "1" / "scene.json").write_text("{}")
+            (cache / "klatrap" / "0").mkdir(parents=True)
+            self.assertEqual(check_scenes(Path(tmp), ["newr1a", "klatrap", "nomap"], cache), ["klatrap", "nomap"])
+
+    def test_scene_current_needs_provenance_and_artifacts(self):
+        class FakeGf:
+            _reads = {}
+
+            def read(self, key):
+                return b""
+
+        original_fp = export.input_fingerprint
+        with TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            self.assertFalse(scene_current(FakeGf(), out, "m", 0, out))
+            provenance = {"map": "m", "elevation": 0, "artifacts_sha256": {"scene.json": "x"},
+                          "resources_read": {}, "fingerprint_sha256": "abc"}
+            without_field = dict(provenance)
+            provenance["inputs_sha256"] = "abc"
+            (out / "provenance.json").write_text(json.dumps(provenance))
+            self.assertFalse(scene_current(FakeGf(), out, "m", 0, out))  # scene.json is missing
+            (out / "scene.json").write_text("{}")
+            (out / "provenance.json").write_text(json.dumps(without_field))
+            export.input_fingerprint = lambda *args: ("abc", None, None, None)
+            try:
+                self.assertFalse(scene_current(FakeGf(), out, "m", 0, out))  # no inputs_sha256 field
+            finally:
+                export.input_fingerprint = original_fp
+            (out / "provenance.json").write_text(json.dumps(provenance))
+            original = export.input_fingerprint
+            try:
+                export.input_fingerprint = lambda *args: ("abc", None, None, None)
+                self.assertTrue(scene_current(FakeGf(), out, "m", 0, out))
+                self.assertFalse(scene_current(FakeGf(), out, "m", 1, out))  # another elevation
+                export.input_fingerprint = lambda *args: ("changed", None, None, None)
+                self.assertFalse(scene_current(FakeGf(), out, "m", 0, out))
+            finally:
+                export.input_fingerprint = original
 
     def test_each_elevation_has_its_directory(self):
         with TemporaryDirectory() as tmp:

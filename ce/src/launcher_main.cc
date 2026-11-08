@@ -871,7 +871,7 @@ Options parseOptions(int argc, char** argv)
             log("  --update-url <url>  where version.txt and the zip live (default: the latest release)");
             log("  --release-info-url <url>  release API for the version notes");
             log("  --maps <list>       maps the exporter covers, comma separated (default: all, every map)");
-            log("  --force-export      rebuild the 3D scene data even if it looks current");
+            log("  --force-export      rebuild all the 3D scene data even if it is current");
             log("  --no-start          do everything except starting the game");
             log("  --rollback          restore the most recent backed-up game build");
             log("  --russian           install the official RPU Russian text translation");
@@ -1076,6 +1076,7 @@ int runConsole(Options options)
         if (needExport) {
             std::string command = "\"" + exporter.string() + "\" --game-root \"" + root.string()
                 + "\" --maps " + mapList;
+            if (options.forceExport) command += " --force";
             logf("making the 3D scene data for: %s", mapList.c_str());
             if (!runTool(utf8ToWide(command), root.wstring())) {
                 log("the exporter failed; the game will start in 2D");
