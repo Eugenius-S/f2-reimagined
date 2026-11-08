@@ -694,10 +694,14 @@ static void renderPresentBody()
     // 127: the frame-time log samples the same present cadence.
     fpsCounterOnFrame();
     owner_shot::pump();
+    // 172: the first present of the chain (the loading screen's) against the
+    // first sync that loaded the scene.
+    scene_renderer::perfLoadMark("ff_present_top");
     // The 3D scene shows the world: the tile window keeps only what the game
     // draws over it.
     if (scene_renderer::isActive()) {
         scene::syncToMap();
+        scene_renderer::perfLoadMark("ff_sync_done");
         devtools::sceneOverlaySynced(scene::syncOverlay());
     }
     const Uint64 syncEnd = SDL_GetPerformanceCounter();
@@ -795,6 +799,10 @@ static void renderPresentBody()
                 // framebuffer, which comes back with its bleed added.
                 scene_renderer::perfBegin();
                 const bool glow = scene_renderer::beginSceneCapture();
+                // 172: the split of the scene_loaded -> first_frame gap: what
+                // ran before the scene draw, then the shadow pass and the
+                // ground bake inside it.
+                scene_renderer::perfLoadMark("ff_draw_begin");
                 scene_renderer::drawStaticHeroPreview();
                 scene_renderer::perfMark("scene");
                 scene_renderer::perfLoadMark("first_frame");
