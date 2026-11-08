@@ -24,9 +24,9 @@ int main()
     check(t.value == 10, "the bar never goes back");
     t.feed("{\"maps_total\": 2, \"scenes_total\": 4}");
     check(t.hideLine && t.mapsTotal == 2 && t.scenesTotal == 4, "totals read");
-    t.feed("{\"fingerprint_sha256\": \"x\", \"output\": \"C:\\\\g\\\\cache\\\\klamall\\\\0\"}");
+    t.feed("{\"fingerprint_sha256\": \"x\", \"output\": \"g\\\\cache\\\\klamall\\\\0\"}");
     check(t.hideLine && t.finishedMap.empty() && t.value == 34, "first scene: 12 + 88/4");
-    t.feed("{\"current\": true, \"output\": \"C:\\\\g\\\\cache\\\\klamall\\\\1\"}");
+    t.feed("{\"current\": true, \"output\": \"g\\\\cache\\\\klamall\\\\1\"}");
     check(t.finishedMap.empty(), "map is open until another starts");
     t.feed("FAILED denbus1 e0: boom");
     check(t.finishedMap == "klamall" && t.finishedResult == MapResult::Built && t.mapsDone == 1, "klamall built");
