@@ -25,6 +25,56 @@ using namespace internal;
 
 namespace {
 
+// 157: the ground light's half-resolution bake. The plane's light and sun
+// shadow cost the scene's most expensive fragment work (the light loop and
+// the 25-tap shadow disk); once per frame they render into this buffer at a
+// quarter of the pixels and the floor tiles sample it instead.
+unsigned int gGroundBakeFbo = 0;
+unsigned int gGroundBakeTexture = 0;
+int gGroundBakeWidth = 0;
+int gGroundBakeHeight = 0;
+
+void destroyGroundBake()
+{
+    if (gContext != nullptr) {
+        if (gGroundBakeFbo != 0) glDeleteFramebuffers(1, &gGroundBakeFbo);
+        if (gGroundBakeTexture != 0) glDeleteTextures(1, &gGroundBakeTexture);
+    }
+    gGroundBakeFbo = 0;
+    gGroundBakeTexture = 0;
+    gGroundBakeWidth = 0;
+    gGroundBakeHeight = 0;
+}
+
+bool ensureGroundBake(int width, int height)
+{
+    if (width <= 0 || height <= 0) return false;
+    if (gGroundBakeFbo != 0 && gGroundBakeWidth == width && gGroundBakeHeight == height) return true;
+    destroyGroundBake();
+    while (glGetError() != 0) {
+    }
+    glGenTextures(1, &gGroundBakeTexture);
+    glBindTexture(kTexture2D, gGroundBakeTexture);
+    glTexImage2D(kTexture2D, 0, kRgba8, width, height, 0, kRGBA, kUnsignedByte, nullptr);
+    glTexParameteri(kTexture2D, kTextureMinFilter, kLinear);
+    glTexParameteri(kTexture2D, kTextureMagFilter, kLinear);
+    glTexParameteri(kTexture2D, kTextureWrapS, kClampToEdge);
+    glTexParameteri(kTexture2D, kTextureWrapT, kClampToEdge);
+    glGenFramebuffers(1, &gGroundBakeFbo);
+    glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, gGroundBakeFbo);
+    glFramebufferTexture2D(0x8D40 /* GL_FRAMEBUFFER */, 0x8CE0 /* GL_COLOR_ATTACHMENT0 */, kTexture2D, gGroundBakeTexture, 0);
+    const bool complete = glGetError() == 0
+        && glCheckFramebufferStatus(0x8D40 /* GL_FRAMEBUFFER */) == 0x8CD5 /* GL_FRAMEBUFFER_COMPLETE */;
+    glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, 0);
+    if (!complete) {
+        destroyGroundBake();
+        return false;
+    }
+    gGroundBakeWidth = width;
+    gGroundBakeHeight = height;
+    return true;
+}
+
 void drawStaticPreview(bool withWalls, bool withHero)
 {
     if (!gInitialized || !gFloorLoaded || (withWalls && !gWallsLoaded)) return;
@@ -114,6 +164,42 @@ void drawStaticPreview(bool withWalls, bool withHero)
     glBindVertexArray(gFloorVao);
     glBindTexture(kTexture2D, gFloorTexture);
 
+    // 157: the ground's light and sun shadow bake at a quarter of the pixel
+    // work; the tiles below sample it (uGroundBakeMode 2) instead of running
+    // the light loop and the 25-tap shadow disk per pixel. Same geometry,
+    // same uniforms, half-sized viewport with the same origin, so both passes
+    // share one normalized space.
+    const bool bakeGround = lit && shadowed && gGroundBakeWidth >= 0
+        && SDL_getenv("F2CE_NO_BAKE") == nullptr
+        && ensureGroundBake(width / 2, height / 2);
+    int unit7Texture = 0;
+    if (bakeGround) {
+        int previousFbo = 0;
+        glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &previousFbo);
+        glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, gGroundBakeFbo);
+        glViewport(x, y, width / 2, height / 2);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClear(kColorBufferBit);
+        glDepthMask(0);
+        glUniform1i(gSceneGroundBakeModeLocation, 1);
+        glUniform1f(gSceneCutoffLocation, -1.0f);
+        glUniform1i(gSceneTexturedLocation, 1);
+        glDrawArrays(kTriangles, 6,
+            (gFloorExtensionFirst > 0 ? gFloorExtensionFirst : gFloorVertexCount) - 6);
+        glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, previousFbo);
+        glViewport(x, y, width, height);
+        glDepthMask(1);
+        glUniform1f(gSceneCutoffLocation, 0.01f);
+        // The bake map rides unit 7 for this frame's floor draw; the binding
+        // restores right after the tiles (the roof grid owns the unit later in
+        // the frame, and the next frame's shadow pass must not see the bake).
+        glActiveTexture(kTexture0 + 7);
+        glGetIntegerv(0x8069 /* GL_TEXTURE_BINDING_2D */, &unit7Texture);
+        glBindTexture(kTexture2D, gGroundBakeTexture);
+        glUniform1i(gSceneGroundBakeMapLocation, 7);
+        glActiveTexture(kTexture0);
+    }
+
     // Nothing lies below the floor, so it is painted first and hides nothing
     // (the donor's game view): cards and solids take the depth of their hex
     // row's plane, which can lie under the floor along the view ray. A fly
@@ -130,11 +216,18 @@ void drawStaticPreview(bool withWalls, bool withHero)
     glUniform1i(gSceneTexturedLocation, 1);
     glUniform1f(gSceneCutoffLocation, 0.01f);
     glUniform1i(gSceneLightModeLocation, lit ? 1 : 0);
+    if (bakeGround) glUniform1i(gSceneGroundBakeModeLocation, 2);
     // The sea extensions sit past the tiles in the buffer; an older sidecar
     // without them ends the buffer at the tiles (the count falls back so a
     // version 6 floor.bin keeps its whole draw).
     glDrawArrays(kTriangles, 6,
         (gFloorExtensionFirst > 0 ? gFloorExtensionFirst : gFloorVertexCount) - 6);
+    if (bakeGround) {
+        glUniform1i(gSceneGroundBakeModeLocation, 0);
+        glActiveTexture(kTexture0 + 7);
+        glBindTexture(kTexture2D, unit7Texture);
+        glActiveTexture(kTexture0);
+    }
     // The sea past the map's water edges (168): flight and turned views only
     // (the game's own view stays pixel for pixel), and never cut by the clean
     // map edges, whose whole point is where the map ends - the sea goes on.
@@ -325,9 +418,14 @@ void drawStaticHeroPreview()
 namespace {
 
 // The back buffer as drawn so far, into top-down RGBA rows: the GL readback
-// the file variants encode (183).
+// the file variants encode (183), and the buffer form the save preview reads
+// (134).
 bool readBackBuffer(std::vector<unsigned char>& topDown, int drawableWidth, int drawableHeight, std::string* error)
 {
+    if (drawableWidth <= 0 || drawableHeight <= 0) {
+        if (error != nullptr) *error = "invalid OpenGL backbuffer dimensions";
+        return false;
+    }
     const size_t rowBytes = static_cast<size_t>(drawableWidth) * 4;
     std::vector<unsigned char> bottomUp(rowBytes * static_cast<size_t>(drawableHeight));
     topDown.resize(bottomUp.size());
@@ -355,7 +453,7 @@ bool writeBackBufferPng(const std::filesystem::path& path, int drawableWidth, in
     if (encodeError != 0) {
         std::error_code ec;
         std::filesystem::remove(path, ec); // Remove only output this call may have partially written.
-        *error = std::string("PNG encode failed: ") + lodepng_error_text(encodeError);
+        if (error != nullptr) *error = std::string("PNG encode failed: ") + lodepng_error_text(encodeError);
         return false;
     }
     return true;
@@ -408,6 +506,27 @@ bool captureFramePng(const std::filesystem::path& path, const unsigned char* rgb
     return true;
 }
 
+bool capturePresentedFramePng(const std::filesystem::path& path, int* width, int* height, std::string* error)
+{
+    auto fail = [&](const std::string& message) {
+        if (error != nullptr) *error = message;
+        return false;
+    };
+    if (!gInitialized) return fail("OpenGL renderer is unavailable");
+    std::error_code existsError;
+    if (std::filesystem::exists(path, existsError)) return fail("snapshot path already exists");
+    int drawableWidth = 0;
+    int drawableHeight = 0;
+    SDL_GL_GetDrawableSize(gWindow, &drawableWidth, &drawableHeight);
+    if (drawableWidth <= 0 || drawableHeight <= 0) return fail("OpenGL drawable has no pixels");
+    std::string message;
+    if (!writeBackBufferPng(path, drawableWidth, drawableHeight, &message)) return fail(message);
+    if (width != nullptr) *width = drawableWidth;
+    if (height != nullptr) *height = drawableHeight;
+    if (error != nullptr) error->clear();
+    return true;
+}
+
 bool captureFrameBuffer(const unsigned char* rgba, int frameWidth, int frameHeight, int pitch,
     std::vector<unsigned char>& out, int* width, int* height, std::string* error)
 {
@@ -452,7 +571,10 @@ bool presentStaticPreview(bool withWalls, bool withHero, bool includeOverlay,
     const bool glow = beginSceneCapture();
     drawStaticPreview(withWalls, withHero);
     if (glow) compositeGlow();
-    if (includeOverlay && withHero && gSceneOverlayReady && !staticFlyCameraActive()) {
+    // 157 diagnostics: F2CE_CAPTURE_NO_OVERLAY strips the game overlay quad,
+    // so a capture shows the scene render alone.
+    const bool captureOverlay = includeOverlay && SDL_getenv("F2CE_CAPTURE_NO_OVERLAY") == nullptr;
+    if (captureOverlay && withHero && gSceneOverlayReady && !staticFlyCameraActive()) {
         // With what the game draws over it, as presented.
         glViewport(0, 0, drawableWidth, drawableHeight);
         glEnable(kBlend);
@@ -543,6 +665,18 @@ bool captureStaticPreviewBuffer(bool withWalls, bool withHero, bool includeOverl
     if (height != nullptr) *height = drawableHeight;
     if (error != nullptr) error->clear();
     return true;
+}
+
+// 134: the pointer form the save preview reads; the same static scene render
+// into a caller's buffer, without touching a file.
+bool captureStaticPreviewRgba(bool withWalls, bool withHero, std::vector<unsigned char>* rgba,
+    int* width, int* height, std::string* error, bool includeOverlay)
+{
+    if (rgba == nullptr) {
+        if (error != nullptr) *error = "RGBA destination is null";
+        return false;
+    }
+    return captureStaticPreviewBuffer(withWalls, withHero, includeOverlay, *rgba, width, height, error);
 }
 
 } // namespace scene_renderer

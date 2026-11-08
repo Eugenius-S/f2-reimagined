@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include <SDL.h>
+#include <SDL_syswm.h>
 
 #include <vector>
 
@@ -13,6 +14,8 @@
 #include "config.h"
 #include "dinput.h"
 #include "draw.h"
+#include "db.h"
+#include "fps_counter.h"
 #include "game.h"
 #include "interface.h"
 #include "memory.h"
@@ -256,6 +259,43 @@ int _GNW95_init_window(int width, int height, WindowMode mode, int outputWidth, 
             return -1;
         }
 
+#ifdef _WIN32
+        if (mode != WindowMode::Fullscreen) {
+            // Windows 11 draws a light one-pixel border around every window;
+            // against the dark menu art it reads as a stray white strip at
+            // the screen edges, so the game window opts out of it.
+            SDL_SysWMinfo wmInfo;
+            SDL_zero(wmInfo);
+            SDL_VERSION(&wmInfo.version);
+            if (SDL_GetWindowWMInfo(gSdlWindow, &wmInfo) && wmInfo.subsystem == SDL_SYSWM_WINDOWS) {
+                HWND hwnd = wmInfo.info.win.window;
+
+                if (mode == WindowMode::Windowed) {
+                    // SDL strips the minimize box from non-resizable windows,
+                    // which would leave the caption without any way to
+                    // minimize the game.
+                    LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+                    SetWindowLongPtrW(hwnd, GWL_STYLE, style | WS_MINIMIZEBOX);
+                }
+
+                // Loaded by name: DWMWA_BORDER_COLOR is Windows 11 only, and
+                // the call is silently skipped where it does not exist.
+                using DwmSetWindowAttributeFn = HRESULT(WINAPI*)(HWND, DWORD, const void*, DWORD);
+                HMODULE dwm = GetModuleHandleW(L"dwmapi.dll");
+                if (dwm == nullptr) {
+                    dwm = LoadLibraryW(L"dwmapi.dll");
+                }
+                if (dwm != nullptr) {
+                    auto* setAttribute = reinterpret_cast<DwmSetWindowAttributeFn>(GetProcAddress(dwm, "DwmSetWindowAttribute"));
+                    if (setAttribute != nullptr) {
+                        COLORREF noBorder = 0xFFFFFFFE; // DWMWA_COLOR_NONE
+                        setAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, &noBorder, sizeof(noBorder));
+                    }
+                }
+            }
+        }
+#endif
+
         // Sprite-lighting mod (P0): take over presentation with our own
         // OpenGL context; the vanilla SDL_Renderer stays as the fallback
         // path if that is unavailable.
@@ -461,6 +501,10 @@ static bool createRenderer(int width, int height)
         return false;
     }
 
+    // SDL's default draw color is white, and the logical-size letterbox bars
+    // are drawn with it; keep them black like the GL presentation's.
+    SDL_SetRenderDrawColor(gSdlRenderer, 0, 0, 0, 255);
+
     if (SDL_RenderSetLogicalSize(gSdlRenderer, width, height) != 0) {
         return false;
     }
@@ -516,6 +560,40 @@ void handleWindowSizeChanged()
     destroyRenderer();
     createRenderer(screenGetWidth(), screenGetHeight());
     mouseDeviceRefreshWindowMapping();
+}
+
+// 209: the display-mode pick applies the moment the menu closes. The picture
+// itself keeps its size and letterboxes, so the engine buffers stay intact;
+// only the resolution and the interface scale still need a restart.
+void applyWindowModeLive()
+{
+    if (gSdlWindow == nullptr || SDL_getenv("F2CE_DEV_BACKGROUND") != nullptr) {
+        return;
+    }
+
+    int width = settings.screen.resolution_x;
+    int height = settings.screen.resolution_y;
+    if (settings.screen.resolution_mode > 0) {
+        width = settings.screen.resolution_mode / 10000;
+        height = settings.screen.resolution_mode % 10000;
+    }
+
+    const WindowMode mode = settings.screen.windowed;
+    if (mode == WindowMode::WindowedFullscreen) {
+        SDL_SetWindowFullscreen(gSdlWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    } else if (mode == WindowMode::Fullscreen) {
+        SDL_DisplayMode request = {};
+        request.w = width;
+        request.h = height;
+        SDL_SetWindowDisplayMode(gSdlWindow, &request);
+        SDL_SetWindowFullscreen(gSdlWindow, SDL_WINDOW_FULLSCREEN);
+    } else {
+        SDL_SetWindowFullscreen(gSdlWindow, 0);
+        SDL_SetWindowSize(gSdlWindow, width, height);
+        SDL_SetWindowPosition(gSdlWindow, SDL_WINDOWPOS_CENTERED_DISPLAY(0), SDL_WINDOWPOS_CENTERED_DISPLAY(0));
+    }
+
+    handleWindowSizeChanged();
 }
 
 void renderFpsCounter()
@@ -574,11 +652,47 @@ void renderFpsCounter()
     SDL_BlitSurface(gSdlSurface, &rect, gSdlTextureSurface, &rect);
 }
 
+static void renderPresentBody();
+
 void renderPresent()
+{
+    // The file read progress handler (map.cc) presents the frame on the main
+    // thread while a load reads its files. A present that starts inside a
+    // present (the 127 readout loading font 101 through an art read in the
+    // middle of one) must be a no-op: the nested pass tramples the renderer
+    // and presentation state and corrupts the heap at map load.
+    static bool inRenderPresent = false;
+    if (inRenderPresent) return;
+    inRenderPresent = true;
+    renderPresentBody();
+    inRenderPresent = false;
+}
+
+static void renderPresentBody()
 {
     // The frame ring feeds the owner shot's fps block (183); the pump takes a
     // pending --dev-owner-shot-once at the first present that can hold it.
+    {
+        static Uint32 lastPresentTicks = 0;
+        static int sameFrameReports = 0;
+        const Uint32 now = SDL_GetTicks();
+        if (lastPresentTicks != 0 && now - lastPresentTicks < 3
+            && getenv("F2CE_PERF") != nullptr && ++sameFrameReports % 60 == 0) {
+            printf("perf present double within %u ms\n", now - lastPresentTicks);
+            fflush(stdout);
+        }
+        lastPresentTicks = now;
+    }
     scene_renderer::perfFrameTick();
+    // 157: the present's own CPU spans, next to the GL timers. A plain
+    // SDL-ticks window over the parts before the render's perfBegin.
+    static double syncMs = 0.0;
+    static double sharpMs = 0.0;
+    static double refreshMs = 0.0;
+    static int presentFrames = 0;
+    const Uint64 presentStart = SDL_GetPerformanceCounter();
+    // 127: the frame-time log samples the same present cadence.
+    fpsCounterOnFrame();
     owner_shot::pump();
     // The 3D scene shows the world: the tile window keeps only what the game
     // draws over it.
@@ -586,12 +700,65 @@ void renderPresent()
         scene::syncToMap();
         devtools::sceneOverlaySynced(scene::syncOverlay());
     }
+    const Uint64 syncEnd = SDL_GetPerformanceCounter();
+    // 127: the player's frame rate readout. It draws after the tile window's
+    // own redraw (syncToMap above), which restores every captured text pixel
+    // in its region: a readout drawn before that redraw was erased the same
+    // frame and never reached the presented picture.
+    static Uint32 fpsWindowStart = 0;
+    static unsigned int fpsWindowFrames = 0;
+    static unsigned int fpsValue = 0;
+    static double frameTimeMs = 0.0;
+    static bool fpsWasDrawn = false;
+    static int fpsX = 0;
+    static int fpsWidth = 0;
+    const bool showFps = settings.scene3d.fps_counter && scene_renderer::isActive() && gSdlSurface != nullptr
+        // A present driven by the file read progress handler belongs to a
+        // loading screen: drawing here (a font load, a text draw) lands in
+        // the middle of the load and corrupted the heap at map load.
+        && !fileReadProgressHandlerActive();
+    if (!showFps) {
+        if (fpsWasDrawn && gSdlSurface != nullptr) {
+            textCaptureEraseTextRuns(static_cast<unsigned char*>(gSdlSurface->pixels), "FPS ");
+        }
+        fpsWasDrawn = false;
+        fpsWindowStart = 0;
+        fpsWindowFrames = 0;
+    } else {
+        const Uint32 now = SDL_GetTicks();
+        if (fpsWindowStart == 0) fpsWindowStart = now;
+        ++fpsWindowFrames;
+        const Uint32 elapsed = now - fpsWindowStart;
+        if (elapsed >= 500 && fpsWindowFrames > 0) {
+            fpsValue = static_cast<unsigned int>((static_cast<Uint64>(fpsWindowFrames) * 1000 + elapsed / 2) / elapsed);
+            frameTimeMs = static_cast<double>(elapsed) / fpsWindowFrames;
+            fpsWindowStart = now;
+            fpsWindowFrames = 0;
+        }
+        textCaptureEraseTextRuns(static_cast<unsigned char*>(gSdlSurface->pixels), "FPS ");
+        char fpsText[48];
+        snprintf(fpsText, sizeof(fpsText), "FPS %3u  %5.1f ms", fpsValue, frameTimeMs);
+        ScopedFont fpsFont(101);
+        const int width = fontGetStringWidth(fpsText);
+        const int x = gSdlSurface->w - width - 8;
+        if (x >= 0) {
+            fpsX = x;
+            fpsWidth = width;
+            fontDrawText(static_cast<unsigned char*>(gSdlSurface->pixels) + gSdlSurface->pitch * 8 + x,
+                fpsText, width, gSdlSurface->pitch, COLOR_GREEN | DRAW_TEXT_FLAG_SHADOWED);
+            fpsWasDrawn = true;
+        }
+    }
     // Sprite-lighting mod: the dev panel is drawn into the framebuffer after
     // the game (so it shows in both presentation paths).
     devtools::draw(static_cast<unsigned char*>(gSdlSurface->pixels), gSdlSurface->w, gSdlSurface->h, gSdlSurface->pitch);
+    // The owner's region mark rectangles, over everything else (183).
+    owner_shot::draw(static_cast<unsigned char*>(gSdlSurface->pixels), gSdlSurface->w, gSdlSurface->h, gSdlSurface->pitch);
     const bool uiVisible = scene_renderer::isActive() && !scene_renderer::staticFlyCameraActive()
         && (!scene::shouldPresent() || scene::activeView() == scene::View::Full);
+    const Uint64 sharpStart = SDL_GetPerformanceCounter();
     const bool sharpTextReady = scene_renderer::prepareSharpTextForPresent(gSdlSurface, gSdlTextureSurface, uiVisible);
+    const Uint64 sharpEnd = SDL_GetPerformanceCounter();
     // A frame without the 3D scene (combat, dialog, ...) lands the fly camera
     // before the game takes input again.
     if (scene_renderer::staticFlyCameraActive()
@@ -602,7 +769,26 @@ void renderPresent()
         if (scene::shouldPresent()) {
             // Read the current hero frame at each scene presentation; nested
             // modal presents yield below and never advance movement observers.
+            const Uint64 refreshStart = SDL_GetPerformanceCounter();
             devtools::scenePresented(scene::refreshForPresent());
+            const Uint64 refreshEnd = SDL_GetPerformanceCounter();
+            const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+            syncMs += static_cast<double>(syncEnd - presentStart) * toMs;
+            sharpMs += static_cast<double>(sharpEnd - sharpStart) * toMs;
+            refreshMs += static_cast<double>(refreshEnd - refreshStart) * toMs;
+            presentFrames++;
+            {
+                static Uint64 windowStart = 0;
+                if (windowStart == 0) windowStart = refreshEnd;
+                if (static_cast<double>(refreshEnd - windowStart) / SDL_GetPerformanceFrequency() >= 2.0) {
+                    printf("perf present sync=%.2f sharp=%.2f refresh=%.2f frames=%d\n",
+                        syncMs / presentFrames, sharpMs / presentFrames, refreshMs / presentFrames, presentFrames);
+                    fflush(stdout);
+                    syncMs = sharpMs = refreshMs = 0.0;
+                    presentFrames = 0;
+                    windowStart = refreshEnd;
+                }
+            }
             const scene::View view = scene::activeView();
             if (view == scene::View::Full) {
                 // With the glow on, the scene renders into its own
@@ -616,8 +802,34 @@ void renderPresent()
                 scene_renderer::perfMark("glow");
                 // A fly camera shows the world alone.
                 if (scene_renderer::staticFlyCameraActive()) {
+                    if (fpsWasDrawn && fpsWidth > 0 && gSdlSurface->format != nullptr
+                        && gSdlSurface->format->palette != nullptr) {
+                        const int overlayHeight = std::min(fontGetLineHeight(), gSdlSurface->h - 8);
+                        const int overlayWidth = std::min(fpsWidth, gSdlSurface->w - fpsX);
+                        const int rgbaPitch = overlayWidth * 4;
+                        std::vector<unsigned char> rgba(static_cast<size_t>(rgbaPitch) * overlayHeight, 0);
+                        SDL_Palette* palette = gSdlSurface->format->palette;
+                        for (int y = 0; y < overlayHeight; ++y) {
+                            for (int x = 0; x < overlayWidth; ++x) {
+                                const unsigned char index = static_cast<const unsigned char*>(gSdlSurface->pixels)
+                                    [static_cast<size_t>(y + 8) * gSdlSurface->pitch + fpsX + x];
+                                if (index == COLOR_FIRST || index >= palette->ncolors) continue;
+                                const SDL_Color& color = palette->colors[index];
+                                unsigned char* pixel = rgba.data() + static_cast<size_t>(y) * rgbaPitch + x * 4;
+                                pixel[0] = color.r;
+                                pixel[1] = color.g;
+                                pixel[2] = color.b;
+                                pixel[3] = 255;
+                            }
+                        }
+                        scene_renderer::drawOverlay(rgba.data(), overlayWidth, overlayHeight, rgbaPitch,
+                            fpsX, 8, overlayWidth, overlayHeight);
+                    }
+                    owner_shot::drawSceneOverlay();
+                    devtools::sceneLiveFrameReady();
                     scene_renderer::swap();
                     scene_renderer::perfEnd();
+                    devtools::sceneOverlayPresented();
                     return;
                 }
                 if (!gRgbaBackground.empty()) {
@@ -640,6 +852,14 @@ void renderPresent()
                 // The game's interface, mouse cursor and floating text over it.
                 scene_renderer::drawSceneOverlayWithSharpText(gSdlSurface, gSdlTextureSurface, sharpTextReady);
                 scene_renderer::perfMark("overlay");
+                // 217: the mark rectangles ride the RGBA overlay pass - the
+                // sharp-text rebuild above drops raw indexed pixels, so the
+                // surface draw alone never reached the screen.
+                owner_shot::drawSceneOverlay();
+                // 218: the drag bench reads the presented pixels right here,
+                // where the overlay has just landed.
+                owner_shot::verifySceneOverlayPresented();
+                devtools::sceneLiveFrameReady();
                 scene_renderer::swap();
                 scene_renderer::perfEnd();
                 devtools::sceneOverlayPresented();

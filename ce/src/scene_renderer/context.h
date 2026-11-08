@@ -3,6 +3,8 @@
 
 #include <SDL.h>
 
+#include <vector>
+
 namespace fallout {
 namespace scene_renderer {
 
@@ -23,9 +25,27 @@ void presentFrame(const unsigned char* rgba, int width, int height, int pitch);
 // the scene include it.
 void drawSceneOverlay(const unsigned char* rgba, int width, int height, int pitch);
 
+// 219: redraws the game overlay already in the quad texture, no upload. The
+// sharp-text cache hit uses it when the frame's picture is unchanged.
+void drawSceneOverlayCached();
+
+// 219: replaces a rectangle of the game overlay in the quad texture (the
+// cycling palette colors' box, patched over the cached layers each frame).
+// `rgba` points at the box's first pixel, `pitch` is the full frame's.
+void updateSceneOverlayRegion(const unsigned char* rgba, int pitch, int dstX, int dstY, int width, int height);
+
 // Optional overlay drawn over the last presented frame (movie frames): an
 // RGBA image mapped into `dstX/dstY/dstW/dstH` in LOGICAL coordinates.
 void drawOverlay(const unsigned char* rgba, int width, int height, int pitch, int dstX, int dstY, int dstW, int dstH);
+
+// Maps a point in LOGICAL coordinates to window pixels through the same fit
+// the quads draw with. The mark-drag bench reads its overlay's pixels back.
+bool overlayLogicalToWindow(int logicalX, int logicalY, int* windowX, int* windowY);
+
+// Reads a rectangle of the default framebuffer as it stands before the swap.
+// `windowY` is top-down, like the drawing coordinates; the returned pixels
+// are RGBA, bottom-up (GL's own order).
+bool readPresentPixels(int windowX, int windowY, int width, int height, std::vector<unsigned char>& out);
 
 // Sharp UI text uses an independent texture so it cannot replace the cached
 // game overlay used by static scene snapshots.

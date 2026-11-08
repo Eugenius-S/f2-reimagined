@@ -236,6 +236,11 @@ extern int gSceneShadowFeetLocation;
 // their world-space wind offset.
 extern int gSceneCloudOnLocation;
 extern int gSceneCloudOffsetLocation;
+// The ground's baked light and shadow (157): 1 captures it into the
+// half-resolution buffer (unit 7), 2 has the floor tiles sample it, 0 the
+// usual per-pixel path for everything else.
+extern int gSceneGroundBakeModeLocation;
+extern int gSceneGroundBakeMapLocation;
 
 bool createSceneShader(std::string* error);
 void destroySceneShader();
