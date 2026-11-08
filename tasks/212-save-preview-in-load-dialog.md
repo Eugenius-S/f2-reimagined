@@ -3,8 +3,8 @@ id: 212
 title: The load dialog shows each save's preview picture
 milestone: M1
 status: open
-owner: gpt
-suggested: owner
+owner: glm
+suggested: glm
 priority: medium
 tier: 2
 claude-only: no
@@ -45,3 +45,4 @@ dialog must show the picture of the save slot being picked.
   with conflicts. Rebased onto current main (the shared readback helpers
   resolved in favor of the 183 versions, the preview capture kept as a
   thin wrapper), build verified, PR 297 refreshed and marked ready.
+- 2026-11-08 claude: owner order 2026-11-08: glm, fourth after 211.

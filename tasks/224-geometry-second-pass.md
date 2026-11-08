@@ -5,7 +5,7 @@ milestone: M1
 status: todo
 owner: glm
 suggested: glm
-priority: high
+priority: normal
 tier: 3
 claude-only: no
 user-check: no
@@ -51,3 +51,4 @@ The floor extension pass (202), the regression harness (203), new
 maps entering 3D (187), view-persistence (173, the owner's draft).
 
 ## Log
+- 2026-11-08 claude: owner order 2026-11-08: 240 (inner-wall graffiti over the outer wall, kladwtwn tiles 28890/29091/29291, crop `runs/240-decal-through-wall/`) folded in; this pass waits behind glm's 239, 172, 211, 212.

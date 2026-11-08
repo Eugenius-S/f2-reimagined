@@ -2,7 +2,7 @@
 id: 240
 title: An inner wall's graffiti does not draw over the outer wall in front of it
 milestone: M1
-status: open
+status: done
 owner: any
 suggested: claude
 priority: medium
@@ -30,3 +30,4 @@ or a baked texture) and make it respect the depth of the wall in front.
 ## Log
 
 - 2026-11-08 claude: cut from the owner's shot.
+- 2026-11-08 claude: Folded into 224: closed here, the work goes on there.

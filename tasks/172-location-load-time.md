@@ -141,3 +141,4 @@ Frame rate in play (157), settings changes (156).
   game may differ). The remaining lever list: attribute the ~450 ms
   between-presents chunk, then the serial objectRead. Pixel-identical
   marks, ctest 23/23. Evidence: runs/172-location-load-time/phases.md.
+- 2026-11-08 claude: owner order 2026-11-08: glm, second after 239.

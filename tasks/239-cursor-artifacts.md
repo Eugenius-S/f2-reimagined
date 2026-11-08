@@ -3,7 +3,7 @@ id: 239
 title: Overlays draw clean - no hex cursor halo, no black box on the edge cursor, the shot mark erased
 milestone: M1
 status: open
-owner: any
+owner: glm
 suggested: glm
 priority: high
 tier: 0
@@ -45,3 +45,4 @@ from the test instance.
 
 - 2026-11-08 claude: cut from the owner's shots.
 - 2026-11-08 claude: stacked the region-mark find from the inbox (part 3); suggested glm.
+- 2026-11-08 claude: owner order 2026-11-08: glm, first in its queue: 239, 172, 211, 212, then 224.

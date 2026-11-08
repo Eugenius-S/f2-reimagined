@@ -1,6 +1,6 @@
 ---
 id: 157
-title: A steady 60 FPS: no uneven frames in the game view or in flight
+title: Steady 90+ FPS: no uneven frames in the game view or in flight
 milestone: M1
 status: todo
 owner: claude
@@ -15,7 +15,7 @@ reviewed: yes
 
 ## Goal
 
-The game holds a steady 60 FPS on the owner's machine with the default 3D
+The game holds a steady 90+ FPS on the owner's machine with the default 3D
 options on: no uneven pacing, no periodic hitches, in the game camera and in
 flight.
 
@@ -76,3 +76,4 @@ Lower visual quality as a default; display changes without restart (156).
   11.0 to 0.73 ms. Still open for the gate: a real-window validation on the
   owner's machine (the off-screen harness capped two demo maps at ~61 by
   their own pacing) and the 120 comfort target.
+- 2026-11-08 claude: owner order 2026-11-08: the bar is 90+ FPS on every location; claude does it.

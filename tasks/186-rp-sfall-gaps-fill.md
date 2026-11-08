@@ -3,8 +3,8 @@ id: 186
 title: The Restoration Project plays in CE, in 3D, and the installer offers it
 milestone: M1
 status: todo
-owner: any
-suggested: any
+owner: claude
+suggested: claude
 priority: high
 tier: 0
 claude-only: no
@@ -68,3 +68,4 @@ Russian translations (227).
 
 - 2026-11-08 claude: 185 and 187 folded in at the owner's request; made the
   next stage.
+- 2026-11-08 claude: owner order 2026-11-08: claude takes critical bugs, performance, RP and the Russian translations.

@@ -3,8 +3,8 @@ id: 211
 title: The 3D mode toggle responds when it can, and says why when it cannot
 milestone: M1
 status: open
-owner: gpt
-suggested: owner
+owner: glm
+suggested: glm
 priority: high
 tier: 2
 claude-only: no
@@ -49,3 +49,4 @@ mode in play must either turn the scene on or say plainly why it did not.
 
 - 2026-11-07: owner report; the toggle path and its silent gates found the
   same day; the reason surfacing is pending.
+- 2026-11-08 claude: owner order 2026-11-08: glm, third after 239 and 172.
