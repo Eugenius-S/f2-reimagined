@@ -29,20 +29,26 @@ Google Drive the owner hosts or from the sites that publish them.
 
 ## Acceptance
 
-- The installer's Russian option becomes a choice of four: RPU (today's),
-  1C with speech, Fargus, Levy Corporation. The UI says in one line what
-  each one changes (text, speech, sound, music).
+- The installer's Russian option becomes two independent choices: text
+  from one translation (RPU as today, 1C, Fargus, Levy Corporation), and
+  sound from one (original English, 1C speech, Levy Corporation's sound and
+  music, or what else a translation carries). Any text goes with any sound,
+  e.g. RPU text with 1C speech. The UI says in one line what each choice
+  changes.
 - Each is downloaded from its URL at the player's request, checked by size
   and SHA-256 before use, and installed so the game loads it (dat files and
   `mods_order.txt`, or what that translation needs). A failed or wrong
   download leaves the game as it was.
-- Switching between translations, or back to English, leaves no file of the
-  previous one in effect.
+- Switching text or sound, or back to English, leaves no file of the
+  previous choice in effect. If a text and a sound do not fit together
+  (speech lines that do not match the dialogue), the Log says so and the
+  installer warns.
 - Nothing of these translations is in the repo, its history or a release.
 - One launch check per translation on the demo copy: the main menu and one
   dialogue are in Russian; for 1C one spoken line; for Levy Corporation its
   music plays.
-- Both READMEs list the four options.
+- One mixed check: RPU text with 1C speech.
+- Both READMEs list the text and sound options.
 
 ## How
 
@@ -52,8 +58,10 @@ Google Drive the owner hosts or from the sites that publish them.
 2. Ask the owner (in the PR or the task Log) to put the archives on their
    Google Drive, or name a stable public mirror. The URLs and hashes live in
    the launcher's code, not in the repo as files.
-3. Extend the 199 Russian option in the launcher with the choice and the
-   download, check and install.
+3. Split each archive into its text part and its sound part, so each
+   installs on its own.
+4. Extend the 199 Russian option in the launcher with the two choices and
+   the download, check and install.
 
 ## Out of scope
 
