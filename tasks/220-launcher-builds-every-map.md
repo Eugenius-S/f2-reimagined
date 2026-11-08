@@ -51,3 +51,6 @@ RP maps (187).
 Done: `export.py --maps all` (any mix of maps and groups), the launcher's default is `all`. Measured on the demo game: the first full export takes about 23 min (222 scenes, 152 maps, 844 MB); a second run took 22 min again, so the exporter now skips a scene whose provenance `inputs_sha256` still matches a replay of its recorded reads (static hashes once per run, gf caches cleared per scene so the reads are complete and order independent); a repeat run over a complete cache takes 12-15 s, `--check` 5 s. The launcher's `--force-export` passes `--force`. Found on the way: coast11 crashed the exporter (fixed in 226).
 Next: nothing.
 Check: `py -3 tools/scene_export/export.py --game-root <game> --maps all --cache-root <dir>` twice; the second prints `"current": true` for every scene.
+
+### 2026-11-08 claude
+Fix: #344 landed only the first commit; the skip and `--force` commits never reached origin, so a launcher update re-exported every scene (17 min on the player install). This PR brings them back. Check: klamall, kladwtwn, denbus1 exported twice into a fresh cache: 54 s, then 2 s with 5 of 5 scenes current; 143 exporter tests pass.
