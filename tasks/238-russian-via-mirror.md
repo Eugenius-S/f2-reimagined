@@ -51,3 +51,4 @@ The translation's license (the owner took the decision); GUI layout.
 Done: see the PR. CI step in `publish-latest`; `ce/src/launcher_main.cc` (mirror route, `--ui-language`, `--mirror-url`, exit code 2 when only the translation failed); `ce/src/launcher_ru.h` (the Russian log table); `ce/src/launcher_ui.cc` (the wish, retry, status); `launcher_progress.h` reads the Russian lines.
 Next: after the first CI run on main, check that `dist` has the two files and that a VPN player installs the translation.
 Check: `ctest --test-dir build`; `fallout2-ce-3d-launcher.exe --game-root <scratch> --no-start --russian --ui-language ru`.
+- 2026-11-08 claude: the mirror goes first for the Russian translation (6 MB instead of RPU's 134 MB translations zip); RPU's own release is the fallback. Checked: scratch copy, --remove-russian then --russian: "route that worked: mirror", "installed mods/rpu_russian.dat from the project mirror (RPU v2.4.34)"; ctest 24/24.

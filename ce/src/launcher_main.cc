@@ -939,24 +939,22 @@ bool installRussianTranslation(const fs::path& root)
             return false;
         }
         fs::path dat = work / "rpu_russian.dat";
-        // Route 1: RPU's own release on github.com.  Route 2 (task 238): the project mirror, which
-        // CI fills with the same file and its tag, for players whose VPN blocks github.com.
-        std::string tag = rpuTagFromGithub();
-        bool got = false;
-        if (!tag.empty()) got = rpuDatFromGithub(tag, work, dat);
-        std::string source = "RPU";
+        // Route 1 (task 238): the project mirror, which CI fills with the same file and its tag;
+        // 6 MB instead of RPU's 134 MB translations zip, and it works through VPNs that block
+        // github.com.  Route 2: RPU's own release on github.com.
+        std::string mirrorTag;
+        std::string mirrorError;
+        fetchRoutes({ { "mirror", g_mirrorBase + "rpu-version.txt", "" } }, &mirrorTag, nullptr, &mirrorError);
+        mirrorTag = trim(mirrorTag);
+        bool got = fetchRoutes({ { "mirror", g_mirrorBase + "rpu_russian.dat", "" } }, nullptr, &dat, &mirrorError);
+        std::string source = mirrorTag.empty() ? "?" : mirrorTag;
+        if (got && !mirrorTag.empty()) logf("  the mirror's RPU version: %s", mirrorTag.c_str());
         if (!got) {
-            if (tag.empty()) log("cannot read the official RPU release version on GitHub");
-            logf("GitHub does not answer for the Russian translation (%s); trying the project mirror",
-                tag.empty() ? "no RPU version" : tag.c_str());
-            std::string mirrorTag;
-            std::string mirrorError;
-            fetchRoutes({ { "mirror", g_mirrorBase + "rpu-version.txt", "" } }, &mirrorTag, nullptr, &mirrorError);
-            mirrorTag = trim(mirrorTag);
-            if (!mirrorTag.empty()) logf("  the mirror's RPU version: %s", mirrorTag.c_str());
-            got = fetchRoutes({ { "mirror", g_mirrorBase + "rpu_russian.dat", "" } }, nullptr, &dat, &mirrorError);
+            std::string tag = rpuTagFromGithub();
+            if (!tag.empty()) got = rpuDatFromGithub(tag, work, dat);
+            source = "RPU";
+            if (!got && tag.empty()) log("cannot read the official RPU release version on GitHub");
             if (!got) logf("the Russian translation could not be downloaded: GitHub and the project mirror both failed (%s)", mirrorError.c_str());
-            source = mirrorTag.empty() ? "?" : mirrorTag;
         }
         bool copied = false;
         if (got) {
