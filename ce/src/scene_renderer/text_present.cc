@@ -230,6 +230,15 @@ SharpFrameScan sharpScanFrame(const unsigned char* indices, int width, int heigh
         unsigned char* prevIndex = gSharpPrevIndices.data() + static_cast<size_t>(y) * indexPitch;
         const unsigned char* mask = gSharpShownMask.data() + static_cast<size_t>(y) * width;
         unsigned char* prevMask = gSharpPrevMask.data() + static_cast<size_t>(y) * width;
+        // A row whose bytes all repeat reuses every chunk hash, as the chunk
+        // branches below would: two row compares instead of a chunk loop.
+        const bool rowExcluded = excludeBox[2] >= excludeBox[0] && y >= excludeBox[1] && y <= excludeBox[3];
+        if (gSharpPrevValid && !rowExcluded && std::memcmp(mask, prevMask, width) == 0
+            && std::memcmp(index, prevIndex, width) == 0) {
+            const unsigned long long* rowHashes = gSharpPrevChunkHashes.data() + static_cast<size_t>(y) * chunksPerRow;
+            for (int chunk = 0; chunk < chunksPerRow; chunk++) hash = hash * 1099511628211ull ^ rowHashes[chunk];
+            continue;
+        }
         for (int chunk = 0; chunk < chunksPerRow; chunk++) {
             const int x0 = chunk * chunkWidth;
             const int count = std::min(chunkWidth, width - x0);
@@ -437,8 +446,12 @@ bool prepareSharpTextForPresent(SDL_Surface* indexedSurface, SDL_Surface* rgbaSu
 
     const scene::TextBufferId buffer = textCaptureBufferId(indexedSurface->pixels);
     if (buffer == 0) return false;
+    // The restoration call prunes records whose pixels no longer match.
     scene::textCaptureSharpRestoration(buffer);
-    if (scene::textCaptureSharpRecords(buffer).empty()) {
+    const auto restoredAt = std::chrono::steady_clock::now();
+    const std::vector<scene::TextRecord> records = scene::textCaptureSharpRecords(buffer);
+    const auto recordsAt = std::chrono::steady_clock::now();
+    if (records.empty()) {
         prepareSharpTextFrame(nullptr, 0, 0, 0, nullptr, 0, 0, 0, nullptr, 0, false);
         return false;
     }
@@ -468,8 +481,26 @@ bool prepareSharpTextForPresent(SDL_Surface* indexedSurface, SDL_Surface* rgbaSu
     const SharpFrameScan scan = sharpScanFrame(indicesData,
         indexedSurface->w, indexedSurface->h, indexedSurface->pitch,
         physicalWidth, physicalHeight, paletteRgb, paletteEntries);
-    const std::vector<scene::TextRecord> records = scene::textCaptureSharpRecords(buffer);
+    const auto scannedAt = std::chrono::steady_clock::now();
     const unsigned long long glyphKey = sharpGlyphKey(scan.staticKey, records);
+    const auto keyedAt = std::chrono::steady_clock::now();
+    {
+        // 157: where the hit path's milliseconds go.
+        static double restoreMs = 0, recordsMs = 0, scanMs = 0, keyMs = 0;
+        static int frames = 0;
+        auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
+        restoreMs += ms(started, restoredAt);
+        recordsMs += ms(restoredAt, recordsAt);
+        scanMs += ms(recordsAt, scannedAt);
+        keyMs += ms(scannedAt, keyedAt);
+        if (getenv("F2CE_PERF") != nullptr && ++frames == 120) {
+            printf("perf sharpsplit restore=%.2f records=%.2f scan=%.2f key=%.2f n=%zu\n", restoreMs / frames,
+                recordsMs / frames, scanMs / frames, keyMs / frames, records.size());
+            fflush(stdout);
+            restoreMs = recordsMs = scanMs = keyMs = 0;
+            frames = 0;
+        }
+    }
     // The stored keys imply the layers exist at these dims: they are stored
     // only by the full build that left the textures in place.
     const bool sameFrame = output.width == indexedSurface->w && output.height == indexedSurface->h
