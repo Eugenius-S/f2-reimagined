@@ -46,6 +46,8 @@ param(
     [ValidateRange(0, 240)]
     [int]$WaitMinutes = 30,
     [switch]$Probe,
+    [string]$ExitProbeDestination,
+    [switch]$TransitionWatch,
     [switch]$Combat,
     [ValidateRange(0, 39999)]
     [int]$CombatTarget = -1,
@@ -301,6 +303,15 @@ if ($DevPanel) {
     # the developer panel is present in the saved picture.
     $Classic = $true
 }
+if ($ExitProbeDestination) {
+    if ($Probe -or $Tour -or $Classic -or $Preferences -or $PreferencesProbe -or $DialogFixture -or $UiFixture -or $Still) {
+        throw '-ExitProbeDestination cannot be combined with Probe, Tour, Classic, Preferences, or other fixtures.'
+    }
+    if (-not $CaptureConsole -or -not $OutputDirectory) {
+        throw '-ExitProbeDestination requires -CaptureConsole and -OutputDirectory.'
+    }
+    if ($ExitProbeDestination.Length -gt 15) { throw 'Exit map name must fit Fallout map names.' }
+}
 $Root = Split-Path -Parent $PSScriptRoot
 $GameDir = if ($GameRoot) {
     if ([System.IO.Path]::IsPathRooted($GameRoot)) { [System.IO.Path]::GetFullPath($GameRoot) }
@@ -533,6 +544,7 @@ if ($SkipScriptBlocking) { $arguments += '--dev-skip-script-blocking' }
 if ($NoEffectEmission) { $arguments += '--dev-no-effect-emission' }
 if ($EffectLightCheck) { $arguments += '--dev-effect-light-check' }
 if ($SharpText) { $arguments += '--dev-sharp-text=1' } else { $arguments += '--dev-sharp-text=0' }
+if ($ExitProbeDestination) { $arguments += "--dev-exit-probe=$ExitProbeDestination" }
 if ($UiFixture) { $arguments += "--dev-ui-fixture=$UiFixture" }
 if ($Font101PreviewScale) { $arguments += "--dev-font101-size-preview=$Font101PreviewScale" }
 if ($Font101PreviewWeight) { $arguments += "--dev-font101-weight-preview=$Font101PreviewWeight" }
@@ -542,6 +554,7 @@ if ($DevPanel) { $arguments += '--dev-panel-snapshot' }
 if ($DialogPageInspect) { $arguments += '--dev-dialog-page-inspect' }
 if ($DialogCursorCheck) { $arguments += '--dev-dialog-cursor-check' }
 if ($DialogLayoutCheck) { $arguments += '--dev-dialog-layout-check' }
+if ($TransitionWatch) { $arguments += '--dev-transition-watch' }
 if ($PreferencesProbe) {
     $arguments += @('--dev-new-game', "--dev-map=$Map", "--dev-elevation=$Elevation", "--dev-preferences-probe=$PreferencesProbe")
 } elseif ($ConfiguredDisplay) {
@@ -748,7 +761,24 @@ try {
                 catch { $false } # The writer may still be completing this file.
             }
             $log = Join-Path $runDirectory 'logs\devprobe.log'
-            $probed = -not $Probe -or ((Test-Path $log) -and (Select-String -Path $log -Pattern 'probe done' -Quiet))
+            $probed = -not ($Probe -or $ExitProbeDestination) -or
+                ((Test-Path $log) -and (Select-String -Path $log -Pattern 'probe done' -Quiet))
+            if ($TransitionWatch -and $Probe) {
+                $transitionLog = Join-Path $runDirectory 'logs\devtransitions.log'
+                $exitPassed = (Test-Path $log) -and (Select-String -Path $log -Pattern 'exit transition passed: map=KLADWTWN.MAP' -Quiet)
+                $arrivalCaptured = (Test-Path $transitionLog) -and
+                    (Select-String -Path $transitionLog -Pattern 'first-3d-capture result=pass map=kladwtwn' -Quiet)
+                $probed = $exitPassed -and $arrivalCaptured
+            }
+            if ($TransitionWatch -and $ExitProbeDestination) {
+                $transitionLog = Join-Path $runDirectory 'logs\devtransitions.log'
+                $destinationPattern = [regex]::Escape($ExitProbeDestination.ToLowerInvariant())
+                $exitPassed = (Test-Path $log) -and
+                    (Select-String -Path $log -Pattern ('exit transition passed: .* target=' + $destinationPattern + ' ') -Quiet)
+                $arrivalCaptured = (Test-Path $transitionLog) -and
+                    (Select-String -Path $transitionLog -Pattern ('first-3d-capture result=pass map=' + $destinationPattern + ' elevation=') -Quiet)
+                $probed = $exitPassed -and $arrivalCaptured
+            }
             if ($Combat) {
                 $combatLog = Join-Path $OutputDirectory 'process.stdout.log'
                 if ((Test-Path -LiteralPath $combatLog) -and (Select-String -LiteralPath $combatLog -Pattern '^COMBAT_FIXTURE FAIL ' -Quiet)) {
@@ -761,8 +791,7 @@ try {
                 $inputLog = Join-Path $OutputDirectory 'process.stdout.log'
                 if ((Test-Path -LiteralPath $inputLog) -and (Select-String -LiteralPath $inputLog -Pattern '^DEV_INPUT FAIL' -Quiet)) { break }
                 if ($snapshots.Count -ge $shots -and (Test-Path -LiteralPath $inputLog) -and (Select-String -LiteralPath $inputLog -Pattern '^DEV_INPUT PASS script complete' -Quiet)) { break }
-            } elseif ($UiFixture) {
-                $fixtureLog = Join-Path $OutputDirectory 'process.stdout.log'
+            } elseif ($UiFixture) {                $fixtureLog = Join-Path $OutputDirectory 'process.stdout.log'
                 if ((Test-Path -LiteralPath $fixtureLog) -and
                     ((Select-String -LiteralPath $fixtureLog -Pattern '^UI_FIXTURE FAIL ' -Quiet) -or
                         ($UiFixture -eq 'barter' -and (Select-String -LiteralPath $fixtureLog -Pattern '^DIALOG_FIXTURE FAIL ' -Quiet)))) {
@@ -1216,11 +1245,13 @@ foreach ($snapshot in $snapshots) {
 $probeLog = Join-Path $runDirectory 'logs\devprobe.log'
 if ($OutputDirectory) {
     # -ShadowDebug 6 writes the depth map dump.
-    foreach ($kept in @($probeLog, (Join-Path $runDirectory 'shadowmap-dump.pgm'))) {
+    $keptFiles = @($probeLog, (Join-Path $runDirectory 'shadowmap-dump.pgm'))
+    if ($TransitionWatch) { $keptFiles += Join-Path $runDirectory 'logs\devtransitions.log' }
+    foreach ($kept in $keptFiles) {
         if (Test-Path -LiteralPath $kept) { Copy-Item -LiteralPath $kept -Destination $OutputDirectory }
     }
 }
-if ($Probe) {
+if ($Probe -or $ExitProbeDestination) {
     Write-Output "PROBE:"
     Get-Content $probeLog
 }
