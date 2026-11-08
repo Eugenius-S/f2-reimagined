@@ -53,3 +53,4 @@ Next: none.
 
 ### 2026-11-08 claude
 The owner: the launcher must warn that the first install is long. The GUI status says the first install takes about 20 minutes before and during it (short, to fit the one-line status), and the console log says so when it starts building every map. Release build and ctest 20/20.
+The owner: the download is named Install F2R with the project icon. The release asset is now `Install-F2R.exe` (GitHub turns a space in an asset name into a dot), the old `fallout2-ce-3d-launcher.exe` asset is deleted on publish, the release notes are refreshed on every publish, and both READMEs link the new name. The zip keeps the launcher as `fallout2-ce-3d-launcher.exe`, which the in-place update installs as `Fallout 2 Reimagined.exe`.
