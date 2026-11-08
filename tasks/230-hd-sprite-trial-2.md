@@ -1,5 +1,5 @@
 ---
-id: 229
+id: 230
 title: A second HD sprite trial, realistic, every frame generated on its own
 milestone: M2
 status: todo
@@ -34,12 +34,18 @@ of all frames on one sheet. A trial; nothing goes into the game.
 
 ## Acceptance
 
-In `runs/229-hd-sprite-trial-2/`, never in game data, each file under 1 MB:
+In `runs/230-hd-sprite-trial-2/`, never in game data, each file under 1 MB:
 
 - One image request per frame (14 requests), each given its original frame
-  as the reference. The prompt asks for a realistic look (real materials,
-  fabric folds, skin, believable light from the original's direction) while
-  keeping the pose, silhouette, proportions and colours of the frame.
+  as the reference. The F2 frame is the base, used like a coloured clay
+  blockout: it fixes the shape, pose, silhouette, proportions and where
+  each colour goes, and the prompt adds all the realism on top (real
+  materials, fabric folds, skin, believable light from the original's
+  direction). Nothing outside the F2 shape is invented.
+- The frames are consistent with each other: the same face, build,
+  suit details and light in all 14, so the walk does not flicker. Terra,
+  the main agent, checks every new frame against the ones already accepted
+  and regenerates any that drifts.
 - The vault jumpsuit's fabric reads like the Fallout 4 vault suit (the
   owner, 2026-11-08): a fitted blue suit of thick, slightly glossy
   synthetic cloth with stitched, padded panels, ribbed seams and yellow

@@ -1,5 +1,5 @@
 ---
-id: 228
+id: 229
 title: Front, back, left and right reference views of every landmark object we will model
 milestone: M2
 status: todo
@@ -35,9 +35,9 @@ modeling easy, so a modeler builds the object from them without guessing.
 
 - A list of the landmark objects, one line each: name, the map(s) it stands
   on, its sprite (FRM name), and why it is a landmark. The list is in
-  `runs/228-landmark-views/list.md`; the owner can strike lines.
+  `runs/229-landmark-views/list.md`; the owner can strike lines.
 - For each object, four views: `front.png`, `back.png`, `left.png`,
-  `right.png` in `runs/228-landmark-views/<object>/`, each under 1 MB
+  `right.png` in `runs/229-landmark-views/<object>/`, each under 1 MB
   (the runs/ limit).
 - The views are made for modeling: orthographic, no perspective, the same
   scale and ground line in all four, a plain flat background, even light
