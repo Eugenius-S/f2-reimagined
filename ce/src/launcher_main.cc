@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "launcher_routes.h"
+#include "launcher_uninstall.h"
 
 namespace fs = std::filesystem;
 
@@ -64,6 +65,8 @@ struct Options {
     bool checkRelease = false;
     bool rollback = false;
     bool installRussian = false;
+    bool removeRussian = false;
+    bool uninstall = false;
     std::vector<std::string> gameArgs;
 };
 
@@ -797,25 +800,9 @@ bool setLanguage(const fs::path& root, const char* language)
         return false;
     }
     std::string input((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    std::string output;
-    bool inSystem = false;
+    in.close();
     bool found = false;
-    size_t begin = 0;
-    while (begin < input.size()) {
-        size_t end = input.find('\n', begin);
-        if (end == std::string::npos) end = input.size(); else end++;
-        std::string line = input.substr(begin, end - begin);
-        std::string content = line;
-        while (!content.empty() && (content.back() == '\r' || content.back() == '\n')) content.pop_back();
-        if (!content.empty() && content[0] == '[') inSystem = content == "[system]";
-        if (inSystem && content.rfind("language=", 0) == 0) {
-            std::string ending = line.substr(content.size());
-            line = std::string("language=") + language + ending;
-            found = true;
-        }
-        output += line;
-        begin = end;
-    }
+    std::string output = launcher_uninstall::withLanguage(input, language, &found);
     if (!found) {
         log("cannot set the game language: [system].language was not found");
         return false;
@@ -849,6 +836,7 @@ bool enableRussianMod(const fs::path& root)
         std::string line;
         bool inserted = false;
         while (std::getline(lines, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back(); // CRLF files must not gain an empty line
             output += line + "\r\n";
             std::string normalized = trim(line);
             std::transform(normalized.begin(), normalized.end(), normalized.begin(),
@@ -948,6 +936,120 @@ bool installRussianTranslation(const fs::path& root)
     if (!enableRussianMod(root)) return false;
     log("  game language set to Russian; mods/mods_order.txt updated");
     return true;
+}
+
+// --- removing the mod (task 234) -------------------------------------------
+
+std::string readWholeFile(const fs::path& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return in ? std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()) : std::string();
+}
+
+// Takes the translation out: its file, its line in mods_order.txt, and the game language back to English.
+bool removeRussianTranslation(const fs::path& root)
+{
+    std::error_code error;
+    fs::path translation = root / "mods" / "rpu_russian.dat";
+    bool ok = true;
+    if (fs::exists(translation, error)) {
+        fs::remove(translation, error);
+        if (error) {
+            log("cannot remove mods/rpu_russian.dat; is the game running? Close it and try again");
+            ok = false;
+        } else {
+            log("  removed mods/rpu_russian.dat");
+        }
+    }
+    fs::path orderPath = root / "mods" / "mods_order.txt";
+    if (fs::exists(orderPath, error)) {
+        bool removed = false;
+        std::string order = launcher_uninstall::removeLine(readWholeFile(orderPath), "rpu_russian.dat", &removed);
+        if (removed) {
+            if (launcher_uninstall::hasContent(order)) {
+                std::ofstream out(orderPath, std::ios::binary | std::ios::trunc);
+                out.write(order.data(), static_cast<std::streamsize>(order.size()));
+                if (!out) {
+                    log("cannot update mods/mods_order.txt");
+                    ok = false;
+                }
+            } else {
+                fs::remove(orderPath, error); // the mod made the list: nothing else is in it
+            }
+            log("  mods/mods_order.txt: the translation line removed");
+        }
+    }
+    fs::remove(root / "mods", error); // only when empty
+    if (launcher_uninstall::languageOf(readWholeFile(root / kCfg)) == "russian") {
+        if (setLanguage(root, "english")) log("  game language set back to English");
+        else ok = false;
+    }
+    return ok;
+}
+
+// Gives the game back as it was before the mod.  Saves (data/), the original game files
+// and fallout2.cfg are never touched.  The folder f2reimagined-backups only holds older
+// mod builds, so it goes with the mod.
+bool uninstallMod(const fs::path& root)
+{
+    bool ok = true;
+    std::error_code error;
+    log("removing the mod from the game folder:");
+    for (const std::string& name : launcher_uninstall::installedFiles()) {
+        if (!fs::exists(root / name, error)) continue;
+        fs::remove(root / name, error);
+        if (error) {
+            logf("  cannot remove %s (%s); is the game running? Close it and try again", name.c_str(), error.message().c_str());
+            ok = false;
+        } else {
+            logf("  removed %s", name.c_str());
+        }
+    }
+    for (const std::string& name : launcher_uninstall::installedFolders()) {
+        if (!fs::exists(root / name, error)) continue;
+        fs::remove_all(root / name, error);
+        if (error) {
+            logf("  cannot remove the folder %s (%s)", name.c_str(), error.message().c_str());
+            ok = false;
+        } else {
+            logf("  removed the folder %s", name.c_str());
+        }
+    }
+    if (!removeRussianTranslation(root)) ok = false;
+
+    // The launcher itself, last: if it is the running program, it moves aside and a helper deletes it after we close.
+    fs::path launcher = root / kRootLauncher;
+    if (fs::exists(launcher, error)) {
+        fs::remove(launcher, error);
+        if (!error) {
+            logf("  removed %s", kRootLauncher);
+        } else {
+            fs::path aside = launcher;
+            aside += ".old";
+            fs::remove(aside, error);
+            fs::rename(launcher, aside, error);
+            if (error) {
+                logf("  cannot remove %s (%s)", kRootLauncher, error.message().c_str());
+                ok = false;
+            } else {
+                // cmd repeats the delete until the running copy is closed; it stops by itself at the latest after ten minutes.
+                std::wstring command = L"cmd.exe /c \"for /l %i in (1,1,600) do @(del /f /q \"" + aside.wstring()
+                    + L"\" 2>nul & if not exist \"" + aside.wstring() + L"\" exit & ping -n 2 127.0.0.1 >nul)\"";
+                STARTUPINFOW startup = {};
+                startup.cb = sizeof(startup);
+                PROCESS_INFORMATION process = {};
+                if (CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW | DETACHED_PROCESS,
+                        nullptr, root.c_str(), &startup, &process)) {
+                    CloseHandle(process.hThread);
+                    CloseHandle(process.hProcess);
+                }
+                logf("  %s: removed (the last file goes when this window closes)", kRootLauncher);
+            }
+        }
+    }
+    log(ok ? "the mod is removed; your saves and the original Fallout 2 files were not touched"
+           : "the mod is only partly removed; see the lines above");
+    return ok;
 }
 
 // --- command line --------------------------------------------------------
@@ -1054,6 +1156,8 @@ Options parseOptions(int argc, char** argv)
             log("  --no-start          do everything except starting the game");
             log("  --rollback          restore the most recent backed-up game build");
             log("  --russian           install the official RPU Russian text translation");
+            log("  --remove-russian    remove the Russian translation and set the game language back to English");
+            log("  --uninstall         remove the mod and give back the game as it was (saves and original files stay)");
             log("  --check-release     print the latest version and release notes");
             log("  -- <args>           arguments handed over to the game");
             std::exit(0);
@@ -1073,6 +1177,10 @@ Options parseOptions(int argc, char** argv)
             options.rollback = true;
         } else if (arg == "--russian") {
             options.installRussian = true;
+        } else if (arg == "--remove-russian") {
+            options.removeRussian = true;
+        } else if (arg == "--uninstall") {
+            options.uninstall = true;
         } else if (arg == "--check-release") {
             options.checkRelease = true;
         } else {
@@ -1138,12 +1246,12 @@ int runConsole(Options options)
     if (!options.gameRoot.empty()) {
         root = fs::path(utf8ToWide(options.gameRoot));
         logf("game root (from --game-root): %s", options.gameRoot.c_str());
-        if (!looksLikeFallout2(root)) die("master.dat and critter.dat are not in --game-root");
+        if (!looksLikeFallout2(root)) die("this is not a Fallout 2 folder: master.dat and critter.dat are not there");
     } else {
         std::string found = ownGameRoot();
         if (!found.empty()) logf("game root (the folder of this launcher): %s", found.c_str());
         else found = findGameRoot(true);
-        if (found.empty()) die("no Fallout 2 folder given");
+        if (found.empty()) die("no Fallout 2 folder was chosen");
         root = found;
     }
 
@@ -1154,6 +1262,11 @@ int runConsole(Options options)
         fs::remove(old, ignored);
     }
 
+    if (options.uninstall) return uninstallMod(root) ? 0 : 1;
+    if (options.removeRussian) {
+        log("removing the Russian translation:");
+        return removeRussianTranslation(root) ? 0 : 1;
+    }
     if (options.rollback) return rollbackInstalledBuild(root) ? 0 : 1;
 
     bool installedGamePresent = fs::exists(root / kGameExe);
@@ -1184,9 +1297,9 @@ int runConsole(Options options)
 
     if (remoteVersion.empty()) {
         if (installedVersion.empty() && !installedGamePresent) {
-            die("first install needs the network: the release is unreachable");
+            die("GitHub does not answer, and the first install needs the internet. Try again later or use another network");
         }
-        log("offline: starting the installed game as it is");
+        log("GitHub does not answer: the installed game is used as it is");
     }
 
     bool freshInstall = !installedGamePresent;
@@ -1214,17 +1327,17 @@ int runConsole(Options options)
         log("unpacking");
         if (!unpackZip(zip, stage)) {
             fs::remove_all(work, error);
-            die("unpack failed");
+            die("the downloaded file could not be unpacked; try the install again");
         }
         if (!fs::exists(stage / kGameExe)) {
             fs::remove_all(work, error);
-            die("the package does not hold the game exe");
+            die("the downloaded package is damaged (the game is not in it); try the install again");
         }
 
         if (installedGamePresent && !backupInstalledBuild(root,
             installedVersion.empty() ? std::string("manual") : installedVersion)) {
             fs::remove_all(work, error);
-            die("cannot back up the installed build before updating");
+            die("could not save the current build before updating; nothing was changed");
         }
 
         // --- into the game folder; the player's things stay theirs ---
@@ -1265,7 +1378,7 @@ int runConsole(Options options)
     }
     fs::path exporter = root / kExporterExe;
     if (!fs::exists(exporter)) {
-        log("scene-exporter.exe is missing; the game will start in 2D");
+        log("scene-exporter.exe is missing; the game will start without 3D");
     } else {
         bool needExport = options.forceExport || freshInstall || updated;
         if (!needExport) {
@@ -1285,7 +1398,7 @@ int runConsole(Options options)
             logf("making the 3D scene data for: %s", mapList.c_str());
             if (freshInstall) log("  the first install builds every map: about 20 minutes; later updates take seconds");
             if (!runTool(utf8ToWide(command), root.wstring(), nullptr, true)) {
-                log("the exporter failed; the game will start in 2D");
+                log("the 3D data could not be built; the game will start without 3D");
             }
         } else {
             log("the 3D scene data is current");
@@ -1293,7 +1406,7 @@ int runConsole(Options options)
     }
 
     if (options.installRussian && !installRussianTranslation(root)) {
-        die("the Russian translation could not be installed");
+        die("the Russian translation could not be installed (see the lines above)");
     }
 
     if (options.noStart) {
@@ -1311,7 +1424,7 @@ int runConsole(Options options)
 
     // --- start the game ---
     fs::path game = root / kGameExe;
-    if (!fs::exists(game)) die("the game exe is not installed");
+    if (!fs::exists(game)) die("the game is not installed yet; press Install first");
     std::string command = "\"" + game.string() + "\"";
     for (const std::string& argument : options.gameArgs) {
         command += " ";

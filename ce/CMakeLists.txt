@@ -451,6 +451,12 @@ if(BUILD_TESTING)
     target_include_directories(launcher_routes_tests PRIVATE "src")
     add_test(NAME launcher_routes_tests COMMAND launcher_routes_tests)
 
+    add_executable(launcher_uninstall_tests
+        "tests/launcher_progress/launcher_uninstall_test.cc"
+    )
+    target_include_directories(launcher_uninstall_tests PRIVATE "src")
+    add_test(NAME launcher_uninstall_tests COMMAND launcher_uninstall_tests)
+
     add_executable(preview_policy_tests
         "src/scene/preview_policy.cc"
         "tests/preview_policy/preview_policy_test.cc"
@@ -775,6 +781,8 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
         target_link_libraries(fallout2-ce-3d-launcher winhttp bcrypt advapi32 ole32 uuid comctl32 shell32)
         if(MSVC)
             target_compile_options(fallout2-ce-3d-launcher PRIVATE /utf-8)
+            # launcher.rc embeds the manifest (asInvoker, supportedOS): the linker must not add a second one.
+            target_link_options(fallout2-ce-3d-launcher PRIVATE /MANIFEST:NO)
         endif()
     endif()
     if(MINGW)
