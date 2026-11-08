@@ -45,6 +45,9 @@ constexpr const char* kGameExe = "fallout2-ce.exe";
 constexpr const char* kCfg = "fallout2.cfg";
 constexpr const char* kVersionTxt = "version.txt";
 constexpr const char* kExporterExe = "scene-exporter.exe";
+// The launcher as the player sees it in the game folder; the release zip carries it under kZipLauncher.
+constexpr const char* kRootLauncher = "Fallout 2 Reimagined.exe";
+constexpr const char* kZipLauncher = "fallout2-ce-3d-launcher.exe";
 constexpr const char* kDefaultMaps = "all";
 
 struct Options {
@@ -587,9 +590,30 @@ bool copyIfPresent(const fs::path& stage, const char* name, const fs::path& dest
     return true;
 }
 
+// A running exe cannot be overwritten but can be renamed: the old copy moves aside
+// (deleted on the next run) and the new one takes its name.
+bool copyLauncher(const fs::path& source, const fs::path& target)
+{
+    std::error_code error;
+    fs::path aside = target;
+    aside += ".old";
+    fs::remove(aside, error);
+    bool moved = false;
+    if (fs::exists(target, error)) {
+        fs::rename(target, aside, error);
+        moved = !error;
+    }
+    fs::copy_file(source, target, fs::copy_options::overwrite_existing, error);
+    if (error && moved) {
+        std::error_code ignored;
+        fs::rename(aside, target, ignored);
+    }
+    return !error;
+}
+
 const std::vector<std::string>& buildFiles()
 {
-    static const std::vector<std::string> names = {kGameExe, "ce.dat", kExporterExe, kVersionTxt};
+    static const std::vector<std::string> names = {kGameExe, "ce.dat", kExporterExe, kVersionTxt, kRootLauncher};
     return names;
 }
 
@@ -670,6 +694,13 @@ bool rollbackInstalledBuild(const fs::path& root)
     for (const std::string& name : buildFiles()) {
         fs::path source = selected / name;
         if (!fs::is_regular_file(source, error)) continue;
+        if (name == kRootLauncher) {
+            if (!copyLauncher(source, root / name)) {
+                logf("rollback failed for %s", name.c_str());
+                return false;
+            }
+            continue;
+        }
         fs::copy_file(source, root / name, fs::copy_options::overwrite_existing, error);
         if (error) {
             logf("rollback failed for %s: %s", name.c_str(), error.message().c_str());
@@ -925,7 +956,7 @@ Options parseOptions(int argc, char** argv)
             log("fallout2-ce-3d-launcher: installs Fallout 2: Reimagined onto a clean Fallout 2 and keeps");
             log("it updated from the rolling `latest` GitHub release, then starts the game.");
             log("");
-            log("  --game-root <dir>   the Fallout 2 folder (default: registry lookup, then a picker)");
+            log("  --game-root <dir>   the Fallout 2 folder (default: this launcher's own folder when it is a game root, else registry lookup, then a picker)");
             log("  --update-url <url>  where version.txt and the zip live (default: the latest release)");
             log("  --release-info-url <url>  release API for the version notes");
             log("  --maps <list>       maps the exporter covers, comma separated (default: all, every map)");
@@ -975,6 +1006,17 @@ std::vector<std::string> splitMaps(const std::string& maps)
 
 } // namespace
 
+// The folder of this exe when it is a game root (the launcher installed there), else empty.
+std::string ownGameRoot()
+{
+    wchar_t path[MAX_PATH] = {};
+    if (GetModuleFileNameW(nullptr, path, MAX_PATH) == 0) return std::string();
+    fs::path folder = fs::path(path).parent_path();
+    std::error_code error;
+    if (!looksLikeFallout2(folder) || !fs::exists(folder / kVersionTxt, error)) return std::string();
+    return wideToUtf8(folder.wstring());
+}
+
 std::string findGameRootForUi()
 {
     return findGameRoot(false);
@@ -1006,9 +1048,18 @@ int runConsole(Options options)
         logf("game root (from --game-root): %s", options.gameRoot.c_str());
         if (!looksLikeFallout2(root)) die("master.dat and critter.dat are not in --game-root");
     } else {
-        std::string found = findGameRoot(true);
+        std::string found = ownGameRoot();
+        if (!found.empty()) logf("game root (the folder of this launcher): %s", found.c_str());
+        else found = findGameRoot(true);
         if (found.empty()) die("no Fallout 2 folder given");
         root = found;
+    }
+
+    {
+        std::error_code ignored;
+        fs::path old = root / kRootLauncher;
+        old += ".old";
+        fs::remove(old, ignored);
     }
 
     if (options.rollback) return rollbackInstalledBuild(root) ? 0 : 1;
@@ -1092,6 +1143,13 @@ int runConsole(Options options)
         copyIfPresent(stage, kGameExe, root, true, "installed");
         copyIfPresent(stage, "ce.dat", root, true, "installed");
         copyIfPresent(stage, kExporterExe, root, true, "installed");
+        if (!fs::exists(stage / kZipLauncher)) {
+            logf("  %s: not in the package, skipped", kRootLauncher);
+        } else if (copyLauncher(stage / kZipLauncher, root / kRootLauncher)) {
+            logf("  %s: installed", kRootLauncher);
+        } else {
+            logf("  %s: copy failed", kRootLauncher);
+        }
         if (fs::exists(root / kCfg)) {
             log("  fallout2.cfg: kept (the player's file is never overwritten)");
         } else {
@@ -1136,6 +1194,7 @@ int runConsole(Options options)
                 + "\" --maps " + mapList;
             if (options.forceExport) command += " --force";
             logf("making the 3D scene data for: %s", mapList.c_str());
+            if (freshInstall) log("  the first install builds every map: about 20 minutes; later updates take seconds");
             if (!runTool(utf8ToWide(command), root.wstring())) {
                 log("the exporter failed; the game will start in 2D");
             }

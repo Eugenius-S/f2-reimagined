@@ -105,11 +105,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create latest --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA `
               --title "Latest build" `
-              --notes "Rolling build of main. Run fallout2-ce-3d-launcher.exe to install it onto your Fallout 2; the launcher makes the 3D scene data from your own game files."
+              --notes "Rolling build of main. Run Install-F2R.exe to install it onto your Fallout 2; afterwards start the game with Fallout 2 Reimagined.exe in the game folder; the launcher makes the 3D scene data from your own game files."
           }
-          gh release upload latest fallout2-ce-3d-win64.zip staging/version.txt staging/fallout2-ce-3d-launcher.exe --repo $env:GITHUB_REPOSITORY --clobber
+          # The download players see; the zip keeps the launcher under its build name for the in-place update.
+          Copy-Item staging/fallout2-ce-3d-launcher.exe Install-F2R.exe
+          gh release upload latest fallout2-ce-3d-win64.zip staging/version.txt Install-F2R.exe --repo $env:GITHUB_REPOSITORY --clobber
+          gh release delete-asset latest fallout2-ce-3d-launcher.exe --repo $env:GITHUB_REPOSITORY --yes 2>$null
+          $global:LASTEXITCODE = 0
           # The release page shows the creation date, so the title carries the build day.
-          gh release edit latest --repo $env:GITHUB_REPOSITORY --title "Latest build $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))"
+          gh release edit latest --repo $env:GITHUB_REPOSITORY --title "Latest build $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))" `
+            --notes "Rolling build of main. Run Install-F2R.exe to install it onto your Fallout 2; afterwards start the game with Fallout 2 Reimagined.exe in the game folder; the launcher makes the 3D scene data from your own game files."
   exporter:
     runs-on: ubuntu-latest
     steps:
