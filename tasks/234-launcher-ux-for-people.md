@@ -2,7 +2,7 @@
 id: 234
 title: The launcher speaks to people - remove mod, Russian checkbox, honest errors
 milestone: M1
-status: open
+status: done
 owner: any
 suggested: claude
 priority: high
@@ -39,3 +39,13 @@ Starts from main after 232 lands, since both change the launcher window.
 ## Log
 
 - 2026-11-08 claude: cut from the owner's review.
+- 2026-11-08 claude: done. Remove mod (`--uninstall`, confirmation first), the Russian checkbox
+  follows the disk (`--remove-russian`, asks before removing), manifest embedded (asInvoker, four
+  supportedOS GUIDs, no second linker manifest), plain error texts in the worker. Pure parts in
+  `launcher_uninstall.h` with `launcher_uninstall_tests`. Checked on a scratch copy of the three
+  original dats: install with `--maps klamall`, `--uninstall` brings back the exact pre-mod file
+  list and the same fallout2.cfg hash; the root launcher removes itself through rename-aside. The
+  Russian download could not run (GitHub API limit used up and github.com answered 504 through the
+  VPN), so install/remove were checked with a stand-in rpu_russian.dat. The GUI was not clicked
+  (no GUI automation here): the owner's check is the window itself. "Install-F2R.exe closed
+  without the installer prompt" is for the owner to confirm on a real run.
