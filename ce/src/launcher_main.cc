@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "launcher_routes.h"
+#include "launcher_ru.h"
 #include "launcher_uninstall.h"
 
 namespace fs = std::filesystem;
@@ -54,6 +55,11 @@ constexpr const char* kExporterExe = "scene-exporter.exe";
 constexpr const char* kRootLauncher = "Fallout 2 Reimagined.exe";
 constexpr const char* kZipLauncher = "fallout2-ce-3d-launcher.exe";
 constexpr const char* kDefaultMaps = "all";
+// The project mirror (task 235): the CI branch `dist`.  Since task 238 it also holds
+// rpu_russian.dat and rpu-version.txt.  --mirror-url overrides it (tests).
+std::string g_mirrorBase = std::string("https://raw.githubusercontent.com/") + kDefaultRepo + "/dist/";
+// --ui-language ru: the user-facing log lines are printed in Russian (launcher_ru.h).
+bool g_ru = false;
 
 struct Options {
     std::string gameRoot;
@@ -70,9 +76,14 @@ struct Options {
     std::vector<std::string> gameArgs;
 };
 
+const char* tr(const char* english)
+{
+    return g_ru ? launcher_ru::translate(english) : english;
+}
+
 void log(const char* text)
 {
-    std::printf("%s\n", text);
+    std::printf("%s\n", tr(text));
     std::fflush(stdout);
 }
 
@@ -81,14 +92,20 @@ void logf(const char* format, ...)
     char buffer[1024];
     va_list args;
     va_start(args, format);
-    std::vsnprintf(buffer, sizeof(buffer), format, args);
+    std::vsnprintf(buffer, sizeof(buffer), tr(format), args);
     va_end(args);
-    log(buffer);
+    std::printf("%s\n", buffer);
+    std::fflush(stdout);
 }
 
-[[noreturn]] void die(const std::string& message)
+[[noreturn]] void die(const char* format, ...)
 {
-    logf("ERROR: %s", message.c_str());
+    char buffer[1024];
+    va_list args;
+    va_start(args, format);
+    std::vsnprintf(buffer, sizeof(buffer), tr(format), args);
+    va_end(args);
+    logf("ERROR: %s", buffer);
     std::exit(1);
 }
 
@@ -451,7 +468,7 @@ std::vector<launcher_routes::Route> releaseRoutes(const std::string& base, const
     if (base == kDefaultUpdateBase) {
         std::string repo = kDefaultRepo;
         routes.push_back({ "api", "https://api.github.com/repos/" + repo + "/releases/tags/latest", file });
-        routes.push_back({ "mirror", "https://raw.githubusercontent.com/" + repo + "/dist/" + file, "" });
+        routes.push_back({ "mirror", g_mirrorBase + file, "" });
     }
     return routes;
 }
@@ -666,7 +683,7 @@ bool copyIfPresent(const fs::path& stage, const char* name, const fs::path& dest
         logf("  %s: copy failed (%s)", name, error.message().c_str());
         return false;
     }
-    logf("  %s: %s", name, note);
+    logf("  %s: %s", name, tr(note));
     return true;
 }
 
@@ -857,79 +874,101 @@ bool enableRussianMod(const fs::path& root)
     return setLanguage(root, "russian");
 }
 
+// The official RPU release tag from github.com (the 302 page, then the api); empty when neither answers.
+std::string rpuTagFromGithub()
+{
+    const char* networkError = nullptr;
+    std::string location;
+    std::string tag;
+    if (httpRedirectLocation(kRpuLatestUrl, &location, &networkError)) {
+        const std::string marker = "/releases/tag/";
+        size_t at = location.find(marker);
+        if (at != std::string::npos) tag = trim(location.substr(at + marker.size()));
+    } else {
+        logf("  RPU release page failed: %s", networkError != nullptr ? networkError : "network error");
+    }
+    if (tag.empty()) {
+        std::string json;
+        if (httpGet(std::string("https://api.github.com/repos/") + kRpuRepo + "/releases/latest", &json, &networkError)) {
+            tag = jsonStringValue(json, "tag_name");
+        }
+    }
+    return tag;
+}
+
+// rpu_russian.dat from RPU's own zip (github.com, then the api) into dat; false when any step fails.
+bool rpuDatFromGithub(const std::string& tag, const fs::path& work, const fs::path& dat)
+{
+    std::string filename = "rpu_" + tag + "_translations.zip";
+    std::vector<launcher_routes::Route> rpuRoutes = {
+        { "github.com", std::string("https://github.com/") + kRpuRepo + "/releases/download/" + tag + "/" + filename, "" },
+        { "api", std::string("https://api.github.com/repos/") + kRpuRepo + "/releases/tags/" + tag, filename },
+    };
+    fs::path zip = work / filename;
+    logf("downloading the official Russian translation from RPU %s", tag.c_str());
+    std::string routeError;
+    if (!fetchRoutes(rpuRoutes, nullptr, &zip, &routeError)) return false;
+    std::error_code error;
+    fs::create_directories(work / "stage", error);
+    if (!unpackZip(zip, work / "stage")) {
+        log("the Russian translation archive could not be unpacked");
+        return false;
+    }
+    for (fs::recursive_directory_iterator it(work / "stage", error), end; !error && it != end; it.increment(error)) {
+        if (it->is_regular_file() && it->path().filename() == "rpu_russian.dat") {
+            fs::copy_file(it->path(), dat, fs::copy_options::overwrite_existing, error);
+            return !error;
+        }
+    }
+    log("the official translation archive does not contain rpu_russian.dat");
+    return false;
+}
+
 bool installRussianTranslation(const fs::path& root)
 {
     fs::path translation = root / "mods" / "rpu_russian.dat";
     if (!fs::exists(translation)) {
-        const char* networkError = nullptr;
-        std::string location;
-        std::string tag;
-        if (httpRedirectLocation(kRpuLatestUrl, &location, &networkError)) {
-            const std::string marker = "/releases/tag/";
-            size_t at = location.find(marker);
-            if (at != std::string::npos) tag = trim(location.substr(at + marker.size()));
-        } else {
-            logf("  RPU release page failed: %s", networkError != nullptr ? networkError : "network error");
-        }
-        if (tag.empty()) {
-            std::string json;
-            if (httpGet(std::string("https://api.github.com/repos/") + kRpuRepo + "/releases/latest", &json, &networkError)) {
-                tag = jsonStringValue(json, "tag_name");
-            }
-        }
-        if (tag.empty()) {
-            log("GitHub does not answer: cannot read the official RPU release version");
-            log("the official RPU release did not provide a version tag");
-            return false;
-        }
-        std::string filename = "rpu_" + tag + "_translations.zip";
-        // RPU has no license that allows a copy, so there is no mirror route for it.
-        std::vector<launcher_routes::Route> rpuRoutes = {
-            { "github.com", std::string("https://github.com/") + kRpuRepo + "/releases/download/" + tag + "/" + filename, "" },
-            { "api", std::string("https://api.github.com/repos/") + kRpuRepo + "/releases/tags/" + tag, filename },
-        };
         char tempPath[MAX_PATH] = {};
         GetTempPathA(MAX_PATH, tempPath);
         fs::path work = fs::path(tempPath) / ("f2ce3d-russian-" + std::to_string(GetCurrentProcessId()));
         std::error_code error;
         fs::remove_all(work, error);
-        fs::create_directories(work / "stage", error);
+        fs::create_directories(work, error);
         if (error) {
             logf("cannot create translation staging folder: %s", error.message().c_str());
             return false;
         }
-        fs::path zip = work / filename;
-        logf("downloading the official Russian translation from RPU %s", tag.c_str());
-        std::string routeError;
-        bool downloaded = fetchRoutes(rpuRoutes, nullptr, &zip, &routeError);
-        if (!downloaded || !unpackZip(zip, work / "stage")) {
-            if (downloaded) log("the Russian translation archive could not be unpacked");
-            else logf("GitHub does not answer, the Russian translation could not be downloaded (%s); "
-                "it has no mirror, so try again later or use another network", routeError.c_str());
-            fs::remove_all(work, error);
-            return false;
+        fs::path dat = work / "rpu_russian.dat";
+        // Route 1: RPU's own release on github.com.  Route 2 (task 238): the project mirror, which
+        // CI fills with the same file and its tag, for players whose VPN blocks github.com.
+        std::string tag = rpuTagFromGithub();
+        bool got = false;
+        if (!tag.empty()) got = rpuDatFromGithub(tag, work, dat);
+        std::string source = "RPU";
+        if (!got) {
+            if (tag.empty()) log("cannot read the official RPU release version on GitHub");
+            logf("GitHub does not answer for the Russian translation (%s); trying the project mirror",
+                tag.empty() ? "no RPU version" : tag.c_str());
+            std::string mirrorTag;
+            std::string mirrorError;
+            fetchRoutes({ { "mirror", g_mirrorBase + "rpu-version.txt", "" } }, &mirrorTag, nullptr, &mirrorError);
+            mirrorTag = trim(mirrorTag);
+            if (!mirrorTag.empty()) logf("  the mirror's RPU version: %s", mirrorTag.c_str());
+            got = fetchRoutes({ { "mirror", g_mirrorBase + "rpu_russian.dat", "" } }, nullptr, &dat, &mirrorError);
+            if (!got) logf("the Russian translation could not be downloaded: GitHub and the project mirror both failed (%s)", mirrorError.c_str());
+            source = mirrorTag.empty() ? "?" : mirrorTag;
         }
-        fs::path source;
-        for (fs::recursive_directory_iterator it(work / "stage", error), end; !error && it != end; it.increment(error)) {
-            if (it->is_regular_file() && it->path().filename() == "rpu_russian.dat") {
-                source = it->path();
-                break;
-            }
+        bool copied = false;
+        if (got) {
+            fs::create_directories(translation.parent_path(), error);
+            fs::copy_file(dat, translation, fs::copy_options::overwrite_existing, error);
+            copied = !error;
+            if (!copied) log("failed to install the Russian translation file");
         }
-        if (source.empty()) {
-            log("the official translation archive does not contain rpu_russian.dat");
-            fs::remove_all(work, error);
-            return false;
-        }
-        fs::create_directories(translation.parent_path(), error);
-        fs::copy_file(source, translation, fs::copy_options::overwrite_existing, error);
-        bool copySucceeded = !error;
         fs::remove_all(work, error);
-        if (!copySucceeded) {
-            log("failed to install the Russian translation file");
-            return false;
-        }
-        log("  installed mods/rpu_russian.dat from the official RPU release");
+        if (!copied) return false;
+        if (source == "RPU") log("  installed mods/rpu_russian.dat from the official RPU release");
+        else logf("  installed mods/rpu_russian.dat from the project mirror (RPU %s)", source.c_str());
     } else {
         log("  kept the existing mods/rpu_russian.dat");
     }
@@ -1157,6 +1196,8 @@ Options parseOptions(int argc, char** argv)
             log("  --rollback          restore the most recent backed-up game build");
             log("  --russian           install the official RPU Russian text translation");
             log("  --remove-russian    remove the Russian translation and set the game language back to English");
+            log("  --ui-language <ru|en>  the language of the log lines (default: en)");
+            log("  --mirror-url <url>  the mirror folder for the release files and the Russian translation (tests)");
             log("  --uninstall         remove the mod and give back the game as it was (saves and original files stay)");
             log("  --check-release     print the latest version and release notes");
             log("  -- <args>           arguments handed over to the game");
@@ -1179,12 +1220,17 @@ Options parseOptions(int argc, char** argv)
             options.installRussian = true;
         } else if (arg == "--remove-russian") {
             options.removeRussian = true;
+        } else if (arg == "--ui-language" && i + 1 < argc) {
+            g_ru = std::string(argv[++i]) == "ru";
+        } else if (arg == "--mirror-url" && i + 1 < argc) {
+            g_mirrorBase = argv[++i];
+            if (g_mirrorBase.back() != '/') g_mirrorBase += '/';
         } else if (arg == "--uninstall") {
             options.uninstall = true;
         } else if (arg == "--check-release") {
             options.checkRelease = true;
         } else {
-            die("unknown option: " + arg + " (see --help)");
+            die("unknown option: %s (see --help)", arg.c_str());
         }
     }
     return options;
@@ -1306,8 +1352,8 @@ int runConsole(Options options)
     bool updated = false;
     if (!remoteVersion.empty() && remoteVersion != installedVersion) {
         // --- download and unpack ---
-        logf("%s: %s -> %s", installedVersion.empty() ? "installing" : "updating",
-            installedVersion.empty() ? "none" : installedVersion.c_str(), remoteVersion.c_str());
+        if (installedVersion.empty()) logf("installing: none -> %s", remoteVersion.c_str());
+        else logf("updating: %s -> %s", installedVersion.c_str(), remoteVersion.c_str());
         char tempPath[MAX_PATH] = {};
         GetTempPathA(MAX_PATH, tempPath);
         fs::path work = fs::path(tempPath) / ("f2ce3d-" + std::to_string(GetCurrentProcessId()));
@@ -1322,7 +1368,7 @@ int runConsole(Options options)
         logf("downloading %s", kZipAsset);
         if (!fetchRoutes(releaseRoutes(options.updateBase, kZipAsset), nullptr, &zip, &downloadError)) {
             fs::remove_all(work, error);
-            die("GitHub does not answer, download failed (" + downloadError + ")");
+            die("GitHub does not answer, download failed (%s)", downloadError.c_str());
         }
         log("unpacking");
         if (!unpackZip(zip, stage)) {
@@ -1406,7 +1452,9 @@ int runConsole(Options options)
     }
 
     if (options.installRussian && !installRussianTranslation(root)) {
-        die("the Russian translation could not be installed (see the lines above)");
+        // Exit 2: the game itself is installed, only the translation will be tried again.
+        log("the Russian translation could not be installed (see the lines above)");
+        return 2;
     }
 
     if (options.noStart) {

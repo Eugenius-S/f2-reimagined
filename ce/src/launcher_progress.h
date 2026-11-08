@@ -3,7 +3,7 @@
 // The launcher's progress bar and per-map log lines, read from the worker's
 // own output (task 232).  No windows, no IPC: the UI feeds it each line.
 //   download  "  ... N / M MB"                      0..10 %
-//   unpack    "unpacking"                           10 %
+//   unpack    "unpacking" (or its Russian line)      10 %
 //   export    {"maps_total": K, "scenes_total": N}  12..100 %, then one
 //             scene line per scene ({"output": ...}, "current": true when
 //             skipped) or "FAILED map eN: ..."
@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+
+#include "launcher_ru.h"
 
 namespace launcher_progress {
 
@@ -74,9 +76,9 @@ struct Tracker {
         int b = 0;
         if (std::sscanf(line.c_str(), "  ... %d / %d MB", &a, &b) == 2 && b > 0) {
             raise(10 * a / b);
-        } else if (line == "unpacking") {
+        } else if (line == launcher_ru::kUnpacking || line == launcher_ru::kUnpackingRu) {
             raise(10);
-        } else if (line.rfind("making the 3D scene data", 0) == 0) {
+        } else if (line.rfind(launcher_ru::kMakingScene, 0) == 0 || line.rfind(launcher_ru::kMakingSceneRu, 0) == 0) {
             raise(12);
         } else if (line.rfind("{\"maps_total\"", 0) == 0) {
             hideLine = true;

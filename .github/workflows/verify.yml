@@ -126,6 +126,33 @@ jobs:
           $dist = Join-Path $env:RUNNER_TEMP 'dist'
           New-Item -ItemType Directory $dist | Out-Null
           Copy-Item fallout2-ce-3d-win64.zip, staging/version.txt $dist
+          # Task 238: the official RPU Russian translation rides on the mirror
+          # too (the owner's decision), with its release tag.  If RPU cannot
+          # be reached, keep the previous dist copy; with neither, fail loudly.
+          $rpu = Join-Path $env:RUNNER_TEMP 'rpu'
+          New-Item -ItemType Directory $rpu | Out-Null
+          $rpuRepo = 'BGforgeNet/Fallout2_Restoration_Project'
+          $tag = (gh release view --repo $rpuRepo --json tagName --jq .tagName)
+          if ($LASTEXITCODE -eq 0 -and $tag) {
+            gh release download --repo $rpuRepo --pattern 'rpu_*_translations.zip' --dir $rpu --clobber
+          }
+          $rpuZip = Get-ChildItem $rpu -Filter 'rpu_*_translations.zip' | Select-Object -First 1
+          if ($LASTEXITCODE -eq 0 -and $rpuZip) {
+            Expand-Archive $rpuZip.FullName -DestinationPath (Join-Path $rpu 'x') -Force
+            $dat = Get-ChildItem (Join-Path $rpu 'x') -Recurse -Filter rpu_russian.dat | Select-Object -First 1
+            if (-not $dat) { throw "rpu_russian.dat is not in $($rpuZip.Name)" }
+            Copy-Item $dat.FullName (Join-Path $dist 'rpu_russian.dat')
+            Set-Content (Join-Path $dist 'rpu-version.txt') $tag -NoNewline
+          } else {
+            Write-Warning "RPU release download failed; keeping the previous dist copy"
+            $raw = "https://raw.githubusercontent.com/$($env:GITHUB_REPOSITORY)/dist"
+            foreach ($name in 'rpu_russian.dat', 'rpu-version.txt') {
+              Invoke-WebRequest "$raw/$name" -OutFile (Join-Path $dist $name)
+            }
+          }
+          if (-not (Test-Path (Join-Path $dist 'rpu_russian.dat')) -or (Get-Item (Join-Path $dist 'rpu_russian.dat')).Length -lt 1MB) {
+            throw "the dist mirror has no usable rpu_russian.dat"
+          }
           Set-Location $dist
           git init -q -b dist
           git config user.name github-actions
