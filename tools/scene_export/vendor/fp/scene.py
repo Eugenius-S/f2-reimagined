@@ -984,7 +984,8 @@ class SceneBuilder:
                 if not forced:                          # a solid by name lifts nothing: the game's view keeps its cards
                     solids.append((round_, u + pu, v + pv, half, z1))
                 if forced:
-                    self.forced_boards.add(first.board)
+                    if first.board is not None:         # a sheet piece has no card to mark
+                        self.forced_boards.add(first.board)
                 else:
                     self.prop_blobs.append((u + pu, v + pv, 1.15 * max(half), 1.15 * min(half)))
                 if blocking and (area >= SMALL_AREA or z1 >= TALL):
