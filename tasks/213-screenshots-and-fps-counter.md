@@ -2,7 +2,7 @@
 id: 213
 title: F12 screenshots, Ctrl+F12 with the highlight, and the FPS counter answer
 milestone: M1
-status: open
+status: done
 owner: gpt
 suggested: owner
 priority: medium

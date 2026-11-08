@@ -2,7 +2,7 @@
 id: 203
 title: Leak the text capture registry so the exit-time free hook cannot touch destroyed statics
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: gpt
 priority: high

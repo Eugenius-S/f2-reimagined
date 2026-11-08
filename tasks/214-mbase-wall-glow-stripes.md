@@ -2,7 +2,7 @@
 id: 214
 title: Military base walls show light stripes in the glow
 milestone: M1
-status: open
+status: done
 owner: gpt
 suggested: owner
 priority: normal
