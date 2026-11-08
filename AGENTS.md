@@ -59,7 +59,7 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
 - After every code merge into main the game is verified before anybody
   plays it: rebuild Release from fresh `origin/main`, run one off-screen
   `tools/dev-snapshot.ps1` launch check on the demo copy, and only then copy
-  `build/fallout2-ce.exe` to `E:\Projects2r-verifiedallout2-ce.exe`
+  `build/fallout2-ce.exe` to `E:\Projects\f2r-verified\fallout2-ce.exe`
   with a line in `version.txt` beside it (commit, date, checks). The owner's
   `Run F2R.lnk` swaps that build into `game/` on its next start (the previous
   one stays as `fallout2-ce.exe.bak`). Main must always be playable. Docs-only
