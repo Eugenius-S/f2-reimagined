@@ -16,7 +16,7 @@ from baked_sidecar import (ENTRY as BAKED_ENTRY, GL_MAP_OFFSET, HEADER as BAKED_
                            NOCAST as BAKED_NOCAST, SKIP as BAKED_SKIP, FLAT as BAKED_FLAT, FLY_FLAT as BAKED_FLY_FLAT,
                            FIXED_CARD as BAKED_FIXED_CARD, FLY_SKIP as BAKED_FLY_SKIP, PLANE as BAKED_PLANE,
                            baked_objects, decode_baked_sidecar, encode_baked_sidecar)
-from export import ReadOnlyGameFiles, choose_source, main, parse_args, patch_paths, scene_directory, validate_output_contents
+from export import MAP_GROUPS, ReadOnlyGameFiles, choose_source, main, parse_args, patch_paths, scene_directory, validate_output_contents
 from floor_sidecar import HEADER, MAGIC, VERSION, cell_content_rect, decode_floor_sidecar, encode_floor_sidecar
 from roof_fringe import (boundary_edges, components_of, donor_tiles, inner_edge, cut_to_walls, own_strip, donate, foot_cover, lay_donor, roof_sides, whole_sides, BELT_LAP, BELT_ROWS, EDGE_ROWS, STRIP_ROWS, belt_art, compose_band, is_fringe, outward, resolve_runs, runs_of,
                          split_tile, tidy_cell, unproject_cell, unroll, wall_under, write_fringe_art)
@@ -30,6 +30,8 @@ from solids import Projection, row_plane
 from wall_sidecar import (BATCH, HEADER as WALL_HEADER, MAGIC as WALL_MAGIC, VERTEX,
                           VERSION as WALL_VERSION, decode_wall_sidecar, encode_wall_sidecar)
 from vendor.fp import proj as donor_proj
+from vendor.fp import light as donor_light
+from vendor.fp.scene import renderable_map_objects
 from f2lib.dat2 import write_dat2
 
 
@@ -166,6 +168,18 @@ class TargetTests(unittest.TestCase):
         self.assertEqual(len(parse_args(["--maps", "klamath"]).map_names), 7)
         self.assertEqual(parse_args(["--maps", "kladwtwn, klatrap"]).map_names, ["kladwtwn", "klatrap"])
 
+    def test_groups_in_a_list_and_all(self):
+        # Groups mix with maps in one list, and a map two groups share (vault15) comes once.
+        names = parse_args(["--maps", "klamath,vault15,ncr,artemple"]).map_names
+        self.assertEqual(names[:7], list(MAP_GROUPS["klamath"]))
+        self.assertEqual(names.count("vault15"), 1)
+        self.assertIn("ncrent", names)
+        self.assertEqual(names[-1], "artemple")
+        every = parse_args(["--maps", "all"]).map_names
+        self.assertEqual(len(every), len(set(every)))
+        self.assertEqual(set(every), {name for group in MAP_GROUPS.values() for name in group})
+        self.assertGreaterEqual(len(every), 152)
+
     def test_rejects_unsafe_map_names(self):
         with self.assertRaises(SystemExit):
             parse_args(["--map", "../kladwtwn"])
@@ -259,7 +273,7 @@ class FloorSidecarTests(unittest.TestCase):
         payload = encode_floor_sidecar(self.sample_scene())
         decoded = decode_floor_sidecar(payload)
         self.assertEqual(payload[:4], MAGIC)
-        self.assertEqual(decoded["version"], VERSION)
+        self.assertEqual(decoded["version"], 6)  # no water flags given: stays version 6
         self.assertEqual(decoded["grid_size"], (100, 100))
         self.assertEqual(decoded["image_size"], (512, 512))
         self.assertEqual(decoded["cells"], [(0, 0), (89, 0)])
@@ -287,11 +301,60 @@ class FloorSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "truncated"):
             decode_floor_sidecar(payload[:-1])
 
+    def test_water_flags_round_trip_and_stay_version_6_without_them(self):
+        scene = self.sample_scene()
+        plain = encode_floor_sidecar(scene)
+        self.assertEqual(decode_floor_sidecar(plain)["version"], 6)
+        self.assertIsNone(decode_floor_sidecar(plain)["water"])
+        water = bytearray(100 * 100)
+        water[0] = 1
+        water[1] = 2
+        water[9999] = 1
+        payload = encode_floor_sidecar(scene, water=water, water_color=[0.04, 0.047, 0.045])
+        decoded = decode_floor_sidecar(payload)
+        self.assertEqual(decoded["version"], VERSION)
+        self.assertEqual(decoded["water"][0], 1)
+        self.assertEqual(decoded["water"][1], 2)
+        self.assertEqual(decoded["water"][2], 0)
+        self.assertEqual(decoded["water"][9999], 1)
+        for got, want in zip(decoded["waterColor"], (10, 12, 11)):
+            self.assertEqual(got, want / 255)
+        self.assertEqual(len(payload), len(plain) + 3 + 100 * 100)
+        with self.assertRaisesRegex(ValueError, "water flags"):
+            encode_floor_sidecar(scene, water=bytearray(99 * 99), water_color=[0.1, 0.1, 0.1])
+        with self.assertRaisesRegex(ValueError, "water flags"):
+            encode_floor_sidecar(scene, water=b"\x03" + bytearray(100 * 100 - 1), water_color=[0.1, 0.1, 0.1])
+        with self.assertRaisesRegex(ValueError, "water colour"):
+            encode_floor_sidecar(scene, water=water, water_color=[0.1, 0.1])
+        with self.assertRaisesRegex(ValueError, "truncated"):
+            decode_floor_sidecar(payload[:-1])
+
     def test_version_5_floor_lists_still_decode_without_patches(self):
         payload = bytearray(encode_floor_sidecar(self.sample_scene())[:-2])  # no patch count: version 5 had none
         struct.pack_into("<H", payload, 4, 5)
         decoded = decode_floor_sidecar(bytes(payload))
         self.assertEqual((decoded["version"], decoded["fringe"], decoded["patches"]), (5, [], []))
+
+    def test_tileless_elevation_round_trips_with_an_empty_atlas(self):
+        # encfite's void boxes: every square is the nothing tile (the lookup's
+        # 0), the atlas holds no cell, the sidecar stays valid (171).
+        scene = self.sample_scene()
+        scene["floor"] = base64.b64encode(bytes(100 * 100 * 2)).decode("ascii")
+        scene["roof"] = base64.b64encode(bytes(100 * 100 * 2)).decode("ascii")
+        scene["tiles"]["cells"] = []
+        payload = encode_floor_sidecar(scene, water=bytearray(100 * 100), water_color=[0.05, 0.05, 0.05])
+        decoded = decode_floor_sidecar(payload)
+        self.assertEqual(decoded["version"], VERSION)
+        self.assertEqual(decoded["cells"], [])
+        self.assertEqual(decoded["water"], [0] * 100 * 100)
+        # one drawn square over the empty atlas is still a broken scene
+        drawn = self.sample_scene()
+        drawn["tiles"]["cells"] = []
+        with self.assertRaisesRegex(ValueError, "missing tiles.cells entry"):
+            encode_floor_sidecar(drawn, water=bytearray(100 * 100), water_color=[0.05, 0.05, 0.05])
+        # the plain form without water stays version 6 and round-trips too
+        plain = encode_floor_sidecar(scene)
+        self.assertEqual(decode_floor_sidecar(plain)["version"], 6)
 
     def test_cell_coordinates_select_inner_square_and_validate_outer_cell(self):
         self.assertEqual(cell_content_rect((0, 0), (100, 100)), (6, 6, 94, 94))
@@ -435,7 +498,7 @@ class RoofFringeTests(unittest.TestCase):
         self.assertNotEqual(comp[103], comp[5107])
         pool = [(runs[0], strips[0], comp[103])]
         out = donate(runs, strips, [True, False, False], pool, comp)
-        self.assertIs(out[0], strips[0])
+        self.assertTrue(np.array_equal(out[0], strips[0]))
         for n, (run, per_tile) in enumerate(((runs[1], v_tile), (runs[2], u_tile)), start=1):
             width = len(run[3]) * per_tile
             self.assertEqual(out[n].shape, (STRIP_ROWS, width, 4))
@@ -446,6 +509,55 @@ class RoofFringeTests(unittest.TestCase):
         # a run's strip made of the donor repeats it: shifted by the donor's length it is the same
         repeat = lay_donor((strips[0], 2, 1), 1, 6)
         self.assertTrue((repeat[:, :2 * u_tile] == repeat[:, 2 * u_tile:4 * u_tile]).all())
+
+    def test_genuine_bands_on_one_roof_share_donor_height(self):
+        u_tile, v_tile = int(-donor_proj.SQ_U[0]), int(donor_proj.SQ_V[0])
+
+        def strip(count, per_tile, step):
+            value = np.zeros((STRIP_ROWS, count * per_tile, 4), np.uint8)
+            value[-3:] = (30, 30, 30, 255)
+            value[-EDGE_ROWS:-3:step] = (200, 0, 0, 255)
+            return value
+
+        art = np.zeros((2, 2, 4), np.uint8)
+        long_run = (1, 11, 3, [(103, art), (104, art), (105, art)])
+        short_run = (3, 14, 3, [(305, art), (405, art)])
+        donor = strip(3, u_tile, 2)
+        other = strip(2, v_tile, 5)
+        donor_profile = (donor[..., 3] > 0).mean(axis=1)
+        other_profile = (other[..., 3] > 0).mean(axis=1)
+        self.assertFalse(np.array_equal(donor_profile, other_profile))
+
+        out = donate([long_run, short_run], [donor, other], [True, True],
+            [(long_run, donor, 1), (short_run, other, 1)], {103: 1, 305: 1})
+        first_profile = (out[0][..., 3] > 0).mean(axis=1)
+        second_profile = (out[1][..., 3] > 0).mean(axis=1)
+        self.assertTrue(np.array_equal(first_profile, second_profile))
+        self.assertGreaterEqual(foot_cover(out[0]), 0.99)
+        self.assertGreaterEqual(foot_cover(out[1]), 0.99)
+
+    def test_shared_edge_profile_uses_the_component_median(self):
+        u_tile = int(-donor_proj.SQ_U[0])
+        art = np.zeros((2, 2, 4), np.uint8)
+        runs = [(edge, 10 + edge, 3, [(103 + edge * 100, art), (104 + edge * 100, art)])
+                for edge in (0, 1, 2)]
+
+        def strip(dense):
+            value = np.zeros((STRIP_ROWS, 2 * u_tile, 4), np.uint8)
+            value[-3:] = (30, 30, 30, 255)
+            if dense:
+                value[-EDGE_ROWS:-3] = (200, 0, 0, 255)
+            else:
+                value[-EDGE_ROWS:-3:3] = (200, 0, 0, 255)
+            return value
+
+        strips = [strip(False), strip(False), strip(True)]
+        comp = {index: 1 for run in runs for index, _ in run[3]}
+        pool = [(run, value, 1) for run, value in zip(runs, strips)]
+        out = donate(runs, strips, [True] * 3, pool, comp)
+        sparse_profile = (strips[0][-EDGE_ROWS:, :, 3] > 0).mean(axis=1)
+        out_profile = (out[0][-EDGE_ROWS:, :, 3] > 0).mean(axis=1)
+        self.assertTrue(np.array_equal(out_profile, sparse_profile))
 
     def test_a_band_stands_only_over_squares_with_a_wall_under_it(self):
         art = np.zeros((2, 2, 4), np.uint8)
@@ -601,6 +713,20 @@ class RoofEdgeTests(unittest.TestCase):
         grey = (np.abs(roof[..., 0].astype(int) - roof[..., 2]) < 6) & (roof[..., 3] > 0)
         self.assertFalse(grey.any())                                   # none of the dark part is left on the roof
         self.assertEqual(unproject_cell(roof).shape[:2], (100, 100))
+
+    def test_an_unsupported_partial_grey_roof_tile_stays_flat(self):
+        partial = self.tile([(0, 1, 0, 0.3, (14, 14, 14))])
+        pieces, roof = split_tile(partial, (0, 1, 2, 3), wall_supported=False)
+        self.assertEqual(pieces, [])
+        self.assertIs(roof, partial)
+
+        with TemporaryDirectory() as temp:
+            png = Path(temp) / "roof_fringe.png"
+            entries, patches = write_fringe_art(png, {101: 7}, lambda _: partial,
+                                                lambda *run: None)
+            self.assertEqual(entries, [])
+            self.assertEqual(patches, [])
+            self.assertFalse(png.exists())
 
     def test_a_whole_painted_tile_with_a_grey_slab_on_an_open_edge_stands_up_there(self):
         whole = self.tile([(0, 1, 0, 1, (120, 80, 50)), (0, 1, 0, 0.36, (14, 14, 14))])
@@ -792,6 +918,91 @@ class WallSidecarTests(unittest.TestCase):
             "trims": [],
             "doors": [[0, 5.0, 6.0, 7.0, 6.0, 0.0, 1.0, 46, 400]],
         }
+
+    def test_a_fixed_fly_rest_is_one_fly_only_plane(self):
+        scene = self.sample_scene()
+        scene["sprites"][0][5:] = [-5, -20]
+        scene["walls"] = []
+        scene["trims"] = []
+        scene["doors"] = []
+        scene["rests"] = [[0, 10.0, 10.0, 0.0, 0.0, 3]]
+
+        batches = decode_wall_sidecar(encode_wall_sidecar(scene))["batches"]
+        self.assertEqual(len(batches), 1)
+        self.assertTrue(batches[0]["fly_only"])
+        self.assertFalse(batches[0]["game_only"])
+        self.assertEqual(batches[0]["triangles"], 4)
+
+    @staticmethod
+    def hull_scene():
+        scene = json.loads(json.dumps(WallSidecarTests.sample_scene()))
+        scene["pages"] = [{"image": "sprites0.png", "size": [4096, 4096]}]
+        scene["sprites"][0][3:] = [2028, 529, -1014, -529]
+        scene["walls"] = []
+        scene["trims"] = []
+        scene["doors"] = []
+        scene["rests"] = [[0, 10.0, 10.0, 0.0, 0.0, 3]]
+        return scene
+
+    def test_a_hull_sized_fixed_fly_rest_stands_on_its_water_line(self):
+        scene = self.hull_scene()
+        water = bytearray(100 * 100)          # row 10 water, its north row land
+        for col in range(100):
+            water[10 * 100 + col] = 1
+        batches = decode_wall_sidecar(encode_wall_sidecar(scene, water=water))["batches"]
+        self.assertEqual(len(batches), 1)
+        self.assertTrue(batches[0]["fly_only"])
+        self.assertEqual(batches[0]["triangles"], 4)
+        # The plane stands on the water/land boundary (row 9's south edge),
+        # feet on the ground, the whole picture above it. A batch vertex
+        # stores u - 50, z, v - 50.
+        vs = {round(vertex[2], 6) for vertex in batches[0]["vertices"]}
+        self.assertEqual(vs, {-40.0})
+        zs = sorted({round(vertex[1], 6) for vertex in batches[0]["vertices"]})
+        self.assertEqual(zs[0], 0.0)
+        self.assertGreater(zs[1], 0.0)
+
+    def test_a_shore_to_the_west_turns_the_hull_along_v(self):
+        scene = self.hull_scene()
+        water = bytearray(100 * 100)          # column 10 water, land on both sides
+        for row in range(100):
+            water[row * 100 + 10] = 1
+        batches = decode_wall_sidecar(encode_wall_sidecar(scene, water=water))["batches"]
+        self.assertEqual(len(batches), 1)
+        # The walk finds the west shore first (it steps west before east);
+        # the plane stands on the column 9/10 boundary (tile u 10), along v:
+        # a batch vertex stores u - 50.
+        us = {round(vertex[0], 6) for vertex in batches[0]["vertices"]}
+        self.assertEqual(us, {-40.0})
+
+    def test_water_without_a_water_line_leaves_the_sidecar_unchanged(self):
+        scene = self.hull_scene()
+        self.assertEqual(encode_wall_sidecar(scene),
+                         encode_wall_sidecar(scene, water=bytearray(100 * 100)))
+
+    def test_a_fractional_anchor_uses_the_square_it_lands_in(self):
+        scene = self.hull_scene()
+        scene["rests"] = [[0, 10.75, 10.75, 0.0, 0.0, 3]]
+        water = bytearray(100 * 100)          # row 10 water, its north row land
+        for col in range(100):
+            water[10 * 100 + col] = 1
+        batches = decode_wall_sidecar(encode_wall_sidecar(scene, water=water))["batches"]
+        self.assertEqual(len(batches), 1)
+        # The containing square (10, 10) decides: the hull stands on row 9's
+        # south edge, exactly as an integral anchor there would. Rounding read
+        # the neighbour (11, 11) — land — and kept the game-screen plane.
+        vs = {round(vertex[2], 6) for vertex in batches[0]["vertices"]}
+        self.assertEqual(vs, {-40.0})
+
+    def test_an_anchor_past_the_far_edge_reads_no_water(self):
+        scene = self.hull_scene()
+        scene["rests"] = [[0, 10.0, 99.75, 0.0, 0.0, 3]]
+        rows = [[1] * 100 for _ in range(100)]   # all water, no shore in reach
+        # floor(99.75) is the containing row 99: the walk finds no shore and
+        # the anchor keeps rest_card's plane. Rounding read water[100] of the
+        # row-split grid and raised IndexError before the bounds check.
+        self.assertEqual(encode_wall_sidecar(scene, water=rows),
+                         encode_wall_sidecar(scene))
 
     def test_encodes_game_view_front_and_cap_only(self):
         decoded = decode_wall_sidecar(encode_wall_sidecar(self.sample_scene()))
@@ -1452,6 +1663,14 @@ class BakedSidecarTests(unittest.TestCase):
         self.assertIn((100, 0x03000010, BAKED_SKIP, 0.0, 0.0, 0.0), entries)
         self.assertEqual(decode_baked_sidecar(encode_baked_sidecar(entries)), entries)
 
+    def test_a_flat_part_in_a_composite_is_skipped_only_in_flight(self):
+        scene, objects = self.sample()
+        objects.append(self.MapObject(600, 0x02000020))
+        scene["decals"] = [[0, 1, 1, 0, 5]]
+        scene["flyDecals"] = [0]
+        entries = baked_objects(scene, objects)
+        self.assertIn((600, 0x02000020, BAKED_FLY_SKIP, 0.0, 0.0, 0.0), entries)
+
     def test_doors_lie_on_their_wall_and_low_cards_lie_flat_in_flight(self):
         scene, objects = self.sample()
         objects += [self.MapObject(600, 0x02000020), self.MapObject(700, 0x02000030), self.MapObject(800, 0x02000040)]
@@ -1665,6 +1884,45 @@ class ThingShapeTests(unittest.TestCase):
         self.assertIs(bed, props.lead(groups[1]))
         apart = self.piece("Bed", 70, 30, 25, 20, tile=402)          # half of it outside the bed: a bed of its own
         self.assertEqual(2, len(props.groups([bed, apart])))
+
+    def test_numbered_art_parts_join_by_nearby_tile_cluster(self):
+        from vendor.fp import props
+        first = [10722, 10723, 11922, 12127, 12316, 12330, 12517, 13323, 13325]
+        second = [16522, 16721, 17921, 17926, 18315, 18316, 18329, 19122, 19124]
+        pieces = []
+        for cluster, tiles in enumerate((first, second)):
+            for part, tile in enumerate(tiles):
+                p = self.piece("Vertibird", part * 8, cluster * 200, 8, 8,
+                               tile=tile, order=len(pieces))
+                p.family = ("verti", part + 1)
+                p.obj.pid = 1000 + part
+                p.stands = part != 0
+                pieces.append(p)
+        # A short numbered pair is too ambiguous to treat as one object.
+        small = [self.piece(f"small-{i}", i * 30, 500, 8, 8, tile=25000 + i * 10, order=18 + i)
+                 for i in range(3)]
+        for i, p in enumerate(small):
+            p.family = ("pair", i + 1)
+            p.obj.pid = 2000 + i
+        groups = sorted(props.groups(pieces + small), key=len)
+        self.assertEqual([1, 1, 1, 9, 9], [len(group) for group in groups])
+        self.assertTrue(all(not any(p in small for p in group) for group in groups if len(group) > 1))
+        self.assertEqual([9, 9], sorted(len(group) for group in props.multipart_groups(pieces)))
+
+    def test_numbered_art_from_separate_objects_does_not_join_by_family_alone(self):
+        from vendor.fp import props
+        pieces = []
+        for i in range(props.MULTIPART_MIN_PARTS):
+            piece = self.piece("Graffiti", i * 100, 0, 20, 20, tile=10000 + i, order=i)
+            piece.family = ("gy", i + 1)
+            piece.obj.pid = 3000 + i
+            pieces.append(piece)
+        self.assertEqual([], props.multipart_groups(pieces))
+
+        for i, piece in enumerate(pieces):
+            piece.name = "Weed" if i % 2 else "Scrub"
+            piece.family = ("weed", i + 1)
+        self.assertEqual([], props.multipart_groups(pieces))
 
     def scene(self, rows, boxes=()):
         from types import SimpleNamespace
@@ -2104,3 +2362,21 @@ class FillHolesBandTests(unittest.TestCase):
         rgba[12:15, 1:9, 3] = 255         # the lower rail: 8 open rows between
         out = fill_holes(rgba)
         self.assertTrue((out[4:12, 3:7, 3] == 0).all())     # a real gap the game's view shows too
+
+
+class RpMapExportEdgeTests(unittest.TestCase):
+    def test_engine_script_helpers_without_prototypes_are_not_scene_objects(self):
+        from types import SimpleNamespace
+        placed = SimpleNamespace(pid=1, tile=200)
+        hidden_script_helper = SimpleNamespace(pid=-1, tile=0)
+        invalid = SimpleNamespace(pid=2, tile=40000)
+        self.assertEqual(renderable_map_objects([hidden_script_helper, invalid, placed]), [placed])
+
+    def test_light_at_reset_floor_is_not_an_emitter(self):
+        from types import SimpleNamespace
+        from vendor.fp.light import mapfile
+        light = SimpleNamespace(light_intensity=donor_light.INTENSITY_FLOOR,
+                                flags=mapfile.OBJECT_LIGHTING, light_distance=4, tile=100)
+        self.assertEqual(donor_light.emitters([light]), [])
+        light.light_intensity += 1
+        self.assertEqual(len(donor_light.emitters([light])), 1)
