@@ -405,22 +405,6 @@ void writeShotFiles(const std::string& imagePath, const std::string& sidecarPath
     std::thread worker([imagePath, sidecarPath, pixels = std::move(pixels),
         indexed = std::move(indexed), palette = std::move(palette), width, height,
         json = std::move(json)]() {
-        // 157 diagnostics, once per process: what the encoder actually got.
-        static int encodeProbes = 0;
-        if (encodeProbes++ < 2) {
-            const size_t center = static_cast<size_t>(height / 2) * width * 4 + static_cast<size_t>(width / 2) * 4;
-            if (!indexed.empty() && indexed.size() == static_cast<size_t>(width) * height) {
-                fprintf(stderr, "probe5: worker indexed path w=%d h=%d centerIndex=%d paletteColors=%d\n",
-                    width, height, indexed[static_cast<size_t>(height / 2) * width + width / 2], palette.size() / 3);
-            } else if (pixels.size() >= center + 4) {
-                fprintf(stderr, "probe5: worker rgba path w=%d h=%d center=(%d,%d,%d,%d)\n",
-                    width, height, pixels[center], pixels[center + 1], pixels[center + 2], pixels[center + 3]);
-            } else {
-                fprintf(stderr, "probe5: worker w=%d h=%d indexed=%zu pixels=%zu\n",
-                    width, height, indexed.size(), pixels.size());
-            }
-            fflush(stderr);
-        }
         unsigned encodeError = 0;
         if (!indexed.empty()) {
             // The 2D frame: palette-expand into RGB rows, then encode.

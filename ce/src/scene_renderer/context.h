@@ -34,10 +34,6 @@ void drawSceneOverlayCached();
 // `rgba` points at the box's first pixel, `pitch` is the full frame's.
 void updateSceneOverlayRegion(const unsigned char* rgba, int pitch, int dstX, int dstY, int width, int height);
 
-// 157 diagnostics: one pixel of the sharp text texture through a throwaway
-// FBO, so a capture can tell what the glyph layer really holds.
-void debugProbeSharpTextTexture(int x, int y, unsigned char out[4]);
-
 // Optional overlay drawn over the last presented frame (movie frames): an
 // RGBA image mapped into `dstX/dstY/dstW/dstH` in LOGICAL coordinates.
 void drawOverlay(const unsigned char* rgba, int width, int height, int pitch, int dstX, int dstY, int dstW, int dstH);

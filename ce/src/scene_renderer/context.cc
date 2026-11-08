@@ -390,21 +390,6 @@ void updateSceneOverlayRegion(const unsigned char* rgba, int pitch, int dstX, in
     glPixelStorei(kUnpackRowLength, 0);
 }
 
-void debugProbeSharpTextTexture(int x, int y, unsigned char out[4])
-{
-    if (!gInitialized || gSharpTextTexture == 0) return;
-    unsigned int probeFbo = 0;
-    int previousFbo = 0;
-    glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &previousFbo);
-    glGenFramebuffers(1, &probeFbo);
-    glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, probeFbo);
-    glFramebufferTexture2D(0x8D40, 0x8CE0 /* GL_COLOR_ATTACHMENT0 */, kTexture2D, gSharpTextTexture, 0);
-    glReadPixels(x < 0 ? gSharpTextTextureWidth / 2 : x, y < 0 ? gSharpTextTextureHeight / 2 : y,
-        1, 1, kRGBA, kUnsignedByte, out);
-    glBindFramebuffer(0x8D40, previousFbo);
-    glDeleteFramebuffers(1, &probeFbo);
-}
-
 void drawOverlay(const unsigned char* rgba, int width, int height, int pitch, int dstX, int dstY, int dstW, int dstH)
 {
     if (!gInitialized || rgba == nullptr || width <= 0 || height <= 0) {

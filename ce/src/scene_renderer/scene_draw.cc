@@ -108,17 +108,6 @@ void drawStaticPreview(bool withWalls, bool withHero)
     glUseProgram(gSceneProgram);
     glUniform1i(gSceneCloseupFilterLocation, flying ? 1 : 0);
     bindStaticMapClipUniforms();
-    {
-        // 157 diagnostics, once per process: the MVP the scene draws with.
-        static int mvpProbes = 0;
-        if (mvpProbes++ < 2) {
-            fprintf(stderr, "probe6: mvpLoc=%d flying=%d mvp=[%.3f %.3f %.3f %.3f / %.3f %.3f %.3f %.3f / %.3f %.3f %.3f %.3f / %.3f %.3f %.3f %.3f]\n",
-                gSceneMvpLocation, flying ? 1 : 0,
-                mvp[0], mvp[1], mvp[2], mvp[3], mvp[4], mvp[5], mvp[6], mvp[7],
-                mvp[8], mvp[9], mvp[10], mvp[11], mvp[12], mvp[13], mvp[14], mvp[15]);
-            fflush(stderr);
-        }
-    }
     glUniformMatrix4fv(gSceneMvpLocation, 1, 0, mvp);
     glUniform1i(gSceneDepthAtLocation, 0);
     // The fragment shader finds a solid's line of sight by its pixel.
@@ -174,29 +163,6 @@ void drawStaticPreview(bool withWalls, bool withHero)
     glUniform1i(gSceneTextureLocation, 0);
     glBindVertexArray(gFloorVao);
     glBindTexture(kTexture2D, gFloorTexture);
-    {
-        // 157 diagnostics, once per process: the floor texture's own texel at
-        // the center of its rect, through a throwaway FBO.
-        static int texProbes = 0;
-        if (texProbes++ < 2) {
-            unsigned char texelA[4] = { 0, 0, 0, 0 };
-            unsigned char texelB[4] = { 0, 0, 0, 0 };
-            unsigned int probeFbo = 0;
-            int previousFbo = 0;
-            glGetIntegerv(0x8CA6, &previousFbo);
-            glGenFramebuffers(1, &probeFbo);
-            glBindFramebuffer(0x8D40, probeFbo);
-            glFramebufferTexture2D(0x8D40, 0x8CE0, kTexture2D, gFloorTexture, 0);
-            glReadPixels(256, 256, 1, 1, kRGBA, kUnsignedByte, texelA);
-            glReadPixels(1024, 1024, 1, 1, kRGBA, kUnsignedByte, texelB);
-            glBindFramebuffer(0x8D40, previousFbo);
-            glDeleteFramebuffers(1, &probeFbo);
-            fprintf(stderr, "probe8: floorTex (256,256)=(%d,%d,%d,%d) (1024,1024)=(%d,%d,%d,%d)\n",
-                texelA[0], texelA[1], texelA[2], texelA[3],
-                texelB[0], texelB[1], texelB[2], texelB[3]);
-            fflush(stderr);
-        }
-    }
 
     // 157: the ground's light and sun shadow bake at a quarter of the pixel
     // work; the tiles below sample it (uGroundBakeMode 2) instead of running
@@ -466,21 +432,6 @@ bool readBackBuffer(std::vector<unsigned char>& topDown, int drawableWidth, int 
     glPixelStorei(kPackAlignment, 1);
     glReadPixels(0, 0, drawableWidth, drawableHeight, kRGBA, kUnsignedByte, bottomUp.data());
     glPixelStorei(kPackAlignment, kDefaultPackAlignment);
-    {
-        // 157 diagnostics, once per process: what the full readback itself
-        // returned at the screen center (bottom-up rows: middle row either
-        // way) and at the HUD strip.
-        static int readProbes = 0;
-        if (readProbes++ < 2) {
-            const size_t centerRow = static_cast<size_t>(drawableHeight / 2) * rowBytes;
-            const unsigned char* c = bottomUp.data() + centerRow + static_cast<size_t>(drawableWidth / 2) * 4;
-            const unsigned char* h = bottomUp.data() + static_cast<size_t>(60) * rowBytes
-                + static_cast<size_t>(drawableWidth / 2) * 4;
-            fprintf(stderr, "probe4: readback center=(%d,%d,%d,%d) hud=(%d,%d,%d,%d)\n",
-                c[0], c[1], c[2], c[3], h[0], h[1], h[2], h[3]);
-            fflush(stderr);
-        }
-    }
     if (glGetError() != 0) {
         if (error != nullptr) *error = "OpenGL backbuffer read failed";
         return false;
@@ -620,26 +571,6 @@ bool presentStaticPreview(bool withWalls, bool withHero, bool includeOverlay,
     const bool glow = beginSceneCapture();
     drawStaticPreview(withWalls, withHero);
     if (glow) compositeGlow();
-    {
-        // 157 diagnostics, once per process: where did the scene draw land,
-        // and what does the readback's buffer hold at the screen center.
-        static int probes = 0;
-        if (probes++ < 2) {
-            int drawFbo = 0;
-            int readFbo = 0;
-            glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &drawFbo);
-            glGetIntegerv(0x8CD3 /* GL_READ_FRAMEBUFFER_BINDING */, &readFbo);
-            int readBuffer = 0;
-            glGetIntegerv(0x0C02 /* GL_READ_BUFFER */, &readBuffer);
-            unsigned char center[4] = { 0, 0, 0, 0 };
-            glReadPixels(drawableWidth / 2, drawableHeight / 2, 1, 1, kRGBA, kUnsignedByte, center);
-            fprintf(stderr, "probe: glow=%d drawFbo=%d readFbo=%d readBuffer=0x%x center=(%d,%d,%d,%d) noOverlayEnv=%d\n",
-                glow ? 1 : 0, drawFbo, readFbo, readBuffer,
-                center[0], center[1], center[2], center[3],
-                SDL_getenv("F2CE_CAPTURE_NO_OVERLAY") != nullptr ? 1 : 0);
-            fflush(stderr);
-        }
-    }
     // 157 diagnostics: F2CE_CAPTURE_NO_OVERLAY strips the game overlay quad,
     // so a capture shows the scene render alone.
     const bool captureOverlay = includeOverlay && SDL_getenv("F2CE_CAPTURE_NO_OVERLAY") == nullptr;
@@ -650,24 +581,6 @@ bool presentStaticPreview(bool withWalls, bool withHero, bool includeOverlay,
         glBlendFunc(1 /* GL_ONE */, kOneMinusSrcAlpha);
         drawQuad(gTextureWidth, gTextureHeight, gTextureWidth * 4, nullptr, 0, 0, gLogicalWidth, gLogicalHeight);
         glDisable(kBlend);
-        {
-            // 157 diagnostics, once per process: the same center pixel after
-            // the game overlay quad landed, plus the sharp text texture's own
-            // center pixel through a throwaway FBO.
-            static int quadProbes = 0;
-            if (quadProbes++ < 2) {
-                unsigned char center[4] = { 0, 0, 0, 0 };
-                glReadPixels(drawableWidth / 2, drawableHeight / 2, 1, 1, kRGBA, kUnsignedByte, center);
-                unsigned char sharpCenter[4] = { 0, 0, 0, 0 };
-                int previousFbo = 0;
-                glGetIntegerv(0x8CA6, &previousFbo);
-                scene_renderer::debugProbeSharpTextTexture(-1, -1, sharpCenter);
-                fprintf(stderr, "probe2: after quad center=(%d,%d,%d,%d) sharpTexCenter=(%d,%d,%d,%d) prevFbo=%d\n",
-                    center[0], center[1], center[2], center[3],
-                    sharpCenter[0], sharpCenter[1], sharpCenter[2], sharpCenter[3], previousFbo);
-                fflush(stderr);
-            }
-        }
         const PreparedSharpTextFrame& text = preparedSharpTextFrame();
         if (text.active) {
             const bool uploaded = uploadSharpTextOverlay(text.overlay.pixels.data(), text.overlay.width,
@@ -687,23 +600,6 @@ bool presentStaticPreview(bool withWalls, bool withHero, bool includeOverlay,
                     drawSceneOverlay(fallback.data(), text.width, text.height, text.rgbaPitch);
                 }
             }
-        }
-    }
-    {
-        // 157 diagnostics, once per process: a vertical slice of the buffer
-        // at the screen's horizontal center, right before the readback.
-        static int finalProbes = 0;
-        if (finalProbes++ < 2) {
-            fprintf(stderr, "probe3: slice glY:");
-            for (int slice = 0; slice < 15; slice++) {
-                const int sliceY = slice * drawableHeight / 14;
-                if (sliceY >= drawableHeight) continue;
-                unsigned char sample[4] = { 0, 0, 0, 0 };
-                glReadPixels(drawableWidth / 2, sliceY, 1, 1, kRGBA, kUnsignedByte, sample);
-                fprintf(stderr, " y%d=(%d,%d,%d)", sliceY, sample[0], sample[1], sample[2]);
-            }
-            fprintf(stderr, "\n");
-            fflush(stderr);
         }
     }
     if (glGetError() != 0) return fail(withWalls

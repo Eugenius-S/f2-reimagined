@@ -465,19 +465,6 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     }
 
     PerfScope stage("floor_upload");
-    {
-        // 157 diagnostics, once per process: the floor's own vertex data
-        // before the upload - the fill quad and the first tile's corners.
-        static int floorReports = 0;
-        if (floorReports++ < 2 && vertices.size() >= 12) {
-            fprintf(stderr, "probe9: floorVerts=%zu tilesEnd=%d extFirst=%d v6=(%.1f,%.1f,%.1f) v9=(%.1f,%.1f,%.1f) u6=(%.3f,%.3f)\n",
-                vertices.size(), tilesEnd, gFloorExtensionFirst,
-                vertices[6].x, vertices[6].y, vertices[6].z,
-                vertices[9].x, vertices[9].y, vertices[9].z,
-                vertices[6].u, vertices[6].v);
-            fflush(stderr);
-        }
-    }
     glGenVertexArrays(1, &gFloorVao);
     glBindVertexArray(gFloorVao);
     glGenBuffers(1, &gFloorVbo);
