@@ -21,6 +21,8 @@ static bool gConfiguredScalePresent = false;
 static int gConfiguredScale = 1;
 static bool gConfiguredScaleFactorPresent = false;
 static double gConfiguredScaleFactor = 1.0;
+static bool gConfiguredWindowedPresent = false;
+static int gConfiguredWindowed = 0;
 static int gWrittenWidth = 0;
 static int gWrittenHeight = 0;
 
@@ -69,6 +71,10 @@ bool configGetString(Config*, const char*, const char*, char** value, const char
 }
 bool configGetInt(Config*, const char* section, const char* key, int* value)
 {
+    if (std::strcmp(section, "screen") == 0 && std::strcmp(key, "windowed") == 0 && gConfiguredWindowedPresent) {
+        *value = gConfiguredWindowed;
+        return true;
+    }
     if (std::strcmp(section, "screen") != 0 || std::strcmp(key, "scale") != 0 || !gConfiguredScalePresent) return false;
     *value = gConfiguredScale;
     return true;
@@ -207,6 +213,14 @@ int main()
     if (!check(settingsSetValue(*resolutionMode, 25601440, nullptr) && settingsSave()
             && gWrittenWidth == 2560 && gWrittenHeight == 1440,
             "a pending resolution choice writes both legacy resolution keys")) return 1;
+    gConfiguredWindowedPresent = true;
+    gConfiguredWindowed = static_cast<int>(WindowMode::Windowed);
+    if (!check(initializeWith(nullptr) && settings.screen.windowed == WindowMode::Windowed,
+            "a saved windowed=0 (Window) survives the load instead of clamping to fullscreen")) return 1;
+    gConfiguredWindowed = static_cast<int>(WindowMode::WindowedFullscreen);
+    if (!check(initializeWith(nullptr) && settings.screen.windowed == WindowMode::WindowedFullscreen,
+            "a saved windowed=2 (Borderless) survives the load")) return 1;
+    gConfiguredWindowedPresent = false;
     gConfiguredScalePresent = true;
     gConfiguredScale = 2;
     gConfiguredScaleFactorPresent = false;
@@ -221,9 +235,29 @@ int main()
     if (!check(initializeWith(nullptr), "settings initialize with missing key")) return 1;
     const SettingDescriptor* descriptor = findThreeDDescriptor();
     const SettingDescriptor* cleanEdgesDescriptor = findCleanEdgesDescriptor();
+    const SettingDescriptor* fpsCounter = findDescriptor("3d.fps_counter");
     const SettingDescriptor* shadowDensity = findDescriptor("3d.shadow_density");
     if (!check(descriptor != nullptr, "real [3d].enabled descriptor is registered")) return 1;
     if (!check(cleanEdgesDescriptor != nullptr, "real [3d].clean_edges descriptor is registered")) return 1;
+    if (!check(fpsCounter != nullptr && fpsCounter->valueType == SettingValueType::Boolean
+            && !std::get<bool>(fpsCounter->defaultValue) && !settings.scene3d.fps_counter
+            && fpsCounter->applyPolicy == SettingApplyPolicy::OnClose
+            && fpsCounter->fallbackLabel == "FPS counter" && !fpsCounter->fallbackDescription.empty(),
+            "FPS counter is registered as a default-off 3D setting with menu text")) return 1;
+    const SettingDescriptor* fpsLimit = findDescriptor("3d.fps_limit");
+    if (!check(fpsLimit != nullptr && fpsLimit->valueType == SettingValueType::Real
+            && std::get<double>(fpsLimit->defaultValue) == 60.0 && settings.scene3d.fps_limit == 60.0
+            && fpsLimit->applyPolicy == SettingApplyPolicy::OnClose
+            && fpsLimit->fallbackLabel == "FPS limit" && !fpsLimit->fallbackDescription.empty()
+            && fpsLimit->numericRange.has_value() && fpsLimit->numericRange->minimum == 0.0
+            && fpsLimit->numericRange->maximum == 360.0 && fpsLimit->numericRange->step == 5.0,
+            "FPS limit is registered as a 60-default numeric 3D setting with menu text")) return 1;
+    const SettingDescriptor* frameLog = findDescriptor("3d.frame_log");
+    if (!check(frameLog != nullptr && frameLog->valueType == SettingValueType::Boolean
+            && !std::get<bool>(frameLog->defaultValue) && !settings.scene3d.frame_log
+            && frameLog->applyPolicy == SettingApplyPolicy::OnClose
+            && frameLog->fallbackLabel == "Frame time log" && !frameLog->fallbackDescription.empty(),
+            "frame time log is registered as a default-off 3D setting with menu text")) return 1;
     if (!check(shadowDensity != nullptr && std::get<double>(shadowDensity->defaultValue) == 0.8
             && settings.scene3d.shadow_density == 0.8 && gConfiguredShadowDensityValue == 0.8,
             "new settings write shadow density as 0.8")) return 1;

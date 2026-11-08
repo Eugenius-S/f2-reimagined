@@ -16,7 +16,7 @@ from baked_sidecar import (ENTRY as BAKED_ENTRY, GL_MAP_OFFSET, HEADER as BAKED_
                            NOCAST as BAKED_NOCAST, SKIP as BAKED_SKIP, FLAT as BAKED_FLAT, FLY_FLAT as BAKED_FLY_FLAT,
                            FIXED_CARD as BAKED_FIXED_CARD, FLY_SKIP as BAKED_FLY_SKIP, PLANE as BAKED_PLANE,
                            baked_objects, decode_baked_sidecar, encode_baked_sidecar)
-from export import ReadOnlyGameFiles, choose_source, main, parse_args, patch_paths, scene_directory, validate_output_contents
+from export import MAP_GROUPS, ReadOnlyGameFiles, choose_source, main, parse_args, patch_paths, scene_directory, validate_output_contents
 from floor_sidecar import HEADER, MAGIC, VERSION, cell_content_rect, decode_floor_sidecar, encode_floor_sidecar
 from roof_fringe import (boundary_edges, components_of, donor_tiles, inner_edge, cut_to_walls, own_strip, donate, foot_cover, lay_donor, roof_sides, whole_sides, BELT_LAP, BELT_ROWS, EDGE_ROWS, STRIP_ROWS, belt_art, compose_band, is_fringe, outward, resolve_runs, runs_of,
                          split_tile, tidy_cell, unproject_cell, unroll, wall_under, write_fringe_art)
@@ -30,6 +30,8 @@ from solids import Projection, row_plane
 from wall_sidecar import (BATCH, HEADER as WALL_HEADER, MAGIC as WALL_MAGIC, VERTEX,
                           VERSION as WALL_VERSION, decode_wall_sidecar, encode_wall_sidecar)
 from vendor.fp import proj as donor_proj
+from vendor.fp import light as donor_light
+from vendor.fp.scene import renderable_map_objects
 from f2lib.dat2 import write_dat2
 
 
@@ -165,6 +167,18 @@ class TargetTests(unittest.TestCase):
     def test_group_and_list(self):
         self.assertEqual(len(parse_args(["--maps", "klamath"]).map_names), 7)
         self.assertEqual(parse_args(["--maps", "kladwtwn, klatrap"]).map_names, ["kladwtwn", "klatrap"])
+
+    def test_groups_in_a_list_and_all(self):
+        # Groups mix with maps in one list, and a map two groups share (vault15) comes once.
+        names = parse_args(["--maps", "klamath,vault15,ncr,artemple"]).map_names
+        self.assertEqual(names[:7], list(MAP_GROUPS["klamath"]))
+        self.assertEqual(names.count("vault15"), 1)
+        self.assertIn("ncrent", names)
+        self.assertEqual(names[-1], "artemple")
+        every = parse_args(["--maps", "all"]).map_names
+        self.assertEqual(len(every), len(set(every)))
+        self.assertEqual(set(every), {name for group in MAP_GROUPS.values() for name in group})
+        self.assertGreaterEqual(len(every), 152)
 
     def test_rejects_unsafe_map_names(self):
         with self.assertRaises(SystemExit):
@@ -1470,6 +1484,46 @@ class WallSidecarTests(unittest.TestCase):
                 else:
                     self.assertAlmostEqual(du + dv + dz, 0.0, places=6)
 
+    def test_a_painted_post_rehomes_only_the_terminal_half_to_its_crossing_wall(self):
+        import numpy as np
+        import wall_sidecar
+
+        atlas = np.zeros((24, 32, 4), dtype=np.uint8)
+        atlas[5:15, 0:8, 3] = 255  # horizontal rail in the donor picture
+        atlas[:, 8:15, 3] = 255  # opaque post at the end of that picture
+        atlas[5:15, 16:24, 3] = 255  # perpendicular face carries rails, not a second post mask
+        sprites = [[0, 0, 0, 16, 24, 0, 0], [0, 16, 0, 16, 24, 0, 0]]
+        walls = [
+            [0, 1.0, 2.0, 0.67, 2.0, 0.0, 1.0, 0, 5, 1.0, 0.06, -1],
+            [1, 0.67, 2.0, 0.67, 3.0, 0.0, 1.0, 0, 5, 1.0, 0.06, -1],
+            [1, 0.67, 2.0, 0.67, 3.0, 0.0, 1.0, 0, 6, 1.0, 0.06, -1],
+        ]
+
+        homes = wall_sidecar._corner_post_homes(walls, sprites, [atlas], [0.49, 0.74, 0.46])
+
+        self.assertEqual(list(homes), [0])
+        split, to_end, home = homes[0][0]
+        self.assertAlmostEqual(split, 11.5 / 16.0)
+        self.assertTrue(to_end)
+        self.assertEqual(home[:2], (0, 0.67))
+
+    def test_a_post_home_splits_the_wall_surface_at_the_painted_axis(self):
+        from unittest import mock
+        import wall_sidecar
+
+        proj = Projection(donor_proj.as_json())
+        row = [0, 1.0, 2.0, 2.0, 2.0, 0.0, 1.0, 0, 0, 1.0, 0.06, -1]
+        calls = []
+        with mock.patch.object(wall_sidecar, "_upright",
+                               lambda *args, **kwargs: calls.append((args[-1], kwargs.get("plane_home")))):
+            wall_sidecar._wall_front(wall_sidecar._Batches(), proj, [[0, 0, 0, 16, 24, 0, 0]],
+                                     [[100, 100]], row, proj.toward[:2], (False, False),
+                                     post_homes=[(0.5, True, (0, 1.0, proj.toward))])
+
+        self.assertEqual([part for part, _ in calls], [(0.0, 0.5), (0.5, 1.0)])
+        self.assertIsNone(calls[0][1])
+        self.assertEqual(calls[1][1][:2], (0, 1.0))
+
     def test_a_thin_fence_row_across_the_other_line_is_cut_at_it(self):
         import wall_sidecar
         # A fence along u ends at a fence along v; the rows of it whose span
@@ -2348,3 +2402,21 @@ class FillHolesBandTests(unittest.TestCase):
         rgba[12:15, 1:9, 3] = 255         # the lower rail: 8 open rows between
         out = fill_holes(rgba)
         self.assertTrue((out[4:12, 3:7, 3] == 0).all())     # a real gap the game's view shows too
+
+
+class RpMapExportEdgeTests(unittest.TestCase):
+    def test_engine_script_helpers_without_prototypes_are_not_scene_objects(self):
+        from types import SimpleNamespace
+        placed = SimpleNamespace(pid=1, tile=200)
+        hidden_script_helper = SimpleNamespace(pid=-1, tile=0)
+        invalid = SimpleNamespace(pid=2, tile=40000)
+        self.assertEqual(renderable_map_objects([hidden_script_helper, invalid, placed]), [placed])
+
+    def test_light_at_reset_floor_is_not_an_emitter(self):
+        from types import SimpleNamespace
+        from vendor.fp.light import mapfile
+        light = SimpleNamespace(light_intensity=donor_light.INTENSITY_FLOOR,
+                                flags=mapfile.OBJECT_LIGHTING, light_distance=4, tile=100)
+        self.assertEqual(donor_light.emitters([light]), [])
+        light.light_intensity += 1
+        self.assertEqual(len(donor_light.emitters([light])), 1)
