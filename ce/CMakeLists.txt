@@ -445,6 +445,12 @@ if(BUILD_TESTING)
     target_include_directories(launcher_progress_tests PRIVATE "src")
     add_test(NAME launcher_progress_tests COMMAND launcher_progress_tests)
 
+    add_executable(launcher_routes_tests
+        "tests/launcher_progress/launcher_routes_test.cc"
+    )
+    target_include_directories(launcher_routes_tests PRIVATE "src")
+    add_test(NAME launcher_routes_tests COMMAND launcher_routes_tests)
+
     add_executable(preview_policy_tests
         "src/scene/preview_policy.cc"
         "tests/preview_policy/preview_policy_test.cc"
