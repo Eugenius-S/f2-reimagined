@@ -21,7 +21,7 @@ contribute. If you want to take part, message me on
 
 ## Install
 
-[Download the launcher](https://github.com/Eugenius-S/f2-reimagined/releases/download/latest/fallout2-ce-3d-launcher.exe)
+[Download the launcher](https://github.com/Eugenius-S/f2-reimagined/releases/download/latest/Install-F2R.exe)
 from the rolling [latest release](https://github.com/Eugenius-S/f2-reimagined/releases/tag/latest).
 
 1. Install Fallout 2 from Steam or GOG.
@@ -33,6 +33,11 @@ from the rolling [latest release](https://github.com/Eugenius-S/f2-reimagined/re
 4. Choose **Install / Update**. Turn on automatic updates if you want the
    launcher to install a newer build when it starts. Press **Play** when the
    installation finishes. **Roll back** restores the previous build.
+
+The download is the launcher. After the install your Fallout 2 folder holds
+a copy of it named `Fallout 2 Reimagined.exe` (with the radiation icon): run
+that file to start the game and to update it. Ignore the other `.exe` files
+in the folder.
 
 An internet connection is needed for a new install, updates and the optional
 Russian text download.
@@ -69,11 +74,10 @@ During combat and dialogue the game shows the original view for now.
 
 ## Where it works
 
-About 70% of the game's maps are in 3D: Arroyo, Klamath, the Den, Modoc and
+Every map of the game is in 3D: Arroyo, Klamath, the Den, Modoc and
 the Ghost Town, Vault City, Gecko, Broken Hills, New Reno, Redding, NCR,
 Vault 13 and Vault 15, the Sierra Army Depot, the Military Base, San
-Francisco and Navarro, and the desert and coast encounters. The city, cave,
-mountain and special encounters still show the original 2D view.
+Francisco and Navarro, and every random encounter.
 
 ## Keys
 
@@ -89,7 +93,6 @@ enabled=0
 
 ## Plans
 
-- Convert the remaining encounter maps
 - Restoration Project support
 - 3D models of unique landmarks: the Vault Dweller's head, the New Reno
   sign, the Vault City gate and more

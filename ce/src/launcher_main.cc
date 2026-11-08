@@ -38,13 +38,17 @@ constexpr const char* kDefaultUpdateBase =
     "https://github.com/Eugenius-S/f2-reimagined/releases/download/latest";
 constexpr const char* kDefaultReleaseInfoUrl =
     "https://api.github.com/repos/Eugenius-S/f2-reimagined/releases/tags/latest";
-constexpr const char* kRpuLatestApiUrl =
-    "https://api.github.com/repos/BGforgeNet/Fallout2_Restoration_Project/releases/latest";
+// The web page answers 302 to .../releases/tag/<tag>; unlike api.github.com it has no 60 requests/hour limit.
+constexpr const char* kRpuLatestUrl =
+    "https://github.com/BGforgeNet/Fallout2_Restoration_Project/releases/latest";
 constexpr const char* kGameExe = "fallout2-ce.exe";
 constexpr const char* kCfg = "fallout2.cfg";
 constexpr const char* kVersionTxt = "version.txt";
 constexpr const char* kExporterExe = "scene-exporter.exe";
-constexpr const char* kDefaultMaps = "klamath";
+// The launcher as the player sees it in the game folder; the release zip carries it under kZipLauncher.
+constexpr const char* kRootLauncher = "Fallout 2 Reimagined.exe";
+constexpr const char* kZipLauncher = "fallout2-ce-3d-launcher.exe";
+constexpr const char* kDefaultMaps = "all";
 
 struct Options {
     std::string gameRoot;
@@ -295,6 +299,58 @@ bool httpGet(const std::string& urlString, std::string* body, const char** error
     return ok;
 }
 
+// GET one url without following redirects and return the Location header of the answer.
+bool httpRedirectLocation(const std::string& urlString, std::string* location, const char** errorText)
+{
+    Url url;
+    if (!crackUrlWide(utf8ToWide(urlString), &url)) {
+        *errorText = "cannot parse url";
+        return false;
+    }
+    *errorText = nullptr;
+    HINTERNET session = WinHttpOpen(L"fallout2-ce-3d-launcher", proxyFor(url),
+        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (session == nullptr) {
+        *errorText = "WinHttpOpen failed";
+        return false;
+    }
+    WinHttpSetTimeouts(session, 10000, 15000, 30000, 300000);
+    HINTERNET connect = WinHttpConnect(session, url.host.c_str(), url.port, 0);
+    if (connect == nullptr) {
+        *errorText = "cannot connect";
+        WinHttpCloseHandle(session);
+        return false;
+    }
+    HINTERNET request = WinHttpOpenRequest(connect, L"GET", url.path.c_str(), nullptr, WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES, url.https ? WINHTTP_FLAG_SECURE : 0);
+    bool ok = request != nullptr;
+    if (!ok) {
+        *errorText = "cannot open request";
+    } else {
+        DWORD disable = WINHTTP_DISABLE_REDIRECTS;
+        WinHttpSetOption(request, WINHTTP_OPTION_DISABLE_FEATURE, &disable, sizeof(disable));
+        ok = WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+        if (!ok) *errorText = "send failed";
+    }
+    if (ok) {
+        ok = WinHttpReceiveResponse(request, nullptr);
+        if (!ok) *errorText = "receive failed";
+    }
+    if (ok) {
+        wchar_t buffer[2048] = {};
+        DWORD size = sizeof(buffer) - sizeof(wchar_t);
+        ok = WinHttpQueryHeaders(request, WINHTTP_QUERY_LOCATION, WINHTTP_HEADER_NAME_BY_INDEX,
+                 buffer, &size, WINHTTP_NO_HEADER_INDEX)
+            != FALSE;
+        if (ok) *location = wideToUtf8(buffer);
+        else *errorText = "no redirect from the release page";
+    }
+    if (request != nullptr) WinHttpCloseHandle(request);
+    if (connect != nullptr) WinHttpCloseHandle(connect);
+    WinHttpCloseHandle(session);
+    return ok;
+}
+
 bool httpDownload(const std::string& urlString, const fs::path& destination, const char** errorText)
 {
     Url url;
@@ -534,9 +590,30 @@ bool copyIfPresent(const fs::path& stage, const char* name, const fs::path& dest
     return true;
 }
 
+// A running exe cannot be overwritten but can be renamed: the old copy moves aside
+// (deleted on the next run) and the new one takes its name.
+bool copyLauncher(const fs::path& source, const fs::path& target)
+{
+    std::error_code error;
+    fs::path aside = target;
+    aside += ".old";
+    fs::remove(aside, error);
+    bool moved = false;
+    if (fs::exists(target, error)) {
+        fs::rename(target, aside, error);
+        moved = !error;
+    }
+    fs::copy_file(source, target, fs::copy_options::overwrite_existing, error);
+    if (error && moved) {
+        std::error_code ignored;
+        fs::rename(aside, target, ignored);
+    }
+    return !error;
+}
+
 const std::vector<std::string>& buildFiles()
 {
-    static const std::vector<std::string> names = {kGameExe, "ce.dat", kExporterExe, kVersionTxt};
+    static const std::vector<std::string> names = {kGameExe, "ce.dat", kExporterExe, kVersionTxt, kRootLauncher};
     return names;
 }
 
@@ -617,6 +694,13 @@ bool rollbackInstalledBuild(const fs::path& root)
     for (const std::string& name : buildFiles()) {
         fs::path source = selected / name;
         if (!fs::is_regular_file(source, error)) continue;
+        if (name == kRootLauncher) {
+            if (!copyLauncher(source, root / name)) {
+                logf("rollback failed for %s", name.c_str());
+                return false;
+            }
+            continue;
+        }
         fs::copy_file(source, root / name, fs::copy_options::overwrite_existing, error);
         if (error) {
             logf("rollback failed for %s: %s", name.c_str(), error.message().c_str());
@@ -713,13 +797,15 @@ bool installRussianTranslation(const fs::path& root)
     fs::path translation = root / "mods" / "rpu_russian.dat";
     if (!fs::exists(translation)) {
         const char* networkError = nullptr;
-        std::string release;
-        if (!httpGet(kRpuLatestApiUrl, &release, &networkError)) {
+        std::string location;
+        if (!httpRedirectLocation(kRpuLatestUrl, &location, &networkError)) {
             logf("cannot reach the official RPU release (%s)",
                 networkError != nullptr ? networkError : "network error");
             return false;
         }
-        std::string tag = jsonStringValue(release, "tag_name");
+        const std::string marker = "/releases/tag/";
+        size_t at = location.find(marker);
+        std::string tag = at == std::string::npos ? std::string() : trim(location.substr(at + marker.size()));
         if (tag.empty()) {
             log("the official RPU release did not provide a version tag");
             return false;
@@ -848,6 +934,9 @@ bool fetchReleaseInfo(const std::string& updateBase, const std::string& releaseI
         std::string response;
         if (httpGet(releaseInfoUrl, &response, &error)) {
             *notes = shortNotes(jsonStringValue(response, "body"));
+        } else {
+            logf("release notes are unavailable (GitHub API rate limit or network: %s)",
+                error != nullptr ? error : "network error");
         }
     }
     return !version->empty();
@@ -867,11 +956,11 @@ Options parseOptions(int argc, char** argv)
             log("fallout2-ce-3d-launcher: installs Fallout 2: Reimagined onto a clean Fallout 2 and keeps");
             log("it updated from the rolling `latest` GitHub release, then starts the game.");
             log("");
-            log("  --game-root <dir>   the Fallout 2 folder (default: registry lookup, then a picker)");
+            log("  --game-root <dir>   the Fallout 2 folder (default: this launcher's own folder when it is a game root, else registry lookup, then a picker)");
             log("  --update-url <url>  where version.txt and the zip live (default: the latest release)");
             log("  --release-info-url <url>  release API for the version notes");
-            log("  --maps <list>       maps the exporter covers, comma separated (default: klamath)");
-            log("  --force-export      rebuild the 3D scene data even if it looks current");
+            log("  --maps <list>       maps the exporter covers, comma separated (default: all, every map)");
+            log("  --force-export      rebuild all the 3D scene data even if it is current");
             log("  --no-start          do everything except starting the game");
             log("  --rollback          restore the most recent backed-up game build");
             log("  --russian           install the official RPU Russian text translation");
@@ -917,6 +1006,17 @@ std::vector<std::string> splitMaps(const std::string& maps)
 
 } // namespace
 
+// The folder of this exe when it is a game root (the launcher installed there), else empty.
+std::string ownGameRoot()
+{
+    wchar_t path[MAX_PATH] = {};
+    if (GetModuleFileNameW(nullptr, path, MAX_PATH) == 0) return std::string();
+    fs::path folder = fs::path(path).parent_path();
+    std::error_code error;
+    if (!looksLikeFallout2(folder) || !fs::exists(folder / kVersionTxt, error)) return std::string();
+    return wideToUtf8(folder.wstring());
+}
+
 std::string findGameRootForUi()
 {
     return findGameRoot(false);
@@ -948,9 +1048,18 @@ int runConsole(Options options)
         logf("game root (from --game-root): %s", options.gameRoot.c_str());
         if (!looksLikeFallout2(root)) die("master.dat and critter.dat are not in --game-root");
     } else {
-        std::string found = findGameRoot(true);
+        std::string found = ownGameRoot();
+        if (!found.empty()) logf("game root (the folder of this launcher): %s", found.c_str());
+        else found = findGameRoot(true);
         if (found.empty()) die("no Fallout 2 folder given");
         root = found;
+    }
+
+    {
+        std::error_code ignored;
+        fs::path old = root / kRootLauncher;
+        old += ".old";
+        fs::remove(old, ignored);
     }
 
     if (options.rollback) return rollbackInstalledBuild(root) ? 0 : 1;
@@ -1034,6 +1143,13 @@ int runConsole(Options options)
         copyIfPresent(stage, kGameExe, root, true, "installed");
         copyIfPresent(stage, "ce.dat", root, true, "installed");
         copyIfPresent(stage, kExporterExe, root, true, "installed");
+        if (!fs::exists(stage / kZipLauncher)) {
+            logf("  %s: not in the package, skipped", kRootLauncher);
+        } else if (copyLauncher(stage / kZipLauncher, root / kRootLauncher)) {
+            logf("  %s: installed", kRootLauncher);
+        } else {
+            logf("  %s: copy failed", kRootLauncher);
+        }
         if (fs::exists(root / kCfg)) {
             log("  fallout2.cfg: kept (the player's file is never overwritten)");
         } else {
@@ -1064,7 +1180,7 @@ int runConsole(Options options)
     } else {
         bool needExport = options.forceExport || freshInstall || updated;
         if (!needExport) {
-            // The exporter owns the map groups: "klamath" is its name, only
+            // The exporter owns the map groups: "all" is its name, only
             // it knows which scene directories that covers.  Exit 0 = every
             // base scene exists, anything else = make them.
             std::string command = "\"" + exporter.string() + "\" --game-root \"" + root.string()
@@ -1076,7 +1192,9 @@ int runConsole(Options options)
         if (needExport) {
             std::string command = "\"" + exporter.string() + "\" --game-root \"" + root.string()
                 + "\" --maps " + mapList;
+            if (options.forceExport) command += " --force";
             logf("making the 3D scene data for: %s", mapList.c_str());
+            if (freshInstall) log("  the first install builds every map: about 20 minutes; later updates take seconds");
             if (!runTool(utf8ToWide(command), root.wstring())) {
                 log("the exporter failed; the game will start in 2D");
             }

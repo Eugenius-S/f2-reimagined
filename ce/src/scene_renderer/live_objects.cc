@@ -63,6 +63,27 @@ void updateTurnSteps()
     gTurnSteps = spriteTurnSteps(turn, sign, gTurnSteps);
 }
 
+// 157: the built cards, kept between frames. The vertices reference the art
+// texture cache, so it clears with it.
+struct CachedObjectCard {
+    StaticObjectSnapshot snapshot;
+    DepthVertex vertices[6];
+    ObjectDraw draw;
+};
+std::unordered_map<const void*, CachedObjectCard> gObjectCardCache;
+int gObjectCardHits = 0;
+int gObjectCardMisses = 0;
+
+bool sameSnapshot(const StaticObjectSnapshot& a, const StaticObjectSnapshot& b)
+{
+    return a.fid == b.fid && a.frame == b.frame && a.rotation == b.rotation
+        && a.tile == b.tile && a.x == b.x && a.y == b.y && a.pid == b.pid
+        && a.flags == b.flags && a.stack == b.stack && a.seeThrough == b.seeThrough
+        && a.flat == b.flat && a.flyActive == b.flyActive && a.turnOffset == b.turnOffset
+        && a.shadowsOn == b.shadowsOn && a.spriteSidesOn == b.spriteSidesOn
+        && a.clipEnabled == b.clipEnabled;
+}
+
 void destroyStaticObjectTextures()
 {
     if (gContext != nullptr) {
@@ -71,6 +92,8 @@ void destroyStaticObjectTextures()
         }
     }
     gObjectTextures.clear();
+    // The kept cards' vertices sample the deleted textures (157).
+    gObjectCardCache.clear();
 }
 
 } // namespace
@@ -191,7 +214,7 @@ bool updateStaticHero(const StaticHeroFrame& frame, std::string* error)
     const DepthVertex topRight = cardVertex(corners[3], row, camera.eye);
     const DepthVertex vertices[] = { topLeft, bottomLeft, bottomRight, topLeft, bottomRight, topRight };
 
-    while (glGetError() != 0) {
+    if (glErrorChecksEnabled()) while (glGetError() != 0) {
     }
     glPixelStorei(kUnpackAlignment, 1);
     if (gHeroVao == 0) glGenVertexArrays(1, &gHeroVao);
@@ -209,7 +232,7 @@ bool updateStaticHero(const StaticHeroFrame& frame, std::string* error)
     glTexParameteri(kTexture2D, kTextureWrapT, kClampToEdge);
     glPixelStorei(kUnpackAlignment, 4);
     glBindVertexArray(0);
-    if (glGetError() != 0) return fail("OpenGL failed to upload the hero card");
+    if (glErrorChecksEnabled() && glGetError() != 0) return fail("OpenGL failed to upload the hero card");
 
     gHeroInfo = { frame.tile, frame.fid, frame.frame, frame.rotation, worldU, worldV };
     gHeroPickId = frame.pickId;
@@ -301,7 +324,7 @@ bool addStaticObject(const StaticObjectFrame& frame, std::string* error)
         const unsigned long long expectedRgba = static_cast<unsigned long long>(frame.width)
             * static_cast<unsigned long long>(frame.height) * 4;
         if (frame.rgba == nullptr || expectedRgba != frame.rgbaSize) return fail("object frame pixels are missing");
-        while (glGetError() != 0) {
+        if (glErrorChecksEnabled()) while (glGetError() != 0) {
         }
         glGenTextures(1, &texture);
         glBindTexture(kTexture2D, texture);
@@ -313,7 +336,7 @@ bool addStaticObject(const StaticObjectFrame& frame, std::string* error)
         glTexParameteri(kTexture2D, kTextureMagFilter, kNearest);
         glTexParameteri(kTexture2D, kTextureWrapS, kClampToEdge);
         glTexParameteri(kTexture2D, kTextureWrapT, kClampToEdge);
-        if (glGetError() != 0) {
+        if (glErrorChecksEnabled() && glGetError() != 0) {
             glDeleteTextures(1, &texture);
             return fail("OpenGL failed to upload an object frame");
         }
@@ -398,9 +421,76 @@ void endStaticObjects()
     glBindVertexArray(0);
 }
 
+bool staticObjectCardFresh(const void* key, const StaticObjectSnapshot& snapshot)
+{
+    const auto found = gObjectCardCache.find(key);
+    if (found == gObjectCardCache.end()) return false;
+    if (sameSnapshot(found->second.snapshot, snapshot)) {
+        gObjectCardHits++;
+        return true;
+    }
+    gObjectCardMisses++;
+    static int reports = 0;
+    if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
+        const StaticObjectSnapshot& old = found->second.snapshot;
+        const char* field = "?";
+        if (old.fid != snapshot.fid) field = "fid";
+        else if (old.frame != snapshot.frame) field = "frame";
+        else if (old.rotation != snapshot.rotation) field = "rotation";
+        else if (old.tile != snapshot.tile) field = "tile";
+        else if (old.x != snapshot.x) field = "x";
+        else if (old.y != snapshot.y) field = "y";
+        else if (old.pid != snapshot.pid) field = "pid";
+        else if (old.flags != snapshot.flags) field = "flags";
+        else if (old.stack != snapshot.stack) field = "stack";
+        else if (old.seeThrough != snapshot.seeThrough) field = "seeThrough";
+        else if (old.flat != snapshot.flat) field = "flat";
+        else if (old.flyActive != snapshot.flyActive) field = "flyActive";
+        else if (old.turnOffset != snapshot.turnOffset) field = "turnOffset";
+        else if (old.shadowsOn != snapshot.shadowsOn) field = "shadowsOn";
+        else if (old.spriteSidesOn != snapshot.spriteSidesOn) field = "spriteSides";
+        else if (old.clipEnabled != snapshot.clipEnabled) field = "clip";
+        printf("perf obj cache hits=%d misses=%d field=%s\n", gObjectCardHits, gObjectCardMisses, field);
+        fflush(stdout);
+    }
+    return false;
+}
+
+void appendStaticObjectCard(const void* key, int pickId)
+{
+    const auto found = gObjectCardCache.find(key);
+    if (found == gObjectCardCache.end()) return;
+    CachedObjectCard& card = found->second;
+    card.draw.pickId = pickId;
+    card.draw.firstVertex = static_cast<int>(gObjectVertices.size());
+    gObjectVertices.insert(gObjectVertices.end(), card.vertices, card.vertices + 6);
+    gObjectDraws.push_back(card.draw);
+}
+
+bool addStaticObjectCached(const void* key, const StaticObjectSnapshot& snapshot,
+    const StaticObjectFrame& frame, std::string* error)
+{
+    CachedObjectCard card;
+    card.snapshot = snapshot;
+    const size_t verticesBefore = gObjectVertices.size();
+    const size_t drawsBefore = gObjectDraws.size();
+    if (!addStaticObject(frame, error)) {
+        // The failed build may have pushed a draw record before failing.
+        gObjectDraws.resize(drawsBefore);
+        gObjectVertices.resize(verticesBefore);
+        return false;
+    }
+    if (gObjectDraws.size() == drawsBefore) return true; // a skip, not a failure
+    card.draw = gObjectDraws.back();
+    std::copy(gObjectVertices.end() - 6, gObjectVertices.end(), card.vertices);
+    gObjectCardCache[key] = std::move(card);
+    return true;
+}
+
 void clearStaticObjects()
 {
     destroyStaticObjects();
+    gObjectCardCache.clear();
 }
 
 unsigned int staticObjectCount()

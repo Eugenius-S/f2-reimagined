@@ -402,8 +402,8 @@ def parse_args(argv=None):
     roots.add_argument("--game-root", type=Path, help="game directory containing DAT files and data/")
     targets = parser.add_mutually_exclusive_group()
     targets.add_argument("--map", default=DEFAULT_MAP, help=f"one map, without .map (default: {DEFAULT_MAP})")
-    targets.add_argument("--maps", help="every elevation of several maps: a group (" + ", ".join(MAP_GROUPS)
-                         + ") or a comma-separated list")
+    targets.add_argument("--maps", help="every elevation of several maps: a comma-separated list of maps and "
+                         "groups (all, " + ", ".join(MAP_GROUPS) + ")")
     parser.add_argument("--elevation", type=int, choices=(0, 1, 2), default=0,
                         help="the elevation of --map (default: 0)")
     parser.add_argument("--cache-root", type=Path,
@@ -412,19 +412,38 @@ def parse_args(argv=None):
     parser.add_argument("--check", action="store_true",
                         help="report whether every requested map's base scene exists and exit: 0 all present, "
                              "3 some missing (the 091 launcher asks before spending minutes on an export)")
+    parser.add_argument("--force", action="store_true",
+                        help="rebuild every requested scene even if it is current")
     args = parser.parse_args(argv)
-    names = MAP_GROUPS.get(args.maps.lower(), args.maps.split(",")) if args.maps else [args.map]
-    args.map_names = [name.strip().lower() for name in names]
+    args.map_names = expand_maps(args.maps) if args.maps else [args.map.strip().lower()]
     for name in args.map_names:
         if not re.fullmatch(r"[a-z0-9_]+", name):
             parser.error(f"invalid map name: {name!r}")
     return args
 
 
+def expand_maps(spec: str) -> list[str]:
+    """Map names of a --maps value: each comma-separated item is a map, a group, or "all" (every group),
+    in order, each map once."""
+    names = []
+    for item in (part.strip().lower() for part in spec.split(",")):
+        if not item:
+            continue
+        if item == "all":
+            group = [name for members in MAP_GROUPS.values() for name in members]
+        else:
+            group = MAP_GROUPS.get(item, (item,))
+        for name in group:
+            if name not in names:
+                names.append(name)
+    return names
+
+
 def check_scenes(game_root: Path, map_names: list[str], cache_root: Path = None) -> list[str]:
-    """The requested maps whose elevation 0 scene is not in the cache yet."""
+    """The requested maps with no scene in the cache yet: a map counts as present when any of its
+    elevation folders holds a scene.json (some maps have no elevation 0)."""
     scenes = cache_root if cache_root is not None else game_root / "mod-cache" / "scene"
-    return [name for name in map_names if not (scenes / name / "0" / "scene.json").is_file()]
+    return [name for name in map_names if not any(scenes.glob(f"{name}/*/scene.json"))]
 
 
 def scene_directory(game_root: Path, map_name: str, elevation: int, cache_root: Path = None) -> Path:
@@ -445,9 +464,74 @@ def scene_directory(game_root: Path, map_name: str, elevation: int, cache_root: 
     return out_dir
 
 
+def input_fingerprint(gf, game_root: Path, map_name: str, elevation: int):
+    """What a scene depends on, hashed: (fingerprint hex, adapter_hashes, archives, source_priority).
+    The resources are gf._reads, so it is meaningful once the scene was built or its reads replayed."""
+    if getattr(gf, "_static_inputs", None) is None:  # scene-independent hashes, computed once per gf
+        gf._static_inputs = static_inputs(gf, game_root)
+    vendor_hashes, adapter_hashes, archives, source_priority = gf._static_inputs
+    fingerprint_data = {
+        "exporter_version": EXPORTER_VERSION,
+        "donor_revision": DONOR_REVISION,
+        "vendor_sha256": vendor_hashes,
+        "adapter_sha256": adapter_hashes,
+        "archives": archives,
+        "config_sha256": gf.config_hashes,
+        "source_priority": source_priority,
+        "resources": gf._reads,
+        "map": map_name,
+        "elevation": elevation,
+    }
+    fingerprint = hashlib.sha256(json.dumps(fingerprint_data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return fingerprint, adapter_hashes, archives, source_priority
+
+
+def static_inputs(gf, game_root: Path):
+    vendor_files = sorted((HERE / "vendor").rglob("*.py"))
+    vendor_hashes = {p.relative_to(HERE / "vendor").as_posix(): sha256_file(p) for p in vendor_files}
+    adapter_hashes = {name: sha256_file(HERE / name) for name in
+                      ("export.py", "floor_sidecar.py", "roof_fringe.py", "wall_sidecar.py", "projection_sidecar.py", "baked_sidecar.py",
+                       "shadow_sidecar.py", "scene_check.py", "solids.py")}
+    archives = [{"name": name, "path": source.path.relative_to(game_root).as_posix()
+                 if source.path.is_relative_to(game_root) else str(source.path),
+                 "size": source.path.stat().st_size, "sha256": sha256_file(source.path)}
+                for _, name, source in gf.sources if source.archive is not None]
+    source_priority = [
+        {"kind": kind, "name": name,
+         "path": source.path.relative_to(game_root).as_posix()
+         if source.path.is_relative_to(game_root) else str(source.path)}
+        for kind, name, source in gf.sources
+    ]
+    return vendor_hashes, adapter_hashes, archives, source_priority
+
+
+def reset_caches(gf):
+    """Drop gf._cache (parsed lists, protos, the ArtDB and its decoded art) so every read hits gf.read and is recorded."""
+    gf._cache = {}
+
+
+def scene_current(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path) -> bool:
+    """True when out_dir holds a finished scene whose inputs (exporter code, the game data it read,
+    config, archives) still hash to the fingerprint its provenance recorded."""
+    try:
+        provenance = json.loads((out_dir / "provenance.json").read_text(encoding="utf-8"))
+        if provenance["map"] != map_name or provenance["elevation"] != elevation:
+            return False
+        if not all((out_dir / name).is_file() for name in provenance["artifacts_sha256"]):
+            return False
+        reset_caches(gf)
+        gf._reads = {}
+        for key in provenance["resources_read"]:
+            gf.read(key)
+        return input_fingerprint(gf, game_root, map_name, elevation)[0] == provenance["inputs_sha256"]
+    except Exception:
+        return False
+
+
 def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path):
     """One map elevation into its cache directory (scene_directory)."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    reset_caches(gf)
     gf._reads = {}  # provenance lists what this scene read
     builder = SceneBuilder(gf, map_name, elevation)
     builder.export(out_dir)
@@ -475,34 +559,7 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
     (out_dir / "shadows.bin").write_bytes(shadow_payload)
     shadow_count = len(decode_shadow_sidecar(shadow_payload))
 
-    vendor_files = sorted((HERE / "vendor").rglob("*.py"))
-    vendor_hashes = {p.relative_to(HERE / "vendor").as_posix(): sha256_file(p) for p in vendor_files}
-    adapter_hashes = {name: sha256_file(HERE / name) for name in
-                      ("export.py", "floor_sidecar.py", "roof_fringe.py", "wall_sidecar.py", "projection_sidecar.py", "baked_sidecar.py",
-                       "shadow_sidecar.py", "scene_check.py", "solids.py")}
-    archives = [{"name": name, "path": source.path.relative_to(game_root).as_posix()
-                 if source.path.is_relative_to(game_root) else str(source.path),
-                 "size": source.path.stat().st_size, "sha256": sha256_file(source.path)}
-                for _, name, source in gf.sources if source.archive is not None]
-    source_priority = [
-        {"kind": kind, "name": name,
-         "path": source.path.relative_to(game_root).as_posix()
-         if source.path.is_relative_to(game_root) else str(source.path)}
-        for kind, name, source in gf.sources
-    ]
-    fingerprint_data = {
-        "exporter_version": EXPORTER_VERSION,
-        "donor_revision": DONOR_REVISION,
-        "vendor_sha256": vendor_hashes,
-        "adapter_sha256": adapter_hashes,
-        "archives": archives,
-        "config_sha256": gf.config_hashes,
-        "source_priority": source_priority,
-        "resources": gf._reads,
-        "map": map_name,
-        "elevation": elevation,
-    }
-    fingerprint = hashlib.sha256(json.dumps(fingerprint_data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    fingerprint, adapter_hashes, archives, source_priority = input_fingerprint(gf, game_root, map_name, elevation)
     # The roof's wall tops are unrolled into strips in an image of their own, to stand up as bands (roof_fringe.py).
     roof_squares = {index: int(tile) for index, (cell, tile) in
                     enumerate(zip(builder.roof.ravel(), builder.roof_ids.ravel())) if cell}
@@ -550,6 +607,7 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
         "resources_read": gf._reads,
         "artifacts_sha256": artifact_hashes,
     }
+    provenance["inputs_sha256"] = input_fingerprint(gf, game_root, map_name, elevation)[0]  # covers the final resources_read
     (out_dir / "provenance.json").write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"output": str(out_dir), "files": len(artifact_hashes) + 1,
                       "fingerprint_sha256": fingerprint, "resources_read": len(gf._reads)}, sort_keys=True))
@@ -590,6 +648,9 @@ def main(argv=None):
                 export_scene(gf, game_root, name, elevation, out_dir)
                 continue
             try:
+                if not args.force and scene_current(gf, game_root, name, elevation, out_dir):
+                    print(json.dumps({"output": str(out_dir), "current": True}, sort_keys=True))
+                    continue
                 export_scene(gf, game_root, name, elevation, out_dir)
             except (Exception, SystemExit) as error:  # one bad map must not stop the others
                 failed.append(f"{name} e{elevation}: {error}")

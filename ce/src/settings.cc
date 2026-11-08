@@ -3,6 +3,7 @@
 #include "audio_channels.h"
 #include "debug.h"
 #include "game_config.h"
+#include "mouse.h"
 #include "platform_compat.h"
 #include "sound.h"
 #include "scene/menu_text.h"
@@ -294,7 +295,11 @@ void initSettingsRegistry(bool isMapper)
     SETTING_P(resolution_x, clamp(640, 7680));
     SETTING_P(resolution_y, clamp(480, 4320));
     SETTING_P(resolution_mode, clamp(0, 76804320));
-    SETTING_P(windowed, clamp(WindowMode::Fullscreen, WindowMode::WindowedFullscreen));
+    // 216: the lower bound is Windowed, not Fullscreen - the settings window
+    // offers Window (0) as a choice, and a Fullscreen-bounded clamp silently
+    // turned every saved Window pick into exclusive fullscreen on the next
+    // launch, which is the mode that is hard to minimize.
+    SETTING_P(windowed, clamp(WindowMode::Windowed, WindowMode::WindowedFullscreen));
     SETTING(mouse_lock);
     SETTING_P(scale, clamp(1, 4));
     registerSetting("screen", "scale_factor", settings.screen.scale_factor, clamp(1.0, 3.0));
@@ -330,7 +335,9 @@ void initSettingsRegistry(bool isMapper)
     SettingDescriptor& windowModeDescriptor = settingDescriptors[settingDescriptors.size() - 4];
     windowModeDescriptor.valueType = SettingValueType::Choice;
     windowModeDescriptor.category = SettingCategory::Screen;
-    windowModeDescriptor.applyPolicy = SettingApplyPolicy::Restart;
+    // 209: the mode itself applies live on menu close; only the resolution
+    // and the interface scale keep the restart note.
+    windowModeDescriptor.applyPolicy = SettingApplyPolicy::OnClose;
     windowModeDescriptor.subsection = "Display";
     windowModeDescriptor.fallbackLabel = "Window mode";
     windowModeDescriptor.fallbackDescription = "Choose fullscreen, windowed, or borderless mode.";
@@ -398,7 +405,16 @@ void initSettingsRegistry(bool isMapper)
     SETTING(text_base_delay);
     SETTING(text_line_delay);
     SETTING(brightness);
-    SETTING(mouse_sensitivity);
+    registerSetting("preferences", "mouse_sensitivity", settings.preferences.mouse_sensitivity,
+        clamp(MOUSE_SENSITIVITY_MIN, MOUSE_SENSITIVITY_MAX));
+    SettingDescriptor& mouseSensitivityDescriptor = settingDescriptors.back();
+    mouseSensitivityDescriptor.category = SettingCategory::Preferences;
+    mouseSensitivityDescriptor.applyPolicy = SettingApplyPolicy::OnClose;
+    mouseSensitivityDescriptor.subsection = "3D";
+    mouseSensitivityDescriptor.fallbackLabel = "Cursor speed";
+    mouseSensitivityDescriptor.fallbackDescription = "How far the cursor moves when you move the mouse.";
+    mouseSensitivityDescriptor.numericRange = SettingNumericRange { MOUSE_SENSITIVITY_MIN, MOUSE_SENSITIVITY_MAX, 0.05 };
+    settingsRegistry.back().descriptor = mouseSensitivityDescriptor;
     SETTING(running_burning_guy);
 #undef SECT
 
@@ -484,6 +500,26 @@ void initSettingsRegistry(bool isMapper)
         "Show the 3D world view where a scene is available.", SettingApplyPolicy::OnClose);
     registerThreeDBoolean("sharp_text", settings.scene3d.sharp_text, "Sharp interface text",
         "Draw small interface text with a high-resolution font.", SettingApplyPolicy::OnClose);
+    registerThreeDBoolean("fps_counter", settings.scene3d.fps_counter, "FPS counter",
+        "Show average frames per second and frame time. Press F8 to toggle it while playing.",
+        SettingApplyPolicy::OnClose);
+    registerThreeDBoolean("frame_log", settings.scene3d.frame_log, "Frame time log",
+        "Write every frame's time to frame_log.csv and a summary next to it when the log closes.",
+        SettingApplyPolicy::OnClose);
+    registerSetting("3d", "fps_limit", settings.scene3d.fps_limit, clamp(0.0, 360.0));
+    SettingDescriptor& fpsLimitDescriptor = settingDescriptors.back();
+    fpsLimitDescriptor.category = SettingCategory::Uncategorized;
+    fpsLimitDescriptor.applyPolicy = SettingApplyPolicy::OnClose;
+    fpsLimitDescriptor.subsection = "3D";
+    fpsLimitDescriptor.fallbackLabel = "FPS limit";
+    fpsLimitDescriptor.fallbackDescription =
+        "The frame rate the game view is paced to: 60 keeps the classic feel, 0 removes the limit.";
+    fpsLimitDescriptor.numericRange = SettingNumericRange { 0.0, 360.0, 5.0 };
+    settingsRegistry.back().descriptor = fpsLimitDescriptor;
+    settingsRegistry.back().write = [](bool onlyAdd) {
+        if (onlyAdd && settingsKeyExists("3d", "fps_limit")) return;
+        settingsWrite("3d", "fps_limit", onlyAdd ? 60.0 : settings.scene3d.fps_limit);
+    };
     registerThreeDBoolean("clean_edges", settings.scene3d.clean_edges, "Clean map edges",
         "Cut the 3D scene to the map boundary, leaving black beyond it.", SettingApplyPolicy::OnClose);
     registerThreeDBoolean("sun", settings.scene3d.sun, "Sun",

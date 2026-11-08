@@ -184,15 +184,22 @@ FloatingTextOutlineLayout floatingTextOutlineLayout(int legacyWidth, int legacyH
     layout.bufferWidth = legacyWidth;
     layout.bufferHeight = legacyHeight;
     layout.lineHeight = std::max(lineHeight, 0);
-    layout.linePitch = std::max(lineHeight + 1, 1);
+    layout.linePitch = modernOutline ? sharpTextLinePitch(lineHeight, true) : std::max(lineHeight + 1, 1);
     layout.legacyTopMargin = hasOutline ? 1 : 0;
     if (!modernOutline || legacyWidth <= 0 || legacyHeight <= 0 || lineHeight <= 0 || lines <= 0) return layout;
     layout.offsetX = 2;
     layout.offsetY = 2;
     layout.bufferWidth += layout.offsetX * 2;
-    layout.lineOffset = std::max(0, font101PreviewCoverageHeight(lineHeight, -1) - lineHeight);
+    layout.lineOffset = std::max(std::max(0, font101PreviewCoverageHeight(lineHeight, -1) - lineHeight),
+        layout.linePitch - lineHeight);
     layout.bufferHeight += layout.offsetY + lines * layout.lineOffset;
     return layout;
+}
+
+int sharpTextLinePitch(int lineHeight, bool sharpTextEnabled)
+{
+    if (lineHeight <= 0 || !sharpTextEnabled) return std::max(lineHeight, 0);
+    return std::max(lineHeight + 1, (lineHeight * 13 + 9) / 10);
 }
 
 bool setFont101PreviewBold(bool bold, int ownerWindow)
@@ -711,6 +718,13 @@ void TextLayer::eraseBuffer(TextBufferId buffer)
                 record.ownerWindow, static_cast<unsigned long long>(record.ownerGeneration));
         }
         return record.buffer == buffer;
+    }), records_.end());
+}
+
+void TextLayer::eraseTextRuns(TextBufferId buffer, const std::string& prefix)
+{
+    records_.erase(std::remove_if(records_.begin(), records_.end(), [&buffer, &prefix](const TextRecord& record) {
+        return record.buffer == buffer && record.run.text.compare(0, prefix.size(), prefix) == 0;
     }), records_.end());
 }
 
