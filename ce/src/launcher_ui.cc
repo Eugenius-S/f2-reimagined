@@ -91,6 +91,10 @@ std::wstring g_releaseVersion;
 std::wstring g_releaseNotes;
 bool g_autoUpdates = false;
 bool g_russianInstall = false;
+// The player's own wish for the translation (task 238): -1 not chosen yet (the box follows the disk), 0 no, 1 yes.
+int g_russianWish = -1;
+// The last Install put the game in but could not get the translation; it is tried again next time.
+bool g_translationFailed = false;
 bool g_logDragging = false;
 bool g_busy = false;
 bool g_haveRelease = false;
@@ -234,6 +238,9 @@ void saveSettings()
 {
     WritePrivateProfileStringW(L"launcher", L"language", g_uiLanguage.c_str(), g_settingsPath.c_str());
     WritePrivateProfileStringW(L"launcher", L"auto_updates", g_autoUpdates ? L"1" : L"0", g_settingsPath.c_str());
+    if (g_russianWish >= 0) {
+        WritePrivateProfileStringW(L"launcher", L"russian_wish", g_russianWish != 0 ? L"1" : L"0", g_settingsPath.c_str());
+    }
     if (g_root != nullptr) {
         wchar_t value[32768] = {};
         GetWindowTextW(g_root, value, static_cast<int>(std::size(value)));
@@ -348,10 +355,11 @@ bool russianOnDisk()
     return launcher_uninstall::languageOf(text) == "russian";
 }
 
-// For an installed game the checkbox shows what is on disk; for a fresh one it keeps the player's choice.
+// The box shows the player's wish; until they have chosen, an installed game shows what is on disk.
 void syncRussianFromDisk()
 {
-    if (g_installed) g_russianInstall = russianOnDisk();
+    if (g_russianWish >= 0) g_russianInstall = g_russianWish != 0;
+    else if (g_installed) g_russianInstall = russianOnDisk();
     if (g_russian != nullptr) InvalidateRect(g_russian, nullptr, TRUE);
 }
 
@@ -365,6 +373,10 @@ std::wstring doneStatus(Operation operation)
         return tr(L"The Russian translation is removed. The game text is English again.",
             L"Русификатор удалён. Текст игры снова английский.");
     default:
+        if (g_translationFailed) {
+            return tr(L"The game is installed, but the Russian translation did not download. It will be tried again on the next install or update.",
+                L"Игра установлена, но русификатор не скачался. Попробуем снова при следующей установке или обновлении.");
+        }
         return tr(L"Installation complete. Press Play to start.", L"Установка завершена. Нажмите «Играть».");
     }
 }
@@ -392,6 +404,17 @@ std::wstring noReleaseStatus()
         : tr(L"GitHub does not answer", L"GitHub не отвечает") + why + tr(L". Try again later or use another network.", L". Попробуйте позже или другую сеть.");
 }
 
+// The wished translation that is not on disk yet is said out loud, not hidden behind "up to date".
+std::wstring upToDateStatus()
+{
+    std::wstring text = tr(L"Your game is up to date.", L"У вас установлена последняя сборка.");
+    if (g_russianInstall && !russianOnDisk()) {
+        text += tr(L" The Russian translation will be installed on the next Install / Update.",
+            L" Русификатор поставим при следующей установке или обновлении.");
+    }
+    return text;
+}
+
 void refreshStatusFromRelease()
 {
     if (g_busy) return;
@@ -417,7 +440,7 @@ void refreshStatusFromRelease()
     std::string installedVersion;
     if (installed) installedVersion.assign((std::istreambuf_iterator<char>(installed)), std::istreambuf_iterator<char>());
     setStatus(installedVersion == wideToUtf8(g_releaseVersion)
-        ? tr(L"Your game is up to date.", L"У вас установлена последняя сборка.")
+        ? upToDateStatus()
         : tr(L"A newer build is available.", L"Доступна новая сборка."));
 }
 
@@ -506,6 +529,8 @@ void loadSettings()
         g_uiLanguage = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? L"ru" : L"en";
     }
     g_autoUpdates = GetPrivateProfileIntW(L"launcher", L"auto_updates", 0, g_settingsPath.c_str()) != 0;
+    g_russianWish = GetPrivateProfileIntW(L"launcher", L"russian_wish", -1, g_settingsPath.c_str());
+    if (g_russianWish > 1) g_russianWish = 1;
     if (g_args.gameRoot.empty()) {
         wchar_t path[32768] = {};
         GetPrivateProfileStringW(L"launcher", L"game_root", L"", path,
@@ -521,15 +546,15 @@ void loadSettings()
 
 std::vector<std::wstring> workerArguments(Operation operation)
 {
-    std::vector<std::wstring> args = {L"--game-root", g_args.gameRoot, L"--no-start"};
+    std::vector<std::wstring> args = {L"--game-root", g_args.gameRoot, L"--no-start", L"--ui-language", g_uiLanguage};
     if (!g_args.updateUrl.empty()) {
         args.push_back(L"--update-url");
         args.push_back(g_args.updateUrl);
     }
     if (operation == Operation::Uninstall) {
-        args = {L"--game-root", g_args.gameRoot, L"--uninstall"};
+        args = {L"--game-root", g_args.gameRoot, L"--uninstall", L"--ui-language", g_uiLanguage};
     } else if (operation == Operation::RemoveRussian) {
-        args = {L"--game-root", g_args.gameRoot, L"--remove-russian"};
+        args = {L"--game-root", g_args.gameRoot, L"--remove-russian", L"--ui-language", g_uiLanguage};
     } else if (g_russianInstall) {
         args.push_back(L"--russian");
     }
@@ -549,6 +574,7 @@ void startOperation(Operation operation)
     }
     saveSettings();
     g_operationCompleted = false;
+    g_translationFailed = false;
     setBusy(true);
     setStatus(operation == Operation::Uninstall ? tr(L"Removing the mod...", L"Удаляем мод...")
                        : operation == Operation::RemoveRussian ? tr(L"Removing the Russian translation...", L"Удаляем русификатор...")
@@ -965,6 +991,8 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
                 }
             } else {
                 g_russianInstall = !g_russianInstall;
+                g_russianWish = g_russianInstall ? 1 : 0;
+                saveSettings();
                 InvalidateRect(g_russian, nullptr, TRUE);
                 // A game that is already installed gets the translation at once; a fresh one gets it with Install.
                 if (g_russianInstall && g_installed) startOperation(Operation::Install);
@@ -1007,14 +1035,15 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             if (installed) installedVersion.assign((std::istreambuf_iterator<char>(installed)), std::istreambuf_iterator<char>());
             if (!g_haveRelease) {
                 setStatus(noReleaseStatus());
-            } else if (g_autoUpdates && g_installed && installedVersion != wideToUtf8(g_releaseVersion)) {
+            } else if (g_autoUpdates && g_installed
+                && (installedVersion != wideToUtf8(g_releaseVersion) || (g_russianInstall && !russianOnDisk()))) {
                 startOperation(Operation::Install);
             } else if (!g_installed) {
                 setStatus(tr(L"Press Install / Update. The first install takes about 20 minutes.", L"Нажмите «Установить / обновить». Первая установка идёт около 20 минут."));
             } else if (installedVersion != wideToUtf8(g_releaseVersion)) {
                 setStatus(tr(L"A newer build is available.", L"Доступна новая сборка."));
             } else {
-                setStatus(tr(L"Your game is up to date.", L"У вас установлена последняя сборка."));
+                setStatus(upToDateStatus());
             }
         } else {
             setStatus(tr(L"Choose the Fallout 2 folder to continue.", L"Выберите папку Fallout 2, чтобы продолжить."));
@@ -1029,24 +1058,27 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
     case WM_OPERATION_DONE: {
         DWORD result = static_cast<DWORD>(wParam);
         Operation operation = static_cast<Operation>(lParam);
-        if (result == 0) {
+        // Exit 2: the game is in, only the translation is missing (it stays wished and is tried again).
+        g_translationFailed = result == 2 && operation == Operation::Install;
+        if (result == 0 || g_translationFailed) {
             g_operationCompleted = true;
             g_lastOperation = operation;
             g_progressValue = 100;
             InvalidateRect(g_progress, nullptr, TRUE);
             g_installed = operation != Operation::Uninstall;
+            if (result == 0 && operation == Operation::RemoveRussian) g_russianWish = 0;
         } else {
             // A half-done removal may have taken the game exe: look again.
             g_installed = fs::exists(fs::path(g_args.gameRoot) / L"fallout2-ce.exe");
         }
         setBusy(false);
         syncRussianFromDisk();
-        setStatus(result == 0 ? doneStatus(operation) : failedStatus(operation));
+        setStatus(result == 0 || g_translationFailed ? doneStatus(operation) : failedStatus(operation));
         saveSettings();
         // After a removal the launcher may be gone: nothing is left to run the release check or an install.
         const bool launcherLeft = fs::exists(exePath());
         EnableWindow(g_install, launcherLeft && GetWindowTextLengthW(g_root) != 0);
-        if (result == 0 && launcherLeft) checkReleaseAsync();
+        if ((result == 0 || g_translationFailed) && launcherLeft) checkReleaseAsync();
         return 0;
     }
     case WM_DESTROY:

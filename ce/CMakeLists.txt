@@ -443,6 +443,9 @@ if(BUILD_TESTING)
         "tests/launcher_progress/launcher_progress_test.cc"
     )
     target_include_directories(launcher_progress_tests PRIVATE "src")
+    if (MSVC)
+        target_compile_options(launcher_progress_tests PRIVATE /utf-8)
+    endif()
     add_test(NAME launcher_progress_tests COMMAND launcher_progress_tests)
 
     add_executable(launcher_routes_tests
@@ -450,6 +453,15 @@ if(BUILD_TESTING)
     )
     target_include_directories(launcher_routes_tests PRIVATE "src")
     add_test(NAME launcher_routes_tests COMMAND launcher_routes_tests)
+
+    add_executable(launcher_ru_tests
+        "tests/launcher_progress/launcher_ru_test.cc"
+    )
+    target_include_directories(launcher_ru_tests PRIVATE "src")
+    if (MSVC)
+        target_compile_options(launcher_ru_tests PRIVATE /utf-8)
+    endif()
+    add_test(NAME launcher_ru_tests COMMAND launcher_ru_tests)
 
     add_executable(launcher_uninstall_tests
         "tests/launcher_progress/launcher_uninstall_test.cc"
