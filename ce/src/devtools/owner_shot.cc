@@ -52,6 +52,7 @@
 #include "../scene_renderer/game_view.h"
 #include "../scene_renderer/perf.h"
 #include "../scene_renderer/scene_draw.h"
+#include "../scene_renderer/text_present.h"
 #include "preferences_probe.h"
 #include "snapshot_rows.h"
 
@@ -372,12 +373,13 @@ void assembleContext(ShotContext& out)
         const Scene3dSettings& scene3d = settings.scene3d;
         char piece[1024];
         snprintf(piece, sizeof(piece),
-            "{\"scene3d\":{\"enabled\":%s,\"sharp_text\":%s,\"lights\":%s,\"sun\":%s,\"shadows\":%s,"
+            "{\"scene3d\":{\"enabled\":%s,\"sharp_text\":%s,\"sharp_text_drawn\":%s,\"lights\":%s,\"sun\":%s,\"shadows\":%s,"
             "\"cloud_shadows\":%s,\"shadow_pixel_size\":%.2f,\"shadow_density\":%.2f,\"sun_swing\":%.1f,"
             "\"glow\":%s,\"glow_strength\":%.2f,\"camera_rotation\":%s,\"camera_rotation_unlimited\":%s,"
             "\"sprite_sides\":%s,\"zoom\":%.4f,\"clean_edges\":%s},\"renderer\":\"%s\"}",
             scene3d.enabled ? "true" : "false",
             scene3d.sharp_text ? "true" : "false",
+            scene_renderer::preparedSharpTextFrame().drawn ? "true" : "false",
             scene3d.lights ? "true" : "false",
             scene3d.sun ? "true" : "false",
             scene3d.shadows ? "true" : "false",
