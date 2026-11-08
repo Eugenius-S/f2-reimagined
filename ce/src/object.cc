@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include "animation.h"
@@ -1833,6 +1834,67 @@ int objectRotateCounterClockwise(Object* obj, Rect* dirtyRect)
 void _obj_rebuild_all_light()
 {
     lightResetTileIntensity();
+
+    // The rebuild is the load's first mass consumer of protos: the walk below
+    // reads wall extendedFlags per visited tile, and each lazy load costs
+    // ~2 ms of .lst and .pro file reads (219 unique wall protos on New Reno,
+    // ~0.4 s). The parse is a pure file read, so the unique wall pids parse
+    // over a few threads (172); the inserts stay here and the lists stay
+    // single-threaded. The spread itself is ~2 ms on a warm list and keeps
+    // the vanilla shape, its adds landing the same totals whatever their
+    // order.
+    std::vector<ProtoId> wallPids;
+    {
+        std::unordered_set<int> seen;
+        for (int tile = 0; tile < HEX_GRID_SIZE; tile++) {
+            ObjectListNode* objectListNode = gObjectListHeadByTile[tile];
+            while (objectListNode != nullptr) {
+                Object* obj = objectListNode->obj;
+                if (obj != nullptr && FrmId(obj).objectType() == OBJ_TYPE_WALL) {
+                    if (seen.insert(ProtoId(obj).protoId()).second) {
+                        wallPids.push_back(ProtoId(obj));
+                    }
+                }
+                objectListNode = objectListNode->next;
+            }
+        }
+    }
+
+    if (!wallPids.empty()) {
+        std::vector<Proto*> parsed(wallPids.size(), nullptr);
+        unsigned int warmThreads = std::thread::hardware_concurrency();
+        if (warmThreads > 4) warmThreads = 4;
+        if (warmThreads < 1) warmThreads = 1;
+        if (warmThreads <= 1 || wallPids.size() < 32) {
+            for (size_t i = 0; i < wallPids.size(); i++) {
+                protoParseProto(wallPids[i], &parsed[i]);
+            }
+        } else {
+            std::vector<std::thread> threads;
+            const size_t chunk = (wallPids.size() + warmThreads - 1) / warmThreads;
+            for (unsigned int t = 0; t < warmThreads; t++) {
+                const size_t begin = t * chunk;
+                const size_t end = std::min(begin + chunk, wallPids.size());
+                if (begin >= end) break;
+                threads.emplace_back([&wallPids, &parsed, begin, end]() {
+                    for (size_t i = begin; i < end; i++) {
+                        protoParseProto(wallPids[i], &parsed[i]);
+                    }
+                });
+            }
+            for (auto& thread : threads) {
+                thread.join();
+            }
+        }
+
+        for (size_t i = 0; i < wallPids.size(); i++) {
+            if (parsed[i] != nullptr) {
+                Proto* proto;
+                protoInsertProto(wallPids[i], parsed[i], &proto);
+                internal_free(parsed[i]);
+            }
+        }
+    }
 
     for (int tile = 0; tile < HEX_GRID_SIZE; tile++) {
         ObjectListNode* objectListNode = gObjectListHeadByTile[tile];

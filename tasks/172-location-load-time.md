@@ -82,3 +82,22 @@ Frame rate in play (157), settings changes (156).
   order lands the same totals, the blocked table is per-light), the scene's
   PNG decodes in parallel (pure CPU on private buffers), the per-object
   script link cost. Evidence: runs/172-location-load-time/phases.md.
+- 2026-11-08, glm. The planned next lever (the light spread on worker
+  threads) was aimed at the wrong cost: with the protos warm the whole
+  spread walk runs ~2 ms serially, and a parallel spread over 4 threads
+  made objects_light slower (297 -> 390 on newr1), not faster. The
+  rebuild's real cost is the lazy proto loads: the walk reads wall
+  extendedFlags per visited tile, and every miss pays a .lst and a .pro
+  file read, ~2 ms each (219 unique wall protos on newr1, ~0.4 s). The
+  lever became the parallel proto warm: protoParseProto (proto.cc) reads a
+  proto's file into a fresh Proto and touches no lists, protoInsertProto
+  appends a copy of a parsed proto to the lists with protoGetProto's own
+  eviction check; the rebuild collects the map's unique wall pids, parses
+  them over up to 4 threads (pure file reads) and inserts them on the main
+  thread, then runs the vanilla spread loop. objects_light 238 / 295-297 /
+  260 / 0.1 -> 48 / 46-48 / 45 / 0.8 ms (kladwtwn / newr1 / vctyctyd /
+  cave0). First frame: kladwtwn 1933 -> 1793, newr1 2524-2609 -> 2319-2397,
+  vctyctyd 1827 -> 1508, cave0 638 -> 619. The spread is pixel-identical,
+  0 changed px against the before snapshots on all four maps; ctest 20/20.
+  newr1 still needs the scene PNG decodes in parallel and the per-object
+  script link cost. Evidence: runs/172-location-load-time/phases.md.
