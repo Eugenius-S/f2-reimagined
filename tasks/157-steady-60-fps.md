@@ -70,3 +70,9 @@ Lower visual quality as a default; display changes without restart (156).
   every location holds a steady 60+ the next phases do not start. This task
   is the gate: the floor-pass GPU cost and the off-GPU stalls above are the
   remaining work.
+- 2026-11-08 (219 landed on this branch): kladwtwn and klamall hold 100 fps
+  off-screen with the owner's settings (10.0-10.1 ms, the sharp cache takes
+  no misses after startup); the ground light/shadow bake cut the floor pass
+  11.0 to 0.73 ms. Still open for the gate: a real-window validation on the
+  owner's machine (the off-screen harness capped two demo maps at ~61 by
+  their own pacing) and the 120 comfort target.

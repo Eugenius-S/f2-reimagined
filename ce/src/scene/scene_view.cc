@@ -790,11 +790,23 @@ RefreshResult refreshForPresent()
     // view goes with it.
     if (!gCameraGlide) scene_renderer::setStaticCameraCenterTile(-1);
     scene_renderer::setStaticCameraCenterTile(gCenterTile);
+    const Uint64 cameraDone = SDL_GetPerformanceCounter();
     const bool heroUpdated = updateObjectsFromGame();
+    const Uint64 objectsDone = SDL_GetPerformanceCounter();
     updateRoofsFromGame();
     updateLightsFromGame();
     updateSunFromGame();
-    const double seconds = static_cast<double>(SDL_GetPerformanceCounter() - start) / SDL_GetPerformanceFrequency();
+    const Uint64 end = SDL_GetPerformanceCounter();
+    static int reports = 0;
+    if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
+        const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+        printf("perf refresh camera=%.2f objects=%.2f rest=%.2f\n",
+            static_cast<double>(cameraDone - start) * toMs,
+            static_cast<double>(objectsDone - cameraDone) * toMs,
+            static_cast<double>(end - objectsDone) * toMs);
+        fflush(stdout);
+    }
+    const double seconds = static_cast<double>(end - start) / SDL_GetPerformanceFrequency();
     return { heroUpdated, seconds };
 }
 

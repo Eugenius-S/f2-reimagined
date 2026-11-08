@@ -19,5 +19,11 @@ bool glLoad()
     return true;
 }
 
+bool glErrorChecksEnabled()
+{
+    static const bool on = SDL_getenv("F2CE_GL_DEBUG") != nullptr;
+    return on;
+}
+
 } // namespace scene_renderer
 } // namespace fallout

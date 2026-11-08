@@ -471,10 +471,22 @@ static void mainLoop()
     while (_game_user_wants_to_quit == GAME_QUIT_REQUEST_NONE) {
         sharedFpsLimiter.mark();
 
+        // 157: where the frame's CPU goes. A plain SDL-ticks breakdown of the
+        // main loop's own spans; the render keeps its GL timers.
+        static double inputMs = 0.0;
+        static double worldMs = 0.0;
+        static double presentMs = 0.0;
+        static double frameMs = 0.0;
+        static int loopFrames = 0;
+        static Uint64 windowStart = 0;
+        const Uint64 loopStart = SDL_GetPerformanceCounter();
+
         int keyCode = inputGetInput();
 
         // SFALL: MainLoopHook.
         sfall_gl_scr_process_main();
+
+        const Uint64 inputEnd = SDL_GetPerformanceCounter();
 
         gameHandleKey(keyCode, false);
 
@@ -510,12 +522,31 @@ static void mainLoop()
             _game_user_wants_to_quit = GAME_QUIT_REQUEST_MAIN_MENU;
         }
 
+        const Uint64 worldEnd = SDL_GetPerformanceCounter();
+
         renderFpsCounter();
         renderPresent();
         // 157: the game view paces to the player's [3d] fps_limit; 0 runs the
         // loop at whatever the render costs. The world itself advances by
         // real time, so a faster picture does not speed the game up.
         sharedFpsLimiter.throttle(settings.scene3d.fps_limit);
+
+        const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+        inputMs += static_cast<double>(inputEnd - loopStart) * toMs;
+        worldMs += static_cast<double>(worldEnd - inputEnd) * toMs;
+        const Uint64 now = SDL_GetPerformanceCounter();
+        presentMs += static_cast<double>(now - worldEnd) * toMs;
+        frameMs += static_cast<double>(now - loopStart) * toMs;
+        if (windowStart == 0) windowStart = now;
+        loopFrames++;
+        if (static_cast<double>(now - windowStart) / SDL_GetPerformanceFrequency() >= 2.0) {
+            printf("perf loop input=%.2f world=%.2f present=%.2f frame=%.2f frames=%d\n",
+                inputMs / loopFrames, worldMs / loopFrames, presentMs / loopFrames, frameMs / loopFrames, loopFrames);
+            fflush(stdout);
+            inputMs = worldMs = presentMs = frameMs = 0.0;
+            loopFrames = 0;
+            windowStart = now;
+        }
     }
 
     scriptsDisable();
