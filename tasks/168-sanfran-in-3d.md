@@ -2,7 +2,7 @@
 id: 168
 title: San Francisco and Navarro in 3D, every map stands and looks clean
 milestone: M1
-status: in-progress
+status: done
 owner: glm
 suggested: glm
 priority: normal
@@ -147,3 +147,64 @@ other areas (each has its own task).
   thirtieth in one game process ran past the 30 s step budget; reproduced
   on origin/main's exe, it is a slow capture, not a hang) - main's 194
   already raised the step budget to 120 s, nothing left to fix here.
+- 2026-11-05, glm. Rule 2 (the hull) built, branch task/168-hull-plane,
+  PR pending. Root cause: a hull-sized grouped rest seen only from the fly
+  camera went through rest_card, which puts it on the game-screen plane,
+  so from the docks the tanker's side leaned as a slanted sliver above the
+  pier. The rule, general for every map: a grouped rest seen==3 (fly-only
+  plane) whose art is at least 288 px wide, anchored on a water square,
+  stands as ONE vertical plane on the nearest water line - the exporter
+  BFS-walks the floor.bin 7 water flags from the anchor square to the
+  nearest orthogonal land, and the plane rises from that boundary line
+  (tile units, the -50 centering stays downstream) to the art's height.
+  Exporter-only change (renderer diff is empty); anything not hull-sized
+  or not on water keeps rest_card's plane unchanged (byte-identical
+  proven by the no-water test). sfdock's hull: vertical plane at the
+  water line v=31.00, span 35.4 tiles = the 2028 px art, height 529 px,
+  base on the ground; un-mirrored against the game's own 2D at the same
+  water tile 10694 (dotted plates, dark belts, rust streaks left to
+  right in both). Tooling find: a correct origin/main baseline for an
+  exporter-only change is cheaper as a baseline cache - 106 junctions
+  into a folder that mixes the current exports with the few maps
+  re-exported on a stashed clean tree (md5: only the intended walls.bin
+  differ) - instead of re-exporting 107 scenes on main. Tooling find 2:
+  a one-off dead game process produced four literally pure-black frames
+  (scene_3d_enabled=true in the sidecars) and the tour's check_views
+  raised "every turn is the same picture" - the same exe and cache
+  re-shot the spot with 157 colours, so it was the process, not the
+  branch; the tour resumes with --reuse. Regression: 106/106 spots, 0
+  changed pixels (the C++ diff is empty). ctest 129/129. Full fly tour
+  against the correct baseline: 1 of 241 spots changed - sfdock e0 tile
+  20100 "the docks pier", only the +45 turn, bbox (478,0,867,112), the
+  distant tanker; exactly the designed blast radius. Evidence pairs:
+  runs/168-hull-stands/ (full frames, the magnified hull crop pair, the
+  2D-vs-3D stance comparison). Find 2 from the Log closed.
+- 2026-11-05, glm. Both rules landed: the sea (#303) and the hull
+  (#305). Find 1 closed by #303, find 2 by #305; no other defects on the
+  sweep. The area plays in 3D: 14 scene elevations, walk chain 14/14,
+  hour sweep 8/12/18. Task done.
+
+- 2026-11-06, glm. Error work on the merged rules' codex finds. Find 3
+  (the codex P2 on #305, hull water lookup): fixed on
+  task/168-hull-containing-cell. hull_plane read the water grid at
+  int(round(u)), int(round(v)): a fractional anchor on a boundary picked
+  the neighbouring square's water, and the water[r] lookup ran before the
+  bounds check, so a row-split grid at v=99.75 raises IndexError and
+  aborts the export. Now the containing square decides (math.floor) and
+  the bounds come before any water access; two unit tests (the
+  fractional anchor stands as before, the past-the-edge anchor keeps
+  rest_card's plane) fail against the old code and pass against the
+  new. Exporter-only change; regression 154/154 spots 0 changed px.
+  Find 4 (the codex P2 on #303, the sea past water corners):
+  investigated, NOT fixed, owner:. The finding is real - the edge
+  strips stay perpendicular to their edges and the quadrant beyond a
+  water corner square gets no quad (sfdock e0 has all four corners
+  water-flagged). The attempted fill (the strips' doubling steps, two
+  quads a step) blanks the map on the fly camera: quads 2-16 tiles out
+  erase the map's own screen area (bisect frames in
+  runs/168-codex-finds/), and even one 1x1 quad at the corner renders
+  far larger than its ground footprint, though the depth test is on and
+  the tiles write depth in flight. The extension pass's depth/clip
+  semantics for the fly camera need their own investigation before any
+  quadrant geometry ships; the sea rule's accepted behaviour is
+  unchanged (this branch does not touch floor.cc).

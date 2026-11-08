@@ -1,4 +1,5 @@
 #include "devtools.h"
+#include "owner_shot.h"
 #include "snapshot_rows.h"
 #include "snapshot_palette.h"
 #include "preferences_probe.h"
@@ -43,6 +44,7 @@
 #include "../game.h"
 #include "../game_dialog.h"
 #include "../game_mouse.h"
+#include "../loadsave.h"
 #include "../object.h"
 #include "../preferences.h"
 #include "../mouse.h"
@@ -112,6 +114,15 @@ bool gStartupFloorPreviewAttempted = false;
 int gStartupFloorPreviewReturnAfter = 0;
 int gStartupFloorPreviewFramesRemaining = 0;
 bool gSnapshotOncePending = false;
+bool gLiveSnapshotOncePending = false;
+bool gForceLiveSnapshot = false;
+Uint32 gLiveSnapshotNotBefore = 0;
+bool gSavePreviewFixtureRequested = false;
+bool gSavePreviewFixtureActive = false;
+bool gSavePreviewFixtureCaptured = false;
+bool gSavePreviewFixtureLoadActive = false;
+bool gSavePreviewFixtureLoadCaptured = false;
+bool gExistingSavePreviewFixtureRequested = false;
 int gScrollProbeKey = -1;
 int gScrollProbeStage = 0;
 int gScrollProbeStartTile = -1;
@@ -274,6 +285,7 @@ Rect2 gElevRect;
 Rect2 gPrevRect;
 Rect2 gNextRect;
 Rect2 gGoRect;
+Rect2 gTeleportRect;
 Rect2 gSnapRect;
 int gListRowHeight = 0; // drawn row height (font 101), reused by clicks
 bool gZonesValid = false;
@@ -664,6 +676,142 @@ bool setSceneSettingEnabled(bool enabled)
     return false;
 }
 
+
+// Applies a same-map elevation change: the engine skips dude placement when
+// the transition tile is -1, so the map's entering tile is passed explicitly.
+static bool applyElevationChange(int elevation)
+{
+    if (elevation < 0 || elevation >= ELEVATION_COUNT) {
+        snprintf(gStatus, sizeof(gStatus), uiText("no such elevation: %d"), elevation);
+        return false;
+    }
+    if (!elevationPresent(elevation)) {
+        snprintf(gStatus, sizeof(gStatus), uiText("elevation %d absent on this map"), elevation);
+        return false;
+    }
+
+    // The walk check (183 step 4): the hero must be able to walk from the
+    // landing - a path to the map's entrance, or to a few hexes around it
+    // when the entrance itself stands blocked. The check reads the very
+    // elevation the candidate stands on, so a candidate is tried by standing
+    // the hero there; a candidate that fails is just stepped over.
+    const int entrance = gMapHeader.enteringTile;
+    const bool entranceHere = entrance > 0
+        && gMapHeader.enteringElevation == static_cast<MapElevation>(elevation);
+    auto walksFrom = [entranceHere, entrance, elevation](int tile) {
+        if (entranceHere) {
+            if (_make_path(gDude, tile, entrance, nullptr, 0) > 0) return true;
+            for (int rotation = 0; rotation < 6; rotation++) {
+                const int neighbor = tileGetTileInDirection(entrance, static_cast<Rotation>(rotation), 1);
+                if (neighbor > 0 && _make_path(gDude, tile, neighbor, nullptr, 0) > 0) return true;
+            }
+            return false;
+        }
+        // No entrance on this floor: the hero must still be able to step out
+        // - a path to a free neighbor says the hex is not a rock pocket.
+        for (int rotation = 0; rotation < 6; rotation++) {
+            const int neighbor = tileGetTileInDirection(tile, static_cast<Rotation>(rotation), 1);
+            if (neighbor > 0 && elevationTileFree(neighbor, elevation)
+                && _make_path(gDude, tile, neighbor, nullptr, 0) > 0) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Direct placement, not the engine's map transition: mapHandleTransition
+    // refuses tile-based placement on a vanilla blacklist of maps (the Modoc
+    // bed and breakfast, the Squat A), which is exactly where the small
+    // floors live, so a same-map transition would never move the dude there.
+    auto standOn = [elevation](int tile) {
+        objectSetLocation(gDude, tile, static_cast<MapElevation>(elevation), nullptr);
+        mapSetElevation(static_cast<MapElevation>(elevation));
+    };
+
+    // Bounded: one search pass over rings up to distance 4, every candidate
+    // standing for its own walk check. A map entrance is a fallback when it
+    // passes the same candidate checks.
+    int walked = -1;
+    int tried = 0;
+    const int centerCol = gDude->tile % HEX_GRID_WIDTH;
+    const int centerRow = gDude->tile / HEX_GRID_WIDTH;
+    for (int distance = 0; distance <= 4 && walked == -1; distance++) {
+        for (int rowOffset = -distance; rowOffset <= distance && walked == -1; rowOffset++) {
+            const int row = centerRow + rowOffset;
+            if (row < 0 || row >= HEX_GRID_HEIGHT) {
+                continue;
+            }
+            for (int colOffset = -distance; colOffset <= distance; colOffset++) {
+                const int col = centerCol + colOffset;
+                if (col < 0 || col >= HEX_GRID_WIDTH) {
+                    continue;
+                }
+                const int candidate = row * HEX_GRID_WIDTH + col;
+                if (tileDistanceBetween(gDude->tile, candidate) != distance
+                    || !elevationTileFree(candidate, elevation)) {
+                    continue;
+                }
+                standOn(candidate);
+                tried++;
+                if (walksFrom(candidate)) {
+                    walked = candidate;
+                    break;
+                }
+            }
+        }
+    }
+    if (walked == -1 && entranceHere && elevationTileFree(entrance, elevation)) {
+        standOn(entrance);
+        tried++;
+        if (walksFrom(entrance)) walked = entrance;
+    }
+    if (walked == -1) {
+        // Small upstairs floors (denbus2's second storey) stand nowhere near
+        // the dude or the entrance: take the nearest free tile of the whole
+        // elevation, deterministic first-found minimum, still under the walk
+        // check.
+        int bestDistance = -1;
+        int bestTile = -1;
+        for (int tile = 0; tile < HEX_GRID_WIDTH * HEX_GRID_HEIGHT; tile++) {
+            if (!elevationTileFree(tile, elevation)) {
+                continue;
+            }
+            const int distance = tileDistanceBetween(gDude->tile, tile);
+            if (bestDistance == -1 || distance < bestDistance) {
+                bestDistance = distance;
+                bestTile = tile;
+            }
+        }
+        if (bestTile != -1) {
+            standOn(bestTile);
+            tried++;
+            if (walksFrom(bestTile)) walked = bestTile;
+            else if (!entranceHere) walked = bestTile; // no entrance to walk to: the free check is the whole contract
+        }
+    }
+    if (walked == -1) {
+        // The hero stands where the last candidate left them: snap back to a
+        // standable tile so the old contract (a free tile) still holds, then
+        // refuse.
+        int fallback = findFreeTileOnElevation(gDude->tile, elevation, 4);
+        if (fallback == -1) fallback = findFreeTileOnElevation(gMapHeader.enteringTile, elevation, 4);
+        if (fallback != -1) standOn(fallback);
+        snprintf(gStatus, sizeof(gStatus), uiText("no walkable tile on elevation %d (%d tried)"), elevation, tried);
+        return false;
+    }
+
+    tileSetCenter(gDude->tile, TILE_SET_CENTER_REFRESH_WINDOW);
+    {
+        const int path = entranceHere ? _make_path(gDude, walked, entrance, nullptr, 0) : 0;
+        printf("devtools: elevation %d lands on %d, %d candidates tried, path to entrance %s\n",
+            elevation, walked, tried, entranceHere && path > 0 ? "yes" : entranceHere ? "around" : "no entrance");
+        fflush(stdout);
+    }
+    return true;
+}
+
+} // namespace
+
 // One candidate check shared by the search and fallback. A Grid floor is the
 // engine's blank floor frame; this only rejects blank cells and known blockers,
 // and does not claim to prove path connectivity from the current tile.
@@ -688,6 +836,44 @@ bool elevationTileFree(int tile, int elevation)
         return false;
     }
     return true;
+}
+
+// The free pick with the walk-out check: every candidate must be able to
+// step to a free, path-reachable neighbor, so a rock pocket never wins.
+int findWalkableTileOnElevation(int center, int elevation, int maxDistance)
+{
+    if (!hexGridTileIsValid(center) || !elevationIsValid(elevation) || maxDistance < 0) {
+        return -1;
+    }
+    const int centerCol = center % HEX_GRID_WIDTH;
+    const int centerRow = center / HEX_GRID_WIDTH;
+    for (int distance = 0; distance <= maxDistance; distance++) {
+        for (int rowOffset = -distance; rowOffset <= distance; rowOffset++) {
+            const int row = centerRow + rowOffset;
+            if (row < 0 || row >= HEX_GRID_HEIGHT) {
+                continue;
+            }
+            for (int colOffset = -distance; colOffset <= distance; colOffset++) {
+                const int col = centerCol + colOffset;
+                if (col < 0 || col >= HEX_GRID_WIDTH) {
+                    continue;
+                }
+                const int candidate = row * HEX_GRID_WIDTH + col;
+                if (tileDistanceBetween(center, candidate) != distance
+                    || !elevationTileFree(candidate, elevation)) {
+                    continue;
+                }
+                for (int rotation = 0; rotation < 6; rotation++) {
+                    const int neighbor = tileGetTileInDirection(candidate, static_cast<Rotation>(rotation), 1);
+                    if (neighbor > 0 && elevationTileFree(neighbor, elevation)
+                        && _make_path(gDude, candidate, neighbor, nullptr, 0) > 0) {
+                        return candidate;
+                    }
+                }
+            }
+        }
+    }
+    return -1;
 }
 
 // Checks complete hex-distance rings, bounded to a small square around center.
@@ -723,64 +909,18 @@ int findFreeTileOnElevation(int center, int elevation, int maxDistance)
     return -1;
 }
 
-// Applies a same-map elevation change: the engine skips dude placement when
-// the transition tile is -1, so the map's entering tile is passed explicitly.
-static bool applyElevationChange(int elevation)
-{
-    if (elevation < 0 || elevation >= ELEVATION_COUNT) {
-        snprintf(gStatus, sizeof(gStatus), uiText("no such elevation: %d"), elevation);
-        return false;
-    }
-    if (!elevationPresent(elevation)) {
-        snprintf(gStatus, sizeof(gStatus), uiText("elevation %d absent on this map"), elevation);
-        return false;
-    }
-
-    // Bounded: one search pass over rings up to distance 4. A map entrance is
-    // a last resort only when it passes the exact same candidate checks.
-    int targetTile = findFreeTileOnElevation(gDude->tile, elevation, 4);
-    if (targetTile == -1 && elevationTileFree(gMapHeader.enteringTile, elevation)) {
-        targetTile = gMapHeader.enteringTile;
-    }
-    if (targetTile == -1) {
-        // Small upstairs floors (denbus2's second storey) stand nowhere near
-        // the dude or the entrance: take the nearest free tile of the whole
-        // elevation, deterministic first-found minimum.
-        int bestDistance = -1;
-        for (int tile = 0; tile < HEX_GRID_WIDTH * HEX_GRID_HEIGHT; tile++) {
-            if (!elevationTileFree(tile, elevation)) {
-                continue;
-            }
-            const int distance = tileDistanceBetween(gDude->tile, tile);
-            if (bestDistance == -1 || distance < bestDistance) {
-                bestDistance = distance;
-                targetTile = tile;
-            }
-        }
-    }
-    if (targetTile == -1) {
-        snprintf(gStatus, sizeof(gStatus), uiText("no free tile on elevation %d"), elevation);
-        return false;
-    }
-
-    // Direct placement, not the engine's map transition: mapHandleTransition
-    // refuses tile-based placement on a vanilla blacklist of maps (the Modoc
-    // bed and breakfast, the Squat A), which is exactly where the small
-    // floors live, so a same-map transition would never move the dude there.
-    objectSetLocation(gDude, targetTile, static_cast<MapElevation>(elevation), nullptr);
-    mapSetElevation(static_cast<MapElevation>(elevation));
-    tileSetCenter(gDude->tile, TILE_SET_CENTER_REFRESH_WINDOW);
-    return true;
-}
-
-} // namespace
-
 // --- public API -------------------------------------------------------------
 
 bool parseOption(const char* arg)
 {
     if (strcmp(arg, "--dev-tools") == 0) {
         gEnabled = true;
+        return true;
+    }
+    if (strcmp(arg, "--dev-frame-log") == 0) {
+        // 127: the automated frame-time baselines turn the log on from the
+        // command line, no config edit needed.
+        settings.scene3d.frame_log = true;
         return true;
     }
     if (gEnabled && parseScriptedInputOption(arg)) {
@@ -835,6 +975,19 @@ bool parseOption(const char* arg)
     if (strcmp(arg, "--dev-snapshot-once") == 0
         || strcmp(arg, "--dev-live-snapshot-once") == 0) {
         gSnapshotOncePending = true;
+        return true;
+    }
+    if (strcmp(arg, "--dev-live-snapshot-once") == 0) {
+        gLiveSnapshotOncePending = true;
+        gLiveSnapshotNotBefore = SDL_GetTicks() + 750;
+        return true;
+    }
+    if (strcmp(arg, "--dev-save-preview-fixture") == 0) {
+        gSavePreviewFixtureRequested = true;
+        return true;
+    }
+    if (strcmp(arg, "--dev-existing-save-preview-fixture") == 0) {
+        gExistingSavePreviewFixtureRequested = true;
         return true;
     }
     const char* scrollStepPrefix = "--dev-scroll-step=";
@@ -1556,6 +1709,44 @@ void update()
     // The startup --dev-map travel retries here until the opening movie is
     // over and the transition is accepted (089).
     applyStartupTarget();
+    if (gExistingSavePreviewFixtureRequested && sceneStartupReady() && gDude != nullptr
+        && gMapHeader.name[0] != '\0' && !inBlockingGameState()
+        && (gClassic || (scene::activeView() == scene::View::Full && scene::showsCurrentMap()))) {
+        gExistingSavePreviewFixtureRequested = false;
+        gSavePreviewFixtureLoadActive = true;
+        gSavePreviewFixtureLoadCaptured = false;
+        const int result = lsgLoadGame(LOAD_SAVE_MODE_NORMAL);
+        gSavePreviewFixtureLoadActive = false;
+        printf("EXISTING_SAVE_PREVIEW_FIXTURE %s map=%s load_ui=%d loaded=%d\n",
+            gSavePreviewFixtureLoadCaptured && result == 1 ? "PASS" : "FAIL", gMapHeader.name,
+            gSavePreviewFixtureLoadCaptured ? 1 : 0, result == 1 ? 1 : 0);
+        fflush(stdout);
+        _game_user_wants_to_quit = GAME_QUIT_REQUEST_EXIT;
+        return;
+    }
+    if (gSavePreviewFixtureRequested && sceneStartupReady() && gDude != nullptr
+        && gMapHeader.name[0] != '\0' && !inBlockingGameState()
+        && (gClassic || (scene::activeView() == scene::View::Full && scene::showsCurrentMap()))) {
+        gSavePreviewFixtureRequested = false;
+        gSavePreviewFixtureActive = true;
+        gSavePreviewFixtureCaptured = false;
+        const int result = lsgSaveGame(LOAD_SAVE_MODE_NORMAL);
+        gSavePreviewFixtureActive = false;
+        int loadResult = -1;
+        if (gSavePreviewFixtureCaptured && result == 1) {
+            gSavePreviewFixtureLoadActive = true;
+            gSavePreviewFixtureLoadCaptured = false;
+            loadResult = lsgLoadGame(LOAD_SAVE_MODE_NORMAL);
+            gSavePreviewFixtureLoadActive = false;
+        }
+        printf("SAVE_PREVIEW_FIXTURE %s map=%s mode=%s save_ui=%d load_ui=%d saved=%d loaded=%d\n",
+            gSavePreviewFixtureCaptured && result == 1 && gSavePreviewFixtureLoadCaptured && loadResult == 1 ? "PASS" : "FAIL",
+            gMapHeader.name, gClassic ? "classic" : "3d", gSavePreviewFixtureCaptured ? 1 : 0,
+            gSavePreviewFixtureLoadCaptured ? 1 : 0, result == 1 ? 1 : 0, loadResult == 1 ? 1 : 0);
+        fflush(stdout);
+        _game_user_wants_to_quit = GAME_QUIT_REQUEST_EXIT;
+        return;
+    }
     if (gScrollEdgeDirection >= 0 && gScrollEdgeStage < 2
         && gViewTileApplied && sceneStartupReady() && !inBlockingGameState()) {
         if (gScrollEdgeStage == 0) {
@@ -3092,6 +3283,20 @@ void sceneOverlayPresented()
     uiFixtureScenePresented();
 }
 
+void sceneLiveFrameReady()
+{
+    if (!gLiveSnapshotOncePending || !scene_renderer::isActive() || !scene::shouldPresent()
+        || scene::activeView() != scene::View::Full || gSdlTextureSurface == nullptr
+        || gSdlTextureSurface->pixels == nullptr) return;
+    if (static_cast<Sint32>(SDL_GetTicks() - gLiveSnapshotNotBefore) < 0) return;
+    gLiveSnapshotOncePending = false;
+    gForceLiveSnapshot = true;
+    const bool captured = takeSnapshot();
+    gForceLiveSnapshot = false;
+    printf("devtools: one-shot live frame snapshot %s: %s\n", captured ? "saved" : "failed", gStatus);
+    fflush(stdout);
+}
+
 void sceneOverlaySynced(bool on)
 {
     // --dev-pick-probe: the click took the game out of the scene (a dialog).
@@ -3135,6 +3340,16 @@ void restartInOtherAspect()
 void landFlight()
 {
     stopFlying("fly camera landed: the 3D scene is not shown", false);
+}
+
+// 215: Ctrl+F11 in normal play — take off, or land when already flying.
+void toggleFly()
+{
+    if (gFlying) {
+        stopFlying("fly camera landed", true);
+    } else {
+        startFlying(true);
+    }
 }
 
 void gameReset()
@@ -3210,11 +3425,6 @@ bool handleKey(int key)
         return true;
     }
 
-    if (key == KEY_CTRL_F11) {
-        restartInOtherAspect();
-        return true;
-    }
-
     // F7 duplicates Alt+D: window-message automation (tools/game-input.ps1)
     // posts plain virtual keys and cannot hold the Alt modifier.
     if (key == KEY_ALT_D || key == KEY_F7) {
@@ -3274,6 +3484,26 @@ bool handleKey(int key)
         return true;
     case KEY_TAB:
         return true; // keep TAB (inventory) from leaking while typing
+    case KEY_UPPERCASE_T:
+    case KEY_LOWERCASE_T:
+        // The TP button's twin: teleport to the selected map and elevation,
+        // the filter's digits name the hex when they parse as one.
+        if (!gFiltered.empty()) {
+            int tile = -1;
+            if (gFilter[0] != '\0') {
+                const bool digitsOnly = strspn(gFilter, "0123456789") == strlen(gFilter);
+                if (digitsOnly) {
+                    const int hex = atoi(gFilter);
+                    if (hex >= 0 && hex < HEX_GRID_WIDTH * HEX_GRID_HEIGHT) tile = hex;
+                }
+            }
+            if (!owner_shot::requestTeleport(gMaps[gFiltered[gSelected]].c_str(), gSelectedElevation, tile)) {
+                setStatus("teleport refused (see stdout)");
+            }
+        } else {
+            setStatus("no map selected");
+        }
+        return true;
     case KEY_F9:
         takeSnapshot();
         return true;
@@ -3367,6 +3597,27 @@ bool handleClick(int mouseX, int mouseY)
         return true;
     }
 
+    if (hitTest(gTeleportRect, mouseX, mouseY)) {
+        if (!gFiltered.empty()) {
+            // The filter's digits name the hex; without them the safe pick
+            // decides where on the target the hero lands.
+            int tile = -1;
+            if (gFilter[0] != '\0') {
+                const bool digitsOnly = strspn(gFilter, "0123456789") == strlen(gFilter);
+                if (digitsOnly) {
+                    const int hex = atoi(gFilter);
+                    if (hex >= 0 && hex < HEX_GRID_WIDTH * HEX_GRID_HEIGHT) tile = hex;
+                }
+            }
+            const char* mapName = gMaps[gFiltered[gSelected]].c_str();
+            if (!owner_shot::requestTeleport(mapName, gSelectedElevation, tile)) {
+                setStatus("teleport refused (see stdout)");
+            }
+        } else {
+            setStatus("no map selected");
+        }
+        return true;
+    }
     if (hitTest(gSnapRect, mouseX, mouseY)) {
         takeSnapshot();
         return true;
@@ -3454,14 +3705,16 @@ void draw(unsigned char* surface, int width, int height, int pitch)
     }
     y += lineHeight + 2;
 
-    int bw = (kPanelW - 16) / 4;
+    int bw = (kPanelW - 20) / 5;
     gPrevRect = textButton(kPanelX + 4, y, bw, lineHeight + 2);
     gNextRect = textButton(kPanelX + 4 + bw, y, bw, lineHeight + 2);
     gGoRect = textButton(kPanelX + 4 + 2 * bw, y, bw, lineHeight + 2);
-    gSnapRect = textButton(kPanelX + 4 + 3 * bw, y, bw, lineHeight + 2);
+    gTeleportRect = textButton(kPanelX + 4 + 3 * bw, y, bw, lineHeight + 2);
+    gSnapRect = textButton(kPanelX + 4 + 4 * bw, y, bw, lineHeight + 2);
     fontDrawText(surface + pitch * y + gPrevRect.x + 2, uiText("<prev"), bw - 4, pitch, DT_TEXT_COLOR);
     fontDrawText(surface + pitch * y + gNextRect.x + 2, uiText("next>"), bw - 4, pitch, DT_TEXT_COLOR);
     fontDrawText(surface + pitch * y + gGoRect.x + 2, uiText("GO"), bw - 4, pitch, DT_ACTIVE_COLOR);
+    fontDrawText(surface + pitch * y + gTeleportRect.x + 2, uiText("TP"), bw - 4, pitch, DT_ACTIVE_COLOR);
     fontDrawText(surface + pitch * y + gSnapRect.x + 2, uiText("SNAP"), bw - 4, pitch, DT_TEXT_COLOR);
     y += lineHeight + 2;
 
@@ -3492,7 +3745,7 @@ bool takeSnapshot()
 {
     namespace fs = std::filesystem;
     const bool previewRequested = scene::activeView() != scene::View::Off;
-    const bool preview = scene_renderer::isActive() && scene::shouldPresent();
+    const bool preview = !gForceLiveSnapshot && scene_renderer::isActive() && scene::shouldPresent();
     const bool heroPreview = preview && scene::activeView() == scene::View::Full;
     const bool wallPreview = preview && scene::activeView() == scene::View::Walls;
     const bool withWalls = wallPreview || heroPreview;
@@ -3566,11 +3819,14 @@ bool takeSnapshot()
             imageFile = name;
             if (scene_renderer::isActive()) {
                 // As the window shows it, the same size as scene snapshots.
-                SDL_BlitSurface(gSdlSurface, nullptr, gSdlTextureSurface, nullptr);
                 std::string error;
-                if (!scene_renderer::captureFramePng(imagePath, static_cast<const unsigned char*>(gSdlTextureSurface->pixels),
-                        gSdlTextureSurface->w, gSdlTextureSurface->h, gSdlTextureSurface->pitch,
-                        &capturedWidth, &capturedHeight, &error)) {
+                const bool captured = gForceLiveSnapshot
+                    ? scene_renderer::capturePresentedFramePng(imagePath, &capturedWidth, &capturedHeight, &error)
+                    : (SDL_BlitSurface(gSdlSurface, nullptr, gSdlTextureSurface, nullptr),
+                        scene_renderer::captureFramePng(imagePath, static_cast<const unsigned char*>(gSdlTextureSurface->pixels),
+                            gSdlTextureSurface->w, gSdlTextureSurface->h, gSdlTextureSurface->pitch,
+                            &capturedWidth, &capturedHeight, &error));
+                if (!captured) {
                     std::string message = "snapshot failed: " + error;
                     setStatus(message.c_str());
                     return false;
@@ -3664,13 +3920,31 @@ bool takeSnapshot()
             wallSeeThroughRows, wallSeeThroughAny ? "true" : "false");
     }
     const scene_renderer::MapClip mapClip = scene_renderer::staticMapClip();
+    if (mapEdgeIsLoaded()) {
+        const EdgeElevationData& edgeData = mapEdgeGetElevationData(static_cast<MapElevation>(gElevation));
+        Rect squareRect = {};
+        mapEdgeGetSquareRect(static_cast<MapElevation>(gElevation), &squareRect);
+        printf("MAP_EDGE map=%s elevation=%d zones=%zu square_rect=%d,%d,%d,%d\n",
+            mapName, static_cast<int>(gElevation), edgeData.zones.size(), squareRect.left, squareRect.top,
+            squareRect.right, squareRect.bottom);
+        for (size_t index = 0; index < edgeData.zones.size(); index++) {
+            const EdgeZone& zone = edgeData.zones[index];
+            printf("MAP_EDGE zone=%zu tiles=%d,%d,%d,%d pixels=%d,%d,%d,%d scroll_border=%d,%d,%d,%d\n",
+                index, zone.tileRect.left, zone.tileRect.top, zone.tileRect.right, zone.tileRect.bottom,
+                zone.pixelRect.left, zone.pixelRect.top, zone.pixelRect.right, zone.pixelRect.bottom,
+                zone.scrollBorderRect.left, zone.scrollBorderRect.top, zone.scrollBorderRect.right,
+                zone.scrollBorderRect.bottom);
+        }
+        fflush(stdout);
+    }
     const char* clipSource = mapClip.source == scene_renderer::MapClipSource::Authored ? "authored"
         : mapClip.source == scene_renderer::MapClipSource::Floor ? "floor"
         : mapClip.source == scene_renderer::MapClipSource::FloorGridFallback ? "floor-grid-fallback" : "disabled";
     const char* clipVariant = "off";
     if (scene::cleanEdges()) {
         const char* requested = isEnabled() ? SDL_getenv("F2CE_DEV_CLEAN_EDGES") : nullptr;
-        clipVariant = requested != nullptr && strcmp(requested, "floor") == 0 ? "floor" : "authored";
+        clipVariant = requested != nullptr && strcmp(requested, "floor") == 0 ? "floor"
+            : requested != nullptr && strcmp(requested, "off") == 0 ? "off" : "authored";
     }
     char clipMetadata[768];
     if (mapClip.enabled) {
@@ -3836,6 +4110,26 @@ bool takeSnapshot()
 
     snprintf(gStatus, sizeof(gStatus), uiText("snapshot: %s"), sidecarPath.filename().string().c_str());
     return true;
+}
+
+bool savePreviewFixtureActive()
+{
+    return gSavePreviewFixtureActive;
+}
+
+bool savePreviewFixtureLoadActive()
+{
+    return gSavePreviewFixtureLoadActive;
+}
+
+void savePreviewFixtureComplete(bool captured)
+{
+    gSavePreviewFixtureCaptured = captured;
+}
+
+void savePreviewFixtureLoadComplete(bool captured)
+{
+    gSavePreviewFixtureLoadCaptured = captured;
 }
 
 } // namespace devtools

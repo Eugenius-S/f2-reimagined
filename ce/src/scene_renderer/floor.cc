@@ -8,6 +8,7 @@
 #include "band_span.h"
 #include "gl_api.h"
 #include "scene_internal.h"
+#include "perf.h"
 #include "sprite_card.h"
 #include "sky.h"
 
@@ -30,6 +31,10 @@ unsigned int gFloorVbo = 0;
 MapClip gFloorMapClip;
 MapClip gActiveMapClip;
 std::vector<unsigned char> gFloorOccupancy;
+// A tile-less elevation (171): every square is the nothing tile, the floor
+// grid holds no drawn square. The void is the ground; the game's own
+// walkability decides where the hero steps.
+bool gFloorTileLess = false;
 
 } // namespace
 
@@ -56,6 +61,7 @@ void destroyStaticFloor()
     gFloorMapClip = {};
     gActiveMapClip = {};
     gFloorOccupancy.clear();
+    gFloorTileLess = false;
 }
 
 } // namespace internal
@@ -83,11 +89,14 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
 
     std::vector<unsigned char> sidecar;
     std::vector<unsigned char> png;
-    if (!readBinary(cacheDirectory / "floor.bin", sidecar)) {
-        return fail("floor.bin is missing or unreadable");
-    }
-    if (!readBinary(cacheDirectory / "tiles.png", png)) {
-        return fail("tiles.png is missing or unreadable");
+    {
+        PerfScope stage("floor_read");
+        if (!readBinary(cacheDirectory / "floor.bin", sidecar)) {
+            return fail("floor.bin is missing or unreadable");
+        }
+        if (!readBinary(cacheDirectory / "tiles.png", png)) {
+            return fail("tiles.png is missing or unreadable");
+        }
     }
     constexpr size_t kHeaderSize = 20;
     constexpr size_t kFloorBytes = 100 * 100 * 2;
@@ -132,17 +141,24 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     const size_t waterAt = patchesAt + (version >= 6 ? 2 + patchCount * kPatchEntryBytes : 0);
     constexpr size_t kGridSquares = 100 * 100;
     const size_t expectedSize = waterAt + (version >= 7 ? 3 + kGridSquares : 0);
-    if ((version < 1 || version > 7) || gridWidth != 100 || gridHeight != 100 || tileCount == 0
+    // tileCount 0 is a tile-less elevation (171): the map's squares are all
+    // the nothing tile, the scene draws no tiles and the void carries it.
+    if ((version < 1 || version > 7) || gridWidth != 100 || gridHeight != 100
         || cellSize != 88 || cellMargin != 6 || imageWidth == 0 || imageHeight == 0
         || imageWidth > 8192 || imageHeight > 8192
         || sidecar.size() != expectedSize) {
         return fail("floor.bin version, dimensions, or length is unsupported");
     }
+    gFloorTileLess = tileCount == 0;
 
     std::vector<unsigned char> rgba;
     unsigned pngWidth = 0;
     unsigned pngHeight = 0;
-    const unsigned pngError = lodepng::decode(rgba, pngWidth, pngHeight, png);
+    unsigned pngError = 0;
+    {
+        PerfScope stage("floor_decode");
+        pngError = lodepng::decode(rgba, pngWidth, pngHeight, png);
+    }
     if (pngError != 0) {
         return fail(std::string("tiles.png decode failed: ") + lodepng_error_text(pngError));
     }
@@ -208,6 +224,7 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     std::vector<unsigned char> fringeRgba;
     unsigned fringeWidth = 0, fringeHeight = 0;
     if (fringeCount > 0 || patchCount > 0) {
+        PerfScope stage("floor_fringe");
         std::vector<unsigned char> fringePng;
         if (!readBinary(cacheDirectory / "roof_fringe.png", fringePng)) {
             return fail("roof_fringe.png is missing or unreadable");
@@ -366,7 +383,7 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
         }
         size_t filledCount = queue.size();
         static constexpr int kSteps[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-        for (size_t head = 0; head < queue.size() && filledCount < 6000; head++) {
+        for (size_t head = 0; head < queue.size() && filledCount < kGridSquares; head++) {
             const int r = queue[head].first;
             const int c = queue[head].second;
             for (const auto& step : kSteps) {
@@ -437,13 +454,60 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
                 }
             }
         }
+        // The quadrant past a water corner square (the codex P2 on #303): the
+        // corner's two edge strips leave the region beyond BOTH edges empty,
+        // and from outside the corner the map's own near tiles show through
+        // that gap (the 168 bisect frames' wedge: the map seen past the
+        // corner, not an extension-pass depth failure - the strips drawn over
+        // the tiles there are nearer to a camera below the sea's top). The
+        // strips' doubling schedule swept along both axes fills the quadrant
+        // completely: each axis's intervals cover [0, 2048], and a quad per
+        // interval pair tiles the product without overlap.
+        float seaBounds[26];
+        int seaIntervals = 0;
+        {
+            float from = 0.0f;
+            float step = 1.0f;
+            seaBounds[seaIntervals++] = 0.0f;
+            for (int k = 0; k < 24 && from < 2048.0f; k++) {
+                from += step;
+                seaBounds[seaIntervals++] = from;
+                if (k >= 11) step *= 2.0f;
+            }
+        }
+        for (const int rr : {0, 99}) {
+            for (const int cc : {0, 99}) {
+                const int index = rr * 100 + cc;
+                const bool waterSquare = filled[index] != 0
+                    || (floorOccupancy[index] != 0 && water[index] != 0);
+                if (!waterSquare) continue;
+                // The map's corner point, outward signs per axis.
+                const float cornerX = cc == 0 ? -kHalfMap : kHalfMap;
+                const float cornerZ = rr == 0 ? -kHalfMap : kHalfMap;
+                const float sx = cc == 0 ? -1.0f : 1.0f;
+                const float sz = rr == 0 ? -1.0f : 1.0f;
+                for (int iz = 0; iz + 1 < seaIntervals; iz++) {
+                    const float zA = cornerZ + sz * seaBounds[iz];
+                    const float zB = cornerZ + sz * seaBounds[iz + 1];
+                    for (int ix = 0; ix + 1 < seaIntervals; ix++) {
+                        const float xA = cornerX + sx * seaBounds[ix];
+                        const float xB = cornerX + sx * seaBounds[ix + 1];
+                        seaQuad(std::min(xA, xB), std::min(zA, zB), std::max(xA, xB), std::max(zA, zB));
+                    }
+                }
+            }
+        }
         gFloorExtensionFirst = tilesEnd;
         gFloorExtensionCount = static_cast<int>(vertices.size()) - tilesEnd;
     }
 
     std::string shaderError;
-    if (!createSceneShader(&shaderError)) return fail(shaderError);
+    {
+        PerfScope stage("floor_shader");
+        if (!createSceneShader(&shaderError)) return fail(shaderError);
+    }
 
+    PerfScope stage("floor_upload");
     glGenVertexArrays(1, &gFloorVao);
     glBindVertexArray(gFloorVao);
     glGenBuffers(1, &gFloorVbo);
@@ -496,6 +560,9 @@ MapClip staticFloorMapClip()
 bool staticFloorHasGround(double x, double z)
 {
     if (gFloorOccupancy.size() != 10000) return false;
+    // A tile-less elevation has no drawn square anywhere; the void box is
+    // walkable wherever the game's own data says so (171).
+    if (gFloorTileLess) return true;
     return floorGridContainsWorldPoint(gFloorOccupancy.data(), 100, 100, x, z);
 }
 

@@ -327,3 +327,12 @@ first: a new task only when no open task or batch fits (AGENTS.md, Tasks).
 - 2026-11-04 (-> 199, tier 1 high, alone: builds on 091's launcher) The owner: a proper
   installer with the logo, one-click updates from GitHub, a Russian option
   and a disabled Restoration Project option.
+- 2026-11-08 Audit (the owner: "something from our work got lost"). Found:
+  18 open PRs, 16 drafts with green checks, their tasks back to `todo` on
+  main (-> 221, tier 0, the rescue in value order); glm's task files
+  202-205 on #320 collide with other tasks of those ids (-> 221 renumbers
+  them 222-225); #336 claims 219 with no task file (-> 221); the launcher
+  builds only Klamath in 3D for players (-> 220, claude); the READMEs still
+  say 70% (-> 220, with the launcher fix); merged 183, 203, 208-210 and
+  213-215 were still open on the board (closed); 218 had no header (added).
+  Map coverage checked: the export groups hold all 152 playable maps.
