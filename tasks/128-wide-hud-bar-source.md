@@ -114,3 +114,5 @@ Done: the source and rights review is complete in PR #184. The identified HRP ar
 Next: Part C of task 193 needs newly authored art or a verified authorized source for the wide HUD and 4:3 screens.
 Check: PR #184 is merged; the decision and evidence are recorded above.
 Blocked: the only identified art source has unresolved redistribution rights, and the required new art is not present in the task files or this worktree. Keep the task open until an authorized art source is available.
+
+- 2026-11-08 glm: the step 2 blocker record merged as PR #298.

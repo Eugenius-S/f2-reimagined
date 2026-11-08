@@ -81,3 +81,5 @@ Check: `build/rp-gap-run-3/process.stdout.log`, its seven sidecars under
 `build/rp-gap-run-3/runs/3d6a34a69fd1/shots/dev/2026-11-06/`, the cache
 fingerprint output, Release build, CTest 20/20 and exporter tests 135/135.
 - 2026-11-08 claude: folded into 186; what is left is in its Acceptance.
+
+- 2026-11-08 glm: the scanner rides dev-snapshot -ScanUnimplemented, merged as PR #284. Runtime fire counts still owed; task 186 must not be cut from static references alone.

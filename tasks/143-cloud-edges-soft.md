@@ -107,3 +107,5 @@ cloud-on and cloud-off captures before changing the shader.
 Done: rebased the existing branch on current `origin/main` (`46f69787`). Inspected the valid light-ground comparison: the hard edge from the owner's dark-street screenshot is not present there, and the owner image still has no sidecar or reliable camera/time match. Only the 08:00 light-ground comparison is valid; required 12:00/17:00 and owner-spot evidence is absent. No shader change is justified without reproducing the defect. The task remains incomplete, the claim is released, and PR #208 stays draft.
 Next: resume when the owner's spot can be matched from a sidecar or a reliable camera, zoom and time reconstruction; then collect the required matched cloud/sun evidence.
 Check: prior Release build, CTest, exporter tests and regression-tool tests passed as recorded above. No new runtime attempt was made; the branch only rebases the existing evidence and blocker log.
+
+- 2026-11-08 glm: notes merged as PR #208; still blocked on the owner's exact view (no camera or time sidecar).
