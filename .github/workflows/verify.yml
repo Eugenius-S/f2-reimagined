@@ -108,6 +108,8 @@ jobs:
               --notes "Rolling build of main. Run fallout2-ce-3d-launcher.exe to install it onto your Fallout 2; the launcher makes the 3D scene data from your own game files."
           }
           gh release upload latest fallout2-ce-3d-win64.zip staging/version.txt staging/fallout2-ce-3d-launcher.exe --repo $env:GITHUB_REPOSITORY --clobber
+          # The release page shows the creation date, so the title carries the build day.
+          gh release edit latest --repo $env:GITHUB_REPOSITORY --title "Latest build $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))"
   exporter:
     runs-on: ubuntu-latest
     steps:
