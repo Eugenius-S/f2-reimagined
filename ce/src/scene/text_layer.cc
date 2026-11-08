@@ -77,6 +77,19 @@ std::uint64_t pixelKey(int x, int y)
         | static_cast<std::uint32_t>(x);
 }
 
+bool sameRun(const TextRunInfo& a, const TextRunInfo& b)
+{
+    return a.text == b.text && a.font == b.font && a.sizeRole == b.sizeRole
+        && a.colorAndFlags == b.colorAndFlags && a.colorRole == b.colorRole
+        && a.outlineColor == b.outlineColor && a.hasOutline == b.hasOutline
+        && a.x == b.x && a.y == b.y && a.width == b.width && a.cellWidth == b.cellWidth
+        && a.lineHeight == b.lineHeight && a.verticalAlignmentBoxY == b.verticalAlignmentBoxY
+        && a.verticalAlignmentBoxHeight == b.verticalAlignmentBoxHeight
+        && a.sharpTextOffsetY == b.sharpTextOffsetY && a.sharpRightAlignX == b.sharpRightAlignX
+        && a.sharpEligible == b.sharpEligible && a.characterX == b.characterX
+        && a.characterCellX == b.characterCellX;
+}
+
 bool traceEnabled()
 {
     static const bool enabled = []() {
@@ -660,7 +673,39 @@ void TextLayer::copy(TextBufferId source, TextBufferId destination, bool destina
         if (mask.empty()) recordIt = records_.erase(recordIt);
         else ++recordIt;
     }
-    for (auto& clone : copies) records_.push_back(std::move(clone));
+    for (auto& clone : copies) {
+        // A cursor save-under/restore copies a text run back in pieces. Joining a
+        // piece to the run it came from keeps the count of records (and the
+        // oldest-first trim below) from growing with every mouse move.
+        auto same = std::find_if(records_.begin(), records_.end(), [&clone](const TextRecord& old) {
+            return old.buffer == clone.buffer && old.orphan == clone.orphan
+                && old.ownerWindow == clone.ownerWindow && old.ownerGeneration == clone.ownerGeneration
+                && old.ownerWitnessWindow == clone.ownerWitnessWindow
+                && old.ownerWitnessGeneration == clone.ownerWitnessGeneration
+                && old.ownerOffsetX == clone.ownerOffsetX && old.ownerOffsetY == clone.ownerOffsetY
+                && sameRun(old.run, clone.run);
+        });
+        if (same == records_.end()) {
+            records_.push_back(std::move(clone));
+            continue;
+        }
+        std::unordered_set<std::uint64_t> have;
+        for (const auto& pixel : same->coverage) have.insert(pixelKey(pixel.x, pixel.y));
+        for (const auto& pixel : clone.coverage) {
+            if (have.insert(pixelKey(pixel.x, pixel.y)).second) same->coverage.push_back(pixel);
+        }
+        have.clear();
+        for (const auto& pixel : same->pixels) have.insert(pixelKey(pixel.x, pixel.y));
+        for (const auto& pixel : clone.pixels) {
+            if (have.insert(pixelKey(pixel.x, pixel.y)).second) same->pixels.push_back(pixel);
+        }
+        have.clear();
+        for (const auto& witness : same->ownerWitnesses) have.insert(pixelKey(witness.x, witness.y));
+        for (const auto& witness : clone.ownerWitnesses) {
+            if (have.insert(pixelKey(witness.x, witness.y)).second) same->ownerWitnesses.push_back(witness);
+        }
+        same->bounds = coverageBounds(same->coverage);
+    }
     trim();
 }
 
