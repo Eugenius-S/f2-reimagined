@@ -297,6 +297,32 @@ PerfScope::~PerfScope()
     writeLog(line);
 }
 
+PerfSum::PerfSum(const char* what)
+    : what_(what)
+{
+}
+
+PerfSum::~PerfSum()
+{
+    if (count_ == 0) return;
+    char line[160];
+    std::snprintf(line, sizeof line, "perf load %s ms=%.2f n=%d\n", what_, seconds(total_) * 1000.0, count_);
+    writeLog(line);
+}
+
+void PerfSum::start()
+{
+    started_ = perfEnabled() ? SDL_GetPerformanceCounter() : 0;
+}
+
+void PerfSum::stop()
+{
+    if (started_ == 0) return;
+    total_ += SDL_GetPerformanceCounter() - started_;
+    started_ = 0;
+    count_++;
+}
+
 void perfLoadStart(const char* what)
 {
     if (!perfEnabled()) return;

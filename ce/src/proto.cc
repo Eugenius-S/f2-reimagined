@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include <limits>
+#include <mutex>
 
 #include "art.h"
 #include "character_editor.h"
@@ -197,8 +198,18 @@ void proto_make_path(char* path, const ProtoId& protoId)
     }
 }
 
-// Append proto file name to proto_path from proto.lst.
-//
+// The .lst tables in memory (172): every proto miss re-read and re-walked
+// the type's .lst to find its file name, ~2 ms on top of the .pro read, and
+// the map load's object parse pays hundreds of misses (552 ms of the 560 ms
+// of objects_load on newr1). Each table loads once, in .lst order, with the
+// same space/end-of-line cuts as the old walk, so a miss pays the .pro read
+// alone. The parse warm calls this from worker threads, so the load and the
+// lookups stay behind a mutex.
+static char** _protoListStrCache[OBJ_TYPE_COUNT] = {};
+static const char* _protoListStrCacheNames[OBJ_TYPE_COUNT] = {};
+static int _protoListStrCacheLength[OBJ_TYPE_COUNT] = {};
+static std::mutex _protoListStrCacheMutex;
+
 // 0x49E758 proto_list_str
 int _proto_list_str(const ProtoId& protoId, char* proto_path)
 {
@@ -210,41 +221,73 @@ int _proto_list_str(const ProtoId& protoId, char* proto_path)
         return -1;
     }
 
-    char path[COMPAT_MAX_PATH];
-    proto_make_path(path, protoId);
-    strcat(path, "\\");
-    strcat(path, artGetObjectTypeName(protoId.objectType()));
-    strcat(path, ".lst");
+    const ObjectType type = protoId.objectType();
 
-    File* stream = fileOpen(path, "rt");
+    std::lock_guard<std::mutex> guard(_protoListStrCacheMutex);
 
-    int i = 1;
-    char string[256];
-    while (fileReadString(string, sizeof(string), stream)) {
-        if (i == protoId.protoId()) {
-            break;
+    if (_protoListStrCacheLength[type] == 0) {
+        char path[COMPAT_MAX_PATH];
+        proto_make_path(path, protoId);
+        strcat(path, "\\");
+        strcat(path, artGetObjectTypeName(type));
+        strcat(path, ".lst");
+
+        File* stream = fileOpen(path, "rt");
+        if (stream != nullptr) {
+            int count = 0;
+            int capacity = 256;
+            char** names = (char**)internal_malloc(sizeof(*names) * capacity);
+            char string[256];
+            while (names != nullptr && fileReadString(string, sizeof(string), stream)) {
+                if (count == capacity) {
+                    capacity *= 2;
+                    char** grown = (char**)internal_realloc(names, sizeof(*names) * capacity);
+                    if (grown == nullptr) {
+                        break;
+                    }
+                    names = grown;
+                }
+
+                char* pch = strchr(string, ' ');
+                if (pch != nullptr) {
+                    *pch = '\0';
+                }
+
+                pch = strpbrk(string, "\r\n");
+                if (pch != nullptr) {
+                    *pch = '\0';
+                }
+
+                names[count] = (char*)internal_malloc(strlen(string) + 1);
+                if (names[count] == nullptr) {
+                    break;
+                }
+                strcpy(names[count], string);
+                count++;
+            }
+
+            fileClose(stream);
+
+            if (names != nullptr && count > 0) {
+                _protoListStrCache[type] = names;
+                _protoListStrCacheLength[type] = count;
+            } else if (names != nullptr) {
+                internal_free(names);
+            }
         }
 
-        i++;
+        if (_protoListStrCacheLength[type] == 0) {
+            // No table (a missing or unreadable .lst): behave as before.
+            return -1;
+        }
     }
 
-    fileClose(stream);
-
-    if (i != protoId.protoId()) {
+    int index = protoId.protoId() - 1;
+    if (index < 0 || index >= _protoListStrCacheLength[type]) {
         return -1;
     }
 
-    char* pch = strchr(string, ' ');
-    if (pch != nullptr) {
-        *pch = '\0';
-    }
-
-    pch = strpbrk(string, "\r\n");
-    if (pch != nullptr) {
-        *pch = '\0';
-    }
-
-    strcpy(proto_path, string);
+    strcpy(proto_path, _protoListStrCache[type][index]);
 
     return 0;
 }

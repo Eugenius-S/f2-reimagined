@@ -35,6 +35,26 @@ private:
     unsigned long long started_;
 };
 
+// A span the load repeats (per object, per page): each stop() adds into the
+// total, and going out of scope writes one line, so a section reads as its
+// total and count without the per-span write cost (172's per-object scopes
+// added ~1.1 s by writing 12k lines).
+class PerfSum {
+public:
+    explicit PerfSum(const char* what);
+    ~PerfSum();
+    PerfSum(const PerfSum&) = delete;
+    PerfSum& operator=(const PerfSum&) = delete;
+    void start();
+    void stop();
+
+private:
+    const char* what_;
+    unsigned long long total_ = 0;
+    int count_ = 0;
+    unsigned long long started_ = 0;
+};
+
 // A load chain's wall-clock marks (a map change, task 172): perfLoadStart
 // begins the chain and each perfLoadMark logs the wall time since the chain's
 // start, once per name per chain, so one map change reads as one table:

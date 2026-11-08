@@ -812,11 +812,15 @@ RefreshResult refreshForPresent()
     if (!gCameraGlide) scene_renderer::setStaticCameraCenterTile(-1);
     scene_renderer::setStaticCameraCenterTile(gCenterTile);
     const Uint64 cameraDone = SDL_GetPerformanceCounter();
+    // 172: the chain's split of the first refresh (the between-presents gap).
+    scene_renderer::perfLoadMark("ff_refresh_camera");
     const bool heroUpdated = updateObjectsFromGame();
+    scene_renderer::perfLoadMark("ff_refresh_objects");
     const Uint64 objectsDone = SDL_GetPerformanceCounter();
     updateRoofsFromGame();
     updateLightsFromGame();
     updateSunFromGame();
+    scene_renderer::perfLoadMark("ff_refresh_rest");
     const Uint64 end = SDL_GetPerformanceCounter();
     static int reports = 0;
     if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
