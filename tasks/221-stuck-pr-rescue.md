@@ -17,9 +17,26 @@ reviewed: no
 
 The 2026-11-08 audit found 18 open PRs, 16 of them drafts, most with green
 checks, while their tasks went back to `todo` on main. Finished work sits
-outside main and the owner never gets it. Each PR below ends in one of two
-ways: merged into main, or closed with a one-line reason and a link to what
-replaced it. Nothing stays a draft.
+outside main and the owner never gets it.
+
+## Context
+
+The 2026-11-04 strategy was "merge on green CI", yet the PRs below stayed
+drafts while agents moved on. Some are superseded by later merges (#329
+covers part of #227); #320 and #336 carry board ids that clash with main.
+
+## Acceptance
+
+- Each PR in the list below ends merged into main, or closed with a
+  one-line reason and a link to what replaced it. Nothing stays a draft.
+- Each merged code PR passed ctest and one launch check on the demo copy
+  before the merge; main stays playable after each.
+- Each PR's task carries its real status (done, or todo with what is left).
+
+## Out of scope
+
+New features or polish beyond what a PR already holds; the owner's
+`game/` folder; PRs opened after this task was cut.
 
 ## How, per PR
 
