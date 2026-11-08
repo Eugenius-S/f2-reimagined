@@ -206,14 +206,24 @@ class TargetTests(unittest.TestCase):
             def read(self, key):
                 return b""
 
+        original_fp = export.input_fingerprint
         with TemporaryDirectory() as tmp:
             out = Path(tmp)
             self.assertFalse(scene_current(FakeGf(), out, "m", 0, out))
             provenance = {"map": "m", "elevation": 0, "artifacts_sha256": {"scene.json": "x"},
                           "resources_read": {}, "fingerprint_sha256": "abc"}
+            without_field = dict(provenance)
+            provenance["inputs_sha256"] = "abc"
             (out / "provenance.json").write_text(json.dumps(provenance))
             self.assertFalse(scene_current(FakeGf(), out, "m", 0, out))  # scene.json is missing
             (out / "scene.json").write_text("{}")
+            (out / "provenance.json").write_text(json.dumps(without_field))
+            export.input_fingerprint = lambda *args: ("abc", None, None, None)
+            try:
+                self.assertFalse(scene_current(FakeGf(), out, "m", 0, out))  # no inputs_sha256 field
+            finally:
+                export.input_fingerprint = original_fp
+            (out / "provenance.json").write_text(json.dumps(provenance))
             original = export.input_fingerprint
             try:
                 export.input_fingerprint = lambda *args: ("abc", None, None, None)

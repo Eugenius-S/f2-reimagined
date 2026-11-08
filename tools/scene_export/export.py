@@ -467,21 +467,9 @@ def scene_directory(game_root: Path, map_name: str, elevation: int, cache_root: 
 def input_fingerprint(gf, game_root: Path, map_name: str, elevation: int):
     """What a scene depends on, hashed: (fingerprint hex, adapter_hashes, archives, source_priority).
     The resources are gf._reads, so it is meaningful once the scene was built or its reads replayed."""
-    vendor_files = sorted((HERE / "vendor").rglob("*.py"))
-    vendor_hashes = {p.relative_to(HERE / "vendor").as_posix(): sha256_file(p) for p in vendor_files}
-    adapter_hashes = {name: sha256_file(HERE / name) for name in
-                      ("export.py", "floor_sidecar.py", "roof_fringe.py", "wall_sidecar.py", "projection_sidecar.py", "baked_sidecar.py",
-                       "shadow_sidecar.py", "scene_check.py", "solids.py")}
-    archives = [{"name": name, "path": source.path.relative_to(game_root).as_posix()
-                 if source.path.is_relative_to(game_root) else str(source.path),
-                 "size": source.path.stat().st_size, "sha256": sha256_file(source.path)}
-                for _, name, source in gf.sources if source.archive is not None]
-    source_priority = [
-        {"kind": kind, "name": name,
-         "path": source.path.relative_to(game_root).as_posix()
-         if source.path.is_relative_to(game_root) else str(source.path)}
-        for kind, name, source in gf.sources
-    ]
+    if getattr(gf, "_static_inputs", None) is None:  # scene-independent hashes, computed once per gf
+        gf._static_inputs = static_inputs(gf, game_root)
+    vendor_hashes, adapter_hashes, archives, source_priority = gf._static_inputs
     fingerprint_data = {
         "exporter_version": EXPORTER_VERSION,
         "donor_revision": DONOR_REVISION,
@@ -498,6 +486,30 @@ def input_fingerprint(gf, game_root: Path, map_name: str, elevation: int):
     return fingerprint, adapter_hashes, archives, source_priority
 
 
+def static_inputs(gf, game_root: Path):
+    vendor_files = sorted((HERE / "vendor").rglob("*.py"))
+    vendor_hashes = {p.relative_to(HERE / "vendor").as_posix(): sha256_file(p) for p in vendor_files}
+    adapter_hashes = {name: sha256_file(HERE / name) for name in
+                      ("export.py", "floor_sidecar.py", "roof_fringe.py", "wall_sidecar.py", "projection_sidecar.py", "baked_sidecar.py",
+                       "shadow_sidecar.py", "scene_check.py", "solids.py")}
+    archives = [{"name": name, "path": source.path.relative_to(game_root).as_posix()
+                 if source.path.is_relative_to(game_root) else str(source.path),
+                 "size": source.path.stat().st_size, "sha256": sha256_file(source.path)}
+                for _, name, source in gf.sources if source.archive is not None]
+    source_priority = [
+        {"kind": kind, "name": name,
+         "path": source.path.relative_to(game_root).as_posix()
+         if source.path.is_relative_to(game_root) else str(source.path)}
+        for kind, name, source in gf.sources
+    ]
+    return vendor_hashes, adapter_hashes, archives, source_priority
+
+
+def reset_caches(gf):
+    """Drop gf._cache (parsed lists, protos, the ArtDB and its decoded art) so every read hits gf.read and is recorded."""
+    gf._cache = {}
+
+
 def scene_current(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path) -> bool:
     """True when out_dir holds a finished scene whose inputs (exporter code, the game data it read,
     config, archives) still hash to the fingerprint its provenance recorded."""
@@ -507,10 +519,11 @@ def scene_current(gf, game_root: Path, map_name: str, elevation: int, out_dir: P
             return False
         if not all((out_dir / name).is_file() for name in provenance["artifacts_sha256"]):
             return False
+        reset_caches(gf)
         gf._reads = {}
         for key in provenance["resources_read"]:
             gf.read(key)
-        return input_fingerprint(gf, game_root, map_name, elevation)[0] == provenance["fingerprint_sha256"]
+        return input_fingerprint(gf, game_root, map_name, elevation)[0] == provenance["inputs_sha256"]
     except Exception:
         return False
 
@@ -518,6 +531,7 @@ def scene_current(gf, game_root: Path, map_name: str, elevation: int, out_dir: P
 def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path):
     """One map elevation into its cache directory (scene_directory)."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    reset_caches(gf)
     gf._reads = {}  # provenance lists what this scene read
     builder = SceneBuilder(gf, map_name, elevation)
     builder.export(out_dir)
@@ -593,6 +607,7 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
         "resources_read": gf._reads,
         "artifacts_sha256": artifact_hashes,
     }
+    provenance["inputs_sha256"] = input_fingerprint(gf, game_root, map_name, elevation)[0]  # covers the final resources_read
     (out_dir / "provenance.json").write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"output": str(out_dir), "files": len(artifact_hashes) + 1,
                       "fingerprint_sha256": fingerprint, "resources_read": len(gf._reads)}, sort_keys=True))
