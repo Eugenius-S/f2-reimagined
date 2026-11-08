@@ -377,7 +377,12 @@ void drawSceneOverlayCached()
 {
     if (!gInitialized || gTexture == 0) return;
     glViewport(0, 0, gWindowWidth, gWindowHeight);
+    // Blended like drawSceneOverlay: without it the overlay's transparent map
+    // area overwrote the 3D scene with black on every cache-hit frame.
+    glEnable(kBlend);
+    glBlendFunc(1 /* GL_ONE */, kOneMinusSrcAlpha);
     drawTextureQuad(gTexture, 0, 0, gLogicalWidth, gLogicalHeight);
+    glDisable(kBlend);
     gSceneOverlayReady = true;
 }
 

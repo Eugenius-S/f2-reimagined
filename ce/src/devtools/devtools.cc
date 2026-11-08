@@ -1981,6 +1981,9 @@ static void runCombatFixtureFrame()
 // elevation correction once the requested map has finished loading.
 void update()
 {
+    // 215: Ctrl+F11 flies in normal play too, so the flight ticks without the
+    // dev tools (it did not: the camera froze where it took off).
+    fly();
     if (!gEnabled) {
         return;
     }
@@ -2333,7 +2336,6 @@ void update()
             return;
         }
     }
-    fly();
     // Map scripts set the light by the hour; a dev view holds its own.
     if (gDevAmbient >= 0 && gMapHeader.name[0] != '\0' && lightGetAmbientIntensity() != gDevAmbient) {
         lightSetAmbientIntensity(gDevAmbient, true);
@@ -3840,7 +3842,11 @@ double cloudPhaseRequested()
 bool handleKey(int key)
 {
     if (!gEnabled) {
-        return false;
+        // A flying camera owns the keyboard in normal play too; Ctrl+F11
+        // lands it through the game's own hotkey.
+        if (!gFlying || key == KEY_CTRL_F11) return false;
+        if (key == KEY_ESCAPE) stopFlying("fly camera landed", true);
+        return true;
     }
 
     // Ctrl+T steps the game hour forward, Alt+T backward, the [3d] sun the
