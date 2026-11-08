@@ -55,6 +55,7 @@
 #include "queue.h"
 #include "random.h"
 #include "scripts.h"
+#include "scene/menu_text.h"
 #include "scene/scene_view.h"
 #include "settings.h"
 #include "sfall_arrays.h"
@@ -78,6 +79,8 @@
 #include "win32.h"
 #include "window_manager.h"
 #include "devtools/devtools.h"
+#include "fps_counter.h"
+#include "devtools/owner_shot.h"
 #include "devtools/test_run_state.h"
 #include "worldmap.h"
 
@@ -235,7 +238,10 @@ int gameInitWithOptions(const char* windowTitle, bool isMapper, int font, int fl
     fontManagerAdd(&gModernFontManager);
     fontSetCurrent(font);
 
-    screenshotHandlerConfigure(KEY_F12, gameTakeScreenshot);
+    // The vanilla screenshot key is unbound (213): F12 and Ctrl+F12 belong
+    // to the owner's shot, which saves the metadata next to the PNG. The
+    // handler stays configured for anything that still calls it.
+    screenshotHandlerConfigure(-1, gameTakeScreenshot);
 
     tileDisable();
 
@@ -497,6 +503,9 @@ void gameExit()
 {
     debugPrint("\nGame Exit\n");
 
+    // 127: an open frame-time log gets its summary here.
+    fpsCounterFlushLog();
+
     sfallOnGameModeChange(1, GameMode::getCurrentGameMode());
 
     // SFALL
@@ -554,9 +563,50 @@ void gameExit()
 // 0x442D44
 int gameHandleKey(int eventCode, bool isInCombatMode)
 {
+    static bool fpsCounterToggleKeyHeld = false;
+    if (gPressedPhysicalKeys[SDL_SCANCODE_F8] == 0) fpsCounterToggleKeyHeld = false;
+    if (eventCode == KEY_F8 && gGameLoaded) {
+        if (!fpsCounterToggleKeyHeld) {
+            const auto& descriptors = settingsGetDescriptors();
+            const auto fpsCounter = std::find_if(descriptors.begin(), descriptors.end(), [](const SettingDescriptor& descriptor) {
+                return descriptor.id == "3d.fps_counter";
+            });
+            if (fpsCounter != descriptors.end()) {
+                settingsSetValue(*fpsCounter, SettingValue(!settings.scene3d.fps_counter));
+            }
+            fpsCounterToggleKeyHeld = true;
+        }
+        return 0;
+    }
+
     // Sprite-lighting mod: the dev panel consumes keys while it is open and
     // answers its own hotkeys; the game never sees them.
     if (devtools::handleKey(eventCode)) {
+        return 0;
+    }
+
+    // The build's own hotkeys (215): Ctrl+F10 flips the original/reimagined
+    // view, Ctrl+F11 toggles the 3D fly camera. F12 and Ctrl+F12 belong to
+    // the owner's shot below (the screenshot with the metadata and the
+    // region marks, 213).
+    if (gGameLoaded && (eventCode == KEY_CTRL_F10 || eventCode == KEY_CTRL_F11)) {
+        if (eventCode == KEY_CTRL_F10) {
+            std::string message;
+            if (scene::activeView() == scene::View::Full) {
+                scene::disable();
+            } else {
+                scene::enable(scene::View::Full, &message);
+            }
+        } else {
+            devtools::toggleFly();
+        }
+        return 0;
+    }
+
+    // The owner's feedback shot (183): plain F9 while the dev tools are off.
+    // With them on, the dev snapshot above consumed F9, so the tours and the
+    // panel keep their devshot format.
+    if (owner_shot::handleKey(eventCode)) {
         return 0;
     }
 
@@ -568,7 +618,14 @@ int gameHandleKey(int eventCode, bool isInCombatMode)
 
     // NOTE: Uninline.
     if (gameGetState() == GameState::DialogRequested) {
-        _gdialogSystemEnter();
+        if (devtools::skipScriptDialogRequest()) {
+            gameRequestState(GameState::DialogFinished);
+            gameUpdateState();
+            gameRequestState(GameState::Normal);
+            gameUpdateState();
+        } else {
+            _gdialogSystemEnter();
+        }
     }
 
     if (eventCode == -1) {
@@ -1288,6 +1345,28 @@ void showHelp()
                 colorPaletteLoad("art\\intrface\\helpscrn.pal");
                 paletteSetEntries(_cmap);
 
+                // 215: the build's own hotkeys, listed at the bottom of the
+                // help screen in the game's language.
+                const int oldHelpFont = fontGetCurrent();
+                fontSetCurrent(101);
+                const char* hotkeyLines[] = {
+                    "Ctrl+F10 - original / reimagined view",
+                    "Ctrl+F11 - 3D fly camera",
+                    "F12 - screenshot, Ctrl+F12 - mark a spot",
+                    "F8 - FPS counter",
+                    "F1 - this help",
+                };
+                const int hotkeyLineHeight = fontGetLineHeight() + 2;
+                int hotkeyY = HELP_SCREEN_HEIGHT
+                    - hotkeyLineHeight * static_cast<int>(sizeof(hotkeyLines) / sizeof(hotkeyLines[0])) - 10;
+                for (const char* hotkeyLine : hotkeyLines) {
+                    fontDrawText(windowBuffer + HELP_SCREEN_WIDTH * hotkeyY + 12,
+                        scene::menuText(hotkeyLine, settings.system.language),
+                        HELP_SCREEN_WIDTH - 24, HELP_SCREEN_WIDTH, COLOR_GREEN);
+                    hotkeyY += hotkeyLineHeight;
+                }
+                fontSetCurrent(oldHelpFont);
+
                 // CE: Fill overlay with darkest color in the palette. It might
                 // not be completely black, but at least it's uniform.
                 bufferFill(windowGetBuffer(overlay),
@@ -1536,19 +1615,26 @@ static void showSplash()
         snprintf(path, sizeof(path), "art\\splash\\");
     }
 
-    File* stream;
-    for (int index = 0; index < SPLASH_COUNT; index++) {
-        char filePath[64];
-        snprintf(filePath, sizeof(filePath), "%ssplash%d.rix", path, splash);
-        stream = fileOpen(filePath, "rb");
-        if (stream != nullptr) {
-            break;
-        }
+    File* stream = nullptr;
+    // 216: the localized splash folder is optional - an install without
+    // art\<language>\splash falls back to the stock one instead of showing
+    // no splash at all (a Russian fallout2.cfg hits this).
+    const char* splashPaths[2] = { path, "art\\splash\\" };
+    int splashPathCount = compat_stricmp(language, ENGLISH) != 0 ? 2 : 1;
+    for (int pathIndex = 0; pathIndex < splashPathCount && stream == nullptr; pathIndex++) {
+        for (int index = 0; index < SPLASH_COUNT; index++) {
+            char filePath[64];
+            snprintf(filePath, sizeof(filePath), "%ssplash%d.rix", splashPaths[pathIndex], splash);
+            stream = fileOpen(filePath, "rb");
+            if (stream != nullptr) {
+                break;
+            }
 
-        splash++;
+            splash++;
 
-        if (splash >= SPLASH_COUNT) {
-            splash = 0;
+            if (splash >= SPLASH_COUNT) {
+                splash = 0;
+            }
         }
     }
 

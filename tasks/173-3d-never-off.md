@@ -31,7 +31,14 @@ its art on a fixed plane.
   here first; name each with its map and shot, ordered by how much a player
   sees it, so the remodelling can follow.
 - The owner, 2026-11-04. The world map, dialogs and menus stay 2D; this is
-  about local maps only.
+  about local maps only.- Folded in (2026-11-05, from 169): the upper elevations of some desert
+  and coast encounter maps (desert5 e1, desert6 e1, shots in
+  runs/169-encdesertcoast-in-3d/finds/) export with no floor art and no
+  sprites (walls.bin 24 bytes, tiles.png empty, indoor=true), so the 3D
+  view is black where the game's own picture shows dim content (2D mean
+  46 vs 3D 0.8). The scene ships; the elevation needs its tiles and
+  light built or a plane fallback.
+
 - Find every place the 3D view falls back to 2D or switches itself off on a
   local map: a missing or failed cache, an export error, an unsupported
   object or tile, a feature's "switches itself off if it fails to start"
@@ -59,3 +66,37 @@ its art on a fixed plane.
 The world map, dialogs, menus.
 
 ## Log
+
+- 2026-11-04 audit: `scene_view::syncToMap` gave up after any floor, wall or
+  projection load error, cleared the loaded map, and logged `stays 2D`.
+  Changed this path to retry the floor sidecar and keep its 3D ground plane
+  when walls/projection are missing or invalid. `activeView()` now reports the
+  actually loaded level (`Floor`) so presentation draws the ground-plane view.
+  A missing/invalid floor sidecar still has no ground geometry to show; this
+  remains an unresolved fallback and needs an on-entry cache build or a
+  ground-plane source from the live map. No claim that this case is fixed.
+- Other inspected fallback paths: launcher reports 2D if the exporter is
+  missing or export fails; `loadScene` rejects missing floor/walls/projection;
+  map transition retries per map/elevation; unsupported object cards are
+  skipped when rotation, FRM lock/data/dimensions or renderer insertion fails;
+  missing/hidden hero only skips the hero card; explicit 3D-off setting,
+  menus/dialogs/world map, movies and iso-disabled fades are deliberate gates;
+  OpenGL startup failure uses the vanilla SDL renderer. The object-card and
+  hero skips currently have counters/logs but no replacement for every skip;
+  inventory and representative area walks remain outstanding.
+- 2026-11-04 full regression completed: all 88 references matched (`0 changed
+  pixels`). First combined 16-map runtime tour proved 9 stops in full 3D, then
+  caught the game during map-transition state for 7 remaining snapshots.
+  Independent fresh-game captures for the 8 requested areas all reported
+  `scene_view=full`, `preview_availability=available`, and zero skipped object
+  cards. Two follow-up area-tour attempts failed in the harness: Arroyo stopped
+  at `arvill2` because it is absent from the worldmap registry, and Klamath
+  reached `klacanyn` with 3D available but produced no third snapshot; the
+  helper waited for its fixed count until timeout. Only those test processes
+  were stopped. The attempted tour-readiness code change was reverted. Do not
+  claim scripted area-walk acceptance; next diagnostic should make the helper
+  stop promptly and report the actual route/availability instead of waiting
+  for an impossible snapshot count. The eight independent map captures and
+  full regression remain valid.
+
+- 2026-11-08 glm: the incomplete-map fallback landed as PR #272 (e274f59b): a map whose walls or projection sidecar cannot load keeps its 3D ground plane; activeView() reports the loaded level. Still owed: the missing-floor path (no floor data cannot be replaced) and the scripted tour acceptance.
