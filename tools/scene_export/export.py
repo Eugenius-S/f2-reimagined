@@ -610,7 +610,7 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
     provenance["inputs_sha256"] = input_fingerprint(gf, game_root, map_name, elevation)[0]  # covers the final resources_read
     (out_dir / "provenance.json").write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"output": str(out_dir), "files": len(artifact_hashes) + 1,
-                      "fingerprint_sha256": fingerprint, "resources_read": len(gf._reads)}, sort_keys=True))
+                      "fingerprint_sha256": fingerprint, "resources_read": len(gf._reads)}, sort_keys=True), flush=True)
 
 
 def main(argv=None):
@@ -640,24 +640,27 @@ def main(argv=None):
                     elevations = sorted(MapFile.load(name, gf).tiles)
                 except (OSError, ValueError, SystemExit) as error:
                     failed.append(f"{name}: {error}")
+                    print(f"FAILED {failed[-1]}", file=sys.stderr, flush=True)
                     continue
                 targets.extend((name, elevation, scene_directory(game_root, name, elevation, cache_root))
                                for elevation in elevations)
+            # The launcher counts the scene lines against this one for its progress bar.
+            print(json.dumps({"maps_total": len({name for name, _, _ in targets}), "scenes_total": len(targets)},
+                             sort_keys=True), flush=True)
         for name, elevation, out_dir in targets:
             if not args.maps:
                 export_scene(gf, game_root, name, elevation, out_dir)
                 continue
             try:
                 if not args.force and scene_current(gf, game_root, name, elevation, out_dir):
-                    print(json.dumps({"output": str(out_dir), "current": True}, sort_keys=True))
+                    print(json.dumps({"output": str(out_dir), "current": True}, sort_keys=True), flush=True)
                     continue
                 export_scene(gf, game_root, name, elevation, out_dir)
             except (Exception, SystemExit) as error:  # one bad map must not stop the others
                 failed.append(f"{name} e{elevation}: {error}")
+                print(f"FAILED {failed[-1]}", file=sys.stderr, flush=True)  # at once: the launcher counts it
     finally:
         gf.close()
-    for line in failed:
-        print(f"FAILED {line}", file=sys.stderr)
     return 1 if failed else 0
 
 

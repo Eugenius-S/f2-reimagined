@@ -13,6 +13,8 @@
 #include <thread>
 #include <vector>
 
+#include "launcher_progress.h"
+
 namespace fs = std::filesystem;
 
 std::string findGameRootForUi();
@@ -92,6 +94,7 @@ bool g_installed = false;
 bool g_operationCompleted = false;
 bool g_lastRollback = false;
 int g_progressValue = 0;
+launcher_progress::Tracker g_tracker;
 
 int logVisibleLines()
 {
@@ -359,6 +362,7 @@ void setBusy(bool busy)
     EnableWindow(g_rollback, !busy && g_installed);
     EnableWindow(g_play, !busy && g_installed);
     if (busy) {
+        g_tracker = launcher_progress::Tracker();
         g_progressValue = 2;
         InvalidateRect(g_progress, nullptr, TRUE);
     } else if (g_progressValue < 100) {
@@ -373,9 +377,28 @@ void appendLog(const std::wstring& line)
     SendMessageW(g_log, EM_SETSEL, length, length);
     std::wstring text = line + L"\r\n";
     SendMessageW(g_log, EM_REPLACESEL, FALSE, reinterpret_cast<LPARAM>(text.c_str()));
-    g_progressValue = std::min(95, g_progressValue + 2);
-    InvalidateRect(g_progress, nullptr, TRUE);
     updateLogScroll();
+}
+
+// A worker line moves the bar by the real work it reports (task 232).
+void onWorkerLine(const std::wstring& line)
+{
+    using launcher_progress::MapResult;
+    g_tracker.feed(wideToUtf8(line));
+    if (!g_tracker.hideLine) appendLog(line);
+    if (g_tracker.finishedResult != MapResult::None) {
+        const std::wstring map = utf8ToWide(g_tracker.finishedMap);
+        const bool failed = g_tracker.finishedResult == MapResult::Failed;
+        const bool built = g_tracker.finishedResult == MapResult::Built;
+        appendLog(map + L": " + (failed ? tr(L"3D failed", L"3D не получилось")
+            : built ? tr(L"3D ready", L"3D готово") : tr(L"up to date", L"без изменений")));
+    }
+    if (g_tracker.mapsTotal > 0 && g_tracker.mapsDone < g_tracker.mapsTotal) {
+        setStatus(tr(L"Building 3D: ", L"Строим 3D: ") + std::to_wstring(g_tracker.mapsDone)
+            + tr(L" of ", L" из ") + std::to_wstring(g_tracker.mapsTotal) + tr(L" maps", L" карт"));
+    }
+    g_progressValue = std::max(g_progressValue, g_tracker.value);
+    InvalidateRect(g_progress, nullptr, TRUE);
 }
 
 void updateLabels()
@@ -906,7 +929,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
     }
     case WM_LOG_LINE: {
         std::unique_ptr<std::wstring> line(reinterpret_cast<std::wstring*>(lParam));
-        appendLog(*line);
+        onWorkerLine(*line);
         return 0;
     }
     case WM_OPERATION_DONE: {

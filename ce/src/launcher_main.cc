@@ -400,6 +400,12 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
     if (ok) {
         DWORD available = 0;
         size_t total = 0;
+        DWORD contentLength = 0;
+        DWORD lengthSize = sizeof(contentLength);
+        if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+                WINHTTP_HEADER_NAME_BY_INDEX, &contentLength, &lengthSize, WINHTTP_NO_HEADER_INDEX)) {
+            contentLength = 0;
+        }
         while (WinHttpQueryDataAvailable(request, &available) && available > 0) {
             std::vector<char> chunk(available);
             DWORD read = 0;
@@ -407,7 +413,8 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
             out.write(chunk.data(), read);
             total += read;
             if (total / (1024 * 1024) != (total - read) / (1024 * 1024)) {
-                logf("  ... %zu MB", total / (1024 * 1024));
+                if (contentLength > 0) logf("  ... %zu / %lu MB", total / (1024 * 1024), static_cast<unsigned long>(contentLength / (1024 * 1024)));
+                else logf("  ... %zu MB", total / (1024 * 1024));
             }
         }
         out.close();
@@ -537,13 +544,22 @@ std::string findGameRoot(bool allowPicker)
 // Starts the process and waits for it; false only when it never started.
 // The exit code lands in exitCode: the game may leave by any door, the
 // launcher still reports its own state afterwards.
-bool runTool(const std::wstring& command, const std::wstring& workingDirectory, DWORD* exitCode = nullptr)
+// passOutput: the tool writes to this process's stdout/stderr, so the GUI's log pipe sees it.
+// Never for the game: it would keep the pipe open for as long as it runs.
+bool runTool(const std::wstring& command, const std::wstring& workingDirectory, DWORD* exitCode = nullptr,
+    bool passOutput = false)
 {
     STARTUPINFOW startup = {};
     startup.cb = sizeof(startup);
+    if (passOutput) {
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+        startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+        startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+    }
     PROCESS_INFORMATION process = {};
     std::wstring mutableCommand = command;
-    BOOL created = CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, FALSE, 0, nullptr,
+    BOOL created = CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, passOutput ? TRUE : FALSE, 0, nullptr,
         workingDirectory.c_str(), &startup, &process);
     if (!created) return false;
     CloseHandle(process.hThread);
@@ -1195,7 +1211,7 @@ int runConsole(Options options)
             if (options.forceExport) command += " --force";
             logf("making the 3D scene data for: %s", mapList.c_str());
             if (freshInstall) log("  the first install builds every map: about 20 minutes; later updates take seconds");
-            if (!runTool(utf8ToWide(command), root.wstring())) {
+            if (!runTool(utf8ToWide(command), root.wstring(), nullptr, true)) {
                 log("the exporter failed; the game will start in 2D");
             }
         } else {
