@@ -775,6 +775,29 @@ int main()
             "record cap evicts the oldest record");
     }
 
+    // 237: a cursor save-under and restore moves a text run out and back in
+    // pieces. The pieces rejoin their run: the record count stays at one.
+    {
+        TextLayer layer;
+        std::vector<unsigned char> before(16, 10);
+        std::vector<unsigned char> screen = before;
+        screen[2] = 20;
+        screen[3] = 21;
+        capture(layer, 1, false, before, screen, 8, 2, { 2, 0, 2, 1 }, "AB");
+        for (int pass = 0; pass < 3; pass++) {
+            const TextRect piece = { 2 + pass % 2, 0, 1 + (pass + 1) % 2, 2 };
+            std::vector<unsigned char> save(8, 77);
+            const auto saved = blit(screen, 8, 2, save, 4, 2, piece, 0, 0, false, 0);
+            layer.copy(1, 2, false, piece, 0, 0, false, 0, view(screen, 8, 2, 8), view(save, 4, 2, 4), view(saved, 4, 2, 4));
+            const TextRect whole = { 0, 0, piece.width, 2 };
+            const auto back = blit(saved, 4, 2, screen, 8, 2, whole, piece.x, 0, false, 0);
+            layer.copy(2, 1, false, whole, piece.x, 0, false, 0, view(saved, 4, 2, 4), view(screen, 8, 2, 8), view(back, 8, 2, 8));
+        }
+        const auto onScreen = std::count_if(layer.records().begin(), layer.records().end(),
+            [](const TextRecord& record) { return record.buffer == 1; });
+        failures += !check(onScreen == 1, "restored pieces rejoin the run instead of piling up records");
+    }
+
     if (failures == 0) std::printf("text_layer_tests: all passed\n");
     return failures == 0 ? 0 : 1;
 }

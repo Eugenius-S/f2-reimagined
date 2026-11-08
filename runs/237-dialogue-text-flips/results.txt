@@ -1,0 +1,5 @@
+Probe numbers (temporary probe build, not committed). Dialogue fixture, windowed, scale 2, 3440x1440, sharp_text=1, russian.
+Static dialogue, frames 609-908 (before fix): 9 screen records every frame, 0 empty frames.
+Mouse sweep over the replies, 1500 dialogue frames (before fix): screen records 9 -> 335, all buffers up to 688, about 15 fps late in the run.
+Same sweep (after fix): screen records 9, all buffers 36, 1562 dialogue frames, 0 empty frames.
+Unit test: restored pieces rejoin the run (fails without the fix, passes with it).
