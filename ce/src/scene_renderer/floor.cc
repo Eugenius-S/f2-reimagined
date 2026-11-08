@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <thread>
 
 #include "band_span.h"
 #include "gl_api.h"
@@ -151,6 +152,28 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     }
     gFloorTileLess = tileCount == 0;
 
+    // The fringe PNG decodes off the main path while tiles.png decodes (172):
+    // one worker, private buffers, joined right after the tiles decode so no
+    // early return can outrun it. All error paths keep the inline wording.
+    std::vector<unsigned char> fringeRgba;
+    unsigned fringeWidth = 0, fringeHeight = 0;
+    std::string fringeErrorMessage;
+    const bool fringeNeeded = fringeCount > 0 || patchCount > 0;
+    std::thread fringeThread;
+    if (fringeNeeded) {
+        fringeThread = std::thread([&fringeRgba, &fringeWidth, &fringeHeight, &fringeErrorMessage, &cacheDirectory]() {
+            std::vector<unsigned char> fringePng;
+            if (!readBinary(cacheDirectory / "roof_fringe.png", fringePng)) {
+                fringeErrorMessage = "roof_fringe.png is missing or unreadable";
+                return;
+            }
+            const unsigned fringeError = lodepng::decode(fringeRgba, fringeWidth, fringeHeight, fringePng);
+            if (fringeError != 0) {
+                fringeErrorMessage = std::string("roof_fringe.png decode failed: ") + lodepng_error_text(fringeError);
+            }
+        });
+    }
+
     std::vector<unsigned char> rgba;
     unsigned pngWidth = 0;
     unsigned pngHeight = 0;
@@ -158,6 +181,9 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     {
         PerfScope stage("floor_decode");
         pngError = lodepng::decode(rgba, pngWidth, pngHeight, png);
+    }
+    if (fringeThread.joinable()) {
+        fringeThread.join();
     }
     if (pngError != 0) {
         return fail(std::string("tiles.png decode failed: ") + lodepng_error_text(pngError));
@@ -221,17 +247,10 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     // Every square of an exported run, whether or not clipping leaves a band piece on it: the flat
     // atlas square is never drawn in flight for it (its wall-top art stands as a band or is cut away).
     std::vector<unsigned char> inRun(100 * 100, 0);
-    std::vector<unsigned char> fringeRgba;
-    unsigned fringeWidth = 0, fringeHeight = 0;
-    if (fringeCount > 0 || patchCount > 0) {
+    if (fringeNeeded) {
         PerfScope stage("floor_fringe");
-        std::vector<unsigned char> fringePng;
-        if (!readBinary(cacheDirectory / "roof_fringe.png", fringePng)) {
-            return fail("roof_fringe.png is missing or unreadable");
-        }
-        const unsigned fringeError = lodepng::decode(fringeRgba, fringeWidth, fringeHeight, fringePng);
-        if (fringeError != 0) {
-            return fail(std::string("roof_fringe.png decode failed: ") + lodepng_error_text(fringeError));
+        if (!fringeErrorMessage.empty()) {
+            return fail(fringeErrorMessage);
         }
     }
     for (size_t entry = 0; entry < fringeCount; entry++) {

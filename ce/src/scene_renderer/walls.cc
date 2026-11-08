@@ -4,6 +4,8 @@
 #include <cmath>
 #include <map>
 #include <stdio.h>
+#include <thread>
+#include <unordered_map>
 
 #include <lodepng.h>
 
@@ -286,6 +288,21 @@ bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* e
     std::vector<bool> flyOnlyRows(objectCount, false); // rows a fly-only batch references
     std::vector<unsigned int> rowTotalRefs(objectCount, 0);
     std::vector<unsigned int> rowFlyRefs(objectCount, 0);
+    // One decode per page (172): the batch loop registers them, the workers
+    // below read and decode on private buffers, and the first batch naming
+    // the page takes the bytes. The file reads moved into the workers, so
+    // the stage scope covers read + decode.
+    struct PageDecode {
+        unsigned int page;
+        std::string name;
+        unsigned int width;
+        unsigned int height;
+        std::filesystem::path path;
+        std::vector<unsigned char> rgba;
+        std::string error;
+    };
+    std::vector<PageDecode> pageDecodes;
+    std::unordered_map<unsigned int, size_t> pageDecodeIndex;
     size_t offset = kHeaderSize;
     unsigned long long observedTriangles = 0;
     unsigned long long totalDecodedBytes = 0;
@@ -386,52 +403,107 @@ bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* e
 
         char textureName[32];
         snprintf(textureName, sizeof(textureName), "sprites%u.png", page);
-        const std::filesystem::path texturePath = cacheDirectory / textureName;
-        std::vector<unsigned char> png;
+        pageDecodeIndex.emplace(page, pageDecodes.size());
         {
-            PerfScope stage("walls_read");
-            if (!readBinary(texturePath, png)) {
-                return fail(std::string(textureName) + " is missing, unreadable, or exceeds 64 MB");
-            }
-        }
-        if (png.empty()) {
-            return fail(std::string(textureName) + " is empty");
-        }
-        lodepng::State pngState;
-        unsigned pngWidth = 0;
-        unsigned pngHeight = 0;
-        unsigned pngError = lodepng_inspect(&pngWidth, &pngHeight, &pngState, png.data(), png.size());
-        if (pngError != 0) {
-            return fail(std::string(textureName) + " PNG header is invalid: " + lodepng_error_text(pngError));
-        }
-        if (pngWidth == 0 || pngHeight == 0 || pngWidth > kMaxImageDimension || pngHeight > kMaxImageDimension
-            || pngWidth != width || pngHeight != height) {
-            return fail(std::string(textureName) + " dimensions do not match walls.bin batch");
-        }
-        const unsigned long long decodedBytes = static_cast<unsigned long long>(pngWidth) * pngHeight * 4;
-        totalDecodedBytes += decodedBytes;
-        if (decodedBytes > 256ULL * 1024 * 1024 || totalDecodedBytes > 512ULL * 1024 * 1024) {
-            return fail(std::string(textureName) + " decoded size is too large");
-        }
-        {
-            PerfScope stage("walls_decode");
-            pngError = lodepng::decode(batch.rgba, pngWidth, pngHeight, pngState, png);
-            if (pngError != 0) {
-                return fail(std::string(textureName) + " decode failed: " + lodepng_error_text(pngError));
-            }
-            if (batch.rgba.size() != decodedBytes) {
-                return fail(std::string(textureName) + " decoded byte count is inconsistent");
-            }
-            for (size_t alphaOffset = 3; alphaOffset < batch.rgba.size(); alphaOffset += 4) {
-                // The exporter marks the engine's animated colours 254 (they glow)
-                // or 252 (they only glow: tiles and walls); the shader reads it.
-                const unsigned char alpha = batch.rgba[alphaOffset];
-                if (alpha != 0 && alpha != 255 && alpha < 252) {
-                    return fail(std::string(textureName) + " alpha is not binary cutout data");
-                }
-            }
+            PageDecode& decode = pageDecodes.emplace_back();
+            decode.page = page;
+            decode.name = textureName;
+            decode.width = width;
+            decode.height = height;
+            decode.path = cacheDirectory / textureName;
         }
         batches.push_back(std::move(batch));
+    }
+
+    {
+        PerfScope stage("walls_decode");
+        auto decodePage = [&pageDecodes, kMaxImageDimension](size_t index) {
+            PageDecode& decode = pageDecodes[index];
+            std::vector<unsigned char> png;
+            if (!readBinary(decode.path, png)) {
+                decode.error = decode.name + " is missing, unreadable, or exceeds 64 MB";
+                return;
+            }
+            if (png.empty()) {
+                decode.error = decode.name + " is empty";
+                return;
+            }
+            lodepng::State pngState;
+            unsigned pngWidth = 0;
+            unsigned pngHeight = 0;
+            const unsigned pngError = lodepng_inspect(&pngWidth, &pngHeight, &pngState, png.data(), png.size());
+            if (pngError != 0) {
+                decode.error = decode.name + " PNG header is invalid: " + lodepng_error_text(pngError);
+                return;
+            }
+            if (pngWidth == 0 || pngHeight == 0 || pngWidth > kMaxImageDimension || pngHeight > kMaxImageDimension
+                || pngWidth != decode.width || pngHeight != decode.height) {
+                decode.error = decode.name + " dimensions do not match walls.bin batch";
+                return;
+            }
+            if (static_cast<unsigned long long>(pngWidth) * pngHeight * 4 > 256ULL * 1024 * 1024) {
+                decode.error = decode.name + " decoded size is too large";
+                return;
+            }
+            if (lodepng::decode(decode.rgba, pngWidth, pngHeight, pngState, png) != 0) {
+                decode.error = decode.name + " decode failed: " + lodepng_error_text(pngError);
+                return;
+            }
+            if (decode.rgba.size() != static_cast<unsigned long long>(pngWidth) * pngHeight * 4) {
+                decode.error = decode.name + " decoded byte count is inconsistent";
+                return;
+            }
+            for (size_t alphaOffset = 3; alphaOffset < decode.rgba.size(); alphaOffset += 4) {
+                // The exporter marks the engine's animated colours 254 (they glow)
+                // or 252 (they only glow: tiles and walls); the shader reads it.
+                const unsigned char alpha = decode.rgba[alphaOffset];
+                if (alpha != 0 && alpha != 255 && alpha < 252) {
+                    decode.error = decode.name + " alpha is not binary cutout data";
+                    return;
+                }
+            }
+        };
+
+        unsigned int decodeThreads = std::thread::hardware_concurrency();
+        if (decodeThreads > 4) decodeThreads = 4;
+        if (decodeThreads < 1) decodeThreads = 1;
+        if (decodeThreads <= 1 || pageDecodes.size() <= 1) {
+            for (size_t index = 0; index < pageDecodes.size(); index++) {
+                decodePage(index);
+            }
+        } else {
+            std::vector<std::thread> threads;
+            threads.reserve(pageDecodes.size());
+            for (size_t index = 0; index < pageDecodes.size(); index++) {
+                threads.emplace_back([&decodePage, index]() {
+                    decodePage(index);
+                });
+            }
+            for (auto& thread : threads) {
+                thread.join();
+            }
+        }
+    }
+    for (PageDecode& decode : pageDecodes) {
+        if (!decode.error.empty()) {
+            return fail(decode.error);
+        }
+        // The size caps from the inline path: 256 MB per page held in the
+        // worker, 512 MB per scene checked here.
+        totalDecodedBytes += decode.rgba.size();
+        if (decode.rgba.size() > 0 && totalDecodedBytes > 512ULL * 1024 * 1024) {
+            return fail(decode.name + " decoded size is too large");
+        }
+    }
+    // The first batch naming the page carries its bytes; the page's other
+    // batches draw with its texture (their rgba stays empty, as before).
+    for (WallBatchData& batch : batches) {
+        const auto found = pageDecodeIndex.find(batch.page);
+        if (found == pageDecodeIndex.end()) continue;
+        PageDecode& decode = pageDecodes[found->second];
+        if (!decode.rgba.empty()) {
+            batch.rgba = std::move(decode.rgba);
+        }
     }
     if (sidecar.size() - offset < static_cast<size_t>(objectCount) * kObjectSize) {
         return fail("walls.bin has a truncated object table");

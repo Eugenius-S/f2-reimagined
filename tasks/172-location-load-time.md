@@ -101,3 +101,19 @@ Frame rate in play (157), settings changes (156).
   0 changed px against the before snapshots on all four maps; ctest 20/20.
   newr1 still needs the scene PNG decodes in parallel and the per-object
   script link cost. Evidence: runs/172-location-load-time/phases.md.
+- 2026-11-08, glm. The scene PNG decodes left the serial path. Walls: the
+  batch loop now only registers one decode per page; up to 4 workers read
+  and decode the page PNGs on private buffers (the file reads moved in
+  too), the main thread joins, fails on the first error in file order, and
+  hands the bytes to the first batch naming the page, so texture ownership
+  stays as before and the upload loop is untouched. The walls_decode scope
+  now covers read + decode and reads as the longest page instead of their
+  sum (240 -> 157 ms on newr1; walls total 320 -> 212, scene_total 437 ->
+  330). Floor: roof_fringe.png decodes in one worker while tiles.png
+  decodes on the main path, joined right after so no early return outruns
+  it. First frame: kladwtwn 1793 -> 1710, newr1 2319-2397 -> 2230-2280,
+  vctyctyd 1508 -> 1637 (run noise of the same size as the lever is back;
+  the scene stage itself is down ~90 ms there too), cave0 ~619 -> ~700
+  (same noise). Pixel-identical, 0 changed px on all four maps; ctest
+  23/23. newr1 needs the per-object script link cost and the first-frame
+  chunk next. Evidence: runs/172-location-load-time/phases.md.
