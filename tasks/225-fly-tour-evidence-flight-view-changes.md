@@ -1,5 +1,5 @@
 ---
-id: 205
+id: 225
 title: Fly-tour evidence for flight/turned-view renderer changes, starting with the quadrant sea fill (#320)
 milestone: M1
 status: todo
@@ -19,7 +19,7 @@ Every renderer change that touches the flight/turned views gets the
 main-versus-change fly tour as its acceptance evidence, inspected by
 eye, before the PR asks for a merge. The game-camera still gate cannot
 stand in for this class of change: stills never draw the flight/turned
-passes. First consumer: the quadrant sea fill on #320 (task 202).
+passes. First consumer: the quadrant sea fill on #320 (task 222).
 
 ## Context
 

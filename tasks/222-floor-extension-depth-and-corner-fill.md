@@ -1,5 +1,5 @@
 ---
-id: 202
+id: 222
 title: The floor extension pass: depth semantics on the fly camera, the quadrant sea fill, marker colours
 milestone: M1
 status: doing
@@ -111,7 +111,7 @@ wants them on the sea).
 ### 2026-11-06 glm: the codex P1 on #320 moves to 205
 Codex's P1 on the PR: no main-versus-change fly-tour evidence for the
 fill, and the still gate cannot exercise flight/turned views at all.
-The tour run is cut to task 205 (the tool exists, 078; the run and the
+The tour run is cut to task 225 (the tool exists, 078; the run and the
 standing rule live there). This task's gate re-runs after the earlier
 one died with the session restart.
 
