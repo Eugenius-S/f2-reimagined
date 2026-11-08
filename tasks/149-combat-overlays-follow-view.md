@@ -83,3 +83,5 @@ Done: Added a live unturned zoom-2 Klamath bark capture; the floating text fixtu
 Next: Resume the combat acceptance when task 146's fixture works, or a separate safe combat save becomes available. Keep PR #300 draft.
 Blocked: The combat fixture PR #220 is draft after two startup failures, and the available background save is not in combat. The one turned zoom-2 bark fixture attempt stopped after its initial scene capture; it was not repeated. No combat overlay acceptance is claimed.
 Check: `runs/149-combat-overlays-follow-view/devhero-20261105-153127-000-zoom2-unturned-bark.jpg` and sidecar; #220 is still draft at 3751e138, #300 remains draft.
+
+- 2026-11-08 glm: the fly-camera projection work landed as PR #300 (6e65fccb); what 149 still owes (matched combat captures at zoom 0.5/1/2, turns 0/+30/-30) waits on task 146's fixture.
