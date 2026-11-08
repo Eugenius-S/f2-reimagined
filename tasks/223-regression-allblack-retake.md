@@ -2,7 +2,7 @@
 id: 223
 title: The regression harness retakes an all-black capture instead of diffing it
 milestone: M1
-status: todo
+status: done
 owner: glm
 suggested: glm
 priority: normal
@@ -46,3 +46,7 @@ diff.
 The "No snapshot within 90 s" retry and any other harness behaviour.
 
 ## Log
+
+## Log
+
+- 2026-11-08 glm: done inside PR #320 (the regression gate retook the all-black captures clean, 154/154 twice, 0 changed px).
