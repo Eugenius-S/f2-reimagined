@@ -44,6 +44,7 @@ constexpr unsigned int kArrayBuffer = 0x8892;
 constexpr unsigned int kStaticDraw = 0x88E4;
 constexpr unsigned int kColorBufferBit = 0x4000;
 constexpr unsigned int kBlend = 0x0BE2;
+constexpr unsigned int kScissorTest = 0x0C11;
 constexpr unsigned int kTexture0 = 0x84C0;
 constexpr unsigned int kDepthBufferBit = 0x0100;
 constexpr unsigned int kDepthTest = 0x0B71;
@@ -303,6 +304,10 @@ void roofShadowCasters(unsigned int* vao, int* vertexCount);
 // Binds the egg's mask (unit 1) and sets its rect and the viewport; false when
 // no egg is shown.
 bool bindEgg(int viewportX, int viewportY, int viewportWidth, int viewportHeight);
+// Clips drawing to the rect the last bindEgg set (157: the egg passes redraw
+// every wall, and only the egg's few pixels can show). The caller disables
+// the scissor test after.
+void scissorToEgg();
 // The height cards are cut at where a roof covers them (114): the roof plane,
 // 0 when the map has no roofs. The game's own view hides a room's cards above
 // it behind the roof's picture; bindRoofGrid gives the shader the squares the

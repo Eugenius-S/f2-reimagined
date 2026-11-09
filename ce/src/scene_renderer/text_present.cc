@@ -72,8 +72,6 @@ struct SharpFrameScan {
 // same bytes give the same chunk hashes, copied or recomputed.
 std::vector<unsigned char> gSharpPrevIndices;
 std::vector<unsigned char> gSharpPrevMask;
-std::vector<unsigned char> gSharpCurIndices;
-std::vector<unsigned char> gSharpCurMask;
 std::vector<unsigned long long> gSharpPrevChunkHashes;
 bool gSharpPrevValid = false;
 unsigned char gSharpPrevStaticPalette[229 * 3] = {};
@@ -138,7 +136,7 @@ SharpFrameScan sharpScanFrame(const unsigned char* indices, int width, int heigh
     };
     const int dims[5] = { width, height, indexPitch, physicalWidth, physicalHeight };
     mix(dims, sizeof(dims));
-    gSharpShownMask.assign(static_cast<size_t>(width) * height, 0);
+    gSharpShownMask.resize(static_cast<size_t>(width) * height); // windowShownMask clears it
     gSharpShownMaskValid = false;
     if (!windowShownMask(gIsoWindow, gSharpShownMask.data(), width, height)) {
         // No mask: the overlay would show the whole frame (maskOverlay gives
@@ -207,10 +205,17 @@ SharpFrameScan sharpScanFrame(const unsigned char* indices, int width, int heigh
     scan.dynamicY1 = gSharpDynamicBox[3];
     const int chunkWidth = 8;
     const int chunksPerRow = (width + chunkWidth - 1) / chunkWidth;
-    // The current rows land in scratch; the compares run against what the
-    // previous frame stored, then the scratch becomes the previous.
-    gSharpCurIndices.assign(indices, indices + static_cast<size_t>(indexPitch) * height);
-    gSharpCurMask = gSharpShownMask;
+    // The previous frame's rows are updated in place, chunk by chunk, only
+    // where they differ: an idle frame copies nothing.
+    const size_t indexBytes = static_cast<size_t>(indexPitch) * height;
+    const size_t chunkCount = static_cast<size_t>(chunksPerRow) * height;
+    if (gSharpPrevIndices.size() != indexBytes || gSharpPrevMask.size() != gSharpShownMask.size()
+        || gSharpPrevChunkHashes.size() != chunkCount) {
+        gSharpPrevIndices.assign(indices, indices + indexBytes);
+        gSharpPrevMask = gSharpShownMask;
+        gSharpPrevChunkHashes.assign(chunkCount, 0);
+        gSharpPrevValid = false;
+    }
     // The static palette bytes this key covers; when neither they nor any
     // chunk moved, the key is the previous frame's and the mixing is skipped.
     unsigned char staticPalette[229 * 3] = {};
@@ -220,16 +225,20 @@ SharpFrameScan sharpScanFrame(const unsigned char* indices, int width, int heigh
     const bool paletteSame = gSharpPrevValid
         && std::memcmp(staticPalette, gSharpPrevStaticPalette, sizeof(staticPalette)) == 0;
     bool anyChunkChanged = !gSharpPrevValid || !paletteSame;
-    std::vector<unsigned long long> chunkHashes(static_cast<size_t>(chunksPerRow) * height, 0);
     for (int y = 0; y < height; y++) {
         const unsigned char* index = indices + static_cast<size_t>(y) * indexPitch;
-        const unsigned char* prevIndex = gSharpPrevIndices.empty()
-            ? index
-            : gSharpPrevIndices.data() + static_cast<size_t>(y) * indexPitch;
+        unsigned char* prevIndex = gSharpPrevIndices.data() + static_cast<size_t>(y) * indexPitch;
         const unsigned char* mask = gSharpShownMask.data() + static_cast<size_t>(y) * width;
-        const unsigned char* prevMask = gSharpPrevMask.empty()
-            ? mask
-            : gSharpPrevMask.data() + static_cast<size_t>(y) * width;
+        unsigned char* prevMask = gSharpPrevMask.data() + static_cast<size_t>(y) * width;
+        // A row whose bytes all repeat reuses every chunk hash, as the chunk
+        // branches below would: two row compares instead of a chunk loop.
+        const bool rowExcluded = excludeBox[2] >= excludeBox[0] && y >= excludeBox[1] && y <= excludeBox[3];
+        if (gSharpPrevValid && !rowExcluded && std::memcmp(mask, prevMask, width) == 0
+            && std::memcmp(index, prevIndex, width) == 0) {
+            const unsigned long long* rowHashes = gSharpPrevChunkHashes.data() + static_cast<size_t>(y) * chunksPerRow;
+            for (int chunk = 0; chunk < chunksPerRow; chunk++) hash = hash * 1099511628211ull ^ rowHashes[chunk];
+            continue;
+        }
         for (int chunk = 0; chunk < chunksPerRow; chunk++) {
             const int x0 = chunk * chunkWidth;
             const int count = std::min(chunkWidth, width - x0);
@@ -239,8 +248,9 @@ SharpFrameScan sharpScanFrame(const unsigned char* indices, int width, int heigh
             const bool excluded = excludeBox[2] >= excludeBox[0]
                 && x0 + count > excludeBox[0] && x0 <= excludeBox[2]
                 && y >= excludeBox[1] && y <= excludeBox[3];
-            const bool maskSame = !gSharpPrevValid
-                || std::memcmp(mask + x0, prevMask + x0, count) == 0;
+            const bool maskBytesSame = std::memcmp(mask + x0, prevMask + x0, count) == 0;
+            const bool indexBytesSame = std::memcmp(index + x0, prevIndex + x0, count) == 0;
+            const bool maskSame = !gSharpPrevValid || maskBytesSame;
             bool allHidden = true;
             for (int x = x0; allHidden && x < x0 + count; x++) allHidden = mask[x] == 0;
             if (excluded) {
@@ -252,20 +262,18 @@ SharpFrameScan sharpScanFrame(const unsigned char* indices, int width, int heigh
                 chunkHash = gSharpPrevValid
                     ? gSharpPrevChunkHashes[static_cast<size_t>(y) * chunksPerRow + chunk]
                     : 1469598103934665603ull;
-            } else if (maskSame && gSharpPrevValid
-                && std::memcmp(index + x0, prevIndex + x0, count) == 0) {
+            } else if (maskSame && gSharpPrevValid && indexBytesSame) {
                 chunkHash = gSharpPrevChunkHashes[static_cast<size_t>(y) * chunksPerRow + chunk];
             } else {
                 anyChunkChanged = true;
                 chunkHash = sharpChunkHash(index + x0, mask + x0, count, y, scan);
             }
-            chunkHashes[static_cast<size_t>(y) * chunksPerRow + chunk] = chunkHash;
+            gSharpPrevChunkHashes[static_cast<size_t>(y) * chunksPerRow + chunk] = chunkHash;
+            if (!maskBytesSame) std::memcpy(prevMask + x0, mask + x0, count);
+            if (!indexBytesSame) std::memcpy(prevIndex + x0, index + x0, count);
             hash = hash * 1099511628211ull ^ chunkHash;
         }
     }
-    gSharpPrevChunkHashes.swap(chunkHashes);
-    gSharpPrevIndices.swap(gSharpCurIndices);
-    gSharpPrevMask.swap(gSharpCurMask);
     std::memcpy(gSharpPrevStaticPalette, staticPalette, sizeof(gSharpPrevStaticPalette));
     gSharpPrevValid = true;
     // Nothing shown moved and the static palette is the same: the key is the
@@ -438,8 +446,10 @@ bool prepareSharpTextForPresent(SDL_Surface* indexedSurface, SDL_Surface* rgbaSu
 
     const scene::TextBufferId buffer = textCaptureBufferId(indexedSurface->pixels);
     if (buffer == 0) return false;
+    // The restoration call prunes records whose pixels no longer match.
     scene::textCaptureSharpRestoration(buffer);
-    if (scene::textCaptureSharpRecords(buffer).empty()) {
+    const std::vector<scene::TextRecord> records = scene::textCaptureSharpRecords(buffer);
+    if (records.empty()) {
         prepareSharpTextFrame(nullptr, 0, 0, 0, nullptr, 0, 0, 0, nullptr, 0, false);
         return false;
     }
@@ -469,7 +479,6 @@ bool prepareSharpTextForPresent(SDL_Surface* indexedSurface, SDL_Surface* rgbaSu
     const SharpFrameScan scan = sharpScanFrame(indicesData,
         indexedSurface->w, indexedSurface->h, indexedSurface->pitch,
         physicalWidth, physicalHeight, paletteRgb, paletteEntries);
-    const std::vector<scene::TextRecord> records = scene::textCaptureSharpRecords(buffer);
     const unsigned long long glyphKey = sharpGlyphKey(scan.staticKey, records);
     // The stored keys imply the layers exist at these dims: they are stored
     // only by the full build that left the textures in place.

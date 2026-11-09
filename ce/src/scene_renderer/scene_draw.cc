@@ -332,6 +332,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
         glUniform1i(gSceneEggPassLocation, 2);
         glUniform1f(gSceneCutoffLocation, 0.5f);
         glUniform2f(gSceneRoofClipLocation, 0.0f, 0.0f);
+        scissorToEgg();
         if (wallEgg) {
             glEnable(kCullFace);
             glUniform1i(gSceneSeeThroughLocation, 1);
@@ -358,6 +359,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
                 glDrawArrays(kTriangles, draw.firstVertex, 6);
             }
         }
+        glDisable(kScissorTest);
         glUniform1i(gSceneSeeThroughLocation, 0);
         glUniform1i(gSceneEggPassLocation, 0);
         glDepthMask(1);
