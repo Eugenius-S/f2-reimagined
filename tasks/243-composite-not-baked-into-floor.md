@@ -2,7 +2,7 @@
 id: 243
 title: The exporter stops baking a multi-piece building into the floor; its cards cover the base
 milestone: M1
-status: todo
+status: done
 owner: any
 suggested: claude
 priority: normal
@@ -49,3 +49,4 @@ Per-pixel cast shadows across a building's face.
 ## Log
 
 - 2026-11-09 claude: cut from 241 (the floor-baked base, the controller's option C).
+- 2026-11-09 claude: folded into 224 on the owner's word (one object is not a task of its own); closed here.
