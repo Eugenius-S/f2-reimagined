@@ -387,3 +387,16 @@ map every frame, `F2CE_SHADOW_NO_SKIP=1` runs the full tap loop everywhere.
   glow, clouds, lights, sun) at the given second of the run; the frame it lands
   in is logged as `perf toggle ... frame_ms=`.
 - Measured results of the task: `runs/155-performance/results.md`.
+- Task 157: every frame goes to `logs/devperf.frames.csv` (time, interval, the
+  gap before the frame, the frame's CPU time, all in ms). A frame slower than
+  twice its window's median logs a `perf slow` line with the CPU split of the
+  frame (input, key, scripts, loop, sync, sharp, r_camera, r_walk, r_upload,
+  r_roofs, r_lights, r_sun, pre_draw, draw, glow, overlay, swap; ms each).
+  `F2CE_PERF_SLOW=F` sets the factor; `0` logs every frame. More spans go in
+  with `scene_renderer::perfCpuMark("name")`.
+- `F2CE_NO_CULL=1` draws every object card, also the ones wholly off the view
+  (the before side of task 157's culling).
+- A run under `dev-snapshot.ps1` has its stdout redirected to a file the script
+  polls; a flush there can stall about 30 ms, so a ~32 ms frame that comes
+  with a stdout print (the watchdog state, `perf loop` and the like) is the
+  harness, not the game. A player's game has no such redirection.

@@ -253,6 +253,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
     perfMark("floor");
 
     const bool withObjects = withHero && !gObjectDraws.empty() && gObjectVao != 0;
+    if (withObjects) cullStaticObjectDraws(mvp);
     if (withObjects) {
         // Flat objects lie on the floor in the engine's draw order: later ones
         // paint over earlier ones, and they hide nothing drawn after them.
@@ -262,7 +263,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
         if (roofsDrawn) bindRoofGrid(7);
         glBindVertexArray(gObjectVao);
         for (const ObjectDraw& draw : gObjectDraws) {
-            if (draw.pickOnly || !draw.flat || draw.tint[0] >= 0.0f) continue;
+            if (draw.pickOnly || draw.offView || !draw.flat || draw.tint[0] >= 0.0f) continue;
             lightSprite(draw.tile);
             shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
             glBindTexture(kTexture2D, draw.texture);
@@ -303,7 +304,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
         if (roofsDrawn) bindRoofGrid(7);
         glBindVertexArray(gObjectVao);
         for (const ObjectDraw& draw : gObjectDraws) {
-            if (draw.pickOnly || draw.flat || draw.tint[0] >= 0.0f) continue;
+            if (draw.pickOnly || draw.offView || draw.flat || draw.tint[0] >= 0.0f) continue;
             glUniform1i(gSceneSeeThroughLocation, egg && draw.seeThrough ? 2 : 0);
             lightSprite(draw.tile);
             shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
@@ -355,7 +356,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
             if (roofsDrawn) bindRoofGrid(7);
             glBindVertexArray(gObjectVao);
             for (const ObjectDraw& draw : gObjectDraws) {
-                if (draw.pickOnly || draw.flat || draw.tint[0] >= 0.0f || !draw.seeThrough) continue;
+                if (draw.pickOnly || draw.offView || draw.flat || draw.tint[0] >= 0.0f || !draw.seeThrough) continue;
                 lightSprite(draw.tile);
                 shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX,
                     draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
@@ -380,7 +381,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
         if (roofsDrawn) bindRoofGrid(7);
         glBindVertexArray(gObjectVao);
         for (const ObjectDraw& draw : gObjectDraws) {
-            if (draw.pickOnly || draw.tint[0] < 0.0f) continue;
+            if (draw.pickOnly || draw.offView || draw.tint[0] < 0.0f) continue;
             lightSprite(draw.tile);
             shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
             glUniform3f(gSceneTintLocation, draw.tint[0], draw.tint[1], draw.tint[2]);

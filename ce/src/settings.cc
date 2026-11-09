@@ -518,7 +518,7 @@ void initSettingsRegistry(bool isMapper)
     settingsRegistry.back().descriptor = fpsLimitDescriptor;
     settingsRegistry.back().write = [](bool onlyAdd) {
         if (onlyAdd && settingsKeyExists("3d", "fps_limit")) return;
-        settingsWrite("3d", "fps_limit", onlyAdd ? 60.0 : settings.scene3d.fps_limit);
+        settingsWrite("3d", "fps_limit", onlyAdd ? 0.0 : settings.scene3d.fps_limit);
     };
     registerThreeDBoolean("clean_edges", settings.scene3d.clean_edges, "Clean map edges",
         "Cut the 3D scene to the map boundary, leaving black beyond it.", SettingApplyPolicy::OnClose);

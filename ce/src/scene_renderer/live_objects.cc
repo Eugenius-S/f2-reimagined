@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <map>
 #include <unordered_map>
 
@@ -602,6 +603,26 @@ bool addStaticObjectCached(const void* key, const StaticObjectSnapshot& snapshot
     std::copy(gObjectVertices.end() - 6, gObjectVertices.end(), card.vertices);
     gObjectCardCache[key] = std::move(card);
     return true;
+}
+
+void internal::cullStaticObjectDraws(const float mvp[16])
+{
+    static const bool off = std::getenv("F2CE_NO_CULL") != nullptr; // the before side of a measure
+    for (ObjectDraw& draw : gObjectDraws) {
+        int outside[4] = { 0, 0, 0, 0 }; // x < -w, x > w, y < -w, y > w
+        for (int i = 0; i < 6; i++) {
+            const DepthVertex& v = gObjectVertices[draw.firstVertex + i];
+            const float x = mvp[0] * v.x + mvp[4] * v.y + mvp[8] * v.z + mvp[12];
+            const float y = mvp[1] * v.x + mvp[5] * v.y + mvp[9] * v.z + mvp[13];
+            const float w = mvp[3] * v.x + mvp[7] * v.y + mvp[11] * v.z + mvp[15];
+            if (!(w > 0.0f)) break; // behind the eye: keep the draw
+            outside[0] += x < -w;
+            outside[1] += x > w;
+            outside[2] += y < -w;
+            outside[3] += y > w;
+        }
+        draw.offView = !off && (outside[0] == 6 || outside[1] == 6 || outside[2] == 6 || outside[3] == 6);
+    }
 }
 
 void clearStaticObjects()

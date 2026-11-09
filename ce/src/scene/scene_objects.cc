@@ -24,6 +24,7 @@
 #include "../scene_renderer/static_scene.h"
 #include "scene_settings.h"
 #include "../settings.h"
+#include "../scene_renderer/perf.h"
 #include "../svga.h"
 #include "../tile.h"
 
@@ -546,9 +547,11 @@ bool updateObjectsFromGame()
     ObjectCardPass pass = { directDrawGetPalette(), {}, 0, -1, 0 };
     if (pass.palette != nullptr) objectForEachAtElevation(gElevation, addObjectCard, &pass);
     const Uint64 walked = SDL_GetPerformanceCounter();
+    scene_renderer::perfCpuMark("r_walk");
     scene_renderer::endStaticObjects();
     scene_renderer::endStaticWallSeeThrough();
     const Uint64 ended = SDL_GetPerformanceCounter();
+    scene_renderer::perfCpuMark("r_upload");
     static int reports = 0;
     if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
         const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());

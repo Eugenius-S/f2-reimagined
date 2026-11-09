@@ -77,6 +77,19 @@ std::uint64_t pixelKey(int x, int y)
         | static_cast<std::uint32_t>(x);
 }
 
+struct UnderlyingKey {
+    std::uint64_t pixel;
+    unsigned char after;
+    bool operator==(const UnderlyingKey& other) const { return pixel == other.pixel && after == other.after; }
+};
+
+struct UnderlyingKeyHash {
+    std::size_t operator()(const UnderlyingKey& key) const
+    {
+        return std::hash<std::uint64_t>()(key.pixel * 257 + key.after);
+    }
+};
+
 bool sameRun(const TextRunInfo& a, const TextRunInfo& b)
 {
     return a.text == b.text && a.font == b.font && a.sizeRole == b.sizeRole
@@ -384,6 +397,25 @@ void TextLayer::copy(TextBufferId source, TextBufferId destination, bool destina
         return;
     }
 
+    // 157: what a destination pixel showed under the ink it holds now: the
+    // newest destination record's first pixel at that spot with that ink.
+    // Built once per copy; a scan per glyph pixel cost a floating bark ~15 ms
+    // a frame, since the tile window keeps the bark's last-frame pixels.
+    std::unordered_map<UnderlyingKey, unsigned char, UnderlyingKeyHash> underlyingIndex;
+    bool underlyingBuilt = false;
+    auto destinationUnderlying = [&]() -> const std::unordered_map<UnderlyingKey, unsigned char, UnderlyingKeyHash>& {
+        if (!underlyingBuilt) {
+            underlyingBuilt = true;
+            for (const auto& record : records_) {
+                if (record.buffer != destination) continue;
+                for (auto pixelIt = record.pixels.rbegin(); pixelIt != record.pixels.rend(); ++pixelIt) {
+                    underlyingIndex[{ pixelKey(pixelIt->x, pixelIt->y), pixelIt->after }] = pixelIt->before;
+                }
+            }
+        }
+        return underlyingIndex;
+    };
+
     std::vector<TextRecord> copies;
     for (const auto& sourceRecord : records_) {
         if (sourceRecord.buffer != source) continue;
@@ -601,17 +633,8 @@ void TextLayer::copy(TextBufferId source, TextBufferId destination, bool destina
             unsigned char underlying = pixel.before;
             if (transparent && pixel.before == transparentIndex) {
                 underlying = beforeValue;
-                for (auto recordIt = records_.rbegin(); recordIt != records_.rend(); ++recordIt) {
-                    if (recordIt->buffer != destination) continue;
-                    const auto found = std::find_if(recordIt->pixels.begin(), recordIt->pixels.end(),
-                        [destX, destY, beforeValue](const TextPixelRecord& oldPixel) {
-                            return oldPixel.x == destX && oldPixel.y == destY && oldPixel.after == beforeValue;
-                        });
-                    if (found != recordIt->pixels.end()) {
-                        underlying = found->before;
-                        break;
-                    }
-                }
+                const auto found = destinationUnderlying().find({ pixelKey(destX, destY), beforeValue });
+                if (found != destinationUnderlying().end()) underlying = found->second;
             }
             clone.pixels.push_back({ destX, destY, underlying, afterValue });
         }

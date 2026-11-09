@@ -63,6 +63,9 @@ unsigned gGpuFrames = 0;
 double gCpuSum = 0.0;
 std::vector<double> gWindow; // frame intervals this window, ms
 std::vector<double> gRun; // every frame interval, ms
+std::string gFrameRows; // this window's frames for devperf.frames.csv
+std::string gCpuMarks; // this frame's CPU spans
+Uint64 gCpuMarkLast = 0;
 Uint64 gLoadStart = 0;
 std::vector<const char*> gLoadMarks; // names marked since the chain's start
 
@@ -194,6 +197,11 @@ void flushWindow(double elapsed)
     }
     line += "\n";
     writeLog(line);
+    if (FILE* rows = std::fopen((dev_output::outputDirectory("logs") / "devperf.frames.csv").string().c_str(), "a")) {
+        std::fputs(gFrameRows.c_str(), rows);
+        std::fclose(rows);
+    }
+    gFrameRows.clear();
     gWindow.clear();
     gSpans.clear();
     gGpuSum = 0.0;
@@ -248,9 +256,22 @@ void perfMark(const char* name)
     glQueryCounter(slot.queries[slot.marks], kTimestamp);
 }
 
+void perfCpuMark(const char* name)
+{
+    if (!perfEnabled()) return;
+    const Uint64 now = SDL_GetPerformanceCounter();
+    if (gCpuMarkLast != 0) {
+        char part[64];
+        std::snprintf(part, sizeof part, " %s=%.2f", name, seconds(now - gCpuMarkLast) * 1000.0);
+        gCpuMarks += part;
+    }
+    gCpuMarkLast = now;
+}
+
 void perfEnd()
 {
     if (!gInFrame) return;
+    perfCpuMark("swap");
     gInFrame = false;
     const Uint64 now = SDL_GetPerformanceCounter();
     gCpuSum += seconds(now - gFrameStart) * 1000.0;
@@ -258,6 +279,20 @@ void perfEnd()
         const double interval = seconds(now - gLastEnd) * 1000.0;
         gWindow.push_back(interval);
         gRun.push_back(interval);
+        // One row per frame: the interval, the time outside the draw (game
+        // loop, scene refresh) and the draw submit plus swap, so a spike
+        // reads as its side.
+        char row[96];
+        std::snprintf(row, sizeof row, "%.3f,%.3f,%.3f,%.3f\n", seconds(now - gRunStart), interval,
+            seconds(gFrameStart - gLastEnd) * 1000.0, seconds(now - gFrameStart) * 1000.0);
+        gFrameRows += row;
+        std::vector<double> sorted = gWindow;
+        std::nth_element(sorted.begin(), sorted.begin() + sorted.size() / 2, sorted.end());
+        static const double slowFactor = SDL_getenv("F2CE_PERF_SLOW") != nullptr ? std::atof(SDL_getenv("F2CE_PERF_SLOW")) : 2.0;
+        if (gWindow.size() >= 10 && interval > slowFactor * sorted[sorted.size() / 2]) {
+            writeLog("perf slow t=" + std::to_string(seconds(now - gRunStart)) + " ms=" + std::to_string(interval)
+                + gCpuMarks + "\n");
+        }
         if (!gToggleNote.empty()) {
             // The frame a toggle landed in: its length is the stall.
             char line[160];
@@ -266,6 +301,7 @@ void perfEnd()
             gToggleNote.clear();
         }
     }
+    gCpuMarks.clear();
     gLastEnd = now;
     collect(gSlots[(gCurrent + 1) % kRing]);
     const double sinceWindow = seconds(now - gWindowStart);

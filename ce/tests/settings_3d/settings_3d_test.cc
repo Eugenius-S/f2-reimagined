@@ -246,7 +246,7 @@ int main()
             "FPS counter is registered as a default-off 3D setting with menu text")) return 1;
     const SettingDescriptor* fpsLimit = findDescriptor("3d.fps_limit");
     if (!check(fpsLimit != nullptr && fpsLimit->valueType == SettingValueType::Real
-            && std::get<double>(fpsLimit->defaultValue) == 60.0 && settings.scene3d.fps_limit == 60.0
+            && std::get<double>(fpsLimit->defaultValue) == 0.0 && settings.scene3d.fps_limit == 0.0
             && fpsLimit->applyPolicy == SettingApplyPolicy::OnClose
             && fpsLimit->fallbackLabel == "FPS limit" && !fpsLimit->fallbackDescription.empty()
             && fpsLimit->numericRange.has_value() && fpsLimit->numericRange->minimum == 0.0

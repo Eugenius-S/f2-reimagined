@@ -705,6 +705,7 @@ static void renderPresentBody()
         devtools::sceneOverlaySynced(scene::syncOverlay());
     }
     const Uint64 syncEnd = SDL_GetPerformanceCounter();
+    scene_renderer::perfCpuMark("sync");
     // 127: the player's frame rate readout. It draws after the tile window's
     // own redraw (syncToMap above), which restores every captured text pixel
     // in its region: a readout drawn before that redraw was erased the same
@@ -763,6 +764,7 @@ static void renderPresentBody()
     const Uint64 sharpStart = SDL_GetPerformanceCounter();
     const bool sharpTextReady = scene_renderer::prepareSharpTextForPresent(gSdlSurface, gSdlTextureSurface, uiVisible);
     const Uint64 sharpEnd = SDL_GetPerformanceCounter();
+    scene_renderer::perfCpuMark("sharp");
     // 172: the chain's split of the first present (the between-presents gap).
     scene_renderer::perfLoadMark("ff_sharp_done");
     // A frame without the 3D scene (combat, dialog, ...) lands the fly camera
@@ -807,11 +809,14 @@ static void renderPresentBody()
                 // ran before the scene draw, then the shadow pass and the
                 // ground bake inside it.
                 scene_renderer::perfLoadMark("ff_draw_begin");
+                scene_renderer::perfCpuMark("pre_draw");
                 scene_renderer::drawStaticHeroPreview();
+                scene_renderer::perfCpuMark("draw");
                 scene_renderer::perfMark("scene");
                 scene_renderer::perfLoadMark("first_frame");
                 if (glow) scene_renderer::compositeGlow();
                 scene_renderer::perfMark("glow");
+                scene_renderer::perfCpuMark("glow");
                 // A fly camera shows the world alone.
                 if (scene_renderer::staticFlyCameraActive()) {
                     if (fpsWasDrawn && fpsWidth > 0 && gSdlSurface->format != nullptr
@@ -864,6 +869,7 @@ static void renderPresentBody()
                 // The game's interface, mouse cursor and floating text over it.
                 scene_renderer::drawSceneOverlayWithSharpText(gSdlSurface, gSdlTextureSurface, sharpTextReady);
                 scene_renderer::perfMark("overlay");
+                scene_renderer::perfCpuMark("overlay");
                 // 217: the mark rectangles ride the RGBA overlay pass - the
                 // sharp-text rebuild above drops raw indexed pixels, so the
                 // surface draw alone never reached the screen.
