@@ -46,6 +46,7 @@
 #include "sfall_kb_helpers.h"
 #include "sfall_lists.h"
 #include "sfall_metarules.h"
+#include "sfall_perks.h"
 #include "sfall_script_hooks.h"
 #include "skill.h"
 #include "stat.h"
@@ -2027,15 +2028,40 @@ static void op_charcode(Program* program)
     }
 }
 
-static void op_set_fake_trait(Program* program)
+// set_fake_perk(string name, int level, int image, string desc)
+// set_fake_trait(string name, int active, int image, string desc)
+static void setFakePerk(Program* program, bool trait)
 {
     char* desc = programStackPopString(program);
     int image = programStackPopInteger(program);
-    int active = programStackPopInteger(program);
+    int level = programStackPopInteger(program);
     char* name = programStackPopString(program);
+    sfallFakePerkSet(trait, name, level, image, desc);
+}
 
-    sfallGapNote("opcode", "set_fake_trait", program);
-    programPrintError("set_fake_trait: not implemented!");
+static void op_set_fake_perk(Program* program)
+{
+    setFakePerk(program, false);
+}
+
+static void op_set_fake_trait(Program* program)
+{
+    setFakePerk(program, true);
+}
+
+// has_fake_perk(string name / int extraPerkID): CE has no extra perks, so an
+// ID finds nothing.
+static void op_has_fake_perk(Program* program)
+{
+    ProgramValue value = programStackPopValue(program);
+    const char* name = value.isString() ? programGetString(program, value.opcode, value.integerValue) : nullptr;
+    programStackPushInteger(program, sfallFakePerkHas(false, name));
+}
+
+static void op_has_fake_trait(Program* program)
+{
+    char* name = programStackPopString(program);
+    programStackPushInteger(program, sfallFakePerkHas(true, name));
 }
 
 static void op_show_iface_tag(Program* program)
@@ -2228,6 +2254,29 @@ static void op_fs_find(Program* program)
 {
     char* path = programStackPopString(program);
     programStackPushInteger(program, sfallFileSystemFind(path));
+}
+
+// fs_seek(int id, int pos)
+static void op_fs_seek(Program* program)
+{
+    int position = programStackPopInteger(program);
+    int id = programStackPopInteger(program);
+    sfallFileSystemSeek(id, position);
+}
+
+// fs_read_short(int id)
+static void op_fs_read_short(Program* program)
+{
+    int id = programStackPopInteger(program);
+    programStackPushInteger(program, sfallFileSystemReadShort(id));
+}
+
+// fs_write_short(int id, int data)
+static void op_fs_write_short(Program* program)
+{
+    int value = programStackPopInteger(program);
+    int id = programStackPopInteger(program);
+    sfallFileSystemWriteShort(id, value);
 }
 
 static void op_fs_create(Program* program)
@@ -2533,6 +2582,7 @@ void sfallOpcodesInit()
     interpreterRegisterOpcode(0x81B6, op_set_car_current_town);
 
     // 0x81bb - void set_fake_perk(string name, int level, int image, string desc)
+    interpreterRegisterOpcode(0x81BB, op_set_fake_perk);
     // 0x81bc - void set_fake_trait(string name, int active, int image, string desc)
     interpreterRegisterOpcode(0x81BC, op_set_fake_trait);
     // 0x81bd - void set_selectable_perk(string name, int active, int image, string desc)
@@ -2540,7 +2590,9 @@ void sfallOpcodesInit()
     // 0x81bf - void hide_real_perks()
     // 0x81c0 - void show_real_perks()
     // 0x81c1 - int has_fake_perk(string name/int extraPerkID)
+    interpreterRegisterOpcode(0x81C1, op_has_fake_perk);
     // 0x81c2 - int has_fake_trait(string name)
+    interpreterRegisterOpcode(0x81C2, op_has_fake_trait);
     // 0x81c3 - void perk_add_mode(int type)
     // 0x81c4 - void clear_selectable_perks()
     // 0x8225 - void remove_trait(Trait trait)
@@ -2636,12 +2688,14 @@ void sfallOpcodesInit()
     interpreterRegisterOpcode(0x81f9, op_fs_find);
     // 0x81fa - void  fs_write_byte(int id, int data)
     // 0x81fb - void  fs_write_short(int id, int data)
+    interpreterRegisterOpcode(0x81fb, op_fs_write_short);
     // 0x81fc - void  fs_write_int(int id, int data)
     // 0x81fd - void  fs_write_float(int id, int data)
     // 0x81fe - void  fs_write_string(int id, string data)
     // 0x8208 - void  fs_write_bstring(int id, string data)
     // 0x8209 - int   fs_read_byte(int id)
     // 0x820a - int   fs_read_short(int id)
+    interpreterRegisterOpcode(0x820a, op_fs_read_short);
     // 0x820b - int   fs_read_int(int id)
     // 0x820c - float fs_read_float(int id)
     // 0x81ff - void  fs_delete(int id)
@@ -2649,6 +2703,7 @@ void sfallOpcodesInit()
     // 0x8200 - int   fs_size(int id)
     // 0x8201 - int   fs_pos(int id)
     // 0x8202 - void  fs_seek(int id, int pos)
+    interpreterRegisterOpcode(0x8202, op_fs_seek);
     // 0x8203 - void  fs_resize(int id, int size)
 
     // 0x8204 - int  get_proto_data(int pid, int offset)

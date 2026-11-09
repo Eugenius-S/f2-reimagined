@@ -21,7 +21,27 @@ RPU game; no RP file is committed). Build: this branch on `origin/main`
   -GameRoot` copies it beside the test exe (CE reads `ddraw.ini` next to its
   exe; before this, RP test runs ran without RP's sfall settings).
 
-## The gap list (12 gaps, 1 blocking)
+## After part 2: 7 gaps, 0 blocking
+
+Before: 12 gaps, 1 blocking. Part 2 implements five, following sfall's
+`Modules/Perks.cpp` and `Modules/FileSystem.cpp`:
+
+- `set_fake_perk` (the blocking one), with `set_fake_trait` (was a stub),
+  `has_fake_perk` and `has_fake_trait` (`ce/src/sfall_perks.cc`); kept in
+  `sfallgv.sav` in sfall's record layout. The character screen does not
+  list them yet.
+- `fs_seek`, `fs_read_short`, `fs_write_short`, and with them
+  `UseFileSystemOverride`: `fs_copy` now holds the file's bytes, and an
+  edited file is served to the game from a temp file. On a route the two
+  global scripts run to the end and patch 56 walking FRMs; no `sfall gap`
+  line fires.
+
+Left (none blocks): `set_dude_obj`, `HOOK_SETGLOBALVAR`, `WorldMapSlots`,
+`ExtraSaveSlots`, `FemaleDialogMsgs`, `EnableHeroAppearanceMod`,
+`BoxBarColours`. The static scan now lists only `set_dude_obj` and
+`HOOK_SETGLOBALVAR`.
+
+## The gap list before (12 gaps, 1 blocking)
 
 Count: static references (scripts), then runtime fires on the routes.
 
