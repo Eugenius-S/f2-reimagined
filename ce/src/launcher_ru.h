@@ -66,6 +66,7 @@ inline constexpr Entry kTable[] = {
         "  первая установка строит все карты: около 20 минут; дальше обновления идут секунды" },
     { "the 3D data could not be built; the game will start without 3D", "3D-данные не построились; игра запустится без 3D" },
     { "the 3D scene data is current", "3D-данные сцены актуальны" },
+    { "the game folder holds build %s", "в папке игры сборка %s" },
     { "done (--no-start)", "готово (--no-start)" },
     { "the Russian translation could not be installed (see the lines above)",
         "русификатор не установился (см. строки выше); игра установлена, русификатор попробуем снова при следующей установке" },

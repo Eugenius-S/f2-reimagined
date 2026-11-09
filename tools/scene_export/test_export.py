@@ -20,7 +20,7 @@ from baked_sidecar import (ENTRY as BAKED_ENTRY, GL_MAP_OFFSET, HEADER as BAKED_
                            FIXED_CARD as BAKED_FIXED_CARD, FLY_SKIP as BAKED_FLY_SKIP, PLANE as BAKED_PLANE,
                            baked_objects, decode_baked_sidecar, encode_baked_sidecar)
 import export
-from export import MAP_GROUPS, ReadOnlyGameFiles, check_scenes, choose_source, main, parse_args, patch_paths, scene_current, scene_directory, validate_output_contents
+from export import MAP_GROUPS, ReadOnlyGameFiles, check_scenes, choose_source, main, parse_args, patch_paths, scene_directory, stale_reason, validate_output_contents
 from floor_sidecar import HEADER, MAGIC, VERSION, cell_content_rect, decode_floor_sidecar, encode_floor_sidecar
 from roof_fringe import (boundary_edges, components_of, donor_tiles, inner_edge, cut_to_walls, own_strip, donate, foot_cover, lay_donor, roof_sides, whole_sides, BELT_LAP, BELT_ROWS, EDGE_ROWS, STRIP_ROWS, belt_art, compose_band, is_fringe, outward, resolve_runs, runs_of,
                          split_tile, tidy_cell, unproject_cell, unroll, wall_under, write_fringe_art)
@@ -198,13 +198,14 @@ class TargetTests(unittest.TestCase):
             if name == "bad":
                 raise ValueError("no such map")
             return Fake()
-        def current(_gf, _root, name, _elevation, _out):
-            return name == "b"
+        def stale(_gf, _root, name, _elevation, _out):
+            return None if name == "b" else "no scene yet"
         out, err = StringIO(), StringIO()
-        with TemporaryDirectory() as tmp, mock.patch.object(export, "ReadOnlyGameFiles"),                 mock.patch.object(export.MapFile, "load", side_effect=load),                 mock.patch.object(export, "scene_current", side_effect=current),                 mock.patch.object(export, "export_scene"),                 redirect_stdout(out), redirect_stderr(err):
+        with TemporaryDirectory() as tmp, mock.patch.object(export, "ReadOnlyGameFiles"),                 mock.patch.object(export.MapFile, "load", side_effect=load),                 mock.patch.object(export, "stale_reason", side_effect=stale),                 mock.patch.object(export, "export_scene"),                 redirect_stdout(out), redirect_stderr(err):
             code = main(["--game-root", tmp, "--maps", "a,bad,b"])
-        lines = [json.loads(line) for line in out.getvalue().splitlines()]
+        lines = [json.loads(line) for line in out.getvalue().splitlines() if line.startswith("{")]
         self.assertEqual(lines[0], {"maps_total": 2, "scenes_total": 4})
+        self.assertIn("rebuilding a e0: no scene yet", out.getvalue())
         self.assertEqual([line.get("current") for line in lines[1:]], [True, True])  # map b is up to date
         self.assertIn("FAILED bad: no such map", err.getvalue())
         self.assertEqual(code, 1)
@@ -221,17 +222,20 @@ class TargetTests(unittest.TestCase):
             (cache / "klatrap" / "0").mkdir(parents=True)
             self.assertEqual(check_scenes(Path(tmp), ["newr1a", "klatrap", "nomap"], cache), ["klatrap", "nomap"])
 
-    def test_scene_current_needs_provenance_and_artifacts(self):
+    def test_stale_reason_needs_provenance_and_artifacts(self):
         class FakeGf:
             _reads = {}
 
             def read(self, key):
                 return b""
 
+        def scene_current(*args):
+            return stale_reason(*args) is None
+
         original_fp = export.input_fingerprint
         with TemporaryDirectory() as tmp:
             out = Path(tmp)
-            self.assertFalse(scene_current(FakeGf(), out, "m", 0, out))
+            self.assertEqual(stale_reason(FakeGf(), out, "m", 0, out), "no scene yet")
             provenance = {"map": "m", "elevation": 0, "artifacts_sha256": {"scene.json": "x"},
                           "resources_read": {}, "fingerprint_sha256": "abc"}
             without_field = dict(provenance)
@@ -252,9 +256,65 @@ class TargetTests(unittest.TestCase):
                 self.assertTrue(scene_current(FakeGf(), out, "m", 0, out))
                 self.assertFalse(scene_current(FakeGf(), out, "m", 1, out))  # another elevation
                 export.input_fingerprint = lambda *args: ("changed", None, None, None)
-                self.assertFalse(scene_current(FakeGf(), out, "m", 0, out))
+                self.assertEqual(stale_reason(FakeGf(), out, "m", 0, out), "the exporter changed")
             finally:
                 export.input_fingerprint = original
+
+    def test_a_repeat_export_rebuilds_only_the_maps_whose_inputs_changed(self):
+        # Task 242: the real fingerprint and replay over a real game root; export_scene stands in by
+        # reading its map (b also probes an optional file) and writing the provenance fields it would.
+        built = []
+
+        def fake_export(gf, game_root, name, elevation, out_dir):
+            out_dir.mkdir(parents=True, exist_ok=True)
+            export.reset_caches(gf)
+            gf._reads = {}
+            gf.read(f"maps/{name}.map")
+            if name == "b":
+                gf.exists("art/tiles/extra.frm")
+            (out_dir / "scene.json").write_text("{}")
+            provenance = {"map": name, "elevation": elevation, "artifacts_sha256": {"scene.json": ""},
+                          "resources_read": gf._reads,
+                          "inputs_sha256": export.input_fingerprint(gf, game_root, name, elevation)[0]}
+            (out_dir / "provenance.json").write_text(json.dumps(provenance))
+            built.append(name)
+
+        class OneElevation:
+            tiles = {0: None}
+
+        with TemporaryDirectory() as tmp:
+            game, cache = Path(tmp) / "game", Path(tmp) / "cache"
+            game.mkdir()
+            (game / "fallout2.cfg").write_text("[system]\nmaster_dat=master.dat\ncritter_dat=critter.dat\n")
+            write_dat2({"maps/a.map": b"a", "maps/b.map": b"b"}, game / "master.dat")
+            write_dat2({}, game / "critter.dat")
+
+            def run():
+                built.clear()
+                out = StringIO()
+                with mock.patch.object(export.MapFile, "load", return_value=OneElevation()), \
+                        mock.patch.object(export, "export_scene", side_effect=fake_export), redirect_stdout(out):
+                    self.assertEqual(main(["--game-root", str(game), "--maps", "a,b", "--cache-root", str(cache)]), 0)
+                return out.getvalue()
+
+            self.assertIn("rebuilding a e0: no scene yet", run())
+            self.assertEqual(built, ["a", "b"])
+            run()
+            self.assertEqual(built, [])                                # nothing changed: nothing rebuilt
+            # The game rewrites its config on exit and the launcher adds a mod no scene reads.
+            (game / "fallout2.cfg").write_text("[system]\nmaster_dat=master.dat\ncritter_dat=critter.dat\n"
+                                               "[preferences]\nbrightness=1.2\n")
+            (game / "mods").mkdir()
+            (game / "mods" / "mods_order.txt").write_text("rpu_russian.dat\n")
+            write_dat2({"text/russian/game/misc.msg": b"ru"}, game / "mods" / "rpu_russian.dat")
+            run()
+            self.assertEqual(built, [])
+            write_dat2({"maps/a.map": b"a, patched"}, game / "patch000.dat")  # one map's input changes
+            self.assertIn("rebuilding a e0: game files changed: maps/a.map", run())
+            self.assertEqual(built, ["a"])
+            write_dat2({"art/tiles/extra.frm": b"new"}, game / "patch001.dat")  # the file b looked for turns up
+            self.assertIn("rebuilding b e0: game files changed: art/tiles/extra.frm", run())
+            self.assertEqual(built, ["b"])
 
     def test_each_elevation_has_its_directory(self):
         with TemporaryDirectory() as tmp:
