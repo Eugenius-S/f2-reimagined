@@ -1,5 +1,5 @@
 ---
-id: 242
+id: 243
 title: The exporter stops baking a multi-piece building into the floor; its cards cover the base
 milestone: M1
 status: todo
@@ -38,7 +38,7 @@ like the ground.
 
 - artemple at hours 9, 12 and 16: the temple, stairs and lower domes
   included, is all lit or all shaded; before and after shots in
-  `runs/242-composite-not-baked-into-floor/`.
+  `runs/243-composite-not-baked-into-floor/`.
 - The game's own view stays pixel for pixel (the regression), ctest passes.
 - The caches are re-exported for every map the change touches.
 

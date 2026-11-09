@@ -76,7 +76,7 @@ artemple entrance (inbox, grow the map with pines).
   left out at the taps (TEMPLE04/05 are walls.bin rows). Cards and walls.bin
   rows of the temple now shade as one at 9, 12 and 16. The temple's lower half
   (stairs, lower domes) is not cards: the exporter bakes it into the floor
-  atlas `tiles.png`, so it shades as ground, per pixel. That part goes to 242.
+  atlas `tiles.png`, so it shades as ground, per pixel. That part goes to 243.
   Trees and scrub keep their own verdicts (changed-hour-09.jpg: only the temple
   and the cliff set change; the hero and fires animate).
   Fly tour against main (Klamath, 43 spots): none changed (tour-changed.jpg).
