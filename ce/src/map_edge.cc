@@ -21,6 +21,7 @@ constexpr int kTileWidth = 32;
 constexpr int kTileHeight = 24;
 static EdgeElevationData edgeData[ELEVATION_COUNT];
 static bool edgeDataLoaded = false;
+static unsigned edgeDataSerial = 0;
 static bool mapperMode = false;
 static bool edgeVersion2 = false;
 static EdgeZone* currentEdgeZone = nullptr;
@@ -286,6 +287,7 @@ void mapEdgeLoad(const char* mapName)
 
     if (ok) {
         edgeDataLoaded = true;
+        edgeDataSerial++;
         debugPrint("mapEdgeLoad: loaded %s\n", edgPath);
     } else {
         debugPrint("mapEdgeLoad: failed to parse %s\n", edgPath);
@@ -378,6 +380,7 @@ void mapEdgeFree()
         data = EdgeElevationData {};
     }
     edgeDataLoaded = false;
+    edgeDataSerial++;
     currentEdgeZone = nullptr;
     currentTileXAlignment = 0;
     currentTileYAlignment = 0;
@@ -389,6 +392,11 @@ void mapEdgeFree()
 bool mapEdgeIsLoaded()
 {
     return edgeDataLoaded;
+}
+
+unsigned mapEdgeSerial()
+{
+    return edgeDataSerial;
 }
 
 void mapEdgeSetMapperMode(bool enabled)
