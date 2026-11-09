@@ -708,6 +708,21 @@ bool copyLauncher(const fs::path& source, const fs::path& target)
     return !error;
 }
 
+// The wide menu, death and loading art ships as folders next to the exe.
+void copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& destination)
+{
+    fs::path source = stage / name;
+    if (!fs::is_directory(source)) {
+        logf("  %s: not in the package, skipped", name);
+        return;
+    }
+    std::error_code error;
+    fs::create_directories(destination / name, error);
+    fs::copy(source, destination / name,
+        fs::copy_options::recursive | fs::copy_options::overwrite_existing, error);
+    logf("  %s: %s", name, error ? error.message().c_str() : "installed");
+}
+
 const std::vector<std::string>& buildFiles()
 {
     static const std::vector<std::string> names = {kGameExe, "ce.dat", kExporterExe, kVersionTxt, kRootLauncher};
@@ -1348,7 +1363,9 @@ int runConsole(Options options)
 
     bool freshInstall = !installedGamePresent;
     bool updated = false;
-    if (!remoteVersion.empty() && remoteVersion != installedVersion) {
+    // An older launcher installed the build without the wide art folders: pull once more for them.
+    bool wideArtMissing = !fs::exists(root / "user-assets/fullscreen-20261028/wallpapers-selected/hires/menu");
+    if (!remoteVersion.empty() && (remoteVersion != installedVersion || wideArtMissing)) {
         // --- download and unpack ---
         if (installedVersion.empty()) logf("installing: none -> %s", remoteVersion.c_str());
         else logf("updating: %s -> %s", installedVersion.c_str(), remoteVersion.c_str());
@@ -1396,6 +1413,9 @@ int runConsole(Options options)
         } else {
             logf("  %s: copy failed", kRootLauncher);
         }
+        copyTreeIfPresent(stage, "user-assets", root);
+        copyTreeIfPresent(stage, "data/art/splash", root);
+        copyTreeIfPresent(stage, "data/art/russian/splash", root);
         if (fs::exists(root / kCfg)) {
             log("  fallout2.cfg: kept (the player's file is never overwritten)");
         } else {
