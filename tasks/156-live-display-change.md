@@ -243,3 +243,38 @@ This run used the static wall-and-hero 3D preview (`gameState=0`), so it does no
 Two consecutive new attempts then failed. Multi-step run #7 saved the requested config but stopped after interface repositioning, before the tile-center/window refresh and the fifth frame (4/11 captures). Diagnostic run #8 stopped after screen-buffer exchange and before the iso-window exchange (4/5 captures). The trace stops at different stages, so the failure is intermittent and not yet isolated. Logs and before/after sidecars are retained in `runs/156-live-display-change/live-attempt6/`, `live-attempt7/` and `live-attempt8/`.
 
 Per the two-consecutive-failure limit, stop runtime retries here. PR #227 remains draft and the task remains `doing`; do not claim acceptance. Continue the ordered queue with task 127.
+
+### 2026-11-10 glm: state of the task and the one-device audit
+
+What already applies live on main and no longer needs this task: window
+mode (#329, applyWindowModeLive at the panel close), sharp text (its
+descriptor is OnClose), and every 3D row the acceptance names except two -
+shadows, glow, clouds, lights, fps limit, map clip all apply on close;
+the settings_3d suite gates them. The "Requires restart" note remains on
+exactly two descriptors: scale_factor and resolution_mode (the only
+SettingApplyPolicy::Restart registrations left in settings.cc).
+
+One presentation device: audited the lifetime on main. The GL context is
+created once at startup (_GNW95_init_mode_ex -> scene_renderer::init) and
+never leaves. handleWindowSizeChanged on the healthy path only refreshes
+the mouse mapping; destroyRenderer (with scene_renderer::shutdown) runs
+only when the GL init failed and the SDL fallback is in charge, and
+movieHandleRendererReset only frees the movie overlay texture. So on a
+normal install nothing recreates the presentation device during play, and
+the NVIDIA overlay toast suspect (the 2026-11-04 note) does not exist on
+the GL path. No code change made.
+
+The remaining slice is the live resolution+scale transaction. The
+2356-line table-exchange branch (PR #227, closed) failed twice at
+different stages of the same transaction; the intermittent stop was never
+diagnosed. My recommendation for the return to this task: do not resume
+that branch. Re-enter at the preferences close with a rebuild that reuses
+the engine's own init paths instead of exchanging buffers live -
+directDrawInit already supports re-init with palette preservation, the GL
+side needs its logical size re-set plus a new gSdlTextureSurface, and the
+GNW window layer should be torn down and re-created through
+interfaceInit/map window init rather than repositioned in place (the
+acceptance explicitly allows "live from the options screen with the map
+window re-created on return"). Owner question recorded here rather than
+asked live: whether the under-a-second budget tolerates a brief black
+frame on the switch.
