@@ -91,12 +91,14 @@ mouse exists there).
    scaled dotted ring lands next to the true ring the cursor pass draws.
    Fix: scene_overlay.cc drawOutline skips gGameMouseHexCursor and
    gGameMouseBouncingCursor - their outline belongs to the cursor pass.
-2. Black box: _mouse_blit_trans was null, so mouseShowCursor composited
-   the shape over the freshly composed under-buffer and opaque-blitted the
-   whole rect; at the map's top edge that under-buffer is palette black and
-   the maskOverlay rule keeps those world pixels opaque. Fix: a real
-   transparent blit _GNW95_ShowRectTrans (svga.cc), assigned to
-   _mouse_blit_trans; the screenshot path in input.cc keeps nulling it.
+2. Black box: the sharp-text cache's cursor patch (patchCyclingRegion,
+   text_present.cc) indexed its mask loop from column 0 instead of the
+   box's left column: it masked a strip at the screen's left edge and left
+   the box's own see-through pixels opaque palette black. Fix: the row
+   pointer starts at x0. Proven by the box vanishing with
+   --dev-sharp-text=0 or F2CE_NO_SHARP_CACHE=1; the earlier
+   _mouse_blit_trans transparent-blit experiment was reverted from the
+   tree (the composite was not the culprit).
 3. Stale mark: over the 3D view the rectangles already ride the RGBA
    overlay; the raw indexed painting only ever reached pixels nothing
    refreshes. Fix: owner_shot.cc draw() takes the overlay path in the 3D
