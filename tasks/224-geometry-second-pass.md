@@ -22,6 +22,7 @@ missing, an edge gap), and fix each find or hand it to its batch.
 
 ## Context
 
+- Folded in from 243 (2026-11-09, owner: one object is not a task of its own): the artemple entrance base (stairs, dome bottoms) is baked into the floor and shades as ground while the building cards above take one shade (241). Look for the same on every multi-piece building in the pass; the exporter should leave such a base to the cards. Details in `tasks/243-composite-building-not-baked-into-floor.md`.
 - The owner's ask (2026-11-06): a second geometry pass, hunting flaws
   and fixing them.
 - Earlier sweeps each covered one slice: 075 the shapes algorithm, 129
