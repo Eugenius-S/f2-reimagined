@@ -2,7 +2,7 @@
 id: 172
 title: A location loads in 2 s from a warm cache
 milestone: M1
-status: doing
+status: done
 owner: glm
 suggested: any
 priority: high
@@ -10,7 +10,7 @@ tier: 2
 claude-only: no
 user-check: no
 depends-on: [127]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -163,3 +163,11 @@ Frame rate in play (157), settings changes (156).
   ~150 ms map_objects -> map_elevation gap, art_preload ~390 ms, the
   first-refresh object-card atlas ~57 ms. Evidence:
   runs/172-location-load-time/phases.md.
+- 2026-11-09, glm. Close-out: the pending pixel regression ran on merged
+  main 79ee16efe (every 172 PR included: #315, #357, #362, #364, #370):
+  a fresh Release build, ctest 24/24, the exporter and regression unit
+  tests green (145 + 12), and the full 154-spot regression passed with 0
+  changed pixels everywhere. Warm-cache first frame holds at 1306 /
+  1668 / 1242 / 597 ms on kladwtwn / newr1 / vctyctyd / cave0 (the
+  dev-shot overhead included). Main has since taken the owner's #384
+  with its own gates; this task's acceptance is met. Done.
