@@ -74,6 +74,7 @@ std::uint64_t gCleanEdgesRevision = static_cast<std::uint64_t>(-1);
 std::string gClipMap;
 int gClipElevation = -1;
 bool gClipBottomExtended = false;
+unsigned gClipEdgeSerial = 0;
 std::string gClipFailureMap;
 int gClipFailureElevation = -1;
 std::uint64_t gClipFailureRevision = static_cast<std::uint64_t>(-1);
@@ -213,7 +214,8 @@ void updateMapClip()
     const bool extendBottom = cleanEdges() && tileSceneOverlayActive() && mapEdgeIsLoaded()
         && mapEdgeTilePastBottomStop(gCenterTile);
     if (gClipMap == gLoadedMap && gClipElevation == gLoadedElevation
-        && gCleanEdgesRevision == revision && gClipBottomExtended == extendBottom) return;
+        && gCleanEdgesRevision == revision && gClipBottomExtended == extendBottom
+        && gClipEdgeSerial == mapEdgeSerial()) return;
     scene_renderer::MapClip clip;
     if (cleanEdges()) {
         const char* requested = devtools::isEnabled() ? SDL_getenv("F2CE_DEV_CLEAN_EDGES") : nullptr;
@@ -246,6 +248,7 @@ void updateMapClip()
     gClipMap = gLoadedMap;
     gClipElevation = gLoadedElevation;
     gClipBottomExtended = extendBottom;
+    gClipEdgeSerial = mapEdgeSerial();
     gCleanEdgesRevision = revision;
 }
 
