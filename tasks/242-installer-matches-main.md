@@ -2,7 +2,7 @@
 id: 242
 title: The installer gives a player exactly the current main, wide art included, and rebuilds only changed maps
 milestone: M1
-status: todo
+status: done
 owner: claude
 suggested: claude
 priority: high
@@ -61,3 +61,4 @@ New art; the Russian translations list (227); the RP option (186).
 
 - 2026-11-09 claude: cut from the owner's order; the 128 find and the panel choice folded in.
 - 2026-11-09 claude: wide menu, death and loading art ship in the release (PR 380, 9a08d6386): fixed release `wide-art` holds the owner's art, the build job packs it, the launcher copies the folders and pulls once more where they are missing. Left: changed-maps-only rebuild, the launcher naming the build.
+- 2026-11-09 claude: done. PR 382 (563ce081d): the freshness key counts game data only through the files each scene read or looked for; the game rewriting fallout2.cfg or the launcher adding the Russian mod rebuilds nothing; the log names each rebuilt map and why; the launcher names the installed build at the end. Existing installs rebuild every scene once after this ships.
