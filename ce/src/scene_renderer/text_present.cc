@@ -448,9 +448,7 @@ bool prepareSharpTextForPresent(SDL_Surface* indexedSurface, SDL_Surface* rgbaSu
     if (buffer == 0) return false;
     // The restoration call prunes records whose pixels no longer match.
     scene::textCaptureSharpRestoration(buffer);
-    const auto restoredAt = std::chrono::steady_clock::now();
     const std::vector<scene::TextRecord> records = scene::textCaptureSharpRecords(buffer);
-    const auto recordsAt = std::chrono::steady_clock::now();
     if (records.empty()) {
         prepareSharpTextFrame(nullptr, 0, 0, 0, nullptr, 0, 0, 0, nullptr, 0, false);
         return false;
@@ -481,26 +479,7 @@ bool prepareSharpTextForPresent(SDL_Surface* indexedSurface, SDL_Surface* rgbaSu
     const SharpFrameScan scan = sharpScanFrame(indicesData,
         indexedSurface->w, indexedSurface->h, indexedSurface->pitch,
         physicalWidth, physicalHeight, paletteRgb, paletteEntries);
-    const auto scannedAt = std::chrono::steady_clock::now();
     const unsigned long long glyphKey = sharpGlyphKey(scan.staticKey, records);
-    const auto keyedAt = std::chrono::steady_clock::now();
-    {
-        // 157: where the hit path's milliseconds go.
-        static double restoreMs = 0, recordsMs = 0, scanMs = 0, keyMs = 0;
-        static int frames = 0;
-        auto ms = [](auto a, auto b) { return std::chrono::duration<double, std::milli>(b - a).count(); };
-        restoreMs += ms(started, restoredAt);
-        recordsMs += ms(restoredAt, recordsAt);
-        scanMs += ms(recordsAt, scannedAt);
-        keyMs += ms(scannedAt, keyedAt);
-        if (getenv("F2CE_PERF") != nullptr && ++frames == 120) {
-            printf("perf sharpsplit restore=%.2f records=%.2f scan=%.2f key=%.2f n=%zu\n", restoreMs / frames,
-                recordsMs / frames, scanMs / frames, keyMs / frames, records.size());
-            fflush(stdout);
-            restoreMs = recordsMs = scanMs = keyMs = 0;
-            frames = 0;
-        }
-    }
     // The stored keys imply the layers exist at these dims: they are stored
     // only by the full build that left the textures in place.
     const bool sameFrame = output.width == indexedSurface->w && output.height == indexedSurface->h
