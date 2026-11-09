@@ -85,6 +85,12 @@ jobs:
           path: staging
       - name: Add the standalone exporter to the payload
         run: Copy-Item build/exporter-standalone/scene-exporter.exe staging/
+      - name: Add the wide menu, death and loading art
+        # The owner's art is not in git; it lives in the fixed release "wide-art".
+        run: |
+          gh release download wide-art --repo $env:GITHUB_REPOSITORY --pattern wide-art.zip --dir .
+          Expand-Archive -LiteralPath wide-art.zip -DestinationPath staging -Force
+          if (-not (Test-Path staging/user-assets/fullscreen-20261028/wallpapers-selected/hires/menu/art__intrface__hr_mainmenu__d0_f0_21-9.png)) { throw "wide-art.zip has no menu art" }
       - name: Pack and update the latest release
         run: |
           Compress-Archive -Path staging/* -DestinationPath fallout2-ce-3d-win64.zip -Force
