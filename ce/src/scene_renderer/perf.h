@@ -18,6 +18,10 @@ bool perfEnabled();
 void perfBegin();
 void perfMark(const char* name);
 void perfEnd();
+// A CPU split of the frame (157): each mark ends the span since the previous
+// one. A frame slower than twice the window's median logs its spans as one
+// "perf slow" line, so a hitch reads as the stage that ate it.
+void perfCpuMark(const char* name);
 // F2CE_PERF_HOLD=N: true until N seconds after the first measured frame, so a
 // one-shot test run keeps drawing long enough to measure.
 bool perfHolding();

@@ -431,9 +431,14 @@ struct ObjectDraw {
     int wallRow = -1;
     int shadowGroup = -1;
     bool tall = false; // standing taller than half a wall: a group needs one
+    bool offView = false; // 157: this frame's card lies wholly off the view
 };
 
 extern std::vector<ObjectDraw> gObjectDraws;
+// 157: marks each card whose six vertices all lie past one side of the view
+// (the clip-space x or y bound of mvp): it can give no pixel, so its draw
+// and its uniforms are skipped. Depth and the near plane are not tested.
+void cullStaticObjectDraws(const float mvp[16]);
 extern unsigned int gObjectVao;
 extern unsigned int gHeroVao;
 extern unsigned int gHeroTexture;

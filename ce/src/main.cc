@@ -488,8 +488,10 @@ static void mainLoop()
         sfall_gl_scr_process_main();
 
         const Uint64 inputEnd = SDL_GetPerformanceCounter();
+        scene_renderer::perfCpuMark("input");
 
         gameHandleKey(keyCode, false);
+        scene_renderer::perfCpuMark("key");
 
         // The owner's region mark holds the frame (183): no scripts, no map
         // transitions, no camera updates - present and take input only.
@@ -505,6 +507,7 @@ static void mainLoop()
         scene_renderer::perfLoadMark("loop_input");
         scriptsHandleRequests();
         scene_renderer::perfLoadMark("loop_scripts");
+        scene_renderer::perfCpuMark("scripts");
 
         mapHandleTransition();
         scene_renderer::perfLoadMark("loop_transition");
@@ -518,6 +521,7 @@ static void mainLoop()
             scene::syncSettings(devtools::suppressInitialSceneEnable());
         }
         scene_renderer::perfLoadMark("loop_sync");
+        scene_renderer::perfCpuMark("loop");
 
         if (_main_game_paused != 0) {
             _main_game_paused = 0;

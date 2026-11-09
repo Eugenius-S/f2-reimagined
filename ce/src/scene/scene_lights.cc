@@ -222,6 +222,10 @@ void collectEffectLight(Object* object, void* context)
 
 void collectMuzzleLight(Object* object, void* context)
 {
+    // 157: only a critter fires (muzzleFlashFor), and its shown art keeps its
+    // type: the rest skip the shown-art lookups, about half a millisecond a
+    // frame over a town's objects.
+    if (FrmId(object).objectType() != OBJ_TYPE_CRITTER) return;
     if (!muzzleFlashesEnabled() || (object->flags & OBJECT_HIDDEN) != OBJECT_NONE || !hexGridTileIsValid(object->tile)) return;
     const auto shown = shownObjectArt(object);
     const auto* flash = muzzleFlashFor(shown.fid, object->frame, shown.rotation, true);
