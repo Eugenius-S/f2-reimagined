@@ -36,6 +36,7 @@
 #include "scripts.h"
 #include "sfall_animation.h"
 #include "sfall_arrays.h" // For CreateTempArray, SetArray
+#include "sfall_gaps.h"
 #include "sfall_global_scripts.h"
 #include "sfall_ini.h"
 #include "sfall_object_name.h"
@@ -1665,6 +1666,7 @@ void mf_intface_redraw(OpcodeContext& ctx)
         interfaceBarRefresh();
     } else {
         // TODO: Incomplete.
+        sfallGapNote("metarule", "intface_redraw", ctx.program());
         programFatalError("mf_intface_redraw: not implemented");
     }
 }
@@ -2499,6 +2501,7 @@ void sfall_metarule(Program* program, int args)
     }
 
     if (metaruleInfo == nullptr) {
+        sfallGapNote("metarule", metarule, program);
         programPrintError("op_sfall_func(\"%s\", ...) - metarule function is unknown.", metarule);
         programStackPushInteger(program, 0);
         return;

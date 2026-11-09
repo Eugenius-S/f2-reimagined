@@ -400,6 +400,8 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/sfall_ext.h"
     "src/sfall_filesystem.cc"
     "src/sfall_filesystem.h"
+    "src/sfall_gaps.cc"
+    "src/sfall_gaps.h"
     "src/sfall_global_vars.cc"
     "src/sfall_global_vars.h"
     "src/sfall_global_scripts.cc"

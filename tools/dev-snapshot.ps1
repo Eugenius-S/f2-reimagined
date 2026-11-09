@@ -497,6 +497,14 @@ if (-not (Test-Path -LiteralPath $exe) -or
     (Get-FileHash -LiteralPath $built).Hash -ne (Get-FileHash -LiteralPath $exe).Hash) {
     Copy-Item $built $exe -Force
 }
+# The game reads sfall's ddraw.ini next to its exe: a scratch install's own
+# goes beside the test exe, so a mod such as RP runs with its own settings.
+$testIni = Join-Path $exeDirectory 'ddraw.ini'
+if ($GameRoot -and (Test-Path -LiteralPath (Join-Path $GameDir 'ddraw.ini'))) {
+    Copy-Item -LiteralPath (Join-Path $GameDir 'ddraw.ini') $testIni -Force
+} elseif (Test-Path -LiteralPath $testIni) {
+    Remove-Item -LiteralPath $testIni
+}
 $shots = 1
 $runId = [guid]::NewGuid().ToString('N')
 # This run's own output root: the exe writes everything under it. A short

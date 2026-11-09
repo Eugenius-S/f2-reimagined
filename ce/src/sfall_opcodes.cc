@@ -39,6 +39,7 @@
 #include "sfall_animation.h"
 #include "sfall_arrays.h"
 #include "sfall_filesystem.h"
+#include "sfall_gaps.h"
 #include "sfall_global_scripts.h"
 #include "sfall_global_vars.h"
 #include "sfall_ini.h"
@@ -2033,6 +2034,7 @@ static void op_set_fake_trait(Program* program)
     int active = programStackPopInteger(program);
     char* name = programStackPopString(program);
 
+    sfallGapNote("opcode", "set_fake_trait", program);
     programPrintError("set_fake_trait: not implemented!");
 }
 
@@ -2232,6 +2234,7 @@ static void op_fs_create(Program* program)
 {
     int size = programStackPopInteger(program);
     char* path = programStackPopString(program);
+    sfallGapNote("opcode", "fs_create", program);
     programPrintError("fs_create: not implemented!");
     programStackPushInteger(program, -1);
 }
@@ -2245,12 +2248,14 @@ static void op_fs_delete(Program* program)
 static void op_set_hero_style(Program* program)
 {
     int style = programStackPopInteger(program);
+    sfallGapNote("opcode", "set_hero_style", program);
     programPrintError("set_hero_style: not implemented!");
 }
 
 static void op_set_hero_race(Program* program)
 {
     int race = programStackPopInteger(program);
+    sfallGapNote("opcode", "set_hero_race", program);
     programPrintError("set_hero_race: not implemented!");
 }
 
