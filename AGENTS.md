@@ -174,8 +174,9 @@ days), else the top free `todo` in the board order (`tier`, then
 blocker). Finish the task you took before taking
 another: a hard task is split (step 4), not handed over.
 
-The owner sees and orders the board in Polka: `E:\Projects\!F2R board`,
-`polka.html`. `py -3 "E:\Projects\!F2R board\update_board.py"` syncs it
+The owner sees and orders the board in Polka: the folder `!F2R board` next
+to the checkouts, `polka.html`. `py -3 "../!F2R board/update_board.py"`
+(from a checkout) syncs it
 both ways; run it after a merge that changes a task file, and when the owner
 says he added cards. His edits come back as a PR named `board: the owner's
 Polka edits`: changed priorities and assignees go into the task files (his order, so
