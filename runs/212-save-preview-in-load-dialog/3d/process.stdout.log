@@ -1,5 +1,5 @@
 devtools: startup target kladwtwn e0 accepted=1 blocking=0
-scene: cache E:\Projects\f2r-glm-211\build\scene-cache\kladwtwn\0
+scene: cache <path>
 devtools: static wall+hero preview started for KLADWTWN.MAP elevation 0
 scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
 scene: preview policy=iso-disabled gameState=0 gameMode=0x10 uiDisabled=0 isoDisabled=1 combat=0 dialog=0 movie=0
