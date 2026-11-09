@@ -60,3 +60,4 @@ New art; the Russian translations list (227); the RP option (186).
 ## Log
 
 - 2026-11-09 claude: cut from the owner's order; the 128 find and the panel choice folded in.
+- 2026-11-09 claude: wide menu, death and loading art ship in the release (PR 380, 9a08d6386): fixed release `wide-art` holds the owner's art, the build job packs it, the launcher copies the folders and pulls once more where they are missing. Left: changed-maps-only rebuild, the launcher naming the build.
