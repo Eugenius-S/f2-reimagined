@@ -178,7 +178,7 @@ The owner sees and orders the board in Polka: `E:\Projects\!F2R board`,
 `polka.html`. `py -3 "E:\Projects\!F2R board\update_board.py"` syncs it
 both ways; run it after a merge that changes a task file, and when the owner
 says he added cards. His edits come back as a PR named `board: the owner's
-Polka edits`: changed priorities go into the task files (his order, so
+Polka edits`: changed priorities and assignees go into the task files (his order, so
 `-Next` follows them once merged), his new cards go into `tasks/inbox.md`
 as `(Polka card <id>, ...)` lines. Claude merges that PR first, cuts or
 folds each new card like any find, and then removes the card from
