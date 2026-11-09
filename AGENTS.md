@@ -174,6 +174,15 @@ days), else the top free `todo` in the board order (`tier`, then
 blocker). Finish the task you took before taking
 another: a hard task is split (step 4), not handed over.
 
+The owner sees and orders the board in Polka: `E:\Projects\!F2R board`,
+`polka.html`. `py -3 "E:\Projects\!F2R board\update_board.py"` syncs it
+both ways: priorities the owner changed there come back as a PR named
+`board: priorities from the owner's Polka board` (they are his order, so
+`-Next` follows them once merged), and the cards get the statuses from
+origin/main. Run it after a merge that changes a task file. A new task also
+gets a line in `ru-tasks.json` there: a short plain Russian title and one or
+two sentences, no long dash; without it the card shows in English.
+
 1. Work in your own worktree, never switch branches in the main checkout:
    `git worktree add --detach ../fallout2-ce-3d-<you> origin/main`. It has no
    `game/`: the scripts use the main checkout's `game/` with the worktree's

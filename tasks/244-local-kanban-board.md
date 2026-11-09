@@ -2,8 +2,8 @@
 id: 244
 title: A local kanban page shows the whole board at a glance
 milestone: M1
-status: todo
-owner: any
+status: done
+owner: claude
 suggested: claude
 priority: normal
 tier: 3
@@ -48,3 +48,4 @@ Editing tasks from the page; drag and drop that writes back.
 ## Log
 
 - 2026-11-09 claude: cut at the owner's request (screenshot of the Jedi Academy board); nothing built yet.
+- 2026-11-09 claude: done another way, by the owner's choice: his Polka 3.8 board (a static page with columns, priorities, links and search) in `E:\Projects\!F2R board`, outside the repo. `update_board.py` there rebuilds its data from `tasks/*.md` on origin/main (242 cards, plain Russian texts in `ru-tasks.json`) and sends the owner's priority changes back as a board PR, through its own worktree `E:\Projects\f2r-board-sync`. The rule for agents is in AGENTS.md (Tasks). Not done: a timer for the sync (Windows refused a scheduled task without the owner); the order of cards inside a column is not sent back.
