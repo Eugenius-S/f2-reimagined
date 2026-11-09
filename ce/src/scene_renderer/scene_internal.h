@@ -430,6 +430,7 @@ struct ObjectDraw {
     float screenRect[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     int wallRow = -1;
     int shadowGroup = -1;
+    bool tall = false; // standing taller than half a wall: a group needs one
 };
 
 extern std::vector<ObjectDraw> gObjectDraws;
