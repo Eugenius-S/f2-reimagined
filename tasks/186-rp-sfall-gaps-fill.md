@@ -69,3 +69,10 @@ Russian translations (227).
 - 2026-11-08 claude: 185 and 187 folded in at the owner's request; made the
   next stage.
 - 2026-11-08 claude: owner order 2026-11-08: claude takes critical bugs, performance, RP and the Russian translations.
+- 2026-11-10 claude: parts 1 and 2 landed (#391, which carries #388): the gap
+  list with runtime counts is in `runs/186-rp/README.md`, 12 gaps (1 blocking)
+  before, 7 (0 blocking) after; `set_fake_perk` and its kin, `fs_seek`,
+  `fs_read_short`, `fs_write_short` and an editable `fs_copy`. EPAMAIN1 reaches
+  its scene. Left: the RP map exports and fly tour spots, the walk through two
+  restored areas, the installer option; not seen live: the `epac3` reply, an
+  edited walking FRM drawn in play, fake perks in the character screen.
