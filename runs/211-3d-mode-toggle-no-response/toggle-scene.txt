@@ -1,0 +1,16 @@
+# 211: Ctrl+F10 on a map with a scene: 3D -> original view -> 3D.
+snap
+hold 224
+waitms 80
+key 67
+waitms 80
+release 224
+waitms 600
+snap
+hold 224
+waitms 80
+key 67
+waitms 80
+release 224
+waitms 600
+snap

@@ -19,6 +19,9 @@ bool parsePreferencesProbeOption(const char* arg);
 bool preferencesProbeRequested();
 bool preferencesProbeActive();
 bool preferencesProbeFinished();
+// The Toggle3d probe keeps the game alive a few frames after the panel
+// closes, so the toggle's status line is on screen for the evidence shot.
+bool preferencesProbeWantsPostFrame();
 bool preferencesProbeUsesSimulatedMouse();
 bool preferencesProbeOverrideMouse(int* x, int* y, unsigned char* leftButton, unsigned char* rightButton);
 void preferencesProbeComplete(bool success, scene::OptionsPanel* panel, int stagedLegacyDifficulty);

@@ -180,6 +180,14 @@ const std::vector<Translation>& catalog()
         { "mark cancelled", cp1251(u8"рамка отменена") },
         { "MARK: drag rectangles, Enter saves, Esc cancels", cp1251(u8"РАМКА: выделяй мышью, Enter - сохранить, Esc - отмена") },
         { "teleported:", cp1251(u8"переход выполнен:") },
+        { "3D scene is disabled in settings", cp1251(u8"3D-сцена выключена в настройках") },
+        { "no map is loaded", cp1251(u8"карта не загружена") },
+        { "this map has no 3D scene", cp1251(u8"у этой карты нет 3D-сцены") },
+        { "the 3D scene failed to load", cp1251(u8"3D-сцена не загрузилась") },
+        // The word goes through the catalog too: a narrow Cyrillic literal
+        // would land in the compiler's execution charset, which is only
+        // CP1251 on a Russian machine.
+        { " (elevation ", cp1251(u8" (этаж ") },
     };
     return strings;
 }
@@ -216,6 +224,29 @@ std::string menuStatusText(const std::string& status, const std::string& languag
     if (colon == std::string::npos) return status;
     const std::string prefix = status.substr(0, colon + 1);
     return std::string(menuText(prefix.c_str(), language)) + status.substr(colon + 1);
+}
+
+std::string toggleRefusalText(const char* reason, const std::string& map, int elevation,
+    const std::string& language)
+{
+    // The 3D toggle's refusal (211): a status-line phrase naming the map and
+    // the elevation, in the game's language. Map names stay as they are.
+    if (reason == nullptr) return std::string();
+    const std::string place = ": " + map
+        + std::string(menuText(" (elevation ", language)) + std::to_string(elevation) + ")";
+    if (std::strcmp(reason, "disabled") == 0) {
+        return menuText("3D scene is disabled in settings", language);
+    }
+    if (std::strcmp(reason, "no-map") == 0) {
+        return menuText("no map is loaded", language);
+    }
+    if (std::strcmp(reason, "no-scene") == 0) {
+        return std::string(menuText("this map has no 3D scene", language)) + place;
+    }
+    if (std::strcmp(reason, "load-failed") == 0) {
+        return std::string(menuText("the 3D scene failed to load", language)) + place;
+    }
+    return reason;
 }
 
 void localizeMenuDescriptors(std::vector<SettingDescriptor>& descriptors, const std::string& language)

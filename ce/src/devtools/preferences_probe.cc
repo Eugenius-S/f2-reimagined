@@ -87,6 +87,21 @@ void scriptedInputPump()
             return;
         }
         if (action == "snap") { gInputSnapshot = true; printf("DEV_INPUT snap\n"); fflush(stdout); return; }
+        if (action == "hold" || action == "release") {
+            // Half a key press: hold pushes only the down event, release only
+            // the up, so a script can press a chord like Ctrl+F10.
+            int scancode;
+            if (!(input >> scancode) || scancode <= 0 || scancode >= SDL_NUM_SCANCODES) { fprintf(stderr, "DEV_INPUT FAIL: invalid key\n"); gInputActive = false; return; }
+            SDL_Event event = {};
+            event.type = action == "hold" ? SDL_KEYDOWN : SDL_KEYUP;
+            event.key.keysym.scancode = static_cast<SDL_Scancode>(scancode);
+            event.key.state = action == "hold" ? SDL_PRESSED : SDL_RELEASED;
+            event.key.repeat = 0;
+            if (SDL_PushEvent(&event) != 1) fprintf(stderr, "DEV_INPUT FAIL: %s\n", SDL_GetError());
+            else printf("DEV_INPUT pushed key %d %s\n", scancode, action.c_str());
+            fflush(stdout);
+            return;
+        }
         if (action == "key") {
             // One press: a down and an up pushed in the same batch, so a held
             // key's repeat never fires. The value is an SDL_SCANCODE_* number.
@@ -180,6 +195,7 @@ enum class ProbeMode {
     Defaults,
     Verify,
     CursorSpeed,
+    Toggle3d,
 };
 
 enum class DragProbe {
@@ -294,6 +310,7 @@ bool parsePreferencesProbeOption(const char* arg)
     else if (strcmp(mode, "defaults") == 0) gMode = ProbeMode::Defaults;
     else if (strcmp(mode, "verify") == 0) gMode = ProbeMode::Verify;
     else if (strcmp(mode, "cursor-speed") == 0) gMode = ProbeMode::CursorSpeed;
+    else if (strcmp(mode, "toggle3d") == 0) gMode = ProbeMode::Toggle3d;
     else {
         printf("PREFERENCES_PROBE FAIL: expected save, save-key, cancel, cancel-key, escape, defaults, verify, or cursor-speed\n");
         gMode = ProbeMode::Cancel;
@@ -313,6 +330,11 @@ bool parsePreferencesProbeOption(const char* arg)
 bool preferencesProbeRequested()
 {
     return gMode != ProbeMode::None;
+}
+
+bool preferencesProbeWantsPostFrame()
+{
+    return gMode == ProbeMode::Toggle3d;
 }
 
 bool preferencesProbeActive()
@@ -411,6 +433,15 @@ void preferencesProbeComplete(bool success, scene::OptionsPanel* panel, int stag
         printf("PREFERENCES_PROBE PASS committed zoom=%s enabled=%s combat_difficulty=%d\n",
             panel->settingValueForProbe("3d.zoom").c_str(), panel->settingValueForProbe("3d.enabled").c_str(),
             gStagedLegacyDifficulty);
+    } else if (gMode == ProbeMode::Toggle3d) {
+        const std::string committedEnabled = panel->settingValueForProbe("3d.enabled");
+        if (committedEnabled == gEnabledBefore
+            || settings.scene3d.enabled != (committedEnabled == "true")) {
+            failProbe("Done did not commit the 3D toggle");
+            return;
+        }
+        printf("PREFERENCES_PROBE PASS toggle3d enabled %s -> %s\n",
+            gEnabledBefore.c_str(), committedEnabled.c_str());
     } else {
         failProbe("unexpected preferences probe completion mode");
         return;
@@ -469,7 +500,7 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
         }
         if (eventCode == -1 || eventCode == -2) return -1;
         bool expected = eventCode == gExpectedFooterEvent;
-        if ((gMode == ProbeMode::Save || gMode == ProbeMode::SaveKeyboard) && eventCode == KEY_RETURN) expected = true;
+        if ((gMode == ProbeMode::Save || gMode == ProbeMode::SaveKeyboard || gMode == ProbeMode::Toggle3d) && eventCode == KEY_RETURN) expected = true;
         if ((gMode == ProbeMode::Cancel || gMode == ProbeMode::CancelKeyboard) && eventCode == KEY_ESCAPE) expected = true;
         if (!expected) {
             printf("PREFERENCES_PROBE ignored input=%d while waiting for footer=%d\n", eventCode, gExpectedFooterEvent);
@@ -556,6 +587,11 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
             printf("PREFERENCES_PROBE cursor speed slider armed row=%d before=%s\n", gCursorSpeedRow, gCursorSpeedBefore.c_str());
             return 600 + gCursorSpeedRow;
         }
+        if (gMode == ProbeMode::Toggle3d) {
+            // The display rows moved the General group's first slot to the
+            // scale row: select the toggle's row explicitly (211).
+            panel->selectRowForProbe("3d.enabled");
+        }
         return KEY_SPACE;
     case 2:
         if (gMode == ProbeMode::CursorSpeed) {
@@ -577,6 +613,20 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
             return KEY_ESCAPE;
         }
         printf("PREFERENCES_PROBE PASS keyboard toggle %s -> %s\n", gEnabledBefore.c_str(), panel->settingValueForProbe("3d.enabled").c_str());
+        if (gMode == ProbeMode::Toggle3d) {
+            // The 211 toggle path: commit with Done so the game's syncSettings
+            // acts on the new value the moment the panel closes.
+            gWaitingForFooter = true;
+            gExpectedFooterEvent = 504;
+            SDL_Event key = {};
+            key.type = SDL_KEYDOWN;
+            key.key.state = SDL_PRESSED;
+            key.key.keysym.scancode = SDL_SCANCODE_RETURN;
+            key.key.keysym.sym = SDLK_RETURN;
+            SDL_PushEvent(&key);
+            printf("PREFERENCES_PROBE queued isolated Enter through SDL input\n");
+            return -1;
+        }
         return KEY_END;
     case 3:
         if (panel->scroll() != panel->maxScroll()) {

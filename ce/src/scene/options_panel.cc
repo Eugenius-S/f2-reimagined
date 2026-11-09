@@ -614,6 +614,14 @@ std::string OptionsPanel::settingValueForProbe(const std::string& id) const
     if (const auto* text = std::get_if<std::string>(&value)) return *text;
     return {};
 }
+
+void OptionsPanel::selectRowForProbe(const std::string& id)
+{
+    const int index = findRowBySettingId(id);
+    if (index < 0) return;
+    selectedRow_ = index;
+    setScroll(std::clamp(rowTop(index) + rowHeight(index) / 2 - screenHeight_ / 2, 0, maxScroll()));
+}
 int OptionsPanel::scroll() const { return scroll_; }
 int OptionsPanel::maxScroll() const { return std::max(0, contentHeight_ - screenHeight_); }
 int OptionsPanel::scrollbarX() const

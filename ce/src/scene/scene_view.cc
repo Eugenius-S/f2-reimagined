@@ -19,9 +19,11 @@
 #include "scene_settings.h"
 #include "scene_lights.h"
 #include "scene_objects.h"
+#include "menu_text.h"
 #include "../art.h"
 #include "../devtools/devtools.h"
 #include "../dialog.h"
+#include "../display_monitor.h"
 #include "../map_edge.h"
 #include "../object.h"
 #include "../scene_renderer/game_view.h"
@@ -269,8 +271,9 @@ bool readDaylight(const std::filesystem::path& cacheDirectory)
     return value != std::string::npos && json.compare(value, 4, "true") == 0;
 }
 
-// Loads what `view` needs of the current map's scene.
-bool loadScene(View view, const std::string& map, int elevation, std::string* message)
+// The map's scene cache directory: the dev cache override when the dev
+// tools run, the game's mod-cache otherwise.
+static std::filesystem::path sceneCacheDirectory(const std::string& map, int elevation)
 {
     // F2CE_SCENE_CACHE (dev tools only): a worktree's own scene cache, so a test
     // run of a new exporter leaves the cache of a game running alongside alone.
@@ -278,7 +281,39 @@ bool loadScene(View view, const std::string& map, int elevation, std::string* me
     const std::filesystem::path scenes = devCache != nullptr && devCache[0] != '\0'
         ? std::filesystem::path(devCache)
         : gameRootPath() / "mod-cache" / "scene";
-    const std::filesystem::path cacheDirectory = scenes / map / std::to_string(elevation);
+    return scenes / map / std::to_string(elevation);
+}
+
+// The 3D toggle's refusal (211) goes to the game's status line, in the
+// game's language: which map has no scene, or what failed. A refused
+// enable that stays silent reads to the player as a button that does not
+// work. Dev panels keep their own status line on top of this.
+static void reportToggleRefusal(const std::string& rawMessage)
+{
+    if (gameGetState() != GameState::Normal || rawMessage.empty()) return;
+    const char* reason = nullptr;
+    std::string map;
+    int elevation = 0;
+    if (rawMessage == "3D scene is disabled in settings") {
+        reason = "disabled";
+    } else if (rawMessage == "no map is loaded") {
+        reason = "no-map";
+    } else {
+        map = currentMapName();
+        elevation = static_cast<int>(gElevation);
+        // A map that was never exported has no cache directory at all; every
+        // other failure means the scene exists but did not load.
+        const bool sceneless = !std::filesystem::exists(sceneCacheDirectory(map, elevation));
+        reason = sceneless ? "no-scene" : "load-failed";
+    }
+    const std::string text = toggleRefusalText(reason, map, elevation, settings.system.language);
+    displayMonitorAddMessage(text.c_str());
+}
+
+// Loads what `view` needs of the current map's scene.
+bool loadScene(View view, const std::string& map, int elevation, std::string* message)
+{
+    const std::filesystem::path cacheDirectory = sceneCacheDirectory(map, elevation);
     printf("scene: cache %s\n", cacheDirectory.string().c_str());
     fflush(stdout);
     std::string error;
@@ -575,6 +610,7 @@ bool enable(View view, std::string* message)
     }
     if (!settings.scene3d.enabled) {
         *message = "3D scene is disabled in settings";
+        reportToggleRefusal(*message);
         return false;
     }
     gView = view;
@@ -584,6 +620,7 @@ bool enable(View view, std::string* message)
     syncToMap();
     if (!showsCurrentMap()) {
         *message = gFailure.empty() ? "no map is loaded" : gFailure;
+        reportToggleRefusal(*message);
         return false;
     }
     message->clear();
