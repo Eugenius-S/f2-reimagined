@@ -171,3 +171,16 @@ Frame rate in play (157), settings changes (156).
   1668 / 1242 / 597 ms on kladwtwn / newr1 / vctyctyd / cave0 (the
   dev-shot overhead included). Main has since taken the owner's #384
   with its own gates; this task's acceptance is met. Done.
+- 2026-11-10, glm. CORRECTION to the .lst cache entry above: the in-memory
+  .lst tables (the objects_read 551 -> 78 ms claim) made two later maps sick.
+  On denres1 e0 the map load went 0.95 s -> 4.85 s, the first frame 1.85 s ->
+  5.63 s, the first game frames ran under 1 fps, and repeated runs ended in
+  STATUS_STACK_OVERFLOW crashes (the Windows event log, 0xc00000fd) - the
+  heap or a structure the cache's parallel warm touches was poisoned. Found
+  tonight while the 225 fly tour died on denres1; the bisect pinned the
+  cache commit (a35409ae), and reverting only the proto.cc hunk restores
+  denres1 to 0.85 s load / 1.63 s first frame, three runs green, ctest
+  25/25. The cache is gone from main; the load-time numbers of this task
+  stand on the maps it measured (the .lst re-read cost there was ~5 ms of
+  the chain), and denres1-class maps are safe again. The cache idea needs a
+  real diagnosis before it comes back.
