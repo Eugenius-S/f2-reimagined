@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <map>
 #include <unordered_map>
 
 #include "gl_api.h"
@@ -40,6 +41,80 @@ unsigned int gObjectVbo = 0;
 unsigned int gHeroVbo = 0;
 StaticHeroInfo gHeroInfo = {};
 int gTurnSteps = 0; // rotations a turned camera moves the shown sides by (087)
+
+// 241: a composite sprite's groups, a row of kGroupTexels RGBA32F texels each
+// (uShadowGroups): (anchor count, 0, 0, 0), the walls.bin casters of the
+// group (row + 1, 0: none), then the feet anchors, two (x, z) per texel.
+// shortcut: 8 anchors and 4 walls.bin pieces per group, 254 groups a frame;
+// raise the caps if a bigger set loses its uniform shade.
+constexpr int kGroupAnchors = 8;
+constexpr int kGroupTexels = 2 + kGroupAnchors / 2;
+constexpr int kMaxGroups = 254; // the wall table's B channel holds group + 1
+std::vector<float> gGroupTexels;
+std::vector<float> gGroupTexelsUploaded;
+unsigned int gGroupTexture = 0;
+
+// The pieces of one art set whose cards touch or overlap on the game's
+// screen, with no art file repeated, take one sun verdict (the owner,
+// 2026-11-09): a forest of TREE7/8/9 repeats its files and keeps a verdict
+// per tree. shortcut: two different trees that touch and stand alone group
+// too; tell them apart by the art kind if one shows.
+void groupCompositeSprites()
+{
+    gGroupTexels.clear();
+    std::map<int, std::vector<int>> bySet;
+    for (int index = 0; index < static_cast<int>(gObjectDraws.size()); index++) {
+        gObjectDraws[index].shadowGroup = -1;
+        if (gObjectDraws[index].artSet != 0) bySet[gObjectDraws[index].artSet].push_back(index);
+    }
+    int groups = 0;
+    for (const auto& [set, members] : bySet) {
+        if (members.size() < 2) continue;
+        std::vector<int> parent(members.size());
+        for (size_t k = 0; k < parent.size(); k++) parent[k] = static_cast<int>(k);
+        auto root = [&](int k) {
+            while (parent[k] != k) k = parent[k] = parent[parent[k]];
+            return k;
+        };
+        for (size_t a = 0; a < members.size(); a++) {
+            const float* ra = gObjectDraws[members[a]].screenRect;
+            for (size_t b = a + 1; b < members.size(); b++) {
+                const float* rb = gObjectDraws[members[b]].screenRect;
+                if (ra[0] <= rb[2] + 1.0f && rb[0] <= ra[2] + 1.0f && ra[1] <= rb[3] + 1.0f && rb[1] <= ra[3] + 1.0f) {
+                    parent[root(static_cast<int>(a))] = root(static_cast<int>(b));
+                }
+            }
+        }
+        std::map<int, std::vector<int>> parts;
+        for (size_t k = 0; k < members.size(); k++) parts[root(static_cast<int>(k))].push_back(members[k]);
+        for (const auto& [top, part] : parts) {
+            if (part.size() < 2 || groups >= kMaxGroups) continue;
+            std::vector<int> files;
+            for (int index : part) files.push_back(gObjectDraws[index].artFile);
+            std::sort(files.begin(), files.end());
+            if (std::adjacent_find(files.begin(), files.end()) != files.end()) continue;
+            const size_t base = gGroupTexels.size();
+            gGroupTexels.resize(base + kGroupTexels * 4, 0.0f);
+            float* row = gGroupTexels.data() + base;
+            int anchors = 0, casters = 0;
+            for (int index : part) {
+                ObjectDraw& draw = gObjectDraws[index];
+                draw.shadowGroup = groups;
+                if (draw.wallRow >= 0) {
+                    markStaticWallShadowGroup(draw.wallRow, groups);
+                    if (casters < 4) row[4 + casters++] = static_cast<float>(draw.wallRow + 1);
+                }
+                if (anchors < kGroupAnchors) {
+                    row[8 + anchors * 2] = draw.anchorX;
+                    row[8 + anchors * 2 + 1] = draw.anchorZ;
+                    anchors++;
+                }
+            }
+            row[0] = static_cast<float>(anchors);
+            groups++;
+        }
+    }
+}
 
 unsigned long long objectArtKey(int fid, int frame, int rotation, int variant)
 {
@@ -162,11 +237,22 @@ void destroyStaticObjects()
     if (gContext != nullptr) {
         if (gObjectVbo != 0) glDeleteBuffers(1, &gObjectVbo);
         if (gObjectVao != 0) glDeleteVertexArrays(1, &gObjectVao);
+        if (gGroupTexture != 0) glDeleteTextures(1, &gGroupTexture);
     }
     gObjectVbo = 0;
     gObjectVao = 0;
+    gGroupTexture = 0;
+    gGroupTexelsUploaded.clear();
     gObjectVertices.clear();
     gObjectDraws.clear();
+}
+
+void bindShadowGroups(int unit)
+{
+    glActiveTexture(kTexture0 + unit);
+    glBindTexture(kTexture2D, gGroupTexture);
+    glUniform1i(gSceneShadowGroupsLocation, unit);
+    glActiveTexture(kTexture0);
 }
 
 } // namespace internal
@@ -390,6 +476,18 @@ bool addStaticObject(const StaticObjectFrame& frame, std::string* error)
     // such cards out since 090). Every other standing card reads per pixel.
     gObjectDraws.back().feetShadow = ((frame.fid >> 24) & 0xF) == OBJ_TYPE_CRITTER
         || (!flat && !frame.noBlock && high - low > staticHalfWallHeight());
+    if (frame.artSet != 0) {
+        ObjectDraw& draw = gObjectDraws.back();
+        draw.artSet = frame.artSet;
+        draw.artFile = frame.fid & 0x0F000FFF;
+        double hexX, hexY;
+        spriteHexPixel(frame.tile, &hexX, &hexY);
+        draw.screenRect[0] = static_cast<float>(hexX + frame.objectX + frame.artXOffset - frame.width / 2);
+        draw.screenRect[1] = static_cast<float>(hexY + frame.objectY + frame.artYOffset - (frame.height - 1));
+        draw.screenRect[2] = draw.screenRect[0] + static_cast<float>(frame.width);
+        draw.screenRect[3] = draw.screenRect[1] + static_cast<float>(frame.height);
+        draw.wallRow = frame.pickOnly ? staticWallObjectRow(frame.tile, frame.fid) : -1;
+    }
     const int order[6] = { 0, 1, 2, 0, 2, 3 };
     for (int index : order) {
         SpriteCardVertex corner = corners[index];
@@ -410,7 +508,21 @@ bool addStaticObject(const StaticObjectFrame& frame, std::string* error)
 
 void endStaticObjects()
 {
+    groupCompositeSprites();
     if (!gInitialized || gObjectVertices.empty()) return;
+    if (!gGroupTexels.empty() && gGroupTexels != gGroupTexelsUploaded) {
+        if (gGroupTexture == 0) {
+            glGenTextures(1, &gGroupTexture);
+            glBindTexture(kTexture2D, gGroupTexture);
+            glTexParameteri(kTexture2D, kTextureMinFilter, kNearest);
+            glTexParameteri(kTexture2D, kTextureMagFilter, kNearest);
+        }
+        glBindTexture(kTexture2D, gGroupTexture);
+        glTexImage2D(kTexture2D, 0, 0x8814 /* GL_RGBA32F */, kGroupTexels,
+            static_cast<int>(gGroupTexels.size() / (kGroupTexels * 4)), 0, kRGBA, 0x1406 /* GL_FLOAT */,
+            gGroupTexels.data());
+        gGroupTexelsUploaded = gGroupTexels;
+    }
     if (gObjectVao == 0) glGenVertexArrays(1, &gObjectVao);
     if (gObjectVbo == 0) glGenBuffers(1, &gObjectVbo);
     glBindVertexArray(gObjectVao);

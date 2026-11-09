@@ -26,7 +26,7 @@ uniform int uDepthAt;
 // Whether the egg cuts what is drawn: 0 no, 1 the walls whose object row is
 // set in uSeeThroughObjects (the hero stands behind them), 2 the whole draw.
 uniform int uSeeThrough;
-uniform sampler2D uSeeThroughObjects; // per object row: R see-through, G full light
+uniform sampler2D uSeeThroughObjects; // per object row: R see-through, G full light, B group + 1 (241)
 uniform int uLightMode;
 out vec2 vTexcoord;
 out vec3 vWorld;
@@ -36,6 +36,7 @@ out float vCasterId; // the depth pass writes it into the map's id channel
 out float vSelfId; // the screen piece's own object row + 1, for the compare
 flat out int vSeeThrough;
 flat out float vFullLight;
+flat out float vShadowGroup; // 241: the walls.bin row's composite sprite group, -1: none
 flat out int vDepthOnPlane;
 flat out vec4 vDepthPlane; // normal, and its dot with the plane's points
 void main() {
@@ -48,11 +49,15 @@ void main() {
     vSelfId = aObject + 1.0;
     vSeeThrough = uSeeThrough == 2 ? 1 : 0;
     vFullLight = 0.0;
+    vShadowGroup = -1.0;
     if ((uSeeThrough == 1 || uLightMode == 2) && aObject >= 0.0) {
         int row = int(aObject + 0.5);
-        vec2 entry = texelFetch(uSeeThroughObjects, ivec2(row % 1024, row / 1024), 0).rg;
+        vec3 entry = texelFetch(uSeeThroughObjects, ivec2(row % 1024, row / 1024), 0).rgb;
         if (uSeeThrough == 1) vSeeThrough = entry.r > 0.5 ? 1 : 0;
-        if (uLightMode == 2) vFullLight = entry.g;
+        if (uLightMode == 2) {
+            vFullLight = entry.g;
+            vShadowGroup = floor(entry.b * 255.0 + 0.5) - 1.0;
+        }
     }
     vDepthOnPlane = uDepthAt != 0 && dot(aDepthNormal, aDepthNormal) > 0.5 ? 1 : 0;
     vDepthPlane = vec4(aDepthNormal, dot(aDepthNormal, aDepthAt));
@@ -160,6 +165,14 @@ uniform vec4 uShadowGround;
 // 1: a card takes its whole verdict at the feet point (109): the people,
 // whose per-pixel read straddles a shadow edge over several pixels of travel.
 uniform float uShadowFeet;
+// 241: a composite sprite's group (the card's uniform, a walls.bin row's
+// vShadowGroup), -1: none; and the groups, a row each: (anchor count),
+// the group's walls.bin casters (row + 1), the feet anchors two a texel.
+uniform int uShadowGroup;
+uniform sampler2D uShadowGroups;
+flat in float vShadowGroup;
+// The casters a group read leaves out at the taps, beside selfId (241).
+vec4 gShadowExclude = vec4(0.0);
 uniform bool uCloudOn;
 uniform vec2 uCloudOffset;
 // The ground's baked light and sun shadow (157): 1 captures it into the
@@ -338,7 +351,7 @@ float shadowTexelDiff(vec3 p, ivec2 texel, vec2 slope, float selfId) {
     vec2 size = vec2(textureSize(uShadowMap, 0));
     if (any(lessThan(texel, ivec2(0))) || any(greaterThanEqual(texel, ivec2(size)))) return -1.0;
     float id = texelFetch(uShadowIds, texel, 0).r * 1024.0;
-    if (id > 0.5 && abs(id - selfId) < 0.5) return -1.0;
+    if (id > 0.5 && (abs(id - selfId) < 0.5 || any(lessThan(abs(gShadowExclude - id), vec4(0.5))))) return -1.0;
     float receiver = p.z + dot(slope, (vec2(texel) + 0.5) / size - p.xy);
     return receiver - texelFetch(uShadowMap, texel, 0).r;
 }
@@ -506,7 +519,27 @@ bool seenThroughCaster(vec3 p) {
     if (behind > uShadowContact || front < -32.0 * uShadowBias) return false;
     return shadowCasterId(p) < 0.5 && shadowCasterId(p + v * shaded) > 0.5;
 }
+// A composite sprite shades as one (241, the owner's rule): the group
+// standing on a plane in shadow with one piece in the shadow is shaded
+// whole. The darkest of its pieces' feet verdicts (each read as
+// sunShadowAtAnchor reads one), the group's own walls.bin casters left out
+// at the taps, or a piece's feet in another piece's shadow would shade
+// the whole group at every hour.
+float groupShadow(int g) {
+    int anchors = int(texelFetch(uShadowGroups, ivec2(0, g), 0).x + 0.5);
+    gShadowExclude = texelFetch(uShadowGroups, ivec2(1, g), 0);
+    vec2 slope = shadowPlaneSlope(vec3(0.0, 1.0, 0.0));
+    float verdict = 0.0;
+    for (int i = 0; i < anchors && verdict < 0.5; i++) {
+        vec4 pair = texelFetch(uShadowGroups, ivec2(2 + i / 2, g), 0);
+        vec2 a = (i % 2) == 0 ? pair.xy : pair.zw;
+        verdict = step(0.5, shadowCoverage(vec3(a.x, 0.12, a.y), vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), slope, 0.0));
+    }
+    gShadowExclude = vec4(0.0);
+    return verdict;
+}
 float sunShadow(float selfId) {
+    if (vShadowGroup > -0.5) return groupShadow(int(vShadowGroup + 0.5));
     vec3 n = shadowFaceNormal();
     // A face turned away from the sun is in its own shadow: no map lookup,
     // the shaded value (082). This is what striped the walls before: half of
@@ -581,6 +614,7 @@ bool cardTurned() {
     return dot(w, uShadowLight) <= 0.001;
 }
 float sunShadowCard(float selfId) {
+    if (uShadowGroup >= 0) return groupShadow(uShadowGroup);
     if (cardTurned()) return 1.0;
     if (uShadowGround.x > 0.5) {
         vec3 g = vWorld;
@@ -1073,6 +1107,8 @@ int gSceneShadowSelfIdLocation = -1;
 int gSceneShadowAnchorLocation = -1;
 int gSceneShadowGroundLocation = -1;
 int gSceneShadowFeetLocation = -1;
+int gSceneShadowGroupLocation = -1;
+int gSceneShadowGroupsLocation = -1;
 int gSceneCloudOnLocation = -1;
 int gSceneCloudOffsetLocation = -1;
 int gSceneGroundBakeModeLocation = -1;
@@ -1170,6 +1206,8 @@ bool createSceneShader(std::string* error)
     gSceneShadowAnchorLocation = glGetUniformLocation(gSceneProgram, "uShadowAnchor");
     gSceneShadowGroundLocation = glGetUniformLocation(gSceneProgram, "uShadowGround");
     gSceneShadowFeetLocation = glGetUniformLocation(gSceneProgram, "uShadowFeet");
+    gSceneShadowGroupLocation = glGetUniformLocation(gSceneProgram, "uShadowGroup");
+    gSceneShadowGroupsLocation = glGetUniformLocation(gSceneProgram, "uShadowGroups");
     gSceneCloudOnLocation = glGetUniformLocation(gSceneProgram, "uCloudOn");
     gSceneCloudOffsetLocation = glGetUniformLocation(gSceneProgram, "uCloudOffset");
     if (gSceneMvpLocation < 0 || gSceneTextureLocation < 0
@@ -1194,6 +1232,10 @@ bool createSceneShader(std::string* error)
         *error = "static floor shader uniforms are missing";
         return false;
     }
+    // 241: no card is in a composite sprite group until a draw says so (an
+    // int uniform starts at 0, group 0).
+    glUseProgram(gSceneProgram);
+    glUniform1i(gSceneShadowGroupLocation, -1);
     return true;
 }
 
