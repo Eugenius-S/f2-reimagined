@@ -2,7 +2,7 @@
 id: 241
 title: A building made of several sprite pieces takes one sun shade, not a patchwork
 milestone: M1
-status: doing
+status: done
 owner: claude
 suggested: claude
 priority: high
