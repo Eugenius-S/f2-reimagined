@@ -337,7 +337,10 @@ class ReadOnlyGameFiles(GameFiles):
 
     def _winner(self, path: str):
         key = canonical_resource(path)
-        return key, choose_source(key, self.sources)
+        winner = choose_source(key, self.sources)
+        if winner is None:  # a probe that missed shapes the scene too: the file turning up later must rebuild it
+            self._reads.setdefault(key, {"source": "missing"})
+        return key, winner
 
     def find(self, path):
         key, winner = self._winner(path)
@@ -466,7 +469,10 @@ def scene_directory(game_root: Path, map_name: str, elevation: int, cache_root: 
 
 def input_fingerprint(gf, game_root: Path, map_name: str, elevation: int):
     """What a scene depends on, hashed: (fingerprint hex, adapter_hashes, archives, source_priority).
-    The resources are gf._reads, so it is meaningful once the scene was built or its reads replayed."""
+    The resources are gf._reads, so it is meaningful once the scene was built or its reads replayed.
+    The game data counts only through gf._reads (each file read or looked for: its winning source and
+    hash, or its absence): whole archives, the source order and the config files stay out, so the game
+    rewriting fallout2.cfg or a mod added that no scene reads rebuilds nothing (task 242)."""
     if getattr(gf, "_static_inputs", None) is None:  # scene-independent hashes, computed once per gf
         gf._static_inputs = static_inputs(gf, game_root)
     vendor_hashes, adapter_hashes, archives, source_priority = gf._static_inputs
@@ -475,9 +481,6 @@ def input_fingerprint(gf, game_root: Path, map_name: str, elevation: int):
         "donor_revision": DONOR_REVISION,
         "vendor_sha256": vendor_hashes,
         "adapter_sha256": adapter_hashes,
-        "archives": archives,
-        "config_sha256": gf.config_hashes,
-        "source_priority": source_priority,
         "resources": gf._reads,
         "map": map_name,
         "elevation": elevation,
@@ -510,22 +513,35 @@ def reset_caches(gf):
     gf._cache = {}
 
 
-def scene_current(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path) -> bool:
-    """True when out_dir holds a finished scene whose inputs (exporter code, the game data it read,
-    config, archives) still hash to the fingerprint its provenance recorded."""
+def stale_reason(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path) -> str | None:
+    """None when out_dir holds a finished scene whose inputs (exporter code, every game file it read or
+    looked for) still hash to the fingerprint its provenance recorded; otherwise why it must be built."""
     try:
         provenance = json.loads((out_dir / "provenance.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "no scene yet"
+    try:
         if provenance["map"] != map_name or provenance["elevation"] != elevation:
-            return False
+            return "the scene is another map's"
         if not all((out_dir / name).is_file() for name in provenance["artifacts_sha256"]):
-            return False
+            return "scene files missing"
+        recorded = provenance["resources_read"]
         reset_caches(gf)
         gf._reads = {}
-        for key in provenance["resources_read"]:
-            gf.read(key)
-        return input_fingerprint(gf, game_root, map_name, elevation)[0] == provenance["inputs_sha256"]
-    except Exception:
-        return False
+        for key, record in recorded.items():
+            try:
+                gf.exists(key) if record.get("source") == "missing" else gf.read(key)
+            except FileNotFoundError:
+                pass  # now missing: _winner recorded it, the comparison below sees it
+        if input_fingerprint(gf, game_root, map_name, elevation)[0] == provenance["inputs_sha256"]:
+            return None
+        changed = sorted(key for key in set(recorded) | set(gf._reads) if recorded.get(key) != gf._reads.get(key))
+        if not changed:
+            return "the exporter changed"
+        more = f" and {len(changed) - 3} more" if len(changed) > 3 else ""
+        return "game files changed: " + ", ".join(changed[:3]) + more
+    except Exception as error:
+        return f"provenance unreadable ({error})"
 
 
 def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path):
@@ -652,9 +668,11 @@ def main(argv=None):
                 export_scene(gf, game_root, name, elevation, out_dir)
                 continue
             try:
-                if not args.force and scene_current(gf, game_root, name, elevation, out_dir):
+                reason = "--force" if args.force else stale_reason(gf, game_root, name, elevation, out_dir)
+                if reason is None:
                     print(json.dumps({"output": str(out_dir), "current": True}, sort_keys=True), flush=True)
                     continue
+                print(f"rebuilding {name} e{elevation}: {reason}", flush=True)  # the launcher log shows it as is
                 export_scene(gf, game_root, name, elevation, out_dir)
             except (Exception, SystemExit) as error:  # one bad map must not stop the others
                 failed.append(f"{name} e{elevation}: {error}")

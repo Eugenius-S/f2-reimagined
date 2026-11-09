@@ -1468,6 +1468,7 @@ int runConsole(Options options)
             log("the 3D scene data is current");
         }
     }
+    if (!installedVersion.empty()) logf("the game folder holds build %s", installedVersion.c_str());
 
     if (options.installRussian && !installRussianTranslation(root)) {
         // Exit 2: the game itself is installed, only the translation will be tried again.
