@@ -233,6 +233,8 @@ extern int gSceneShadowGroundLocation;
 // people); a standing card of any other kind reads it per pixel on its own
 // plane.
 extern int gSceneShadowFeetLocation;
+extern int gSceneShadowGroupLocation; // 241: a card's composite sprite group, -1: none
+extern int gSceneShadowGroupsLocation; // 241: the groups' anchors and casters
 // The drifting cloud shadows: whether they shade the ambient sun light and
 // their world-space wind offset.
 extern int gSceneCloudOnLocation;
@@ -349,8 +351,10 @@ extern bool gWallsLoaded;
 extern unsigned int gWallSeeThroughTexture;
 extern bool gWallSeeThroughAny;
 // Uploads the wall object table (R: see-through, G: the light of the object's
-// hex) when it changed.
+// hex, B: its composite sprite group + 1, 241) when it changed.
 void flushWallObjectTable();
+// 241: this frame's composite sprite group of a walls.bin row.
+void markStaticWallShadowGroup(int row, int group);
 
 void destroyStaticWalls();
 
@@ -416,6 +420,17 @@ struct ObjectDraw {
     // wall (a tree, a statue). Every other standing card reads the shadow per
     // pixel on its own plane.
     bool feetShadow = false;
+    // 241: a composite sprite (pieces of one art set whose cards touch on
+    // the game's screen) takes one sun verdict: the set, the art file
+    // (type and index of the fid), the card's rect on the game's screen
+    // (left, top, right, bottom), its walls.bin row (-1: a live card), and
+    // this frame's group (-1: none).
+    int artSet = 0;
+    int artFile = 0;
+    float screenRect[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    int wallRow = -1;
+    int shadowGroup = -1;
+    bool tall = false; // standing taller than half a wall: a group needs one
 };
 
 extern std::vector<ObjectDraw> gObjectDraws;
@@ -423,6 +438,8 @@ extern unsigned int gObjectVao;
 extern unsigned int gHeroVao;
 extern unsigned int gHeroTexture;
 extern bool gHeroLoaded;
+// 241: binds this frame's composite sprite groups (uShadowGroups) to `unit`.
+void bindShadowGroups(int unit);
 extern int gHeroPickId;
 
 void destroyStaticHero();

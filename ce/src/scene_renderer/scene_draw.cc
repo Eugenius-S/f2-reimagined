@@ -150,7 +150,8 @@ void drawStaticPreview(bool withWalls, bool withHero)
         if (lit && tile >= 0) setLightAnchor(tile);
     };
     auto shadowAtFeet = [&](float x, float z, bool ground = false, float groundY = 0.0f, float wallX = 0.0f,
-                            float wallZ = 0.0f, bool feet = false) {
+                            float wallZ = 0.0f, bool feet = false, int group = -1) {
+        glUniform1i(gSceneShadowGroupLocation, group);
         glUniform2f(gSceneShadowAnchorLocation, x, z);
         glUniform4f(gSceneShadowGroundLocation, ground ? 1.0f : 0.0f, groundY, wallX, wallZ);
         glUniform1f(gSceneShadowFeetLocation, feet ? 1.0f : 0.0f);
@@ -161,6 +162,9 @@ void drawStaticPreview(bool withWalls, bool withHero)
         glBindTexture(kTexture2D, gWallSeeThroughTexture);
         glUniform1i(gSceneSeeThroughObjectsLocation, 2);
     }
+    // 241: no card is in a group until its draw says so.
+    glUniform1i(gSceneShadowGroupLocation, -1);
+    if (lit) bindShadowGroups(9);
     glActiveTexture(kTexture0);
     glUniform1i(gSceneTextureLocation, 0);
     glBindVertexArray(gFloorVao);
@@ -260,7 +264,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
         for (const ObjectDraw& draw : gObjectDraws) {
             if (draw.pickOnly || !draw.flat || draw.tint[0] >= 0.0f) continue;
             lightSprite(draw.tile);
-            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow);
+            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
             glBindTexture(kTexture2D, draw.texture);
             glDrawArrays(kTriangles, draw.firstVertex, 6);
         }
@@ -302,7 +306,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
             if (draw.pickOnly || draw.flat || draw.tint[0] >= 0.0f) continue;
             glUniform1i(gSceneSeeThroughLocation, egg && draw.seeThrough ? 2 : 0);
             lightSprite(draw.tile);
-            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow);
+            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
             glBindTexture(kTexture2D, draw.texture);
             glDrawArrays(kTriangles, draw.firstVertex, 6);
         }
@@ -354,7 +358,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
                 if (draw.pickOnly || draw.flat || draw.tint[0] >= 0.0f || !draw.seeThrough) continue;
                 lightSprite(draw.tile);
                 shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX,
-                    draw.wallNormalZ, draw.feetShadow);
+                    draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
                 glBindTexture(kTexture2D, draw.texture);
                 glDrawArrays(kTriangles, draw.firstVertex, 6);
             }
@@ -378,7 +382,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
         for (const ObjectDraw& draw : gObjectDraws) {
             if (draw.pickOnly || draw.tint[0] < 0.0f) continue;
             lightSprite(draw.tile);
-            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow);
+            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
             glUniform3f(gSceneTintLocation, draw.tint[0], draw.tint[1], draw.tint[2]);
             glUniform1i(gSceneGlassGrayLocation, draw.glassGray ? 1 : 0);
             glBindTexture(kTexture2D, draw.texture);

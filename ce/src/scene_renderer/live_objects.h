@@ -60,6 +60,9 @@ struct StaticObjectFrame {
     // OBJECT_NO_BLOCK: ground clutter (scrub, weeds) whatever its height; its
     // card reads the sun shadow as the ground does (109).
     bool noBlock = false;
+    // 241: the art set of a scenery piece (its file name without the
+    // trailing number, TEMPLE01..temple08), interned; 0: none.
+    int artSet = 0;
 };
 
 struct StaticHeroInfo {

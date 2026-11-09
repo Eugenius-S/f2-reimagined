@@ -276,6 +276,32 @@ struct ObjectCardPass {
     int onTile; // standing sprites painted on lastTile so far
 };
 
+// 241: the art set a scenery piece belongs to: its file name without the
+// trailing number and extension (TEMPLE01..temple08: "temple"), interned
+// per fid; 0 when the name ends in no number. A composite sprite's pieces
+// share it, and the renderer shades touching pieces of one set as one.
+int sceneryArtSet(int fid, const char* path)
+{
+    static std::map<int, int> byFid;
+    static std::map<std::string, int> byStem;
+    const auto found = byFid.find(fid);
+    if (found != byFid.end()) return found->second;
+    std::string stem = path != nullptr ? path : "";
+    const size_t slash = stem.find_last_of("\\/");
+    if (slash != std::string::npos) stem.erase(0, slash + 1);
+    const size_t dot = stem.find_last_of('.');
+    if (dot != std::string::npos) stem.erase(dot);
+    const size_t named = stem.find_last_not_of("0123456789");
+    int set = 0;
+    if (named != std::string::npos && named + 1 < stem.size()) {
+        stem.erase(named + 1);
+        std::transform(stem.begin(), stem.end(), stem.begin(), [](unsigned char c) { return static_cast<char>(tolower(c)); });
+        set = byStem.emplace(stem, static_cast<int>(byStem.size()) + 1).first->second;
+    }
+    byFid.emplace(fid, set);
+    return set;
+}
+
 // How many standing sprites the game paints on this object's hex before it
 // (the walk is in the game's own painting order).
 int nextStackOnTile(ObjectCardPass& pass, Object* object)
@@ -442,6 +468,7 @@ void addObjectCard(Object* object, void* context)
     frame.pickOnly = pickOnly;
     frame.seeThrough = seeThrough;
     frame.noBlock = (object->flags & OBJECT_NO_BLOCK) != OBJECT_NONE;
+    if (objectFid.objectType() == OBJ_TYPE_SCENERY) frame.artSet = sceneryArtSet(object->fid, objectFid.filePath());
     // The engine's translucent kinds and their tints (_obj_render_object).
     Color tint = COLOR_WHITE;
     bool translucent = true;
