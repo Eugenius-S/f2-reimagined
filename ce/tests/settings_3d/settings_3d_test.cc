@@ -573,6 +573,25 @@ int main()
     const std::string status = scene::menuStatusText("snapshot: example.png", "russian");
     if (!check(status != "snapshot: example.png" && status.find("example.png") != std::string::npos,
             "localized status keeps dynamic filenames intact")) return 1;
+    // The 3D toggle's refusal (211) names the map and its elevation in the
+    // game's language. CP1251 bytes: "у этой" and "этаж" below.
+    const std::string noScene = scene::toggleRefusalText("no-scene", "artemple", 0, "russian");
+    const std::string loadFailed = scene::toggleRefusalText("load-failed", "artemple", 1, "russian");
+    if (!check(noScene.rfind("\xF3 \xFD\xF2\xEE\xE9", 0) == 0
+            && noScene.find("artemple") != std::string::npos
+            && noScene.find("(\xFD\xF2\xE0\xE6 0)") != std::string::npos
+            && loadFailed.find("artemple") != std::string::npos
+            && loadFailed.find("(\xFD\xF2\xE0\xE6 1)") != std::string::npos
+            && noScene.find('?') == std::string::npos
+            && loadFailed.find('?') == std::string::npos,
+            "the toggle's refusal names the map and elevation in Russian")) return 1;
+    if (!check(scene::toggleRefusalText("disabled", "", 0, "russian")
+            == scene::menuText("3D scene is disabled in settings", "russian")
+            && scene::toggleRefusalText("no-map", "", 0, "russian")
+            == scene::menuText("no map is loaded", "russian")
+            && scene::toggleRefusalText("no-scene", "arvill2", 0, "english")
+            == "this map has no 3D scene: arvill2 (elevation 0)",
+            "the refusal catalog keeps the English fallback")) return 1;
     const auto englishDescriptors = settingsGetDescriptors();
     gConfiguredLanguage = "russian";
     if (!check(initializeWith(nullptr), "initialize real descriptors in Russian")) return 1;

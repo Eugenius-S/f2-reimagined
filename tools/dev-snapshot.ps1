@@ -96,6 +96,9 @@ param(
     # Turn [3d] fps_counter on in this run's isolated config copy, so the
     # presented frame (the watchdog capture) shows the readout.
     [switch]$FpsCounter,
+    # Extra [3d] keys for this run's isolated config copy, "key=value" each
+    # (for example enabled=0). The fixed test config keeps its defaults.
+    [string[]]$Set3d,
     [ValidateSet('resolution', 'mode')]
     [string]$PreferencesDropdown,
     [switch]$DevPanel,
@@ -134,7 +137,7 @@ param(
     [switch]$ConfiguredDisplay,
     [ValidateSet('english', 'russian')]
     [string]$Language,
-    [ValidateSet('save', 'save-key', 'cancel', 'cancel-key', 'escape', 'defaults', 'verify', 'cursor-speed')]
+    [ValidateSet('save', 'save-key', 'cancel', 'cancel-key', 'escape', 'defaults', 'verify', 'cursor-speed', 'toggle3d')]
     [string]$PreferencesProbe,
     [switch]$ReuseTestConfig,
     [switch]$CaptureConsole,
@@ -476,6 +479,30 @@ if ($FpsCounter) {
         }
     }
     if (-not $counterFound) { throw 'Could not find [3d].fps_counter in the isolated test config.' }
+    [System.IO.File]::WriteAllLines($configPath, $configLines, [System.Text.UTF8Encoding]::new($false))
+}
+if ($Set3d) {
+    $configLines = [System.Collections.Generic.List[string]]::new()
+    $in3dSection = $false
+    $written = @{}
+    foreach ($line in [System.IO.File]::ReadAllLines($configPath)) {
+        if ($line -match '^\s*\[') { $in3dSection = $line.Trim() -eq '[3d]' }
+        if ($in3dSection) {
+            $key = ($line -split '=')[0].Trim()
+            $seedEntry = $Set3d | Where-Object { ($_ -split '=')[0].Trim() -eq $key } | Select-Object -First 1
+            if ($seedEntry) {
+                $value = ($seedEntry -split '=', 2)[1]
+                $configLines.Add("$key=$value")
+                $written[$key] = $true
+                continue
+            }
+        }
+        $configLines.Add($line)
+    }
+    foreach ($entry in $Set3d) {
+        $key = ($entry -split '=')[0].Trim()
+        if (-not $written.ContainsKey($key)) { throw "Could not find [3d].$key in the isolated test config." }
+    }
     [System.IO.File]::WriteAllLines($configPath, $configLines, [System.Text.UTF8Encoding]::new($false))
 }
 $configHashBefore = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
@@ -1072,6 +1099,14 @@ if ($PreferencesProbe) {
     $resultPath = Join-Path $OutputDirectory 'preferences-result.json'
     $probeResult | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $resultPath -Encoding utf8
     Write-Output "PREFERENCES_PROBE RESULT $resultPath"
+    # A probe's own evidence snapshots (the 3D toggle's post-panel shot, 211)
+    # land in the run folder's shots tree: bring them along before cleanup.
+    $shotSource = Join-Path $runDirectory 'shots'
+    if (Test-Path -LiteralPath $shotSource) {
+        Get-ChildItem -LiteralPath $shotSource -Recurse -File |
+            Where-Object { $_.Extension -in '.png', '.jpg', '.json' } |
+            ForEach-Object { Copy-Item $_.FullName (Join-Path $OutputDirectory $_.Name) -Force }
+    }
     Complete-RunFolder
     return
 }

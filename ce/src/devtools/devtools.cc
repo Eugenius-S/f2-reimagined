@@ -170,6 +170,9 @@ int gClockLadderStage = -1;
 bool gPreferencesSnapshotPending = false;
 bool gPreferencesSnapshotActive = false;
 bool gPreferencesSnapshotBottom = false;
+// The 3D toggle probe's post-panel hold (211): frames left before the
+// evidence snapshot and the exit.
+int gPreferencesPostFrameHold = 0;
 std::string gPreferencesSnapshotDropdown;
 // --dev-map-tour: the map elevations to visit after the startup one; the
 // step counts snapshots taken (-1: no tour).
@@ -2236,9 +2239,32 @@ void update()
         doPreferences(false);
         gPreferencesSnapshotActive = false;
         if (preferencesProbeFinished()) {
-            printf("PREFERENCES_PROBE finished; requesting isolated helper exit\n");
-            fflush(stdout);
-            _game_user_wants_to_quit = GAME_QUIT_REQUEST_EXIT;
+            if (preferencesProbeWantsPostFrame()) {
+                // The 3D toggle probe (211): hold a few rendered frames so the
+                // status line the toggle just posted is on screen, take the
+                // evidence shot, then leave.
+                gPreferencesPostFrameHold = 12;
+            } else {
+                printf("PREFERENCES_PROBE finished; requesting isolated helper exit\n");
+                fflush(stdout);
+                _game_user_wants_to_quit = GAME_QUIT_REQUEST_EXIT;
+            }
+        }
+    }
+    if (gPreferencesPostFrameHold > 0 && sceneStartupReady() && !inBlockingGameState()) {
+        // The toggle acts once the game reaches its normal state again; wait
+        // that out before counting the hold down (211).
+        if (gameGetState() == GameState::Normal) {
+            if (--gPreferencesPostFrameHold == 0) {
+                renderPresent();
+                const bool captured = takeSnapshot();
+                printf("PREFERENCES_PROBE post-frame snapshot %s (status=%s)\n",
+                    captured ? "saved" : "failed", gStatus);
+                fflush(stdout);
+                printf("PREFERENCES_PROBE finished; requesting isolated helper exit\n");
+                fflush(stdout);
+                _game_user_wants_to_quit = GAME_QUIT_REQUEST_EXIT;
+            }
         }
     }
     if (gDialogFixtureRequested && !gDialogFixtureStarted && !gDialogFixtureFinished
