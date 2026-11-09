@@ -41,6 +41,11 @@ Left (none blocks): `set_dude_obj`, `HOOK_SETGLOBALVAR`, `WorldMapSlots`,
 `BoxBarColours`. The static scan now lists only `set_dude_obj` and
 `HOOK_SETGLOBALVAR`.
 
+Checks: ctest 25/25 (with the new `sfall_perks_tests`). The original view
+regression passed 153 spots; `den-residential` timed out with no snapshot,
+and it fails the same way with main's exe, so it is not from this change.
+Not seen live: the `epac3` reply, an edited FRM being drawn in play.
+
 ## The gap list before (12 gaps, 1 blocking)
 
 Count: static references (scripts), then runtime fires on the routes.
