@@ -1,0 +1,3 @@
+3D save/load: SAVE_PREVIEW_FIXTURE PASS map=KLADWTWN.MAP mode=3d save_ui=1 load_ui=1 saved=1 loaded=1
+Original-view save/load: SAVE_PREVIEW_FIXTURE PASS map=KLADWTWN.MAP mode=classic save_ui=1 load_ui=1 saved=1 loaded=1
+Both runs: 1920x1080, scale 2, isolated test roots, build ebad0465a (contains the #297 preview fix, 7e01a4d61).

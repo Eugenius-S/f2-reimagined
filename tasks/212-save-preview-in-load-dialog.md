@@ -2,15 +2,15 @@
 id: 212
 title: The load dialog shows each save's preview picture
 milestone: M1
-status: open
+status: done
 owner: glm
 suggested: glm
 priority: medium
 tier: 2
 claude-only: no
 user-check: yes
-depends-on: []
-reviewed: no
+depends-on: [134]
+reviewed: yes
 ---
 
 ## Goal
@@ -46,3 +46,13 @@ dialog must show the picture of the save slot being picked.
   resolved in favor of the 183 versions, the preview capture kept as a
   thin wrapper), build verified, PR 297 refreshed and marked ready.
 - 2026-11-08 claude: owner order 2026-11-08: glm, fourth after 211.
+- 2026-11-10, glm. No new code was needed: the fix is #297 (the task 134
+  recovery, merged 2026-11-07). Verified it on the current build: two full
+  save→load round trips on the demo Klamath startup (1920x1080, scale 2,
+  isolated test roots), one with the 3D scene active, one in the classic
+  view. Both report SAVE_PREVIEW_FIXTURE PASS (save_ui=1 load_ui=1
+  saved=1 loaded=1), and the load-dialog snapshots show the saved slot's
+  picture in both modes - the 3D-presented street view for the 3D save,
+  the 2D view for the classic save; neither black nor stale. Evidence:
+  runs/212-save-preview-in-load-dialog/ (README, fixture-result.txt, the
+  save and load screens of both runs). Done.
