@@ -1,4 +1,5 @@
-id: 119
+---
+id: 245
 title: Composite owner fullscreen art with the 3D interface
 milestone: M1
 status: done
@@ -38,3 +39,8 @@ Done: Fixed the full-view compositor to apply the RGBA background between palett
 Check: Release build; `ctest --test-dir build --output-on-failure` passed 18/18. Full regression against references reported 14/16. The two failures (klagraz-e0: 183 pixels, klaratcv-e2: 6299 pixels) reproduced on clean `origin/main` with the same counts; direct branch-to-main PNG comparisons at both points were 0 different pixels. Sidecars identify CE commit 27ded3a6 and the final regression EXE SHA-256 `707ab34152471be1a725bf60ebdba553ba9e75e5a55d625ce0791906ef64045f`.
 
 Limit: Runtime screenshots used a temporary isolated test hook to force the death scene; those hooks were removed before the final build. The owner's game, configuration, and cache were not changed.
+
+### 2026-11-10 claude
+
+Renumbered from 119: two tasks had id 119, and the lid drums task keeps it
+(task 120 depends on that one). The opening `---` was missing and is back.
