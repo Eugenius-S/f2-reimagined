@@ -1,0 +1,62 @@
+devtools: startup target kladwtwn e0 accepted=1 blocking=0
+scene: cache <path>
+devtools: static wall+hero preview started for KLADWTWN.MAP elevation 0
+scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+MAP_EDGE map=KLADWTWN.MAP elevation=0 zones=1 square_rect=99,0,0,99
+MAP_EDGE zone=0 tiles=13331,6901,23253,25771 pixels=5312,1008,2624,2544 scroll_border=4832,1224,3104,2328
+scene: cache <path>
+scene: preview policy=iso-disabled gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=1 combat=0 dialog=0 movie=0
+scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+DEV_WATCHDOG state map=ARVILLAG.MAP elevation=0 tile=21315 combat=0 dialog=0 movie=0 view=3 tour_step=1 walk_stage=0
+MAP_EDGE map=ARVILLAG.MAP elevation=0 zones=1 square_rect=99,0,0,99
+MAP_EDGE zone=0 tiles=11918,8679,15645,31122 pixels=5088,984,3040,2592 scroll_border=4608,1200,3520,2376
+perf present sync=0.44 sharp=0.00 refresh=6.46 frames=60
+perf loop input=1.24 world=43.57 present=9.04 frame=53.86 frames=60
+scene: cache <path>
+scene: preview policy=iso-disabled gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=1 combat=0 dialog=0 movie=0
+scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+MAP_EDGE map=DENBUS1.MAP elevation=0 zones=1 square_rect=99,0,0,99
+MAP_EDGE zone=0 tiles=14730,10075,24462,33713 pixels=5152,1032,2752,2688 scroll_border=4672,1248,3232,2472
+scene: cache <path>
+scene: preview policy=iso-disabled gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=1 combat=0 dialog=0 movie=0
+scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+perf present sync=0.39 sharp=0.00 refresh=6.54 frames=36
+perf loop input=0.42 world=46.64 present=8.61 frame=55.67 frames=36
+DEV_WATCHDOG state map=MODMAIN.MAP elevation=0 tile=23533 combat=0 dialog=0 movie=0 view=3 tour_step=3 walk_stage=0
+MAP_EDGE map=MODMAIN.MAP elevation=0 zones=1 square_rect=99,0,0,99
+MAP_EDGE zone=0 tiles=11131,10456,28675,26365 pixels=5472,960,2720,2544 scroll_border=4992,1176,3200,2328
+scene: cache <path>
+scene: preview policy=iso-disabled gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=1 combat=0 dialog=0 movie=0
+scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+DEV_WATCHDOG skipped script dialog request map=VCTYCTYD.MAP elevation=0 tile=27706
+DEV_WATCHDOG skipped script dialog request map=VCTYCTYD.MAP elevation=0 tile=27706
+DEV_WATCHDOG skipped script dialog request map=VCTYCTYD.MAP elevation=0 tile=27706
+DEV_WATCHDOG skipped script dialog request map=VCTYCTYD.MAP elevation=0 tile=27706
+DEV_WATCHDOG skipped script dialog request map=VCTYCTYD.MAP elevation=0 tile=27706
+MAP_EDGE map=VCTYCTYD.MAP elevation=0 zones=1 square_rect=99,0,0,99
+MAP_EDGE zone=0 tiles=8916,7899,22063,27350 pixels=5280,1056,2976,2520 scroll_border=4800,1272,3456,2304
+scene: cache <path>
+scene: preview policy=iso-disabled gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=1 combat=0 dialog=0 movie=0
+scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+perf present sync=0.35 sharp=0.00 refresh=5.77 frames=55
+perf loop input=0.36 world=29.27 present=7.93 frame=37.56 frames=55
+DEV_WATCHDOG state map=GECKSETL.MAP elevation=0 tile=23909 combat=0 dialog=0 movie=0 view=3 tour_step=5 walk_stage=0
+MAP_EDGE map=GECKSETL.MAP elevation=0 zones=1 square_rect=99,0,0,99
+MAP_EDGE zone=0 tiles=9706,9286,20848,27138 pixels=4992,1056,2688,2448 scroll_border=4512,1272,3168,2232
+scene: cache <path>
+scene: preview policy=iso-disabled gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=1 combat=0 dialog=0 movie=0
+scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+MAP_EDGE map=BROKEN1.MAP elevation=0 zones=1 square_rect=99,0,0,99
+MAP_EDGE zone=0 tiles=17366,8070,20642,30165 pixels=5824,888,2560,2784 scroll_border=5344,1104,3040,2568
+perf present sync=0.36 sharp=0.00 refresh=5.85 frames=59
+perf loop input=0.39 world=26.47 present=8.12 frame=34.97 frames=59
+scene: cache <path>
+scene: preview policy=iso-disabled gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=1 combat=0 dialog=0 movie=0
+scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+DEV_WATCHDOG state map=NEWR1.MAP elevation=0 tile=24305 combat=0 dialog=0 movie=0 view=3 tour_step=7 walk_stage=0
+MAP_EDGE map=NEWR1.MAP elevation=0 zones=1 square_rect=99,0,0,99
+MAP_EDGE zone=0 tiles=21360,6892,33495,32921 pixels=5344,960,2816,2688 scroll_border=4864,1176,3296,2472
+DEV_WATCHDOG state map=NEWR1.MAP elevation=0 tile=24305 combat=0 dialog=0 movie=0 view=3 tour_step=-1 walk_stage=0
+perf present sync=0.36 sharp=0.00 refresh=3.83 frames=106
+perf loop input=0.39 world=11.88 present=6.62 frame=18.89 frames=106
+DEV_WATCHDOG state map=NEWR1.MAP elevation=0 tile=24305 combat=0 dialog=0 movie=0 view=3 tour_step=-1 walk_stage=0
