@@ -100,3 +100,38 @@ The world map, dialogs, menus.
   full regression remain valid.
 
 - 2026-11-08 glm: the incomplete-map fallback landed as PR #272 (e274f59b): a map whose walls or projection sidecar cannot load keeps its 3D ground plane; activeView() reports the loaded level. Still owed: the missing-floor path (no floor data cannot be replaced) and the scripted tour acceptance.
+- 2026-11-10, glm. The scripted area walk now runs clean and closes that
+  acceptance item: one background process, startup Klamath then
+  arvillag → denbus1 → modmain → vctyctyd → gecksetl → broken1 → newr1
+  (Arroyo via arvillag; arvill2 is absent from the worldmap registry), with
+  -SkipScriptBlocking so map-entry scripts do not hold the state. Every stop
+  reports scene_view=full, 0 skipped object cards, and the captured console
+  has 0 "stays 2D" lines - the 2026-11-04 harness hangs are gone (the tour
+  engine now snapshots where the game is and moves on when a stop cannot be
+  reached). Evidence: runs/173-3d-never-off/area-tour/ (8 shots, 8 sidecars,
+  console log).
+- 2026-11-10, glm. The incomplete-elevation family (169's find) is alive in
+  a new form: desert5 e1 with the 1.13.0 re-export has floor geometry but
+  0 sprites, 0 walls, an empty tile atlas - classic 2D shows a lit desert
+  strip with two tents, barrels and a tree, the 3D view shows a dark plane
+  and the hero (runs/173-3d-never-off/desert5-e1/ vs
+  desert5-e1-classic/scr00000.png). The view stays 3D (no 2D fallback), but
+  the elevation's content is lost in the export walk. That is an exporter
+  content bug of its own, not a fallback-ladder gap; ask the owner whether
+  to open a dedicated task (the 224 sweep will hit the same family).
+- 2026-11-10, glm. Owner question on the last unresolved fallback: a map
+  with no cache at all (kladwtwn e1 has no cache directory; the 211 run
+  showed vctyctyd refusing the toggle with "у этой карты нет 3D-сцены" and
+  staying 2D, runs/211-3d-mode-toggle-no-response/sceneless-map-refusal.jpg)
+  still lands in 2D on entry. "Builds one on entry" cannot run the exporter
+  inside the shipped game - the exporter is Python tooling. Options: (a) the
+  launcher pre-builds every local map's cache; (b) a renderer fallback that
+  lays the live map's own 2D floor art on a 3D ground plane until a cache
+  exists (a feature of its own size); (c) accept 2D on cacheless maps.
+  Recorded here, moving on without waiting.
+- 2026-11-10, glm. The folded-in list of unique objects that need their own
+  model (the Arroyo stone head, the Vault City gate, the Reno signs, the
+  vertibirds): producing it map by map with shots is exactly what the 224
+  geometry sweep and the city walk do; named finds go to those logs and the
+  consolidated list lands there. This task keeps the fallback ladder and
+  the never-2D guarantee.
