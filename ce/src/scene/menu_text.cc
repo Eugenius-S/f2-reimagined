@@ -184,6 +184,10 @@ const std::vector<Translation>& catalog()
         { "no map is loaded", cp1251(u8"карта не загружена") },
         { "this map has no 3D scene", cp1251(u8"у этой карты нет 3D-сцены") },
         { "the 3D scene failed to load", cp1251(u8"3D-сцена не загрузилась") },
+        // The word goes through the catalog too: a narrow Cyrillic literal
+        // would land in the compiler's execution charset, which is only
+        // CP1251 on a Russian machine.
+        { " (elevation ", cp1251(u8" (этаж ") },
     };
     return strings;
 }
@@ -228,10 +232,8 @@ std::string toggleRefusalText(const char* reason, const std::string& map, int el
     // The 3D toggle's refusal (211): a status-line phrase naming the map and
     // the elevation, in the game's language. Map names stay as they are.
     if (reason == nullptr) return std::string();
-    const bool isRussian = russian(language);
-    const std::string place = isRussian
-        ? ": " + map + " (этаж " + std::to_string(elevation) + ")"
-        : ": " + map + " (elevation " + std::to_string(elevation) + ")";
+    const std::string place = ": " + map
+        + std::string(menuText(" (elevation ", language)) + std::to_string(elevation) + ")";
     if (std::strcmp(reason, "disabled") == 0) {
         return menuText("3D scene is disabled in settings", language);
     }
