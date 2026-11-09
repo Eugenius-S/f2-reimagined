@@ -71,10 +71,12 @@ artemple entrance (inbox, grow the map with pines).
 - 2026-11-09 claude: cut from the owner's find; mechanism and pieces found, reproduction above.
 - 2026-11-09 claude: the pieces of one art set whose cards touch on the game's
   screen, with no file repeated and one piece taller than half a wall, take one
-  verdict: the darkest of their feet, read with the group's own walls.bin rows
+  verdict (the tall piece a live card: cave walls baked into walls.bin
+  are sets too and keep their per-pixel shade): the darkest of their feet, read with the group's own walls.bin rows
   left out at the taps (TEMPLE04/05 are walls.bin rows). Cards and walls.bin
   rows of the temple now shade as one at 9, 12 and 16. The temple's lower half
   (stairs, lower domes) is not cards: the exporter bakes it into the floor
   atlas `tiles.png`, so it shades as ground, per pixel. That part goes to 242.
   Trees and scrub keep their own verdicts (changed-hour-09.jpg: only the temple
   and the cliff set change; the hero and fires animate).
+  Fly tour against main (Klamath, 43 spots): none changed (tour-changed.jpg).

@@ -94,7 +94,8 @@ void groupCompositeSprites()
             std::sort(files.begin(), files.end());
             if (std::adjacent_find(files.begin(), files.end()) != files.end()) continue;
             // Low clutter of one set (rocks, scrub) keeps its own verdicts:
-            // a group is a building, so one piece stands taller than half a wall.
+            // a group is a building, so one live card (not a walls.bin piece:
+            // cave walls are sets too) stands taller than half a wall.
             if (std::none_of(part.begin(), part.end(), [](int index) { return gObjectDraws[index].tall; })) continue;
             const size_t base = gGroupTexels.size();
             gGroupTexels.resize(base + kGroupTexels * 4, 0.0f);
@@ -490,7 +491,7 @@ bool addStaticObject(const StaticObjectFrame& frame, std::string* error)
         draw.screenRect[2] = draw.screenRect[0] + static_cast<float>(frame.width);
         draw.screenRect[3] = draw.screenRect[1] + static_cast<float>(frame.height);
         draw.wallRow = frame.pickOnly ? staticWallObjectRow(frame.tile, frame.fid) : -1;
-        draw.tall = !flat && high - low > staticHalfWallHeight();
+        draw.tall = !flat && !frame.pickOnly && high - low > staticHalfWallHeight();
     }
     const int order[6] = { 0, 1, 2, 0, 2, 3 };
     for (int index : order) {
