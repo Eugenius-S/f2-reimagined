@@ -12,6 +12,7 @@
 #include "platform_compat.h"
 #include "scripts.h"
 #include "sfall_config.h"
+#include "sfall_gaps.h"
 
 namespace fallout {
 
@@ -106,6 +107,7 @@ void sfall_gl_scr_reset()
 
 void sfall_gl_scr_exit()
 {
+    sfallGapReport();
     if (state != nullptr) {
         sfall_gl_scr_remove_all();
 

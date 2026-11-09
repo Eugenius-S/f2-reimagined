@@ -400,6 +400,8 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/sfall_ext.h"
     "src/sfall_filesystem.cc"
     "src/sfall_filesystem.h"
+    "src/sfall_gaps.cc"
+    "src/sfall_gaps.h"
     "src/sfall_global_vars.cc"
     "src/sfall_global_vars.h"
     "src/sfall_global_scripts.cc"
@@ -415,6 +417,8 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/sfall_object_name.cc"
     "src/sfall_object_name.h"
     "src/sfall_opcodes.cc"
+    "src/sfall_perks.cc"
+    "src/sfall_perks.h"
     "src/sfall_opcodes.h"
     "src/sfall_script_hooks.cc"
     "src/script_sound.cc"
@@ -705,6 +709,13 @@ endif()
 
 if(BUILD_TESTING)
     add_subdirectory(tests/settings_3d)
+
+    add_executable(sfall_perks_tests
+        "src/sfall_perks.cc"
+        "tests/sfall_perks/sfall_perks_test.cc"
+    )
+    target_include_directories(sfall_perks_tests PRIVATE ${ZLIB_INCLUDE_DIRS})
+    add_test(NAME sfall_perks_tests COMMAND sfall_perks_tests)
 endif()
 
 add_subdirectory("third_party/fpattern")
