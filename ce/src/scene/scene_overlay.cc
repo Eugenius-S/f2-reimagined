@@ -101,6 +101,11 @@ bool shownOutlineProjection(Object* object, OutlineProjection* context, int* fid
 
 void drawOutline(Object* object, void* context)
 {
+    // The mouse's cursor objects draw with their outline in the cursor pass
+    // (_obj_render_scene_overlay). A second outline here projects the flat
+    // hexagon through the 3D camera and paints scaled ghost rings around the
+    // cursor once the view turns or zooms.
+    if (object == gGameMouseHexCursor || object == gGameMouseBouncingCursor) return;
     if (scene_renderer::sceneCameraTransformed()) {
         OutlineProjection projection = {};
         int fid = object->fid;

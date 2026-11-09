@@ -1,8 +1,9 @@
 # Owner shots
 
-The owner plays, presses F9, and the game saves the frame as it is on screen
-with a JSON next to it: `shots/dev/<date>/YYYYMMDD-HHMMSS-<map>-e<elevation>.png`
-and `.json`. A batch of these shots with the owner's notes becomes tasks.
+The owner plays, presses F9 or F12, and the game saves the frame as it is on
+screen with a JSON next to it: `screenshots/YYYYMMDD-HHMMSS-<map>-e<elevation>.png`
+and `.json` (the owner's folder since 239; the message line names the path).
+A batch of these shots with the owner's notes becomes tasks.
 
 ## How an agent reads a batch
 

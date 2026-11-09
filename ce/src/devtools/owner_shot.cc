@@ -34,6 +34,7 @@
 #include "../game_movie.h"
 #include "../kb.h"
 #include "../map.h"
+#include "../window_manager.h"
 #include "../map_defs.h"
 #include "../mouse.h"
 #include "../worldmap.h"
@@ -64,6 +65,30 @@ namespace {
 constexpr int kMaxRegionTiles = 256;
 constexpr int kMaxRegionObjects = 128;
 constexpr int kMaxRegionHexProbe = 20000;
+#ifdef _WIN32
+constexpr char kPathSeparator = '\\';
+#else
+constexpr char kPathSeparator = '/';
+#endif
+
+// A saved file's path as the message line shows it. The log line is short,
+// so a file inside the game folder shows as a path relative to it
+// ("screenshots\...png"); anything else (a test run's F2CE_DEV_OUT folder)
+// shows absolute.
+std::string shownPath(const std::filesystem::path& path)
+{
+    std::error_code error;
+    std::filesystem::path result = std::filesystem::absolute(path, error);
+    if (error) result = path;
+    std::filesystem::path gameFolder = std::filesystem::current_path(error);
+    std::string text = result.make_preferred().string();
+    if (!error) {
+        std::string root = gameFolder.make_preferred().string();
+        if (!root.empty() && root.back() != kPathSeparator) root += kPathSeparator;
+        if (text.rfind(root, 0) == 0) return text.substr(root.size());
+    }
+    return text;
+}
 
 // The pending --dev-owner-shot-once shot, how test runs capture acceptance
 // shots without a key press. "=N" delays it N seconds past the ready view,
@@ -453,14 +478,12 @@ bool takeShot()
         }
     }
 
-    char dateStamp[11];
-    snprintf(dateStamp, sizeof(dateStamp), "%.4s-%.2s-%.2s", stamp, stamp + 4, stamp + 6);
-
-    // The files land next to the dev shots: shots/dev/<date>/.
+    // The owner's shots land in <game>/screenshots/, the folder he looks in
+    // (the dev snapshots keep shots/dev/<date>/).
     fs::path directory;
     std::string folderError;
     try {
-        directory = dev_output::outputDirectory("shots/dev", dateStamp);
+        directory = dev_output::outputDirectory("screenshots");
     } catch (const std::exception& exception) {
         folderError = exception.what();
     }
@@ -528,9 +551,8 @@ bool takeShot()
     writeShotFiles(imagePath.string(), sidecarPath.string(), std::move(pixels), std::move(indexed),
         std::move(palette), width, height, std::move(json));
 
-    char message[128];
-    snprintf(message, sizeof(message), "shot saved: %s", imageFile.c_str());
-    displayMonitorAddMessage(scene::menuStatusText(message, settings.system.language).c_str());
+    // The full path: the owner sees where the file went without hunting.
+    displayMonitorAddMessage(scene::menuStatusText("shot saved: " + shownPath(imagePath), settings.system.language).c_str());
     return true;
 }
 
@@ -733,11 +755,9 @@ bool saveMark()
         struct tm* tmv = localtime(&t);
         if (tmv == nullptr || strftime(stamp, sizeof(stamp), "%Y%m%d-%H%M%S", tmv) == 0) return false;
     }
-    char dateStamp[11];
-    snprintf(dateStamp, sizeof(dateStamp), "%.4s-%.2s-%.2s", stamp, stamp + 4, stamp + 6);
     fs::path directory;
     try {
-        directory = dev_output::outputDirectory("shots/dev", dateStamp);
+        directory = dev_output::outputDirectory("screenshots");
     } catch (const std::exception&) {
         return false;
     }
@@ -789,9 +809,7 @@ bool saveMark()
     });
     markedWorker.detach();
 
-    char message[160];
-    snprintf(message, sizeof(message), "mark saved: %s-marked.png", gMarkStem);
-    displayMonitorAddMessage(scene::menuStatusText(message, settings.system.language).c_str());
+    displayMonitorAddMessage(scene::menuStatusText("mark saved: " + shownPath(markedPath), settings.system.language).c_str());
     return true;
 }
 
@@ -813,11 +831,9 @@ void enterMarkMode()
             return;
         }
     }
-    char dateStamp[11];
-    snprintf(dateStamp, sizeof(dateStamp), "%.4s-%.2s-%.2s", stamp, stamp + 4, stamp + 6);
     std::filesystem::path directory;
     try {
-        directory = dev_output::outputDirectory("shots/dev", dateStamp);
+        directory = dev_output::outputDirectory("screenshots");
     } catch (const std::exception&) {
         directory.clear();
     }
@@ -866,11 +882,24 @@ void enterMarkMode()
 
 void exitMarkMode()
 {
+    const bool hadRects = !gMarkRects.empty() || gMarkDragging;
     gMarkMode = false;
     gMarkClean.clear();
     gMarkClean.shrink_to_fit();
     gMarkRects.clear();
     gMarkDragging = false;
+    // The rectangles drew straight into the indexed screen: over the map view
+    // the next refresh re-blits over them, under the interface windows nothing
+    // ever does. Re-blit the screen once, or the last mark stays on the
+    // bottom panel forever.
+    if (hadRects) {
+        Rect screen;
+        screen.left = _scr_size.left;
+        screen.top = _scr_size.top;
+        screen.right = _scr_size.right;
+        screen.bottom = _scr_size.bottom;
+        windowRefreshAll(&screen);
+    }
 }
 
 // The scripted input's fake mouse device (preferences_probe.h): its events
@@ -1000,6 +1029,17 @@ void draw(unsigned char* surface, int width, int height, int pitch)
             surface[pitch * y + x1] = COLOR_GREEN;
         }
     };
+    // Over the 3D scene the rectangles ride drawSceneOverlay's RGBA patches:
+    // raw pixels here would land under the interface windows, where nothing
+    // refreshes, and stay drawn on the bottom panel after the mark ends.
+    if (scene_renderer::isActive() && scene::shouldPresent()
+        && scene::activeView() == scene::View::Full) {
+        ScopedFont scopedFont(101);
+        fontDrawText(surface + pitch * 8 + 8,
+            scene::menuText("MARK: drag rectangles, Enter saves, Esc cancels", settings.system.language),
+            width - 16, pitch, COLOR_GREEN);
+        return;
+    }
     for (const MarkRect& rect : gMarkRects) {
         outline(std::min(rect.x0, rect.x1), std::min(rect.y0, rect.y1),
             std::max(rect.x0, rect.x1), std::max(rect.y0, rect.y1));

@@ -75,3 +75,46 @@ the black box once sprites render. Both owner crops live on main
 Check: tools/dev-snapshot.ps1 -Map kladwtwn -SceneInput
 runs/239-cursor-artifacts/repro4/input.txt -DevInputShots 5
 -OutputDirectory runs/239-cursor-artifacts/repro4 -CaptureConsole
+
+### 2026-11-09 glm
+Done: all three faults fixed at the root and proven on the live game window
+(new runs/239-cursor-artifacts/run-live.ps1: runs the game with a real
+visible-or-offscreen window, pumps the scripted input, captures the window
+with PrintWindow; the old background-devshot path cannot show the mouse
+sprite at all - it re-draws the last present's texture, and no real SDL
+mouse exists there).
+
+1. Halo: the hex cursor is drawn twice per frame. The outline pass
+   (objectVisitOutlined) projects the flat 32x16 hexagon through the 3D
+   camera (objectDrawSceneOutline), so once the view turns or zooms a
+   scaled dotted ring lands next to the true ring the cursor pass draws.
+   Fix: scene_overlay.cc drawOutline skips gGameMouseHexCursor and
+   gGameMouseBouncingCursor - their outline belongs to the cursor pass.
+2. Black box: _mouse_blit_trans was null, so mouseShowCursor composited
+   the shape over the freshly composed under-buffer and opaque-blitted the
+   whole rect; at the map's top edge that under-buffer is palette black and
+   the maskOverlay rule keeps those world pixels opaque. Fix: a real
+   transparent blit _GNW95_ShowRectTrans (svga.cc), assigned to
+   _mouse_blit_trans; the screenshot path in input.cc keeps nulling it.
+3. Stale mark: over the 3D view the rectangles already ride the RGBA
+   overlay; the raw indexed painting only ever reached pixels nothing
+   refreshes. Fix: owner_shot.cc draw() takes the overlay path in the 3D
+   full view, and exitMarkMode() re-blits the screen once
+   (windowRefreshAll) so the last mark leaves no trace.
+4. Stacked inbox item: F9/F12 shots move from shots/dev/<date>/ to
+   <game>/screenshots/ (owner_shot.cc, PNG + JSON together), and the
+   message line names the path: "скриншот сохранён: screenshots\..." (a
+   test run's F2CE_DEV_OUT folder shows absolute). The dev snapshots keep
+   shots/dev/<date>/; docs/owner-shots.md updated.
+
+Evidence (JPEG, committed): 239-halo-before-after.jpg (dotted ghost ring
+gone after zoom), 239-scroll-box-before-after.jpg (transparent scroll
+cursor at the exact top edge), 239-mark-before-after.jpg (no green line on
+the bottom panel after Enter), 239-screenshots-path.jpg (the message line
+names screenshots\<file>.png). Raw frame folders stay untracked in live/.
+The scripted mouse ("move") drives the OS cursor: a live window reads the
+real mouse each frame, "gmove" answers only in background devshots.
+Check: runs/239-cursor-artifacts/run-live.ps1 -Background -InputFile none
+-Extra --dev-owner-shot-once=8 (shots land in <run>/screenshots/ under
+F2CE_DEV_OUT, in <game>/screenshots without it); the A/B pairs above come
+from runs/239-cursor-artifacts/live/{before,after}-frames and mark-*.
