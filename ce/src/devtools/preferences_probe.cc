@@ -9,6 +9,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "../game_mouse.h"
 #include "../input.h"
 #include "../kb.h"
 #include "../mouse.h"
@@ -107,6 +108,21 @@ void scriptedInputPump()
             return;
         }
         SDL_Event event = {};
+        if (action == "gmove") {
+            // The game's own cursor: the SDL-level "move" only reaches event
+            // readers, while the cursor sprite and the game logic follow the
+            // game's mouse state (the combat fixture drives it the same way).
+            // The hover event follows, so the game picks the action cursor and
+            // the scroll zones off its own hover path.
+            int x, y;
+            if (!(input >> x >> y)) { fprintf(stderr, "DEV_INPUT FAIL: invalid coordinates\n"); gInputActive = false; return; }
+            _mouse_set_position(x, y);
+            _mouse_simulate_input(0, 0, 0);
+            _gmouse_handle_event(x, y, 0);
+            printf("DEV_INPUT gmove %d %d\n", x, y);
+            fflush(stdout);
+            return;
+        }
         if (action == "wheel") {
             event.type = SDL_MOUSEWHEEL;
             if (!(input >> event.wheel.y)) { fprintf(stderr, "DEV_INPUT FAIL: invalid wheel\n"); gInputActive = false; return; }

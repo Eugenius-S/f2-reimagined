@@ -385,11 +385,14 @@ void patchCyclingRegion(SDL_Surface* indexedSurface, SDL_Surface* rgbaSurface,
             rgbaPixel[3] = 255;
         }
     }
-    // The overlay's own mask rule over the box.
+    // The overlay's own mask rule over the box. The row pointer starts at the
+    // box's left column: from column 0 it masked a strip at the screen's left
+    // edge instead, and the box's own see-through pixels kept the opaque
+    // palette black (the black box around the scroll cursor at the map edge).
     for (int y = y0; y <= y1; y++) {
         const unsigned char* index = indices + static_cast<size_t>(y) * indexPitch;
         const unsigned char* shown = gSharpShownMask.data() + static_cast<size_t>(y) * width;
-        unsigned char* pixel = rgba + static_cast<size_t>(y) * rgbaPitch;
+        unsigned char* pixel = rgba + static_cast<size_t>(y) * rgbaPitch + static_cast<size_t>(x0) * 4;
         for (int x = x0; x <= x1; x++, pixel += 4) {
             if (shown[x] != 0 && index[x] == COLOR_FIRST) {
                 pixel[0] = pixel[1] = pixel[2] = pixel[3] = 0;
