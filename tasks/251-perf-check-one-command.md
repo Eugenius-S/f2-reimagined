@@ -2,8 +2,8 @@
 id: 251
 title: One command checks the frame rate and the map load time against the owner's bar
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: glm
 suggested: glm
 priority: high
 tier: 1
