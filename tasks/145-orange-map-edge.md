@@ -118,3 +118,4 @@ test results described above.
   edge cut exists. The owner's scene.log has no fresh "clean map edges
   disabled" lines, so the clip-failure path did not fire; needs a live repro
   with logging on the transition itself.
+- 2026-11-11 claude (audit, folded in from the inbox line of 2026-11-09): at the artemple entrance the sides are black because the authored edge is about 704 px wide; the owner wants the map grown left and right (side clip planes and terrain) with pines planted, so a 21:9 screen sees forest.

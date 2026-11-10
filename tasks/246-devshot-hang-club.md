@@ -1,12 +1,12 @@
 ---
 id: 246
-title: Devshot hang club — five maps freeze the engine at load (classic and 3D)
+title: Devshot hang club, five maps freeze the engine at load (classic and 3D)
 milestone: M1
 status: todo
 owner: glm
 suggested: glm
 priority: high
-tier: 3
+tier: 0
 claude-only: no
 user-check: no
 depends-on: []
@@ -49,3 +49,4 @@ load / startup, not the 3D scene path. Diagnose and fix, so the
 - 2026-11-10 glm: found during the 224 city geometry sweep; four
   maps confirmed deterministic under a single clean driver, one
   probe at 180 s step timeout confirms a hard hang.
+- 2026-11-11 claude (audit): raised to tier 0. If a player's game hangs the same way, these are places nobody can get past; and task 146's combat fixture died on the same map (`runs/146-combat-fixture/klatoxcv-3d-fixed-startup/process.stdout.log` has no `COMBAT_FIXTURE START`), so 146, 135, 149, 148 and 111 wait on this. First step: tell whether a plain player entry (a save next to the map, walking in) hangs too.

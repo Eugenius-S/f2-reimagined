@@ -66,7 +66,8 @@ its art on a fixed plane.
 
 ## Out of scope
 
-The world map, dialogs, menus.
+The world map. (Dialogs, the inventory and menus opened over a local map
+are in scope since 2026-11-10: they draw over the live 3D view.)
 
 ## Log
 
@@ -139,3 +140,4 @@ The world map, dialogs, menus.
   consolidated list lands there. This task keeps the fallback ladder and
   the never-2D guarantee.
 - 2026-11-10 claude: the owner's ask folded in: 3D stays on under the inventory, menus and other screens opened on a local map.
+- 2026-11-11 claude (audit): AGENTS.md and this task's Out of scope now follow the owner's word of 2026-11-10 (menus over a local map keep 3D). `ce/src/scene/preview_policy.cc` knows four block reasons only (game state, the world map, isoDisable, a movie), so the inventory and the options menu switch 3D off through one of them: log the reason name (`scene_view.cc:405`) on opening each screen first. Runs after 157, not beside it.

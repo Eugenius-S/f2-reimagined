@@ -88,7 +88,9 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
   `devtools/`) gets a hook or a call at most; the logic lives in our modules.
 - On a local map the 3D view never turns off. An object that cannot be
   built in 3D yet stands as a flat picture (a billboard or a fixed plane),
-  never as a switch back to 2D. The world map, dialogs and menus stay 2D.
+  never as a switch back to 2D. The world map stays 2D; the inventory,
+  dialogs and menus opened over a local map draw over the live 3D view
+  (the owner, 2026-11-10; task 173).
 - Speed is a feature: a steady 60 FPS, a warm-cache map change in 2 s, no
   stall over 100 ms on a settings change. Measure with the frame-time log
   (127) before and after any change that may cost time.
