@@ -58,7 +58,8 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
   `_archive` and `!marketing`.
 - After every code merge into main the game is verified before anybody
   plays it: rebuild Release from fresh `origin/main`, run one off-screen
-  `tools/dev-snapshot.ps1` launch check on the demo copy, and only then copy
+  `tools/dev-snapshot.ps1` launch check on the demo copy, run
+  `tools/perf-check.ps1` (the speed gate, 251), and only then copy
   `build/fallout2-ce.exe` to `f2r-verified/fallout2-ce.exe`, a folder beside
   the main checkout, with a line in `version.txt` there (commit, date,
   checks). The owner's
@@ -115,6 +116,7 @@ py -3 -m unittest discover -s tools/scene_export -p 'test*.py'
 py -3 -m unittest discover -s tools/regression -p 'test*.py'
 py -3 tools/scene_export/export.py --game-root ./game
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/regression.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/perf-check.ps1
 ```
 
 For a locally installed Restoration Project copy outside the main checkout,
