@@ -70,3 +70,4 @@ game or code change.
 The video edit itself (097), the repository's logo.
 
 ## Log
+- 2026-11-11 claude (audit, folded in): the main checkout sits on `board/221-done`, 52 commits behind origin/main (its AGENTS.md lacks Rule 1 and the board rule); 40 worktrees are registered; origin holds 186 branches. Wanted: the main checkout on a detached origin/main, worktrees of merged tasks removed, branches of merged and closed PRs deleted, `archive/*` kept. AGENTS.md gets the line that the main checkout always stays on a detached origin/main.
