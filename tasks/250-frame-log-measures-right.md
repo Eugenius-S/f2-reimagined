@@ -2,8 +2,8 @@
 id: 250
 title: The frame-time log measures right, a fine clock, no stale first frame, load frames marked
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: glm
 suggested: glm
 priority: high
 tier: 1
