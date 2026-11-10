@@ -79,7 +79,6 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-    env:
       BUILD_COMMIT: ${{ inputs.commit || github.sha }}
     steps:
       - uses: actions/checkout@v4
