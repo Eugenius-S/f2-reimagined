@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "launcher_routes.h"
+#include "launcher_rp.h"
 #include "launcher_ru.h"
 #include "launcher_uninstall.h"
 
@@ -60,6 +61,8 @@ constexpr const char* kDefaultMaps = "all";
 std::string g_mirrorBase = std::string("https://raw.githubusercontent.com/") + kDefaultRepo + "/dist/";
 // --ui-language ru: the user-facing log lines are printed in Russian (launcher_ru.h).
 bool g_ru = false;
+// --rp-zip-url: the Restoration Project zip from elsewhere instead of its GitHub release (tests).
+std::string g_rpZipUrl;
 
 struct Options {
     std::string gameRoot;
@@ -72,6 +75,7 @@ struct Options {
     bool rollback = false;
     bool installRussian = false;
     bool removeRussian = false;
+    bool installRp = false;
     bool uninstall = false;
     std::vector<std::string> gameArgs;
 };
@@ -990,6 +994,133 @@ bool installRussianTranslation(const fs::path& root)
     return true;
 }
 
+// --- the Restoration Project (task 186) -------------------------------------
+
+bool rpOnDisk(const fs::path& root)
+{
+    std::error_code error;
+    return fs::exists(root / "mods" / "rpu.dat", error);
+}
+
+// One game-folder file into backup/rpu under the same relative path.
+bool moveToRpBackup(const fs::path& root, const fs::path& relative)
+{
+    std::error_code error;
+    fs::path target = root / launcher_rp::kBackupFolder / relative;
+    fs::create_directories(target.parent_path(), error);
+    fs::rename(root / relative, target, error);
+    if (error) logf("  cannot move %s aside (%s)", wideToUtf8(relative.generic_wstring()).c_str(), error.message().c_str());
+    return !error;
+}
+
+// RPU from its own GitHub release at the player's request (never a copy of ours), put in
+// place the way its manual package's rpu-install.bat does; every file it moves or replaces
+// is kept in backup/rpu.
+bool installRestorationProject(const fs::path& root)
+{
+    if (rpOnDisk(root)) {
+        log("  kept the installed Restoration Project (mods/rpu.dat)");
+        return true;
+    }
+    // A test zip (--rp-zip-url) needs no GitHub lookup.
+    std::string tag = g_rpZipUrl.empty() ? rpuTagFromGithub() : std::string("test");
+    if (tag.empty()) {
+        log("cannot read the official RPU release version on GitHub");
+        return false;
+    }
+    char tempPath[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempPath);
+    fs::path work = fs::path(tempPath) / ("f2ce3d-rp-" + std::to_string(GetCurrentProcessId()));
+    std::error_code error;
+    fs::remove_all(work, error);
+    fs::create_directories(work / "stage", error);
+    if (error) {
+        logf("cannot create the Restoration Project staging folder: %s", error.message().c_str());
+        return false;
+    }
+    std::string filename = "rpu_" + tag + ".zip";
+    std::vector<launcher_routes::Route> routes = {
+        { "github.com", std::string("https://github.com/") + kRpuRepo + "/releases/download/" + tag + "/" + filename, "" },
+        { "api", std::string("https://api.github.com/repos/") + kRpuRepo + "/releases/tags/" + tag, filename },
+    };
+    fs::path zip = work / filename;
+    logf("downloading the Restoration Project %s from its official release (about 900 MB)", tag.c_str());
+    std::string routeError;
+    if (!g_rpZipUrl.empty()) routes = { { "test", g_rpZipUrl, "" } };
+    if (!fetchRoutes(routes, nullptr, &zip, &routeError)) {
+        logf("the Restoration Project could not be downloaded (%s)", routeError.c_str());
+        fs::remove_all(work, error);
+        return false;
+    }
+    log("unpacking");
+    fs::path stage = work / "stage";
+    bool unpacked = unpackZip(zip, stage);
+    fs::remove(zip, error);
+    if (!unpacked || !fs::exists(stage / "mods" / "rpu.dat")) {
+        log("the Restoration Project package could not be unpacked or has no mods/rpu.dat; nothing was changed");
+        fs::remove_all(work, error);
+        return false;
+    }
+
+    log("installing the Restoration Project into the game folder:");
+    bool ok = true;
+    // As rpu-install.bat: the old patch archives and the loose vanilla data go aside.
+    std::vector<fs::path> aside;
+    for (fs::directory_iterator it(root, error), end; !error && it != end; it.increment(error)) {
+        if (it->is_regular_file() && launcher_rp::movedAside(wideToUtf8(it->path().filename().wstring()))) {
+            aside.push_back(it->path().filename());
+        }
+    }
+    error.clear();
+    for (fs::recursive_directory_iterator it(root / "data", error), end; !error && it != end; it.increment(error)) {
+        if (!it->is_regular_file()) continue;
+        fs::path relative = fs::relative(it->path(), root / "data");
+        if (!launcher_rp::keptInData(wideToUtf8(relative.generic_wstring()))) aside.push_back(fs::path("data") / relative);
+    }
+    error.clear(); // a game without data/ is fine
+    for (const fs::path& relative : aside) {
+        if (!moveToRpBackup(root, relative)) ok = false;
+    }
+    // The package over the game folder; a file it replaces is kept first.
+    // mods/rpu.dat goes last: it marks RP as installed, so a copy cut short is tried again next time.
+    std::vector<std::pair<fs::path, std::string>> files;
+    for (fs::recursive_directory_iterator it(stage, error), end; !error && it != end; it.increment(error)) {
+        if (!it->is_regular_file()) continue;
+        std::string target = launcher_rp::targetOf(wideToUtf8(fs::relative(it->path(), stage).generic_wstring()));
+        if (!target.empty()) files.push_back({ it->path(), target });
+    }
+    std::stable_partition(files.begin(), files.end(),
+        [](const auto& file) { return launcher_uninstall::lowered(file.second) != "mods/rpu.dat"; });
+    int installed = 0;
+    for (const auto& [source, target] : files) {
+        if (!ok || error) break;
+        fs::path destination = root / utf8ToWide(target);
+        fs::path kept = root / launcher_rp::kBackupFolder / utf8ToWide(target);
+        std::error_code copyError;
+        if (fs::exists(destination, copyError) && !fs::exists(kept, copyError)) {
+            fs::create_directories(kept.parent_path(), copyError);
+            fs::copy_file(destination, kept, copyError);
+        }
+        if (!copyError) {
+            fs::create_directories(destination.parent_path(), copyError);
+            fs::copy_file(source, destination, fs::copy_options::overwrite_existing, copyError);
+        }
+        if (copyError) {
+            logf("  %s: copy failed (%s)", target.c_str(), copyError.message().c_str());
+            ok = false;
+        } else {
+            installed++;
+        }
+    }
+    if (error) {
+        logf("  cannot read the Restoration Project package (%s)", error.message().c_str());
+        ok = false;
+    }
+    fs::remove_all(work, error);
+    if (ok) logf("  installed %d files of RPU %s; what they replaced is in backup/rpu", installed, tag.c_str());
+    return ok;
+}
+
 // --- removing the mod (task 234) -------------------------------------------
 
 std::string readWholeFile(const fs::path& path)
@@ -1209,8 +1340,10 @@ Options parseOptions(int argc, char** argv)
             log("  --rollback          restore the most recent backed-up game build");
             log("  --russian           install the official RPU Russian text translation");
             log("  --remove-russian    remove the Russian translation and set the game language back to English");
+            log("  --restoration-project  install the Restoration Project from its official release and build its 3D scenes");
             log("  --ui-language <ru|en>  the language of the log lines (default: en)");
             log("  --mirror-url <url>  the mirror folder for the release files and the Russian translation (tests)");
+            log("  --rp-zip-url <url>  the Restoration Project zip from this url instead of its release (tests)");
             log("  --uninstall         remove the mod and give back the game as it was (saves and original files stay)");
             log("  --check-release     print the latest version and release notes");
             log("  -- <args>           arguments handed over to the game");
@@ -1233,6 +1366,10 @@ Options parseOptions(int argc, char** argv)
             options.installRussian = true;
         } else if (arg == "--remove-russian") {
             options.removeRussian = true;
+        } else if (arg == "--restoration-project") {
+            options.installRp = true;
+        } else if (arg == "--rp-zip-url" && i + 1 < argc) {
+            g_rpZipUrl = argv[++i];
         } else if (arg == "--ui-language" && i + 1 < argc) {
             g_ru = std::string(argv[++i]) == "ru";
         } else if (arg == "--mirror-url" && i + 1 < argc) {
@@ -1433,8 +1570,19 @@ int runConsole(Options options)
         logf("the installed build matches the release: nothing to pull");
     }
 
+    // --- the Restoration Project, before the scenes: its maps and art go into them ---
+    bool rpInstalledNow = false;
+    if (options.installRp && !rpOnDisk(root)) {
+        if (!installRestorationProject(root)) {
+            log("the Restoration Project could not be installed (see the lines above)");
+            return 1;
+        }
+        rpInstalledNow = true;
+    }
+
     // --- 3D scene data, always made on this machine from this game ---
-    std::vector<std::string> maps = splitMaps(options.maps);
+    // RP's own maps are the exporter's "rp" group, outside "all".
+    std::vector<std::string> maps = splitMaps(options.maps == kDefaultMaps && rpOnDisk(root) ? "all,rp" : options.maps);
     std::string mapList;
     for (size_t i = 0; i < maps.size(); i++) {
         if (i != 0) mapList += ",";
@@ -1444,7 +1592,7 @@ int runConsole(Options options)
     if (!fs::exists(exporter)) {
         log("scene-exporter.exe is missing; the game will start without 3D");
     } else {
-        bool needExport = options.forceExport || freshInstall || updated;
+        bool needExport = options.forceExport || freshInstall || updated || rpInstalledNow;
         if (!needExport) {
             // The exporter owns the map groups: "all" is its name, only
             // it knows which scene directories that covers.  Exit 0 = every

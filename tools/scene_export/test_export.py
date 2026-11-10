@@ -20,7 +20,7 @@ from baked_sidecar import (ENTRY as BAKED_ENTRY, GL_MAP_OFFSET, HEADER as BAKED_
                            FIXED_CARD as BAKED_FIXED_CARD, FLY_SKIP as BAKED_FLY_SKIP, PLANE as BAKED_PLANE,
                            baked_objects, decode_baked_sidecar, encode_baked_sidecar)
 import export
-from export import MAP_GROUPS, ReadOnlyGameFiles, check_scenes, choose_source, main, parse_args, patch_paths, scene_directory, stale_reason, validate_output_contents
+from export import MAP_GROUPS, RP_MAPS, ReadOnlyGameFiles, check_scenes, choose_source, main, parse_args, patch_paths, scene_directory, stale_reason, validate_output_contents
 from floor_sidecar import HEADER, MAGIC, VERSION, cell_content_rect, decode_floor_sidecar, encode_floor_sidecar
 from roof_fringe import (boundary_edges, components_of, donor_tiles, inner_edge, cut_to_walls, own_strip, donate, foot_cover, lay_donor, roof_sides, whole_sides, BELT_LAP, BELT_ROWS, EDGE_ROWS, STRIP_ROWS, belt_art, compose_band, is_fringe, outward, resolve_runs, runs_of,
                          split_tile, tidy_cell, unproject_cell, unroll, wall_under, write_fringe_art)
@@ -183,6 +183,10 @@ class TargetTests(unittest.TestCase):
         self.assertEqual(len(every), len(set(every)))
         self.assertEqual(set(every), {name for group in MAP_GROUPS.values() for name in group})
         self.assertGreaterEqual(len(every), 152)
+        # RP's own maps come only with "rp", so a vanilla "all" export never asks for them.
+        self.assertFalse(set(RP_MAPS) & set(every))
+        both = parse_args(["--maps", "all,rp"]).map_names
+        self.assertEqual(both, every + list(RP_MAPS))
 
     def test_rejects_unsafe_map_names(self):
         with self.assertRaises(SystemExit):
