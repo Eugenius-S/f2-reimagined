@@ -49,3 +49,16 @@ load / startup, not the 3D scene path. Diagnose and fix, so the
 - 2026-11-10 glm: found during the 224 city geometry sweep; four
   maps confirmed deterministic under a single clean driver, one
   probe at 180 s step timeout confirms a hard hang.
+- 2026-11-10 glm, build-range observation: the 225 before-side tour
+  (build b4b54575, BEFORE #320/#370) shot all club maps fine — its
+  stamps for klacanyn e0, klatoxcv e0/e1, broken2 e1, newrvb e0
+  reused cleanly on this run. The hang appeared somewhere in
+  b4b54575..ba79b58d (#320 water corners, #370's cache+revert,
+  #387..#395). Also on 2026-11-10: the BEFORE build itself stalled
+  on sfelronb e0 (tour stop, 132 s timeout, twice in a row) — a
+  sixth staller, and one that b4b54575 did NOT hang on in past
+  runs. So the stall set shifts between runs/builds: treat as a
+  load-time race, not a per-map data poison. Next probe: hang the
+  loader under a debugger (thread dump at the stall), or bisect
+  b4b54575..ba79b58d with a klacanyn e0 devshot probe (clear the
+  probe output dir per step — stale devshot JSONs fake GOOD).

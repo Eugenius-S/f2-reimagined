@@ -84,6 +84,12 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
   --before <main's scene cache or checkout>`) and attaches its
   `changed.jpg` to the PR (in `runs/NNN-slug/`); a spot that should change
   and did not, or changed and should not, is fixed before the merge.
+- A renderer change to the flight/turned passes runs
+  `tools/tour/tour.py` as its acceptance evidence: the game-camera
+  still gate never draws those passes, so the tour sheets (every
+  spot from the fly camera at each turn, before | after) are the
+  gate; inspect them by eye and pin every unexpected difference
+  before the PR asks for a merge.
 - Upstream CE code (`ce/src/*.cc` outside `scene/`, `scene_renderer/`,
   `devtools/`) gets a hook or a call at most; the logic lives in our modules.
 - On a local map the 3D view never turns off. An object that cannot be
