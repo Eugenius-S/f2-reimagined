@@ -2,15 +2,15 @@
 id: 251
 title: One command checks the frame rate and the map load time against the owner's bar
 milestone: M1
-status: todo
-owner: any
+status: done
+owner: glm
 suggested: glm
 priority: high
 tier: 1
 claude-only: no
 user-check: no
 depends-on: [250]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -56,3 +56,24 @@ Running it in CI (no game files there); making the game faster (157).
 ## Log
 
 - 2026-11-11 claude: cut from the audit.
+- 2026-11-11 glm
+  Done: tools/perf-check.ps1. Two background dev-snapshot runs per map
+  (kladwtwn e0, newr1 e0, vctyctyd e0, klatoxcv e2 as the cave): a warmup,
+  then the measured run with the frame log on (-Set3d frame_log=1, the key
+  added to tools/test-config/fallout2.cfg) and F2CE_PERF=1. The CSV parse
+  (Read-FrameLogSummary) and the load parse (Read-LoadMs) are pure
+  functions; -SelfTest feeds saved samples and fails on a wrong answer.
+  The run folder is kept (-KeepRunFolder) because dev-snapshot deletes it
+  after copying results out, and frame_log.csv lives only there; the load
+  chain prints to the run's logs/devperf.log, not to the captured stdout.
+  Everything the script writes goes under build/. AGENTS.md: the command
+  added to Build and check, and Rule 1 names the speed gate.
+  Check: -SelfTest prints selftest: ok; a run with -MinFps 1000 exits 1
+  naming the 1% low cell of every map; the first run on main (default
+  bars): kladwtwn e0 57.7 avg / 20.3 1% low / 239.2 worst / 1742.6 load;
+  newr1 e0 54.6 / 16.5 / 596.7 / 2300.9; vctyctyd e0 53.5 / 18.0 / 571.8 /
+  1596.4; klatoxcv e2 59.1 / 17.0 / 243.6 / 949.4; exit 1 with named cells
+  (the 1% low of every map is under 60 in a background run, newr1 load
+  2300.9 ms is over 2000). The bars guard regressions; they do not prove
+  the owner's window (157).
+  Next: 252.
