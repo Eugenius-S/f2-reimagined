@@ -2,7 +2,7 @@
 id: 130
 title: The 3D options screen finished the way the owner says, ready for the showcase video
 milestone: M1
-status: doing
+status: todo
 owner: none
 suggested: any
 priority: normal
@@ -57,3 +57,4 @@ Next: Diagnose why the production probe's simulated mouse position does not reac
 Check: `tools/dev-snapshot.ps1 -PreferencesProbe cursor-speed`; both attempts reported `PREFERENCES_PROBE FAIL: cursor speed slider did not stage a new value`.
 
 - 2026-11-08 glm: the cursor speed slider landed as PR #292 (model-level tests green; the production probe twice failed to stage a value, so the end-to-end drag acceptance stays open).
+- 2026-11-10 claude: back to todo: no open PR and no work since the last log line; the card leaves «В работе».
