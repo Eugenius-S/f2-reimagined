@@ -443,6 +443,12 @@ if(BUILD_TESTING)
     target_include_directories(camera_turn_tests PRIVATE "src/scene")
     add_test(NAME camera_turn_tests COMMAND camera_turn_tests)
 
+    add_executable(fps_counter_tests
+        "tests/fps_counter/fps_counter_test.cc"
+    )
+    target_include_directories(fps_counter_tests PRIVATE "src")
+    add_test(NAME fps_counter_tests COMMAND fps_counter_tests)
+
     add_executable(launcher_progress_tests
         "tests/launcher_progress/launcher_progress_test.cc"
     )
