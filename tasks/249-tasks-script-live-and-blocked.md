@@ -2,8 +2,8 @@
 id: 249
 title: The board script never hands out a live task and shows the blocked ones
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: glm
 suggested: glm
 priority: high
 tier: 1
