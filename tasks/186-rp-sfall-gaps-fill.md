@@ -88,3 +88,4 @@ Russian translations (227).
   (3D), `runs/186-rp/sfsheng-walk-part3.jpg` (the dead trees draw near black:
   check against 2D before closing). Left: the real-package install, that
   SFSHENG tree check, and the not-seen-live items above.
+- 2026-11-10 claude: the owner's Steam install after the RP install (photo of the main menu in chat): the menu shows no wide art and the button labels run over the buttons. Found: `user-assets/fullscreen-20261028` in that folder is empty (emptied 2026-11-09 23:28, cause not found: a fresh install and an update over an empty folder both fill it in a test), so the menu falls back to HR_MAINMENU.FRM from `mods/f2_res.dat`, and that fallback layout puts the labels over the buttons. To do: the launcher checks the menu PNG itself, not its folder, and puts the art back; the fallback layout keeps the labels clear of the buttons.

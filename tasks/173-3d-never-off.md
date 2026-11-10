@@ -30,8 +30,11 @@ its art on a fixed plane.
   landmarks, vehicles and large signs). Each stands as a billboard or plane
   here first; name each with its map and shot, ordered by how much a player
   sees it, so the remodelling can follow.
-- The owner, 2026-11-04. The world map, dialogs and menus stay 2D; this is
-  about local maps only.- Folded in (2026-11-05, from 169): the upper elevations of some desert
+- The owner, 2026-11-04: the world map, dialogs and menus stay 2D.
+  **Replaced 2026-11-10:** the owner sees 3D switch off when the inventory,
+  the options menu and the other screens open over a local map, and wants it
+  never to switch off there: those screens draw over the live 3D view.
+- Folded in (2026-11-05, from 169): the upper elevations of some desert
   and coast encounter maps (desert5 e1, desert6 e1, shots in
   runs/169-encdesertcoast-in-3d/finds/) export with no floor art and no
   sprites (walls.bin 24 bytes, tiles.png empty, indoor=true), so the 3D
@@ -135,3 +138,4 @@ The world map, dialogs, menus.
   geometry sweep and the city walk do; named finds go to those logs and the
   consolidated list lands there. This task keeps the fallback ladder and
   the never-2D guarantee.
+- 2026-11-10 claude: the owner's ask folded in: 3D stays on under the inventory, menus and other screens opened on a local map.
