@@ -1643,6 +1643,18 @@ bool skipScriptDialogRequest()
     return true;
 }
 
+bool skipScriptCombatRequest()
+{
+    // The combat fixture starts its own fight through the engine's attack
+    // key, which lands in the same request: let it through.
+    if (gCombatFixtureRequested) return false;
+    if (!backgroundCaptureActive()) return false;
+    printf("devtools: skipped script combat request map=%s elevation=%d tile=%d\n",
+        gMapHeader.name, static_cast<int>(gElevation), gDude != nullptr ? gDude->tile : -1);
+    fflush(stdout);
+    return true;
+}
+
 void prepareStillSnapshot()
 {
     if (!stillSnapshotRequested()) return;
