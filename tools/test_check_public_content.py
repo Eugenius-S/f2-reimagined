@@ -11,7 +11,7 @@ class PublicContentTests(unittest.TestCase):
             "+Game files live in <game>; builds live in <worktree>.\n"
             "+Contact " + "noreply@" + "anthropic.com for upstream notices.\n"
         )
-        self.assertEqual(findings(patch), ["deliberately broken for the 252 red run"])
+        self.assertEqual(findings(patch), [])
 
     def test_rejects_personal_identifiers_and_paths(self):
         username = "j" + "iraf"
