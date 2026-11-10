@@ -2,9 +2,9 @@
 id: 253
 title: Players get only a build that passed the launch check
 milestone: M1
-status: todo
-owner: any
-suggested: claude
+status: doing
+owner: glm
+suggested: any
 priority: high
 tier: 2
 claude-only: no
