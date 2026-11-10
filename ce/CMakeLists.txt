@@ -473,6 +473,12 @@ if(BUILD_TESTING)
     target_include_directories(launcher_uninstall_tests PRIVATE "src")
     add_test(NAME launcher_uninstall_tests COMMAND launcher_uninstall_tests)
 
+    add_executable(launcher_rp_tests
+        "tests/launcher_progress/launcher_rp_test.cc"
+    )
+    target_include_directories(launcher_rp_tests PRIVATE "src")
+    add_test(NAME launcher_rp_tests COMMAND launcher_rp_tests)
+
     add_executable(preview_policy_tests
         "src/scene/preview_policy.cc"
         "tests/preview_policy/preview_policy_test.cc"

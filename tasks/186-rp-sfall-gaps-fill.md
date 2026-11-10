@@ -76,3 +76,15 @@ Russian translations (227).
   its scene. Left: the RP map exports and fly tour spots, the walk through two
   restored areas, the installer option; not seen live: the `epac3` reply, an
   edited walking FRM drawn in play, fake perks in the character screen.
+- 2026-11-10 claude: part 3: the installer's RP option. The launcher fetches
+  `rpu_<tag>.zip` from RPU's latest official release on request, applies
+  `rpu-install.bat`'s steps (old patch archives and loose `data/` aside, saves,
+  music, `data/*.txt|gcd` kept), keeps every replaced file in `backup/rpu`, and
+  writes `mods/rpu.dat` last so a cut-short copy is retried. The scene export
+  then takes `all,rp` (the exporter's new `rp` group). Checked end to end on a
+  fake package and game folder (install, re-run keeps it, failed download
+  changes nothing, a failed copy is finished by the next run); not yet run
+  with the real 900 MB package. Walk shots: `runs/186-rp/abbey-walk-part3.jpg`
+  (3D), `runs/186-rp/sfsheng-walk-part3.jpg` (the dead trees draw near black:
+  check against 2D before closing). Left: the real-package install, that
+  SFSHENG tree check, and the not-seen-live items above.
