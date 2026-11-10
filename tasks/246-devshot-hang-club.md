@@ -2,7 +2,7 @@
 id: 246
 title: Devshot hang club, five maps freeze the engine at load (classic and 3D)
 milestone: M1
-status: todo
+status: doing
 owner: glm
 suggested: glm
 priority: high
