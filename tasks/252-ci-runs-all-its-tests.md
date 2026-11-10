@@ -2,8 +2,8 @@
 id: 252
 title: CI runs every test the repository has, and the rules say what the gate does not cover
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: glm
 suggested: glm
 priority: normal
 tier: 1
