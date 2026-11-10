@@ -2,15 +2,15 @@
 id: 252
 title: CI runs every test the repository has, and the rules say what the gate does not cover
 milestone: M1
-status: todo
-owner: any
+status: done
+owner: glm
 suggested: glm
 priority: normal
 tier: 1
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -46,3 +46,17 @@ Running the game in CI; the release job (253).
 ## Log
 
 - 2026-11-11 claude: cut from the audit.
+- 2026-11-11 glm
+  Done: the exporter job in .github/workflows/verify.yml also runs
+  python -m unittest discover -s tools/regression -p test*.py (12 tests)
+  and python -m unittest discover -s tools -p test_check_public_content.py
+  (6 tests). AGENTS.md Review now says the pixel regression
+  (tools/regression.ps1) needs the game files, so CI does not run it: the
+  author runs it by hand before the merge.
+  Check: the deliberately broken assertion in test_check_public_content.py
+  (expecting a fake finding) gave a red exporter job:
+  https://github.com/Eugenius-S/f2-reimagined/actions/runs/42878708747
+  (conclusion failure); after the revert the same job is green:
+  https://github.com/Eugenius-S/f2-reimagined/actions/runs/42880103335.
+  Locally both suites pass (6 + 12 tests).
+  Next: 146.

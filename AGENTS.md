@@ -232,8 +232,10 @@ parts while its next part is under way (186); otherwise it is set back.
 
 ## Review
 
-The one merge gate is green CI (build, tests, regression). The PR body says
-what it touched. The author merges as soon as CI is green; nothing else is
+The one merge gate is green CI (build, tests, and the unit tests of the
+tools). The pixel regression (`tools/regression.ps1`) needs the game files,
+so CI does not run it: the author runs it by hand before the merge. The PR
+body says what it touched. The author merges as soon as CI is green; nothing else is
 reviewed before the merge. The owner reviews each city later in a fly-through
 with 183's shots (tasks 175 on), and the pool turns the finds into fixes.
 
