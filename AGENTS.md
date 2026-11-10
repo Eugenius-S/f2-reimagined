@@ -187,6 +187,15 @@ folds each new card like any find, and then removes the card from
 also gets a line in `ru-tasks.json` there: a short plain Russian title and
 one or two sentences, no long dash; without it the card shows in English.
 
+Cards move with the work, every agent, every task: started (the draft PR
+of step 2 is open) means the card is in «В работе»; finished (`status: done`
+merged) means «Готово»; stopped without finishing means the draft PR is
+closed with a `Log` line, so the card goes back to the queue. Run
+`update_board.py` right after opening the draft PR and right after the
+merge; an agent without the `!F2R board` folder says so in the PR and
+Claude runs it. A `doing` status sits on `main` only for a task landing in
+parts while its next part is under way (186); otherwise it is set back.
+
 1. Work in your own worktree, never switch branches in the main checkout:
    `git worktree add --detach ../fallout2-ce-3d-<you> origin/main`. It has no
    `game/`: the scripts use the main checkout's `game/` with the worktree's
@@ -197,8 +206,8 @@ one or two sentences, no long dash; without it the card shows in English.
    'task/NNN-*'`); `git switch -c task/NNN-slug`, set `status: doing` and
    `owner: <you>` in the task file, commit, push, and open a draft PR named
    `NNN: <title>` at once. That draft PR is the lock: if another agent's PR
-   for the number is already there, take the next task. The board reads the
-   header from the branch; nothing goes to `main` until the merge.
+   for the number is already there, take the next task. The open PR puts
+   the card in «В работе»; nothing goes to `main` until the merge.
 3. Commit and push each meaningful step, one-line messages. Write a `Log`
    entry only when you stop or finish, in that commit:
 

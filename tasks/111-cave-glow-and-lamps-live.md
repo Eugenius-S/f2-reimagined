@@ -2,7 +2,7 @@
 id: 111
 title: The slime pools glow and the lamps light the walls in the live caves
 milestone: M1
-status: doing
+status: todo
 owner: glm
 suggested: any
 priority: low
@@ -129,3 +129,4 @@ presence, the palette cycle in a running game. The candidate causes
 are in the Context above.
 
 - 2026-11-08 glm: the 11-01/11-04 live-capture logs from PR #189 merged into this Log; out-of-combat captures still hang, no code change.
+- 2026-11-10 claude: back to todo: no open PR and no work since the last log line; the card leaves «В работе».
