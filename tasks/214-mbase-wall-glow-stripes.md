@@ -16,7 +16,7 @@ reviewed: no
 ## Goal
 
 The owner, 2026-11-07 (a screenshot of the military base cave interior):
-"the light plays up, there are little stripes on the walls" — vertical
+"the light plays up, there are little stripes on the walls" - vertical
 light stripes run along the cave walls near the vats in the 3D view with
 the glow on. Fix the wall lighting so the glow reads smooth, as part of the
 next 3D pass over maps.
@@ -41,7 +41,7 @@ next 3D pass over maps.
 - 2026-11-07, the pass: diagnosed the same day. The vat-area walls captured
   with glow on at several view tiles, brightened and compared with the
   classic 2D of the same spot: the vertical streaks exist in the classic
-  render — they are the wall art's own striations, which the 3D view
+  render - they are the wall art's own striations, which the 3D view
   reproduces faithfully under the green glow. A wall small-light
   bilinear-sampling hypothesis produced zero pixel change here (the vat
   glow does not sit in the per-hex small lights) and was dropped. Verdict:

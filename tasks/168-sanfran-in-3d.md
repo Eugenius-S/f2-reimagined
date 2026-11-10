@@ -94,7 +94,7 @@ other areas (each has its own task).
 - Fly tour 14 spots, before/after identical everywhere ("0 of 14 spots
   changed"). Hour sweep 8/12/18 on all 14: outdoor ambient shifts with the
   hour, interiors stable. Dark views checked: sftanker-e1's black deck
-  matches the game's own 2D (`-Classic`, tile 27701) — the map's own
+  matches the game's own 2D (`-Classic`, tile 27701) - the map's own
   lighting, not a defect.
 - Walk chain sfdock -> sfchina -> sfchina2 e0-e2 -> sftanker e0-e2 ->
   sfshutl1 -> sfshutl2 -> sfelronb -> navarro e0-e2: 14/14 captures, 3D
@@ -109,7 +109,7 @@ other areas (each has its own task).
   1. sfdock: the water stops at the map tiles' edge; flat brown void beyond
      (probe-sfdock-e0.jpg, tour sheet sfdock-e0.jpg). General rule to build:
      a map edge that is water continues as water past the edge.
-  2. sftanker / sfdock: the tanker's hull has no standing side — the deck
+  2. sftanker / sfdock: the tanker's hull has no standing side - the deck
      floats over void and from the docks the side is a slanted sliver
      (probe-sftanker-e0.jpg). General rule to build: big hull art stands as
      one vertical plane perpendicular to the water, touching the pier.

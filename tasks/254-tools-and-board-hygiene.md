@@ -2,7 +2,7 @@
 id: 254
 title: The tools folder holds only tools in use, and the long-dash rule is checked
 milestone: M1
-status: todo
+status: done
 owner: any
 suggested: glm
 priority: normal
@@ -10,7 +10,7 @@ tier: 3
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -53,3 +53,37 @@ Worktrees, remote branches and the main checkout (198); `runs/` evidence.
 ## Log
 
 - 2026-11-11 claude: cut from the audit.
+
+- 2026-11-11 glm
+  Done:
+  - Deleted 35 one-shot tools with no references outside runs/ and tasks/
+    (git history keeps them): shots119, shots120, shots120c, shots120d,
+    shots122, shots122fix, shots124, shots125, pairs119, pairs120, pairs120c,
+    pairs125, reg119, grid166, grid167, grid169, hours166, hours167, hours169,
+    hours169b, probe166, probe167, probe169, walk166, walk167, walk169,
+    classic169, classic169b (all .ps1), effect_final_sheets.py,
+    effect_glow_levels.py, effect_white_review.py, glow_ladder_sheets.py,
+    muzzle_sheets.py, game-input-real.ps1, dev-input-display-154.txt.
+    Kept: game-input.ps1 (devtools.cc names it), shadow_seams.py
+    (scene_shader.cc), generate_options_frame.py (options_frame_owner.h),
+    check_png_pixel.py (dev-snapshot.ps1), the verify.yml-checked scripts,
+    and the generic utilities (gallery_*, image_diff, patch_pixel, crop_box,
+    shadow_stripes).
+  - tools/check_public_content.py now bans the long dash (U+2014) in added
+    lines (label long dash (U+2014)); a test in
+    tools/test_check_public_content.py pins it. 13 files had it (12 task
+    files and tools/scene_export/test_export.py); every U+2014 replaced
+    with a plain hyphen. Note: the file-path form
+    (py -3 -m unittest tools/test_check_public_content.py) fails on the
+    import path in every state, main included; the working form is
+    py -3 -m unittest discover -s tools -p test_check_public_content.py,
+    which is also what CI runs since 252 (7 tests green).
+  - tasks/225 header: suggested was the phrase codex (P1 on #320), now any.
+  - owner_shot.cc: the PNG and sidecar encode threads are joined on the
+    next shot and at exit, so quitting right after F12 cannot cut a file
+    mid-write.
+  Check: git grep for U+2014 in tasks, docs, tools, AGENTS.md and README:
+  0 hits. unittest discover: tools 7 OK, tools/regression 12 OK,
+  tools/scene_export 145 OK. powershell -File tools/tasks.ps1 prints the
+  board without errors. ctest 27/27; one background devshot launch check
+  green.
