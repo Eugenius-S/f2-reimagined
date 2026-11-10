@@ -211,6 +211,10 @@ bool gCombatFixtureRequested = false;
 bool gCombatFixtureWaitLogged = false;
 int gCombatFixtureTargetTile = -1;
 int gCombatFixturePhase = 0; // 1 aim, 2 attack, 3 enemy turn, 4 ended
+// Frames the fixture's own combat start may take: the A-key attack lands in
+// scriptsHandleRequests like any script-started fight, and only this window
+// lets one through (the map's own entry-script fights stay skipped).
+int gCombatFixtureAttackWindow = 0;
 Object* gCombatFixtureTarget = nullptr;
 int gCombatFixtureTargetX = -1;
 int gCombatFixtureTargetY = -1;
@@ -1646,8 +1650,10 @@ bool skipScriptDialogRequest()
 bool skipScriptCombatRequest()
 {
     // The combat fixture starts its own fight through the engine's attack
-    // key, which lands in the same request: let it through.
-    if (gCombatFixtureRequested) return false;
+    // key, which lands in the same request: a request is let through only
+    // inside the fixture's own attack window, so a map's entry-script fight
+    // (klatoxcv, 246) never hijacks the fixture's phases.
+    if (gCombatFixtureAttackWindow > 0) return false;
     if (!backgroundCaptureActive()) return false;
     printf("devtools: skipped script combat request map=%s elevation=%d tile=%d\n",
         gMapHeader.name, static_cast<int>(gElevation), gDude != nullptr ? gDude->tile : -1);
@@ -1876,11 +1882,18 @@ static bool prepareCombatFixture()
     gCombatFixtureEndTurnQueued = false;
     gCombatFixtureEnemyTile = -1;
     gCombatFixtureEnemyPhaseFrames = 0;
+    // Aim where the hero stands: a map entrance away from the map's default
+    // center (klatoxcv, 146) leaves the target off screen and the crosshair
+    // can never point at it. The bounds ignore the map edge clamp: the
+    // fixture's view may show the zone edge, the fight stays by the hero.
+    tileSetCenter(gDude->tile, TILE_SET_CENTER_FLAG_IGNORE_SCROLL_RESTRICTIONS
+        | TILE_SET_CENTER_FLAG_IGNORE_BOUNDS | TILE_SET_CENTER_REFRESH_WINDOW);
     printf("COMBAT_FIXTURE START map=%s elevation=%d mode=%s hero=%d target=%d target_tile=%d source=%s\n",
         gMapHeader.name, gElevation, gClassic ? "classic" : "3d", gDude->tile,
         target->id, target->tile, spawned ? "test-critter" : "map-hostile");
     fflush(stdout);
     gCombatFixturePhase = 5; // target prepared; queue the game's A combat key.
+    gCombatFixtureAttackWindow = 900;
     enqueueInputEvent(KEY_UPPERCASE_A);
     return true;
 }
@@ -1998,6 +2011,7 @@ void update()
 {
     // 215: Ctrl+F11 flies in normal play too, so the flight ticks without the
     // dev tools (it did not: the camera froze where it took off).
+    if (gCombatFixtureAttackWindow > 0) gCombatFixtureAttackWindow--;
     fly();
     if (!gEnabled) {
         return;
