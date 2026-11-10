@@ -65,3 +65,17 @@ Cut from the codex P1 on #320. The board audit of gpt's finds
 145/146/147/148/151/152/153/154/156/184 on the board; the codex P2s on
 #303/#305 closed in 168/202; the codex note on #211 is 149). This is
 the one open find.
+
+### 2026-11-10 glm (night run)
+- Before side rebuilt: the b4b54575 build's own tour stamps survived
+  (they live in f2r-225-before/build/tour), so --reuse covered most
+  of the before side; the gaps (desert*, rnd*, sf*) shot fresh.
+- Two harness deaths tonight: the first run died silently after the
+  sfelronb e0 stall (buffered stdout lost the trace) - restarted
+  with py -3 -u (unbuffered). sfelronb e0 stalls are intermittent:
+  failed twice at 132 s, then shot 3/3 on the retry.
+- The stall/hang club observations moved to task 246 (build-range
+  note committed here).
+- The tour is still running at commit time (after side pending);
+  the sheets + changed.jpg + README verdicts land in this branch's
+  evidence commit next session.
