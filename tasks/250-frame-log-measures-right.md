@@ -2,7 +2,7 @@
 id: 250
 title: The frame-time log measures right, a fine clock, no stale first frame, load frames marked
 milestone: M1
-status: doing
+status: done
 owner: glm
 suggested: glm
 priority: high
@@ -10,7 +10,7 @@ tier: 1
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -54,3 +54,24 @@ The on-screen readout and the other frame timers (157); the renderer.
 ## Log
 
 - 2026-11-11 claude: cut from the audit.
+- 2026-11-11 glm
+  Done: `ce/src/fps_counter.cc` times frames with `SDL_GetPerformanceCounter`
+  (sub-millisecond rows), resets the interval when a log opens (a pause with
+  the log off never lands in the first row), and takes one argument from
+  `ce/src/svga.cc` (`fpsCounterOnFrame(fileReadProgressHandlerActive())`,
+  the only change there). Rows carry `frame,ms,load`; the summary math
+  moved into the pure inline `frameLogSummary` (`ce/src/fps_counter.h`):
+  play frames only, load frames counted separately and printed on their own
+  line; `ce/tests/fps_counter/fps_counter_test.cc` pins it with one long
+  first frame and three load frames; one CMake block registers
+  `fps_counter_tests`.
+  Check: `ctest`: 27/27 (the new test included). A background run on
+  kladwtwn with `--dev-frame-log` wrote `frame_log.csv`: header
+  `frame,ms,load`, row 0 = `0,0.000,0` (fresh interval), 1800 rows with
+  168 load rows (the loading-screen presents, ms 2..23), play summary:
+  average 103.7 fps, 1% low 28.0 fps (35.8 ms), worst 336.0 ms. The
+  engine prints and writes the same numbers in `frame_log.summary.txt`
+  when a log closes; a background run ends by a process kill, not a clean
+  `gameExit`, so the numbers above come from the same pure formula the
+  test pins, applied to the CSV rows.
+  Next: 251.
