@@ -59,6 +59,11 @@ void prepareStillSnapshot();
 bool gameMoviesSuppressed();
 // True only for a background probe explicitly told to skip script dialogue.
 bool skipScriptDialogRequest();
+// True for any background capture: a script-started combat would sit in the
+// engine's nested turn loop waiting for the player forever, so the run only
+// ends at the watchdog. The engine's own attack key keeps working, which is
+// how the combat fixture starts its fights.
+bool skipScriptCombatRequest();
 
 // Prints the maps available in game resources (stdout). Requires the game
 // (db) to be initialized.
