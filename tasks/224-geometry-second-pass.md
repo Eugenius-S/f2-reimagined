@@ -54,7 +54,7 @@ maps entering 3D (187), view-persistence (173, the owner's draft).
 ## Log
 - 2026-11-08 claude: owner order 2026-11-08: 240 (inner-wall graffiti over the outer wall, kladwtwn tiles 28890/29091/29291, crop `runs/240-decal-through-wall/`) folded in; this pass waits behind glm's 239, 172, 211, 212.
 - 2026-11-10 glm: the agent-side precursor sweep of the owner's city
-  review (175–182) done — 66 city map-elevations × (hour12 3D,
+  review (175–182) done - 66 city map-elevations × (hour12 3D,
   hour18 3D, classic 2D) on exact main ba79b58d; 183/198 frames
   valid and machine-validated, all judged. Three finds, all
   exporter/renderer-level, each wanting its own diagnosis:
@@ -65,7 +65,7 @@ maps entering 3D (187), view-persistence (173, the owner's draft).
   lit). Evidence pairs in `runs/224-geometry-second-pass/finds/`,
   register + coverage in `runs/224-geometry-second-pass/README.md`.
   Five maps hang the engine at load (classic too): klacanyn e0,
-  klatoxcv e0/e1, broken2 e1, newrvb e0 — own task 246; their
+  klatoxcv e0/e1, broken2 e1, newrvb e0 - own task 246; their
   sweep coverage waits on it. Non-finds and the one low-confidence
   leftover (artemple e0 right-edge boulders) in the README.
   The full ~420 MB shot set stays on the machine, not committed.

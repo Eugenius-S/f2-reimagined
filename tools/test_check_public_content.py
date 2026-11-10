@@ -91,6 +91,11 @@ class PublicContentTests(unittest.TestCase):
             [],
         )
 
+    def test_rejects_long_dash_in_added_lines(self):
+        patch = "+++ b/README.md\n+a " + chr(0x2014) + " b\n"
+        labels = {finding[2] for finding in findings(patch)}
+        self.assertEqual(labels, {"long dash (U+2014)"})
+
 
 if __name__ == "__main__":
     unittest.main()

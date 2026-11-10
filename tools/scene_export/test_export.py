@@ -1124,7 +1124,7 @@ class WallSidecarTests(unittest.TestCase):
         self.assertEqual(len(batches), 1)
         # The containing square (10, 10) decides: the hull stands on row 9's
         # south edge, exactly as an integral anchor there would. Rounding read
-        # the neighbour (11, 11) — land — and kept the game-screen plane.
+        # the neighbour (11, 11) - land - and kept the game-screen plane.
         vs = {round(vertex[2], 6) for vertex in batches[0]["vertices"]}
         self.assertEqual(vs, {-40.0})
 
