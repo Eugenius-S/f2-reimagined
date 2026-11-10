@@ -62,7 +62,9 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
   `tools/perf-check.ps1` (the speed gate, 251), and only then copy
   `build/fallout2-ce.exe` to `f2r-verified/fallout2-ce.exe`, a folder beside
   the main checkout, with a line in `version.txt` there (commit, date,
-  checks). The owner's
+  checks), and dispatch the players' build for the same commit:
+  `gh workflow run verify.yml -f commit=<that commit>` (253), so the
+  launcher's `latest` release carries exactly the verified build. The owner's
   `Run F2R.lnk` swaps that build into `game/` on its next start (the previous
   one stays as `fallout2-ce.exe.bak`). Main must always be playable. Docs-only
   merges skip the check.
