@@ -21,7 +21,7 @@ contribute. If you want to take part, message me on
 
 ## Install
 
-[Download the launcher](https://github.com/Eugenius-S/f2-reimagined/releases/download/latest/fallout2-ce-3d-launcher.exe)
+[Download the launcher](https://github.com/Eugenius-S/f2-reimagined/releases/download/latest/Install-F2R.exe)
 from the rolling [latest release](https://github.com/Eugenius-S/f2-reimagined/releases/tag/latest).
 
 1. Install Fallout 2 from Steam or GOG.
@@ -29,20 +29,30 @@ from the rolling [latest release](https://github.com/Eugenius-S/f2-reimagined/re
    choose its folder containing `master.dat` and `critter.dat`.
 3. Choose English or Russian for the launcher. To play in Russian, select
    **Install Russian text**; the launcher downloads it from the official RPU
-   release. The Restoration Project option is shown as coming soon.
+   release. To play the Restoration Project, select **Restoration Project**:
+   the launcher downloads RPU from its official GitHub release (about
+   900 MB), installs it the way RPU's own manual install does and builds its
+   maps in 3D. Install it on a clean Fallout 2, as RPU asks; the files it
+   replaces are kept in `backup/rpu`.
 4. Choose **Install / Update**. Turn on automatic updates if you want the
    launcher to install a newer build when it starts. Press **Play** when the
    installation finishes. **Roll back** restores the previous build.
 
+The download is the launcher. After the install your Fallout 2 folder holds
+a copy of it named `Fallout 2 Reimagined.exe` (with the radiation icon): run
+that file to start the game and to update it. Ignore the other `.exe` files
+in the folder.
+
 An internet connection is needed for a new install, updates and the optional
-Russian text download.
+Russian text and Restoration Project downloads.
 
 The launcher installs or updates `fallout2-ce.exe`, `ce.dat` and
 `scene-exporter.exe`, then builds scene data from your game files. An existing
 `fallout2.cfg` is kept during install and updates; if you choose Russian, only
 `[system].language` is set to `russian`. A default config is installed only
-when it is missing. The launcher does not replace the original `fallout2.exe`
-or alter save files.
+when it is missing. The launcher does not alter save files, and it replaces
+the original `fallout2.exe` only for the Restoration Project, which ships its
+own (the original goes to `backup/rpu`).
 
 ## What works
 
@@ -69,9 +79,10 @@ During combat and dialogue the game shows the original view for now.
 
 ## Where it works
 
-Klamath for now: downtown, the mall, the pastures, the canyon, the trapping
-grounds, the rat caves and the toxic caves. Other maps show the original 2D
-view.
+Every map of the game is in 3D: Arroyo, Klamath, the Den, Modoc and
+the Ghost Town, Vault City, Gecko, Broken Hills, New Reno, Redding, NCR,
+Vault 13 and Vault 15, the Sierra Army Depot, the Military Base, San
+Francisco and Navarro, and every random encounter.
 
 ## Keys
 
@@ -87,7 +98,6 @@ enabled=0
 
 ## Plans
 
-- Convert the remaining maps
 - Restoration Project support
 - 3D models of unique landmarks: the Vault Dweller's head, the New Reno
   sign, the Vault City gate and more

@@ -2190,6 +2190,91 @@ int protoGetProto(const ProtoId& protoId, Proto** protoPtr)
     return protoLoadProtoId(protoId, protoPtr);
 }
 
+// Reads the proto's file into a fresh Proto without touching the proto lists
+// (172): the map load's parallel warm parses on worker threads and the
+// caller inserts the results with protoInsertProto on the main thread, which
+// keeps the lists single-threaded. The Dude proto lives in memory, it has no
+// file.
+int protoParseProto(const ProtoId& protoId, Proto** protoPtr)
+{
+    *protoPtr = nullptr;
+
+    if (!protoId.valid() || protoId == CritterProtoTypeId::Dude) {
+        return -1;
+    }
+
+    char path[COMPAT_MAX_PATH];
+    proto_make_path(path, protoId);
+    strcat(path, "\\");
+
+    if (_proto_list_str(protoId, path + strlen(path)) == -1) {
+        return -1;
+    }
+
+    File* stream = fileOpen(path, "rb");
+    if (stream == nullptr) {
+        debugPrint("\nError: Can't fopen proto!\n");
+        return -1;
+    }
+
+    Proto* proto = (Proto*)internal_malloc(proto_size(protoId.objectType()));
+    if (proto == nullptr) {
+        fileClose(stream);
+        return -1;
+    }
+
+    if (protoRead(proto, stream) != 0) {
+        fileClose(stream);
+        internal_free(proto);
+        return -1;
+    }
+
+    fileClose(stream);
+    *protoPtr = proto;
+    return 0;
+}
+
+// Inserts a parsed proto into the lists (172): a hit hands the cached proto
+// back; a miss runs the same eviction check as protoGetProto, appends a copy
+// of `parsed` and hands the list's proto back. `parsed` stays the caller's
+// to free either way.
+int protoInsertProto(const ProtoId& protoId, const Proto* parsed, Proto** protoPtr)
+{
+    *protoPtr = nullptr;
+
+    if (parsed == nullptr || !protoId.valid() || protoId == CritterProtoTypeId::Dude) {
+        return -1;
+    }
+
+    ProtoList* protoList = &(_protoLists[protoId.objectType()]);
+    ProtoListExtent* protoListExtent = protoList->head;
+    while (protoListExtent != nullptr) {
+        for (int index = 0; index < protoListExtent->length; index++) {
+            Proto* proto = (Proto*)protoListExtent->proto[index];
+            if (protoId == ProtoId(proto)) {
+                *protoPtr = proto;
+                return 0;
+            }
+        }
+        protoListExtent = protoListExtent->next;
+    }
+
+    if (protoList->head != nullptr && protoList->tail != nullptr) {
+        if (PROTO_LIST_EXTENT_SIZE * protoList->length - (PROTO_LIST_EXTENT_SIZE - protoList->tail->length) > PROTO_LIST_MAX_ENTRIES) {
+            _proto_remove_some_list(protoId.objectType());
+        }
+    }
+
+    Proto* slot;
+    if (_proto_find_free_subnode(protoId.objectType(), &slot) == -1) {
+        return -1;
+    }
+
+    memcpy(slot, parsed, proto_size(protoId.objectType()));
+    *protoPtr = slot;
+    return 0;
+}
+
 // 0x4A21DC proto_new_id
 static ProtoId _proto_new_id(ObjectType type)
 {

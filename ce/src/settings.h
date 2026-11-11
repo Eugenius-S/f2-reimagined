@@ -309,6 +309,9 @@ struct Scene3dSettings {
     double zoom_min = 0.5;
     double zoom_max = 2.0;
     bool clean_edges = true;
+    bool fps_counter = false;
+    bool frame_log = false; // 127: every frame's time to a CSV with a summary
+    double fps_limit = 0.0; // 157: the game view's frame pace; 0 (the default) removes the limit
 };
 
 struct MapperSettings {

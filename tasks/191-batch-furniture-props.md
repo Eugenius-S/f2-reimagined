@@ -42,3 +42,6 @@ Other kinds of objects (their own batches), per-location fixes from the
 owner's shots that are not of this kind.
 
 ## Log
+
+- 2026-11-08 glm: PR #308 closed by task 221: the owner-tile light sampling rewrites whole maps nobody accepted (full regression on the merged tree: 7 enclave spots fail, 3.3k to 476k changed px each; the committed evidence covers only mbase12/mbase34/mbclose). The rule itself stays the right shape; it needs its accepted look across its class before landing.
+- 2026-11-08 claude: find 1 (the owner, open): the Den's chain-link fences (denbus1) stand as solid black walls with bright specks; the see-through mesh lost its transparency, so the holes render black instead of showing the ground behind. Crop: `runs/191-furniture-props/den-fence-black.jpg`. Check every map with this fence art.

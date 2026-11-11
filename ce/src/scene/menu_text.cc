@@ -53,9 +53,29 @@ const std::vector<Translation>& catalog()
         { "fly camera landed", cp1251(u8"полёт завершён") },
         { "fly camera landed: the 3D scene is not shown", cp1251(u8"полёт завершён: 3D-сцена не показана") },
         { "Enable 3D scene", cp1251(u8"Включить 3D-сцену") },
+        { "Ctrl+F10 - original / reimagined view", cp1251(u8"Ctrl+F10 - оригинальный / 3D вид") },
+        { "Ctrl+F11 - 3D fly camera", cp1251(u8"Ctrl+F11 - 3D полёт") },
+        { "F12 - screenshot, Ctrl+F12 - mark a spot", cp1251(u8"F12 - скриншот, Ctrl+F12 - рамка на место") },
+        { "F8 - FPS counter", cp1251(u8"F8 - счётчик FPS") },
+        { "F1 - this help", cp1251(u8"F1 - эта справка") },
         { "Show the 3D world view where a scene is available.", cp1251(u8"Показывать мир в 3D там, где доступна сцена.") },
+        { "Resolution", cp1251(u8"Разрешение") },
+        { "Select an available display resolution.", cp1251(u8"Выберите доступное разрешение экрана.") },
+        { "Window mode", cp1251(u8"Режим окна") },
+        { "Choose fullscreen, windowed, or borderless mode.", cp1251(u8"Выберите полный экран, окно или режим без рамки.") },
+        { "Fullscreen", cp1251(u8"Полный экран") },
+        { "Window", cp1251(u8"Окно") },
+        { "Borderless", cp1251(u8"Без рамки") },
+        { "Picture and interface scale", cp1251(u8"Масштаб картинки и интерфейса") },
+        { "Scales the game picture and interface from 1.0x to 3.0x.", cp1251(u8"Масштабирует картинку и интерфейс от 1.0x до 3.0x.") },
         { "Sharp interface text", cp1251(u8"Чёткий текст интерфейса") },
         { "Draw small interface text with a high-resolution font.", cp1251(u8"Рисовать мелкий текст интерфейса шрифтом высокого разрешения.") },
+        { "FPS counter", cp1251(u8"Счётчик FPS") },
+        { "Show average frames per second and frame time. Press F8 to toggle it while playing.", cp1251(u8"Показывать среднюю частоту кадров и время кадра. Нажмите F8, чтобы переключить счётчик во время игры.") },
+        { "Frame time log", cp1251(u8"Журнал времени кадра") },
+        { "Write every frame's time to frame_log.csv and a summary next to it when the log closes.", cp1251(u8"Записывать время каждого кадра в frame_log.csv, а при закрытии журнала рядом итоговую сводку.") },
+        { "FPS limit", cp1251(u8"Ограничение FPS") },
+        { "The frame rate the game view is paced to: 60 keeps the classic feel, 0 removes the limit.", cp1251(u8"Темп кадров игрового вида: 60 держит классическое ощущение, 0 снимает ограничение.") },
         { "Clean map edges", cp1251(u8"Чёткие границы карты") },
         { "Cut the 3D scene to the map boundary, leaving black beyond it.", cp1251(u8"Обрезать 3D-сцену по границам карты. За границами остаётся чёрный фон.") },
         { "Sun", cp1251(u8"Солнце") },
@@ -78,6 +98,8 @@ const std::vector<Translation>& catalog()
         { "Scales the game picture and interface from 1.0x to 3.0x.", cp1251(u8"Масштабирует изображение и интерфейс от 1,0x до 3,0x.") },
         { "Resolution", cp1251(u8"Разрешение") },
         { "Select an available display resolution.", cp1251(u8"Выберите доступное разрешение экрана.") },
+        { "Cursor speed", cp1251(u8"Скорость курсора") },
+        { "How far the cursor moves when you move the mouse.", cp1251(u8"Насколько далеко перемещается курсор при движении мыши.") },
         { "Window mode", cp1251(u8"Режим окна") },
         { "Choose fullscreen, windowed, or borderless mode.", cp1251(u8"Выберите полный экран, окно или окно без рамки.") },
         { "Fullscreen", cp1251(u8"Полный экран") },
@@ -151,6 +173,21 @@ const std::vector<Translation>& catalog()
         { "snapshot: invalid framebuffer row pitch", cp1251(u8"снимок: неверный шаг строки кадра") },
         { "snapshot: vanilla PNG write failed", cp1251(u8"снимок: не удалось записать PNG") },
         { "snapshot: metadata write failed", cp1251(u8"снимок: не удалось записать метаданные") },
+        { "shot saved:", cp1251(u8"скриншот сохранён:") },
+        { "shot failed", cp1251(u8"скриншот не удался") },
+        { "mark saved:", cp1251(u8"рамка сохранена:") },
+        { "mark failed:", cp1251(u8"рамка не удалась:") },
+        { "mark cancelled", cp1251(u8"рамка отменена") },
+        { "MARK: drag rectangles, Enter saves, Esc cancels", cp1251(u8"РАМКА: выделяй мышью, Enter - сохранить, Esc - отмена") },
+        { "teleported:", cp1251(u8"переход выполнен:") },
+        { "3D scene is disabled in settings", cp1251(u8"3D-сцена выключена в настройках") },
+        { "no map is loaded", cp1251(u8"карта не загружена") },
+        { "this map has no 3D scene", cp1251(u8"у этой карты нет 3D-сцены") },
+        { "the 3D scene failed to load", cp1251(u8"3D-сцена не загрузилась") },
+        // The word goes through the catalog too: a narrow Cyrillic literal
+        // would land in the compiler's execution charset, which is only
+        // CP1251 on a Russian machine.
+        { " (elevation ", cp1251(u8" (этаж ") },
     };
     return strings;
 }
@@ -189,11 +226,34 @@ std::string menuStatusText(const std::string& status, const std::string& languag
     return std::string(menuText(prefix.c_str(), language)) + status.substr(colon + 1);
 }
 
+std::string toggleRefusalText(const char* reason, const std::string& map, int elevation,
+    const std::string& language)
+{
+    // The 3D toggle's refusal (211): a status-line phrase naming the map and
+    // the elevation, in the game's language. Map names stay as they are.
+    if (reason == nullptr) return std::string();
+    const std::string place = ": " + map
+        + std::string(menuText(" (elevation ", language)) + std::to_string(elevation) + ")";
+    if (std::strcmp(reason, "disabled") == 0) {
+        return menuText("3D scene is disabled in settings", language);
+    }
+    if (std::strcmp(reason, "no-map") == 0) {
+        return menuText("no map is loaded", language);
+    }
+    if (std::strcmp(reason, "no-scene") == 0) {
+        return std::string(menuText("this map has no 3D scene", language)) + place;
+    }
+    if (std::strcmp(reason, "load-failed") == 0) {
+        return std::string(menuText("the 3D scene failed to load", language)) + place;
+    }
+    return reason;
+}
+
 void localizeMenuDescriptors(std::vector<SettingDescriptor>& descriptors, const std::string& language)
 {
+    // Every row goes through the catalog; rows without a pair keep their
+    // English fallback unchanged.
     for (auto& descriptor : descriptors) {
-        if (descriptor.section != "3d" && descriptor.id != "screen.scale_factor"
-            && descriptor.id != "screen.resolution_mode" && descriptor.id != "screen.windowed") continue;
         descriptor.fallbackLabel = menuText(descriptor.fallbackLabel.c_str(), language);
         descriptor.fallbackDescription = menuText(descriptor.fallbackDescription.c_str(), language);
         for (auto& choice : descriptor.choices) choice.fallbackLabel = menuText(choice.fallbackLabel.c_str(), language);

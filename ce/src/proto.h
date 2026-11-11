@@ -137,6 +137,12 @@ int protoSaveProtoId(const ProtoId& protoId);
 int proto_new(ProtoId& protoId, ObjectType type);
 void _proto_remove_all();
 int protoGetProto(const ProtoId& protoId, Proto** protoPtr);
+// The parallel proto warm (172): protoParseProto reads a proto's file into a
+// fresh Proto and touches no lists, protoInsertProto appends a copy of a
+// parsed proto to the lists (a hit hands the cached proto back). `parsed`
+// stays the caller's to free either way.
+int protoParseProto(const ProtoId& protoId, Proto** protoPtr);
+int protoInsertProto(const ProtoId& protoId, const Proto* parsed, Proto** protoPtr);
 int _ResetPlayer();
 int proto_max_id(ObjectType type);
 

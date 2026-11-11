@@ -14,6 +14,7 @@
 #include "interpreter_lib.h"
 #include "memory_manager.h"
 #include "platform_compat.h"
+#include "sfall_gaps.h"
 #include "sfall_global_scripts.h"
 #include "svga.h"
 
@@ -2726,6 +2727,9 @@ void programInterpret(Program* program, int numInstructions)
         const unsigned int opcodeIndex = opcode & 0x3FF;
         OpcodeHandler* handler = gInterpreterOpcodeHandlers[opcodeIndex];
         if (handler == nullptr) {
+            char opcodeName[16];
+            snprintf(opcodeName, sizeof(opcodeName), "0x%x", opcode);
+            sfallGapNote("opcode", opcodeName, program);
             programFatalError("Undefined opcode %x.", opcode);
         }
 

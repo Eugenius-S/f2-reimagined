@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <map>
 #include <unordered_map>
 
 #include "gl_api.h"
@@ -41,6 +43,84 @@ unsigned int gHeroVbo = 0;
 StaticHeroInfo gHeroInfo = {};
 int gTurnSteps = 0; // rotations a turned camera moves the shown sides by (087)
 
+// 241: a composite sprite's groups, a row of kGroupTexels RGBA32F texels each
+// (uShadowGroups): (anchor count, 0, 0, 0), the walls.bin casters of the
+// group (row + 1, 0: none), then the feet anchors, two (x, z) per texel.
+// shortcut: 8 anchors and 4 walls.bin pieces per group, 254 groups a frame;
+// raise the caps if a bigger set loses its uniform shade.
+constexpr int kGroupAnchors = 8;
+constexpr int kGroupTexels = 2 + kGroupAnchors / 2;
+constexpr int kMaxGroups = 254; // the wall table's B channel holds group + 1
+std::vector<float> gGroupTexels;
+std::vector<float> gGroupTexelsUploaded;
+unsigned int gGroupTexture = 0;
+
+// The pieces of one art set whose cards touch or overlap on the game's
+// screen, with no art file repeated, take one sun verdict (the owner,
+// 2026-11-09): a forest of TREE7/8/9 repeats its files and keeps a verdict
+// per tree. shortcut: two different trees that touch and stand alone group
+// too; tell them apart by the art kind if one shows.
+void groupCompositeSprites()
+{
+    gGroupTexels.clear();
+    std::map<int, std::vector<int>> bySet;
+    for (int index = 0; index < static_cast<int>(gObjectDraws.size()); index++) {
+        gObjectDraws[index].shadowGroup = -1;
+        if (gObjectDraws[index].artSet != 0) bySet[gObjectDraws[index].artSet].push_back(index);
+    }
+    int groups = 0;
+    for (const auto& [set, members] : bySet) {
+        if (members.size() < 2) continue;
+        std::vector<int> parent(members.size());
+        for (size_t k = 0; k < parent.size(); k++) parent[k] = static_cast<int>(k);
+        auto root = [&](int k) {
+            while (parent[k] != k) k = parent[k] = parent[parent[k]];
+            return k;
+        };
+        for (size_t a = 0; a < members.size(); a++) {
+            const float* ra = gObjectDraws[members[a]].screenRect;
+            for (size_t b = a + 1; b < members.size(); b++) {
+                const float* rb = gObjectDraws[members[b]].screenRect;
+                if (ra[0] <= rb[2] + 1.0f && rb[0] <= ra[2] + 1.0f && ra[1] <= rb[3] + 1.0f && rb[1] <= ra[3] + 1.0f) {
+                    parent[root(static_cast<int>(a))] = root(static_cast<int>(b));
+                }
+            }
+        }
+        std::map<int, std::vector<int>> parts;
+        for (size_t k = 0; k < members.size(); k++) parts[root(static_cast<int>(k))].push_back(members[k]);
+        for (const auto& [top, part] : parts) {
+            if (part.size() < 2 || groups >= kMaxGroups) continue;
+            std::vector<int> files;
+            for (int index : part) files.push_back(gObjectDraws[index].artFile);
+            std::sort(files.begin(), files.end());
+            if (std::adjacent_find(files.begin(), files.end()) != files.end()) continue;
+            // Low clutter of one set (rocks, scrub) keeps its own verdicts:
+            // a group is a building, so one live card (not a walls.bin piece:
+            // cave walls are sets too) stands taller than half a wall.
+            if (std::none_of(part.begin(), part.end(), [](int index) { return gObjectDraws[index].tall; })) continue;
+            const size_t base = gGroupTexels.size();
+            gGroupTexels.resize(base + kGroupTexels * 4, 0.0f);
+            float* row = gGroupTexels.data() + base;
+            int anchors = 0, casters = 0;
+            for (int index : part) {
+                ObjectDraw& draw = gObjectDraws[index];
+                draw.shadowGroup = groups;
+                if (draw.wallRow >= 0) {
+                    markStaticWallShadowGroup(draw.wallRow, groups);
+                    if (casters < 4) row[4 + casters++] = static_cast<float>(draw.wallRow + 1);
+                }
+                if (anchors < kGroupAnchors) {
+                    row[8 + anchors * 2] = draw.anchorX;
+                    row[8 + anchors * 2 + 1] = draw.anchorZ;
+                    anchors++;
+                }
+            }
+            row[0] = static_cast<float>(anchors);
+            groups++;
+        }
+    }
+}
+
 unsigned long long objectArtKey(int fid, int frame, int rotation, int variant)
 {
     return (static_cast<unsigned long long>(static_cast<unsigned int>(fid)) << 32)
@@ -63,6 +143,27 @@ void updateTurnSteps()
     gTurnSteps = spriteTurnSteps(turn, sign, gTurnSteps);
 }
 
+// 157: the built cards, kept between frames. The vertices reference the art
+// texture cache, so it clears with it.
+struct CachedObjectCard {
+    StaticObjectSnapshot snapshot;
+    DepthVertex vertices[6];
+    ObjectDraw draw;
+};
+std::unordered_map<const void*, CachedObjectCard> gObjectCardCache;
+int gObjectCardHits = 0;
+int gObjectCardMisses = 0;
+
+bool sameSnapshot(const StaticObjectSnapshot& a, const StaticObjectSnapshot& b)
+{
+    return a.fid == b.fid && a.frame == b.frame && a.rotation == b.rotation
+        && a.tile == b.tile && a.x == b.x && a.y == b.y && a.pid == b.pid
+        && a.flags == b.flags && a.stack == b.stack && a.seeThrough == b.seeThrough
+        && a.flat == b.flat && a.flyActive == b.flyActive && a.turnOffset == b.turnOffset
+        && a.shadowsOn == b.shadowsOn && a.spriteSidesOn == b.spriteSidesOn
+        && a.clipEnabled == b.clipEnabled;
+}
+
 void destroyStaticObjectTextures()
 {
     if (gContext != nullptr) {
@@ -71,6 +172,8 @@ void destroyStaticObjectTextures()
         }
     }
     gObjectTextures.clear();
+    // The kept cards' vertices sample the deleted textures (157).
+    gObjectCardCache.clear();
 }
 
 } // namespace
@@ -139,11 +242,22 @@ void destroyStaticObjects()
     if (gContext != nullptr) {
         if (gObjectVbo != 0) glDeleteBuffers(1, &gObjectVbo);
         if (gObjectVao != 0) glDeleteVertexArrays(1, &gObjectVao);
+        if (gGroupTexture != 0) glDeleteTextures(1, &gGroupTexture);
     }
     gObjectVbo = 0;
     gObjectVao = 0;
+    gGroupTexture = 0;
+    gGroupTexelsUploaded.clear();
     gObjectVertices.clear();
     gObjectDraws.clear();
+}
+
+void bindShadowGroups(int unit)
+{
+    glActiveTexture(kTexture0 + unit);
+    glBindTexture(kTexture2D, gGroupTexture);
+    glUniform1i(gSceneShadowGroupsLocation, unit);
+    glActiveTexture(kTexture0);
 }
 
 } // namespace internal
@@ -191,7 +305,7 @@ bool updateStaticHero(const StaticHeroFrame& frame, std::string* error)
     const DepthVertex topRight = cardVertex(corners[3], row, camera.eye);
     const DepthVertex vertices[] = { topLeft, bottomLeft, bottomRight, topLeft, bottomRight, topRight };
 
-    while (glGetError() != 0) {
+    if (glErrorChecksEnabled()) while (glGetError() != 0) {
     }
     glPixelStorei(kUnpackAlignment, 1);
     if (gHeroVao == 0) glGenVertexArrays(1, &gHeroVao);
@@ -209,7 +323,7 @@ bool updateStaticHero(const StaticHeroFrame& frame, std::string* error)
     glTexParameteri(kTexture2D, kTextureWrapT, kClampToEdge);
     glPixelStorei(kUnpackAlignment, 4);
     glBindVertexArray(0);
-    if (glGetError() != 0) return fail("OpenGL failed to upload the hero card");
+    if (glErrorChecksEnabled() && glGetError() != 0) return fail("OpenGL failed to upload the hero card");
 
     gHeroInfo = { frame.tile, frame.fid, frame.frame, frame.rotation, worldU, worldV };
     gHeroPickId = frame.pickId;
@@ -301,7 +415,7 @@ bool addStaticObject(const StaticObjectFrame& frame, std::string* error)
         const unsigned long long expectedRgba = static_cast<unsigned long long>(frame.width)
             * static_cast<unsigned long long>(frame.height) * 4;
         if (frame.rgba == nullptr || expectedRgba != frame.rgbaSize) return fail("object frame pixels are missing");
-        while (glGetError() != 0) {
+        if (glErrorChecksEnabled()) while (glGetError() != 0) {
         }
         glGenTextures(1, &texture);
         glBindTexture(kTexture2D, texture);
@@ -313,7 +427,7 @@ bool addStaticObject(const StaticObjectFrame& frame, std::string* error)
         glTexParameteri(kTexture2D, kTextureMagFilter, kNearest);
         glTexParameteri(kTexture2D, kTextureWrapS, kClampToEdge);
         glTexParameteri(kTexture2D, kTextureWrapT, kClampToEdge);
-        if (glGetError() != 0) {
+        if (glErrorChecksEnabled() && glGetError() != 0) {
             glDeleteTextures(1, &texture);
             return fail("OpenGL failed to upload an object frame");
         }
@@ -367,6 +481,19 @@ bool addStaticObject(const StaticObjectFrame& frame, std::string* error)
     // such cards out since 090). Every other standing card reads per pixel.
     gObjectDraws.back().feetShadow = ((frame.fid >> 24) & 0xF) == OBJ_TYPE_CRITTER
         || (!flat && !frame.noBlock && high - low > staticHalfWallHeight());
+    if (frame.artSet != 0) {
+        ObjectDraw& draw = gObjectDraws.back();
+        draw.artSet = frame.artSet;
+        draw.artFile = frame.fid & 0x0F000FFF;
+        double hexX, hexY;
+        spriteHexPixel(frame.tile, &hexX, &hexY);
+        draw.screenRect[0] = static_cast<float>(hexX + frame.objectX + frame.artXOffset - frame.width / 2);
+        draw.screenRect[1] = static_cast<float>(hexY + frame.objectY + frame.artYOffset - (frame.height - 1));
+        draw.screenRect[2] = draw.screenRect[0] + static_cast<float>(frame.width);
+        draw.screenRect[3] = draw.screenRect[1] + static_cast<float>(frame.height);
+        draw.wallRow = frame.pickOnly ? staticWallObjectRow(frame.tile, frame.fid) : -1;
+        draw.tall = !flat && !frame.pickOnly && high - low > staticHalfWallHeight();
+    }
     const int order[6] = { 0, 1, 2, 0, 2, 3 };
     for (int index : order) {
         SpriteCardVertex corner = corners[index];
@@ -387,7 +514,21 @@ bool addStaticObject(const StaticObjectFrame& frame, std::string* error)
 
 void endStaticObjects()
 {
+    groupCompositeSprites();
     if (!gInitialized || gObjectVertices.empty()) return;
+    if (!gGroupTexels.empty() && gGroupTexels != gGroupTexelsUploaded) {
+        if (gGroupTexture == 0) {
+            glGenTextures(1, &gGroupTexture);
+            glBindTexture(kTexture2D, gGroupTexture);
+            glTexParameteri(kTexture2D, kTextureMinFilter, kNearest);
+            glTexParameteri(kTexture2D, kTextureMagFilter, kNearest);
+        }
+        glBindTexture(kTexture2D, gGroupTexture);
+        glTexImage2D(kTexture2D, 0, 0x8814 /* GL_RGBA32F */, kGroupTexels,
+            static_cast<int>(gGroupTexels.size() / (kGroupTexels * 4)), 0, kRGBA, 0x1406 /* GL_FLOAT */,
+            gGroupTexels.data());
+        gGroupTexelsUploaded = gGroupTexels;
+    }
     if (gObjectVao == 0) glGenVertexArrays(1, &gObjectVao);
     if (gObjectVbo == 0) glGenBuffers(1, &gObjectVbo);
     glBindVertexArray(gObjectVao);
@@ -398,9 +539,96 @@ void endStaticObjects()
     glBindVertexArray(0);
 }
 
+bool staticObjectCardFresh(const void* key, const StaticObjectSnapshot& snapshot)
+{
+    const auto found = gObjectCardCache.find(key);
+    if (found == gObjectCardCache.end()) return false;
+    if (sameSnapshot(found->second.snapshot, snapshot)) {
+        gObjectCardHits++;
+        return true;
+    }
+    gObjectCardMisses++;
+    static int reports = 0;
+    if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
+        const StaticObjectSnapshot& old = found->second.snapshot;
+        const char* field = "?";
+        if (old.fid != snapshot.fid) field = "fid";
+        else if (old.frame != snapshot.frame) field = "frame";
+        else if (old.rotation != snapshot.rotation) field = "rotation";
+        else if (old.tile != snapshot.tile) field = "tile";
+        else if (old.x != snapshot.x) field = "x";
+        else if (old.y != snapshot.y) field = "y";
+        else if (old.pid != snapshot.pid) field = "pid";
+        else if (old.flags != snapshot.flags) field = "flags";
+        else if (old.stack != snapshot.stack) field = "stack";
+        else if (old.seeThrough != snapshot.seeThrough) field = "seeThrough";
+        else if (old.flat != snapshot.flat) field = "flat";
+        else if (old.flyActive != snapshot.flyActive) field = "flyActive";
+        else if (old.turnOffset != snapshot.turnOffset) field = "turnOffset";
+        else if (old.shadowsOn != snapshot.shadowsOn) field = "shadowsOn";
+        else if (old.spriteSidesOn != snapshot.spriteSidesOn) field = "spriteSides";
+        else if (old.clipEnabled != snapshot.clipEnabled) field = "clip";
+        printf("perf obj cache hits=%d misses=%d field=%s\n", gObjectCardHits, gObjectCardMisses, field);
+        fflush(stdout);
+    }
+    return false;
+}
+
+void appendStaticObjectCard(const void* key, int pickId)
+{
+    const auto found = gObjectCardCache.find(key);
+    if (found == gObjectCardCache.end()) return;
+    CachedObjectCard& card = found->second;
+    card.draw.pickId = pickId;
+    card.draw.firstVertex = static_cast<int>(gObjectVertices.size());
+    gObjectVertices.insert(gObjectVertices.end(), card.vertices, card.vertices + 6);
+    gObjectDraws.push_back(card.draw);
+}
+
+bool addStaticObjectCached(const void* key, const StaticObjectSnapshot& snapshot,
+    const StaticObjectFrame& frame, std::string* error)
+{
+    CachedObjectCard card;
+    card.snapshot = snapshot;
+    const size_t verticesBefore = gObjectVertices.size();
+    const size_t drawsBefore = gObjectDraws.size();
+    if (!addStaticObject(frame, error)) {
+        // The failed build may have pushed a draw record before failing.
+        gObjectDraws.resize(drawsBefore);
+        gObjectVertices.resize(verticesBefore);
+        return false;
+    }
+    if (gObjectDraws.size() == drawsBefore) return true; // a skip, not a failure
+    card.draw = gObjectDraws.back();
+    std::copy(gObjectVertices.end() - 6, gObjectVertices.end(), card.vertices);
+    gObjectCardCache[key] = std::move(card);
+    return true;
+}
+
+void internal::cullStaticObjectDraws(const float mvp[16])
+{
+    static const bool off = std::getenv("F2CE_NO_CULL") != nullptr; // the before side of a measure
+    for (ObjectDraw& draw : gObjectDraws) {
+        int outside[4] = { 0, 0, 0, 0 }; // x < -w, x > w, y < -w, y > w
+        for (int i = 0; i < 6; i++) {
+            const DepthVertex& v = gObjectVertices[draw.firstVertex + i];
+            const float x = mvp[0] * v.x + mvp[4] * v.y + mvp[8] * v.z + mvp[12];
+            const float y = mvp[1] * v.x + mvp[5] * v.y + mvp[9] * v.z + mvp[13];
+            const float w = mvp[3] * v.x + mvp[7] * v.y + mvp[11] * v.z + mvp[15];
+            if (!(w > 0.0f)) break; // behind the eye: keep the draw
+            outside[0] += x < -w;
+            outside[1] += x > w;
+            outside[2] += y < -w;
+            outside[3] += y > w;
+        }
+        draw.offView = !off && (outside[0] == 6 || outside[1] == 6 || outside[2] == 6 || outside[3] == 6);
+    }
+}
+
 void clearStaticObjects()
 {
     destroyStaticObjects();
+    gObjectCardCache.clear();
 }
 
 unsigned int staticObjectCount()

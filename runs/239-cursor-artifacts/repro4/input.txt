@@ -1,0 +1,31 @@
+# 239 repro round 3: gmove now drives the game's hover path.
+# Sweep near the center (the action cursor animates while the mouse moves),
+# then park on a walkable tile, then the top edge, then back.
+wait 30
+gmove 400 300
+wait 2
+gmove 410 302
+wait 2
+gmove 420 304
+wait 2
+gmove 430 306
+wait 2
+gmove 440 308
+wait 2
+gmove 450 310
+wait 2
+gmove 460 300
+wait 2
+gmove 470 290
+wait 2
+gmove 480 280
+wait 4
+snap
+snap
+gmove 480 0
+wait 15
+snap
+snap
+gmove 480 280
+wait 10
+snap

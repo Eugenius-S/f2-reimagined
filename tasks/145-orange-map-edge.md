@@ -2,7 +2,7 @@
 id: 145
 title: The 3D map edge matches the game, cut where it cuts, with no orange band
 milestone: M1
-status: blocked
+status: todo
 owner: gpt
 suggested: any
 priority: normal
@@ -78,3 +78,46 @@ Next: return to this task only if a bounded Kladwtwn tour route or a harness
 fix becomes available.
 Check: the failure summaries and run paths above; do not treat the completed
 klatoxcv control tour as proof of the Kladwtwn edge.
+
+### 2026-11-06 gpt: refreshed-main edge verification
+
+Done: Rebased the existing branch on current `origin/main` (`6beaf53f`) and
+confirmed the exit-grid marker remains pickable while its translucent card is
+hidden. A fresh targeted fly tour of Kladwtwn tile 24678 completed at -45, 0,
+and +45 degrees on both main and this branch; the difference sheet shows the
+orange marker removed at the two affected views and no change at +45. The
+three-angle before/after sheet is `runs/145-orange-map-edge/tour-current-main-edge.jpg`.
+The same-tile classic 2D view and current 3D still capture are in
+`runs/145-orange-map-edge/current-time-8/`; their sidecars record 288005 and
+288000 game ticks respectively, so they are adjacent contextual views rather
+than a pixel-matched comparison. The existing matched static before/after
+captures show the same authored clip bounds and the marker removal. Release
+build and CTest passed 20/20; scene-export tests passed 135/135. The prior
+full and reduced fly-tour timeouts are superseded by this successful bounded
+route, but the regression references were retaken in this PR, so
+`reviewed: no` remains until the required independent review.
+
+Manual review: inspected both `runs/145-orange-map-edge/regression-review-*.jpg`
+sheets covering all 46 changed before/after references. The changes sit on
+translucent exit-grid wedges at map boundaries; regular geometry remains.
+The other 60 references are pixel-identical. Confirmed `pickOnly` objects are
+still submitted by `picking.cc`, and the exit-grid stays in the pick list for
+the normal transition path.
+
+Next: Verify the rebased head's CI. The PR remains draft until its CI is green.
+Check: the current-main tour sheet, matched capture sidecars, build logs, and
+test results described above.
+
+## Log
+
+- 2026-11-07: reopened by the owner's find: "when the camera moves into the
+  3D mode the map loses its clean edges, they go cell-by-cell like the first
+  iterations." Suspects from a first code read: the clean-edge clip resets
+  while a map transition or camera change walks through
+  updateMapClip (scene_view.cc), or a warm-cache scene built before the
+  edge cut exists. The owner's scene.log has no fresh "clean map edges
+  disabled" lines, so the clip-failure path did not fire; needs a live repro
+  with logging on the transition itself.
+- 2026-11-11 claude (audit, folded in from the inbox line of 2026-11-09): at the artemple entrance the sides are black because the authored edge is about 704 px wide; the owner wants the map grown left and right (side clip planes and terrain) with pines planted, so a 21:9 screen sees forest.
+
+- 2026-11-11 task 248 audit: the original edge verification is recorded, but the new Artemple entrance request needs code to extend side clip planes and terrain and plant pines for 21:9. That implementation is still missing.

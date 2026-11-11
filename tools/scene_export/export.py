@@ -37,7 +37,7 @@ from wall_sidecar import decode_wall_sidecar, encode_wall_sidecar, wall_slabs  #
 from shadow_sidecar import VERSION as SHADOW_SIDECAR_VERSION  # noqa: E402
 from shadow_sidecar import decode_shadow_sidecar, encode_shadow_sidecar  # noqa: E402
 
-EXPORTER_VERSION = "1.12.0"
+EXPORTER_VERSION = "1.13.0"
 DONOR_REVISION = "0da1cd449f1dc7f2f6986ff7e8728a4b6ae20584"
 DEFAULT_MAP = "kladwtwn"
 # Map groups for --maps: every elevation each map has.
@@ -89,7 +89,18 @@ MAP_GROUPS = {
     # and water edges (the game's maps/desert*.map, desrt*.map and
     # coast*.map files).
     "encdesertcoast": ("desert1", "desert2", "desert3", "desert4", "desert5", "desert6", "desert7", "desert8", "desert9", "desrt10", "desrt11", "desrt12", "desrt13", "coast1", "coast2", "coast3", "coast4", "coast5", "coast6", "coast7", "coast8", "coast9", "coast10", "coast11", "coast12"),
+    # The city, cave and mountain random encounters: ruined streets, caves
+    # and mountain paths (the game's maps/city*.map, cave*.map and
+    # mountn*.map files).
+    "enccitycave": ("city1", "city2", "city3", "city4", "city5", "city6", "city7", "city8", "cave0", "cave1", "cave2", "cave3", "cave4", "cave5", "cave6", "cave7", "mountn1", "mountn2", "mountn3", "mountn4", "mountn5", "mountn6"),
+    # The special encounters, the fixed encounters and the car's map: the
+    # whale, the cafe, the bridge, the shuttle and the rest (the game's
+    # maps/rnd*.map, enc*.map, cowbomb.map and cardesrt.map files).
+    "encspecial": ("rndwhale", "rndtinwd", "rndbhead", "rndshutl", "rnduvilg", "rndbridg", "rndcafe", "rndholy1", "rndholy2", "rndforvr", "rndtoxic", "rndparih", "rndexcow", "rndbess", "encdet", "encdock", "encfite", "encgd", "encpres", "encrctr", "enctrp", "cowbomb", "cardesrt"),
 }
+# --maps rp: the maps only the Restoration Project ships (its restored areas and the
+# original maps it brings back). Not part of "all": a vanilla game has none of them.
+RP_MAPS = ("abbasem", "abbey", "abundgr", "easter", "epamain1", "epamain2", "epasl", "epax", "gammovie", "gcenclen", "hubstash", "merchant", "safehs1", "safehs2", "safehs3", "sfsheng", "sfsub", "slvcamp", "tribe01", "tribe02", "v13_orig", "v15_orig", "vill", "vilmerch")
 EXPECTED_OUTPUT_FILES = {"scene.json", "provenance.json", "floor.bin", "walls.bin", "projection.bin", "baked.bin",
                          "shadows.bin", "tiles.png", "light.png", "rock.png", "roof_fringe.png"}
 
@@ -329,7 +340,10 @@ class ReadOnlyGameFiles(GameFiles):
 
     def _winner(self, path: str):
         key = canonical_resource(path)
-        return key, choose_source(key, self.sources)
+        winner = choose_source(key, self.sources)
+        if winner is None:  # a probe that missed shapes the scene too: the file turning up later must rebuild it
+            self._reads.setdefault(key, {"source": "missing"})
+        return key, winner
 
     def find(self, path):
         key, winner = self._winner(path)
@@ -394,8 +408,8 @@ def parse_args(argv=None):
     roots.add_argument("--game-root", type=Path, help="game directory containing DAT files and data/")
     targets = parser.add_mutually_exclusive_group()
     targets.add_argument("--map", default=DEFAULT_MAP, help=f"one map, without .map (default: {DEFAULT_MAP})")
-    targets.add_argument("--maps", help="every elevation of several maps: a group (" + ", ".join(MAP_GROUPS)
-                         + ") or a comma-separated list")
+    targets.add_argument("--maps", help="every elevation of several maps: a comma-separated list of maps and "
+                         "groups (all, " + ", ".join(MAP_GROUPS) + ", and rp: the Restoration Project's own maps)")
     parser.add_argument("--elevation", type=int, choices=(0, 1, 2), default=0,
                         help="the elevation of --map (default: 0)")
     parser.add_argument("--cache-root", type=Path,
@@ -404,19 +418,40 @@ def parse_args(argv=None):
     parser.add_argument("--check", action="store_true",
                         help="report whether every requested map's base scene exists and exit: 0 all present, "
                              "3 some missing (the 091 launcher asks before spending minutes on an export)")
+    parser.add_argument("--force", action="store_true",
+                        help="rebuild every requested scene even if it is current")
     args = parser.parse_args(argv)
-    names = MAP_GROUPS.get(args.maps.lower(), args.maps.split(",")) if args.maps else [args.map]
-    args.map_names = [name.strip().lower() for name in names]
+    args.map_names = expand_maps(args.maps) if args.maps else [args.map.strip().lower()]
     for name in args.map_names:
         if not re.fullmatch(r"[a-z0-9_]+", name):
             parser.error(f"invalid map name: {name!r}")
     return args
 
 
+def expand_maps(spec: str) -> list[str]:
+    """Map names of a --maps value: each comma-separated item is a map, a group, or "all" (every group),
+    in order, each map once."""
+    names = []
+    for item in (part.strip().lower() for part in spec.split(",")):
+        if not item:
+            continue
+        if item == "all":
+            group = [name for members in MAP_GROUPS.values() for name in members]
+        elif item == "rp":
+            group = RP_MAPS
+        else:
+            group = MAP_GROUPS.get(item, (item,))
+        for name in group:
+            if name not in names:
+                names.append(name)
+    return names
+
+
 def check_scenes(game_root: Path, map_names: list[str], cache_root: Path = None) -> list[str]:
-    """The requested maps whose elevation 0 scene is not in the cache yet."""
+    """The requested maps with no scene in the cache yet: a map counts as present when any of its
+    elevation folders holds a scene.json (some maps have no elevation 0)."""
     scenes = cache_root if cache_root is not None else game_root / "mod-cache" / "scene"
-    return [name for name in map_names if not (scenes / name / "0" / "scene.json").is_file()]
+    return [name for name in map_names if not any(scenes.glob(f"{name}/*/scene.json"))]
 
 
 def scene_directory(game_root: Path, map_name: str, elevation: int, cache_root: Path = None) -> Path:
@@ -437,36 +472,29 @@ def scene_directory(game_root: Path, map_name: str, elevation: int, cache_root: 
     return out_dir
 
 
-def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path):
-    """One map elevation into its cache directory (scene_directory)."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    gf._reads = {}  # provenance lists what this scene read
-    builder = SceneBuilder(gf, map_name, elevation)
-    builder.export(out_dir)
-    scene_path = out_dir / "scene.json"
-    scene = json.loads(scene_path.read_text(encoding="utf-8"))
-    if scene.get("map") != map_name or scene.get("elevation") != elevation:
-        raise RuntimeError("SceneBuilder returned an unexpected map/elevation")
-    live_boards, skip_props, skip_rests = live_solids(builder, scene)
-    wall_back_pages = []
-    wall_payload = encode_wall_sidecar(scene, skip_props, skip_rests, builder.map.objects[elevation],
-                                       builder.atlas.pages, builder.tile_sheet[..., 3],
-                                       wall_back_pages=wall_back_pages)
-    for index, page in enumerate(wall_back_pages, start=len(builder.atlas.pages)):
-        Image.fromarray(page, "RGBA").save(out_dir / f"sprites{index}.png", optimize=True)
-    (out_dir / "walls.bin").write_bytes(wall_payload)
-    wall_data = decode_wall_sidecar(wall_payload)
-    baked_payload = encode_baked_sidecar(baked_objects(scene, builder.map.objects[elevation], live_boards,
-                                                     FIXED_CARD_FRMS, gf.art.name))
-    (out_dir / "baked.bin").write_bytes(baked_payload)
-    baked_count = len(decode_baked_sidecar(baked_payload))
-    projection_payload = encode_projection_sidecar(scene)
-    (out_dir / "projection.bin").write_bytes(projection_payload)
-    decode_projection_sidecar(projection_payload)
-    shadow_payload = encode_shadow_sidecar(scene, builder.atlas.images, builder.map.objects[elevation])
-    (out_dir / "shadows.bin").write_bytes(shadow_payload)
-    shadow_count = len(decode_shadow_sidecar(shadow_payload))
+def input_fingerprint(gf, game_root: Path, map_name: str, elevation: int):
+    """What a scene depends on, hashed: (fingerprint hex, adapter_hashes, archives, source_priority).
+    The resources are gf._reads, so it is meaningful once the scene was built or its reads replayed.
+    The game data counts only through gf._reads (each file read or looked for: its winning source and
+    hash, or its absence): whole archives, the source order and the config files stay out, so the game
+    rewriting fallout2.cfg or a mod added that no scene reads rebuilds nothing (task 242)."""
+    if getattr(gf, "_static_inputs", None) is None:  # scene-independent hashes, computed once per gf
+        gf._static_inputs = static_inputs(gf, game_root)
+    vendor_hashes, adapter_hashes, archives, source_priority = gf._static_inputs
+    fingerprint_data = {
+        "exporter_version": EXPORTER_VERSION,
+        "donor_revision": DONOR_REVISION,
+        "vendor_sha256": vendor_hashes,
+        "adapter_sha256": adapter_hashes,
+        "resources": gf._reads,
+        "map": map_name,
+        "elevation": elevation,
+    }
+    fingerprint = hashlib.sha256(json.dumps(fingerprint_data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return fingerprint, adapter_hashes, archives, source_priority
 
+
+def static_inputs(gf, game_root: Path):
     vendor_files = sorted((HERE / "vendor").rglob("*.py"))
     vendor_hashes = {p.relative_to(HERE / "vendor").as_posix(): sha256_file(p) for p in vendor_files}
     adapter_hashes = {name: sha256_file(HERE / name) for name in
@@ -482,19 +510,77 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
          if source.path.is_relative_to(game_root) else str(source.path)}
         for kind, name, source in gf.sources
     ]
-    fingerprint_data = {
-        "exporter_version": EXPORTER_VERSION,
-        "donor_revision": DONOR_REVISION,
-        "vendor_sha256": vendor_hashes,
-        "adapter_sha256": adapter_hashes,
-        "archives": archives,
-        "config_sha256": gf.config_hashes,
-        "source_priority": source_priority,
-        "resources": gf._reads,
-        "map": map_name,
-        "elevation": elevation,
-    }
-    fingerprint = hashlib.sha256(json.dumps(fingerprint_data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return vendor_hashes, adapter_hashes, archives, source_priority
+
+
+def reset_caches(gf):
+    """Drop gf._cache (parsed lists, protos, the ArtDB and its decoded art) so every read hits gf.read and is recorded."""
+    gf._cache = {}
+
+
+def stale_reason(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path) -> str | None:
+    """None when out_dir holds a finished scene whose inputs (exporter code, every game file it read or
+    looked for) still hash to the fingerprint its provenance recorded; otherwise why it must be built."""
+    try:
+        provenance = json.loads((out_dir / "provenance.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "no scene yet"
+    try:
+        if provenance["map"] != map_name or provenance["elevation"] != elevation:
+            return "the scene is another map's"
+        if not all((out_dir / name).is_file() for name in provenance["artifacts_sha256"]):
+            return "scene files missing"
+        recorded = provenance["resources_read"]
+        reset_caches(gf)
+        gf._reads = {}
+        for key, record in recorded.items():
+            try:
+                gf.exists(key) if record.get("source") == "missing" else gf.read(key)
+            except FileNotFoundError:
+                pass  # now missing: _winner recorded it, the comparison below sees it
+        if input_fingerprint(gf, game_root, map_name, elevation)[0] == provenance["inputs_sha256"]:
+            return None
+        changed = sorted(key for key in set(recorded) | set(gf._reads) if recorded.get(key) != gf._reads.get(key))
+        if not changed:
+            return "the exporter changed"
+        more = f" and {len(changed) - 3} more" if len(changed) > 3 else ""
+        return "game files changed: " + ", ".join(changed[:3]) + more
+    except Exception as error:
+        return f"provenance unreadable ({error})"
+
+
+def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path):
+    """One map elevation into its cache directory (scene_directory)."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    reset_caches(gf)
+    gf._reads = {}  # provenance lists what this scene read
+    builder = SceneBuilder(gf, map_name, elevation)
+    builder.export(out_dir)
+    scene_path = out_dir / "scene.json"
+    scene = json.loads(scene_path.read_text(encoding="utf-8"))
+    if scene.get("map") != map_name or scene.get("elevation") != elevation:
+        raise RuntimeError("SceneBuilder returned an unexpected map/elevation")
+    live_boards, skip_props, skip_rests = live_solids(builder, scene)
+    wall_back_pages = []
+    wall_payload = encode_wall_sidecar(scene, skip_props, skip_rests, builder.map.objects[elevation],
+                                       builder.atlas.pages, builder.tile_sheet[..., 3],
+                                       wall_back_pages=wall_back_pages, water=builder.water)
+    for index, page in enumerate(wall_back_pages, start=len(builder.atlas.pages)):
+        Image.fromarray(page, "RGBA").save(out_dir / f"sprites{index}.png", optimize=True)
+    (out_dir / "walls.bin").write_bytes(wall_payload)
+    wall_data = decode_wall_sidecar(wall_payload)
+    baked_payload = encode_baked_sidecar(baked_objects(scene, builder.map.objects[elevation], live_boards,
+                                                     FIXED_CARD_FRMS, gf.art.name))
+    (out_dir / "baked.bin").write_bytes(baked_payload)
+    baked_count = len(decode_baked_sidecar(baked_payload))
+    projection_payload = encode_projection_sidecar(scene)
+    (out_dir / "projection.bin").write_bytes(projection_payload)
+    decode_projection_sidecar(projection_payload)
+    shadow_payload = encode_shadow_sidecar(scene, builder.atlas.images, builder.map.objects[elevation])
+    (out_dir / "shadows.bin").write_bytes(shadow_payload)
+    shadow_count = len(decode_shadow_sidecar(shadow_payload))
+
+    fingerprint, adapter_hashes, archives, source_priority = input_fingerprint(gf, game_root, map_name, elevation)
     # The roof's wall tops are unrolled into strips in an image of their own, to stand up as bands (roof_fringe.py).
     roof_squares = {index: int(tile) for index, (cell, tile) in
                     enumerate(zip(builder.roof.ravel(), builder.roof_ids.ravel())) if cell}
@@ -511,7 +597,8 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
         "inputFingerprintSha256": fingerprint,
     }
     scene_path.write_text(json.dumps(scene, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    (out_dir / "floor.bin").write_bytes(encode_floor_sidecar(scene, fringe, patches))
+    (out_dir / "floor.bin").write_bytes(encode_floor_sidecar(scene, fringe, patches, builder.water,
+                                                             builder.water_color))
     artifact_hashes = {p.name: sha256_file(p) for p in sorted(out_dir.iterdir()) if p.name != "provenance.json"}
     provenance = {
         "exporter": "fallout2-sprite-lighting scene_export",
@@ -541,9 +628,10 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
         "resources_read": gf._reads,
         "artifacts_sha256": artifact_hashes,
     }
+    provenance["inputs_sha256"] = input_fingerprint(gf, game_root, map_name, elevation)[0]  # covers the final resources_read
     (out_dir / "provenance.json").write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"output": str(out_dir), "files": len(artifact_hashes) + 1,
-                      "fingerprint_sha256": fingerprint, "resources_read": len(gf._reads)}, sort_keys=True))
+                      "fingerprint_sha256": fingerprint, "resources_read": len(gf._reads)}, sort_keys=True), flush=True)
 
 
 def main(argv=None):
@@ -573,21 +661,29 @@ def main(argv=None):
                     elevations = sorted(MapFile.load(name, gf).tiles)
                 except (OSError, ValueError, SystemExit) as error:
                     failed.append(f"{name}: {error}")
+                    print(f"FAILED {failed[-1]}", file=sys.stderr, flush=True)
                     continue
                 targets.extend((name, elevation, scene_directory(game_root, name, elevation, cache_root))
                                for elevation in elevations)
+            # The launcher counts the scene lines against this one for its progress bar.
+            print(json.dumps({"maps_total": len({name for name, _, _ in targets}), "scenes_total": len(targets)},
+                             sort_keys=True), flush=True)
         for name, elevation, out_dir in targets:
             if not args.maps:
                 export_scene(gf, game_root, name, elevation, out_dir)
                 continue
             try:
+                reason = "--force" if args.force else stale_reason(gf, game_root, name, elevation, out_dir)
+                if reason is None:
+                    print(json.dumps({"output": str(out_dir), "current": True}, sort_keys=True), flush=True)
+                    continue
+                print(f"rebuilding {name} e{elevation}: {reason}", flush=True)  # the launcher log shows it as is
                 export_scene(gf, game_root, name, elevation, out_dir)
             except (Exception, SystemExit) as error:  # one bad map must not stop the others
                 failed.append(f"{name} e{elevation}: {error}")
+                print(f"FAILED {failed[-1]}", file=sys.stderr, flush=True)  # at once: the launcher counts it
     finally:
         gf.close()
-    for line in failed:
-        print(f"FAILED {line}", file=sys.stderr)
     return 1 if failed else 0
 
 

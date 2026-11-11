@@ -327,3 +327,32 @@ first: a new task only when no open task or batch fits (AGENTS.md, Tasks).
 - 2026-11-04 (-> 199, tier 1 high, alone: builds on 091's launcher) The owner: a proper
   installer with the logo, one-click updates from GitHub, a Russian option
   and a disabled Restoration Project option.
+- 2026-11-08 Audit (the owner: "something from our work got lost"). Found:
+  18 open PRs, 16 drafts with green checks, their tasks back to `todo` on
+  main (-> 221, tier 0, the rescue in value order); glm's task files
+  202-205 on #320 collide with other tasks of those ids (-> 221 renumbers
+  them 222-225); #336 claims 219 with no task file (-> 221); the launcher
+  builds only Klamath in 3D for players (-> 220, claude); the READMEs still
+  say 70% (-> 220, with the launcher fix); merged 183, 203, 208-210 and
+  213-215 were still open on the board (closed); 218 had no header (added).
+  Map coverage checked: the export groups hold all 152 playable maps.
+- 2026-11-08 (-> 191, find 1) The owner: the Den's chain-link fences are black walls with specks; the mesh holes should show what is behind.
+- 2026-11-08 (done: 239, #371 `0a825d85a`) The owner: the screenshot region mark stays drawn on the bottom panel and is never erased.
+- 2026-11-08 (-> 193 part A) The owner: message window bullets - bullet, gap, text; wrapped lines align with the text, not the bullet; one straight left edge.
+- 2026-11-08 (-> 128) The owner: in the player install from the GitHub release the background art (splash/menus) shows 4:3, while the dev game shows it widescreen. Find which file gives the wide art in the dev game folder and ship or generate it for players.
+- 2026-11-08 (-> 234) The launcher says "no network" when GitHub release downloads answer 504 (seen through a VPN exit, even for RPU's releases); say "GitHub does not answer" and show the error.
+- 2026-11-08 (-> new task, tier 0, after 234/235) The owner on main 0f0f1823 (video "Запись 2026-11-08 160620.mp4" on his desktop): sharp text is fixed, but the screen flickers black.
+- 2026-11-08 (-> same task) The owner: in 3D camera mode the movement controls do nothing and the mouse does not aim the camera.
+- 2026-11-08 (done: 239, #371 `0a825d85a`) The owner, shot game/shots/dev/2026-11-08/20261108-181235 (kladwtwn): the hex move cursor has dotted ghost outlines (halo rings) around it in 3D.
+- 2026-11-08 (-> 224, was 240) The owner, shot 20261108-181055 (kladwtwn, rect 880,309,85,62): graffiti of an inner wall draws over the outer wall in front of it.
+- 2026-11-08 (done: 239, #371 `0a825d85a`) The owner, shot 20261108-181209 (kladwtwn, top edge rect 482,0,157,82): the scroll-edge cursor (arrow with red X) has an opaque black box, no transparency.
+- 2026-11-08 (-> 193 part A) The owner, shot 20261108-181342: the bullet alignment went the wrong way; text lines now start left of the window edge and get clipped. Shift the whole text block right: bullet, gap, text, wrapped lines aligned with the text.
+- 2026-11-08 (-> 128, again) The owner in the Steam install (build 364beb2): the menu wallpaper is still 4:3.
+- 2026-11-08 (-> claude, tier 0, after 157) The owner in the Steam install, shot shots/dev/2026-11-08/20261108-221627 (artemple e0): at the temple entrance everything left and right of the narrow strip is black (rect 0,7,534,670 empty).
+- 2026-11-08 (-> same) The owner, shot 20261108-221655 (arcaves e0, zoom 0.5): inside the temple only one block of the map shows, the rest is black.
+- 2026-11-08 (-> 239) The owner: F12 shots land in <game>/shots/dev/<date>/ with a json beside them; he expected <game>/screenshots. Move them there (drop "dev") and say the path when a shot is taken.
+- 2026-11-08 (-> 128, found) Why the GitHub install shows 4:3: the wide art is only in the owner's dev game folder. Main menu: ce/src/mainmenu.cc:316-326 loads game/user-assets/fullscreen-20261028/wallpapers-selected/hires/menu/*21-9.png and hr_mainmenu.png (git-ignored owner assets); loading screens: data/art/splash/splash0-6.rix and data/art/russian/splash/splash0-6.rix (551,338 bytes each), absent from the install. The installer or release must ship these files (or 128 regenerates them) and the menu should load them from a shipped path, not user-assets.
+- 2026-11-09 (-> 145, the map edge batch) owner: artemple entrance, sides black because the authored EDG edge is ~704 px wide. Future task: grow the map left and right (extend side clip planes and terrain) and plant pines there so a 21:9 screen sees forest, not black.
+- 2026-11-09 (-> 241) owner: artemple entrance is part in shade, part in sun. Rule for every multi-piece sprite (a group of cards built from one composite object or adjacent pieces): when the group stands on a plane that is in shadow and one piece falls in the shadow, the whole group is shaded together.
+- 2026-11-09 (-> 128) owner: the bottom panel with brown leather straps at the edges (seen in the build/test-run dev-snapshot shots, e.g. arcaves 20261109-084616) is NOT wanted. Keep the default iron panel with the Vault-Tec logo at the edges everywhere (install, dev game, test runs). 128 ships only the wide menu wallpaper and splash art.
+- 2026-11-11 Audit (`runs/audit-2026-11-11.md`): eleven tasks stuck on live captures and a 65-row review queue (-> 248); the board script hands out live 186 as stale (-> 249); the frame log's coarse clock (-> 250); no speed check (-> 251); CI skips two test sets (-> 252); players get unchecked builds (-> 253); one-off scripts and long dashes (-> 254). Folded: the cut-off download (-> 227), frame timers and wall threads (-> 157), menus keep 3D (-> 173), worktrees and branches (-> 198); 246 raised to tier 0.

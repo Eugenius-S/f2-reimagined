@@ -14,6 +14,9 @@ RULES = (
         "email address",
         re.compile(r"\b[A-Za-z0-9._%+-]+[@][A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
     ),
+    # The repository bans the long dash (U+2014): a colon, a comma, a full
+    # stop or parentheses stand in for it.
+    ("long dash (U+2014)", re.compile("\u2014")),
 )
 ALLOWED_EMAIL = "noreply@" + "anthropic.com"
 

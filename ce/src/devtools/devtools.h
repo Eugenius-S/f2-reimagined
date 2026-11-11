@@ -59,6 +59,11 @@ void prepareStillSnapshot();
 bool gameMoviesSuppressed();
 // True only for a background probe explicitly told to skip script dialogue.
 bool skipScriptDialogRequest();
+// True for any background capture: a script-started combat would sit in the
+// engine's nested turn loop waiting for the player forever, so the run only
+// ends at the watchdog. The engine's own attack key keeps working, which is
+// how the combat fixture starts its fights.
+bool skipScriptCombatRequest();
 
 // Prints the maps available in game resources (stdout). Requires the game
 // (db) to be initialized.
@@ -82,6 +87,16 @@ bool sceneStartupReady();
 // during combat/dialog/movies.
 bool requestMapChange(const char* mapFileName, int elevation);
 
+// A candidate check for a standable tile: bounds, a drawn floor, no
+// blockers. Shared with the owner teleport's safe pick.
+bool elevationTileFree(int tile, int elevation);
+// The nearest standable tile to the center, complete rings out to
+// maxDistance; -1 when nothing stands.
+int findFreeTileOnElevation(int center, int elevation, int maxDistance);
+// The same, but every candidate must be able to step to a free neighbor (a
+// rock pocket never wins); -1 when nothing stands reachable.
+int findWalkableTileOnElevation(int center, int elevation, int maxDistance);
+
 bool panelOpen();
 bool handleKey(int key);
 int shadowDebugRequested(); // --dev-shadow-debug
@@ -89,6 +104,8 @@ double cloudPhaseRequested(); // --dev-cloud-phase, game minutes, -1 when unset
 // The fly camera lands (a frame is presented without the 3D scene: combat,
 // dialog, a movie).
 void landFlight();
+// 215: Ctrl+F11 in normal play — take off or land the fly camera.
+void toggleFly();
 // A new or loaded game: a view restore queued by the last one is dropped.
 void gameReset();
 bool staticWalkPreviewActive();
@@ -101,6 +118,7 @@ void sceneOverlaySynced(bool on);
 // when no 3D view is active.
 void vanillaPresented();
 void sceneOverlayPresented();
+void sceneLiveFrameReady();
 bool handleClick(int mouseX, int mouseY);
 
 // Draws the panel into the 8-bit framebuffer (before palette expansion).
@@ -109,6 +127,11 @@ void draw(unsigned char* surface, int width, int height, int pitch);
 // Saves a PNG of the current frame plus a JSON sidecar with the metadata
 // of the actual state.
 bool takeSnapshot();
+// Background verification of the save-window thumbnail, without writing a save slot.
+bool savePreviewFixtureActive();
+bool savePreviewFixtureLoadActive();
+void savePreviewFixtureComplete(bool captured);
+void savePreviewFixtureLoadComplete(bool captured);
 
 // Metadata helpers.
 void currentMapName(char* buffer, size_t size);

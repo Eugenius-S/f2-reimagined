@@ -21,6 +21,8 @@ static bool gConfiguredScalePresent = false;
 static int gConfiguredScale = 1;
 static bool gConfiguredScaleFactorPresent = false;
 static double gConfiguredScaleFactor = 1.0;
+static bool gConfiguredWindowedPresent = false;
+static int gConfiguredWindowed = 0;
 static int gWrittenWidth = 0;
 static int gWrittenHeight = 0;
 
@@ -69,6 +71,10 @@ bool configGetString(Config*, const char*, const char*, char** value, const char
 }
 bool configGetInt(Config*, const char* section, const char* key, int* value)
 {
+    if (std::strcmp(section, "screen") == 0 && std::strcmp(key, "windowed") == 0 && gConfiguredWindowedPresent) {
+        *value = gConfiguredWindowed;
+        return true;
+    }
     if (std::strcmp(section, "screen") != 0 || std::strcmp(key, "scale") != 0 || !gConfiguredScalePresent) return false;
     *value = gConfiguredScale;
     return true;
@@ -207,6 +213,14 @@ int main()
     if (!check(settingsSetValue(*resolutionMode, 25601440, nullptr) && settingsSave()
             && gWrittenWidth == 2560 && gWrittenHeight == 1440,
             "a pending resolution choice writes both legacy resolution keys")) return 1;
+    gConfiguredWindowedPresent = true;
+    gConfiguredWindowed = static_cast<int>(WindowMode::Windowed);
+    if (!check(initializeWith(nullptr) && settings.screen.windowed == WindowMode::Windowed,
+            "a saved windowed=0 (Window) survives the load instead of clamping to fullscreen")) return 1;
+    gConfiguredWindowed = static_cast<int>(WindowMode::WindowedFullscreen);
+    if (!check(initializeWith(nullptr) && settings.screen.windowed == WindowMode::WindowedFullscreen,
+            "a saved windowed=2 (Borderless) survives the load")) return 1;
+    gConfiguredWindowedPresent = false;
     gConfiguredScalePresent = true;
     gConfiguredScale = 2;
     gConfiguredScaleFactorPresent = false;
@@ -221,9 +235,29 @@ int main()
     if (!check(initializeWith(nullptr), "settings initialize with missing key")) return 1;
     const SettingDescriptor* descriptor = findThreeDDescriptor();
     const SettingDescriptor* cleanEdgesDescriptor = findCleanEdgesDescriptor();
+    const SettingDescriptor* fpsCounter = findDescriptor("3d.fps_counter");
     const SettingDescriptor* shadowDensity = findDescriptor("3d.shadow_density");
     if (!check(descriptor != nullptr, "real [3d].enabled descriptor is registered")) return 1;
     if (!check(cleanEdgesDescriptor != nullptr, "real [3d].clean_edges descriptor is registered")) return 1;
+    if (!check(fpsCounter != nullptr && fpsCounter->valueType == SettingValueType::Boolean
+            && !std::get<bool>(fpsCounter->defaultValue) && !settings.scene3d.fps_counter
+            && fpsCounter->applyPolicy == SettingApplyPolicy::OnClose
+            && fpsCounter->fallbackLabel == "FPS counter" && !fpsCounter->fallbackDescription.empty(),
+            "FPS counter is registered as a default-off 3D setting with menu text")) return 1;
+    const SettingDescriptor* fpsLimit = findDescriptor("3d.fps_limit");
+    if (!check(fpsLimit != nullptr && fpsLimit->valueType == SettingValueType::Real
+            && std::get<double>(fpsLimit->defaultValue) == 0.0 && settings.scene3d.fps_limit == 0.0
+            && fpsLimit->applyPolicy == SettingApplyPolicy::OnClose
+            && fpsLimit->fallbackLabel == "FPS limit" && !fpsLimit->fallbackDescription.empty()
+            && fpsLimit->numericRange.has_value() && fpsLimit->numericRange->minimum == 0.0
+            && fpsLimit->numericRange->maximum == 360.0 && fpsLimit->numericRange->step == 5.0,
+            "FPS limit is registered as a 60-default numeric 3D setting with menu text")) return 1;
+    const SettingDescriptor* frameLog = findDescriptor("3d.frame_log");
+    if (!check(frameLog != nullptr && frameLog->valueType == SettingValueType::Boolean
+            && !std::get<bool>(frameLog->defaultValue) && !settings.scene3d.frame_log
+            && frameLog->applyPolicy == SettingApplyPolicy::OnClose
+            && frameLog->fallbackLabel == "Frame time log" && !frameLog->fallbackDescription.empty(),
+            "frame time log is registered as a default-off 3D setting with menu text")) return 1;
     if (!check(shadowDensity != nullptr && std::get<double>(shadowDensity->defaultValue) == 0.8
             && settings.scene3d.shadow_density == 0.8 && gConfiguredShadowDensityValue == 0.8,
             "new settings write shadow density as 0.8")) return 1;
@@ -376,6 +410,13 @@ int main()
     const SettingDescriptor* zoom = findDescriptor("3d.zoom");
     const SettingDescriptor* zoomMin = findDescriptor("3d.zoom_min");
     const SettingDescriptor* zoomMax = findDescriptor("3d.zoom_max");
+    const SettingDescriptor* cursorSpeed = findDescriptor("preferences.mouse_sensitivity");
+    if (!check(cursorSpeed != nullptr && cursorSpeed->applyPolicy == SettingApplyPolicy::OnClose
+            && cursorSpeed->numericRange.has_value()
+            && cursorSpeed->numericRange->minimum == 0.25
+            && cursorSpeed->numericRange->maximum == 2.5
+            && cursorSpeed->fallbackLabel == "Cursor speed",
+            "existing mouse sensitivity is registered as a saved cursor speed slider")) return 1;
     if (!check(zoom != nullptr && zoomMin != nullptr && zoomMax != nullptr,
             "camera zoom descriptors are registered")) return 1;
     for (const SettingDescriptor* numericSetting : { zoom, zoomMin, zoomMax }) {
@@ -495,7 +536,7 @@ int main()
             "camera zoom applies immediately through its registered OnClose descriptor")) return 1;
     if (!check(settingsSetValue(*zoom, SettingValue(1.0), &zoomError), "camera zoom test restores the default")) return 1;
     for (const auto& item : settingsGetDescriptors()) {
-        if (item.section != "3d") continue;
+        if (item.section != "3d" && item.id != "preferences.mouse_sensitivity") continue;
         if (!check(scene::hasMenuTranslation(item.fallbackLabel.c_str()),
                 (item.id + " needs a Russian menu label").c_str())) return 1;
         if (!check(scene::hasMenuTranslation(item.fallbackDescription.c_str()),
@@ -517,7 +558,7 @@ int main()
     scene::localizeMenuDescriptors(localizedDescriptors, "russian");
     for (std::size_t i = 0; i < localizedDescriptors.size(); ++i) {
         const auto& original = settingsGetDescriptors()[i];
-        if (original.section != "3d") continue;
+        if (original.section != "3d" && original.id != "preferences.mouse_sensitivity") continue;
         if (!check(localizedDescriptors[i].fallbackLabel != original.fallbackLabel
                 && localizedDescriptors[i].fallbackDescription != original.fallbackDescription
                 && localizedDescriptors[i].id == original.id,
@@ -532,11 +573,30 @@ int main()
     const std::string status = scene::menuStatusText("snapshot: example.png", "russian");
     if (!check(status != "snapshot: example.png" && status.find("example.png") != std::string::npos,
             "localized status keeps dynamic filenames intact")) return 1;
+    // The 3D toggle's refusal (211) names the map and its elevation in the
+    // game's language. CP1251 bytes: "у этой" and "этаж" below.
+    const std::string noScene = scene::toggleRefusalText("no-scene", "artemple", 0, "russian");
+    const std::string loadFailed = scene::toggleRefusalText("load-failed", "artemple", 1, "russian");
+    if (!check(noScene.rfind("\xF3 \xFD\xF2\xEE\xE9", 0) == 0
+            && noScene.find("artemple") != std::string::npos
+            && noScene.find("(\xFD\xF2\xE0\xE6 0)") != std::string::npos
+            && loadFailed.find("artemple") != std::string::npos
+            && loadFailed.find("(\xFD\xF2\xE0\xE6 1)") != std::string::npos
+            && noScene.find('?') == std::string::npos
+            && loadFailed.find('?') == std::string::npos,
+            "the toggle's refusal names the map and elevation in Russian")) return 1;
+    if (!check(scene::toggleRefusalText("disabled", "", 0, "russian")
+            == scene::menuText("3D scene is disabled in settings", "russian")
+            && scene::toggleRefusalText("no-map", "", 0, "russian")
+            == scene::menuText("no map is loaded", "russian")
+            && scene::toggleRefusalText("no-scene", "arvill2", 0, "english")
+            == "this map has no 3D scene: arvill2 (elevation 0)",
+            "the refusal catalog keeps the English fallback")) return 1;
     const auto englishDescriptors = settingsGetDescriptors();
     gConfiguredLanguage = "russian";
     if (!check(initializeWith(nullptr), "initialize real descriptors in Russian")) return 1;
     for (std::size_t i = 0; i < englishDescriptors.size(); ++i) {
-        if (englishDescriptors[i].section != "3d") continue;
+        if (englishDescriptors[i].section != "3d" && englishDescriptors[i].id != "preferences.mouse_sensitivity") continue;
         if (!check(settingsGetDescriptors()[i].fallbackLabel != englishDescriptors[i].fallbackLabel
                 && settingsGetDescriptors()[i].fallbackDescription != englishDescriptors[i].fallbackDescription,
                 "settings initialization localizes all real 3D labels and descriptions")) return 1;

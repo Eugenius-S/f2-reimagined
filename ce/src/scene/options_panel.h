@@ -39,6 +39,9 @@ public:
     int sliderTrackY(int index) const;
     int findRowBySettingId(const std::string& id) const;
     std::string settingValueForProbe(const std::string& id) const;
+    // Probe hook: moves the keyboard selection to the named setting's row,
+    // so a scripted Space acts on that row and not on the first one.
+    void selectRowForProbe(const std::string& id);
     int scroll() const;
     int maxScroll() const;
     int scrollbarX() const;

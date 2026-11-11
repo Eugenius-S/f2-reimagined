@@ -3,7 +3,7 @@ id: 130
 title: The 3D options screen finished the way the owner says, ready for the showcase video
 milestone: M1
 status: todo
-owner: any
+owner: none
 suggested: any
 priority: normal
 tier: 3
@@ -50,3 +50,11 @@ off one by one, a slider moved).
 The game's own preferences page art, the video itself.
 
 ## Log
+
+### 2026-11-05 gpt
+Done: Added the cursor speed setting and windowed absolute-cursor scaling; the English and Russian 16:9 and 4:3 panel comparisons are in `runs/130-options-screen-owner-finish/`. Release build and CTest passed earlier (20/20). The initial production probe failed to stage a slider value. A second attempt, adjusted to start at the track midpoint as the existing zoom probe does, failed identically. Both isolated probe logs are in `runs/130-options-screen-owner-finish/cursor-speed-probe/` and `cursor-speed-probe-2/` in the worktree; they are not presented as runtime proof.
+Next: Diagnose why the production probe's simulated mouse position does not reach the cursor speed slider, then verify saved config and windowed/fullscreen movement before claiming acceptance.
+Check: `tools/dev-snapshot.ps1 -PreferencesProbe cursor-speed`; both attempts reported `PREFERENCES_PROBE FAIL: cursor speed slider did not stage a new value`.
+
+- 2026-11-08 glm: the cursor speed slider landed as PR #292 (model-level tests green; the production probe twice failed to stage a value, so the end-to-end drag acceptance stays open).
+- 2026-11-10 claude: back to todo: no open PR and no work since the last log line; the card leaves «В работе».

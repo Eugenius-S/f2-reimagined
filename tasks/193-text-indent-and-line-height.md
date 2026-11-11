@@ -3,9 +3,9 @@ id: 193
 title: The UI batch, text flush left with room, full-screen screens on a fading backdrop, wide art
 milestone: M1
 status: todo
-owner: any
+owner: gpt
 suggested: any
-priority: normal
+priority: high
 tier: 3
 claude-only: no
 user-check: yes
@@ -102,3 +102,66 @@ Part C: the Acceptance of 128.
 The font itself, colours.
 
 ## Log
+
+### 2026-11-06 gpt
+
+Part A code is on draft PR #310 at `a9f75174`; CI run `42097178128` passed.
+The HUD log and dialogue fixtures confirm the changed text placement and
+line pitch. The dialogue fixture currently has no wrapped answer, and the
+required floating-text, sharp-text-off pixel comparison, and full x1/x2
+before/after set are still missing.
+
+Part B remains unverified. A Pip-Boy fixture capture at 1920x1080 produced
+the same framebuffer as the prior fixture capture, so it does not prove that
+the backdrop, fade, corners, or the 21:9 behavior changed. A generic window
+hook prototype was removed because that capture did not validate it. Further
+captures must read scene data from the task worktree's `build/scene-cache`.
+The 03:05 fixture log used the main checkout's existing cache, whose files
+were last modified on 2026-11-03; later captures used a copy in the task
+worktree's `build/scene-cache`. No files in the main checkout cache were
+changed.
+
+The 03:14 inventory fixture still shows the 3D scene around the inventory
+panel at 1920x1080. The test executable contained the generic backdrop
+prototype (`2ee641f2...`), so that prototype did not establish the requested
+backdrop. It was removed; the screenshot is kept only in ignored build output.
+
+Part C remains blocked on art rights: Task 128's variant-6 assets cannot be
+used, and no replacement art has been authored. Keep PR #310 draft until
+the missing acceptance is implemented and evidenced.
+
+### 2026-11-06 gpt
+Done: rebased the existing task branch onto current `origin/main` and rebuilt
+Release; CTest passes 20/20. Fresh sharp-text captures confirm the log fixture
+at 16:9 and 21:9, the real dialogue fixture, and the floating-text lifecycle.
+The dialogue fixture has no wrapped answer, so that line of acceptance is
+still unproven. Added `runs/193-text-indent-and-line-height/diagnostics/current-ui-audit.jpg`.
+The audit exposed a capture bug: the old GL snapshot path redrew only the SDL
+surface after swap, erasing the scene and sometimes saving an all-black frame
+while the UI fixture still reported PASS. It now reads the presented front
+buffer. The corrected inventory capture is valid and visibly shows the world
+around the panel, confirming that Part B's backdrop/corners are still absent.
+No fade, full screen inventory backdrop or rounded corners were implemented.
+Part C is still blocked on the rights resolution for task 128 art. PR #310
+stays draft despite green CI until these acceptance gaps are resolved.
+Next: implement and validate the shared backdrop/corner treatment, obtain a
+wrapped dialogue answer and rights-cleared art, then capture the full before
+and after set at x1/x2 and 16:9/21:9.
+Check: `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release`,
+`ctest --test-dir build --output-on-failure`, and the fresh runs under
+`runs/193-text-indent-and-line-height/fresh/`.
+
+### 2026-11-06 gpt
+Done: merged latest `origin/main` (`ad243e1c`) into the existing PR branch; the
+overlap in `ce/src/devtools/devtools.cc` auto-merged. Reconfigured and rebuilt
+Release, then reran CTest 20/20 and scene-export tests 135/135. No new visual
+acceptance was added: the inventory backdrop/fade/corners, wrapped dialogue
+reply, and rights-cleared task 128 art remain open. PR #310 remains draft.
+Next: keep the task open until those acceptance items are implemented and
+captured; this merge only refreshes the base and verifies the existing code.
+Check: `tools/configure-build.ps1 Release`, CTest and scene-export tests on
+the merged branch.
+- 2026-11-08 claude: owner find (open): in the message window the left edge is ragged, as in the original. Wanted: bullet, a gap, then the text; a wrapped line starts level with the text, not with the bullet; the bullet does not count toward the text's left edge, so every text line of a block shares one straight edge. Crop: `runs/193-text-indent-and-line-height/owner-bullets-ragged-edge.jpg` (his shot `20261108-153908-kladwtwn-e0`).
+- 2026-11-08 claude: owner find 2 (open): after part A the alignment went the wrong way. The text lines now start left of the message window edge and the first letters are clipped. Shift the whole block right so the bullet sits inside the window, then the gap, then the text; wrapped lines level with the text. Crop: `runs/193-text-indent-and-line-height/owner-status-text-clipped.jpg` (his shot `20261108-181342-kladwtwn-e0`).
+- 2026-11-08 claude: priority high - the owner sees the clipped message log text on every screen.
+- 2026-11-10 claude: back to todo: no open PR and no work since the last log line; the card leaves «В работе».
