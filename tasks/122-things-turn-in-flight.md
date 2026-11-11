@@ -9,7 +9,7 @@ priority: normal
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -124,3 +124,8 @@ cache-121 is the branch's last check.
 
 Branch note: branched from task/121-holes-filled-everywhere (that PR carries
 the fill; both wait on the earlier reviews).
+
+### 2026-11-12 gpt review
+Done: reviewed source PR #176 and its folded landing in #180 (the 120-125 stack). Inspected both saved pairs at runs/122-things-turn-in-flight/car-turn0-pair.jpg and car-turn90-pair.jpg (1924x540); they show only the CAR4b card changing direction at camera turns 0/90. They do not show a real vehicle model. The separate model evidence is in #174 / task 120: algorithmic carved CAR4b and CAR3b solids on the Den with four turn pairs and close views; task 124/125 adds rear art to selected CAR4b boxes. Task 192 exists for all-map vehicle geometry, but its acceptance/log rely on area sweeps and do not verify a particular model's faces at opposing fly angles. I did not create a duplicate task because #192 covers the vehicle-wide follow-up. Exceptions: the Arroyo head and fallen vertibird are single-direction, so correctly never pass this rule. Cacti and shelf damage variants are excluded by the silhouette gate per source and reported in #125; its log says the cola and shelf shots failed framing and raw evidence is outside the landed tree. Thus visual proof that these exceptions remain unchanged is not committed in #122. The reported 0/43 Klamath tour is not proof for Den or for small multi-side decor.
+Next: owner-check remains yes; task 259 requests distinct committed opposite-quarter frames for the cactus/shelf exceptions and a true-side control. Vehicle model review remains within existing task 192.
+Check: `gh pr view 176`, `gh pr checks 176` (all required checks pass), `gh pr view 180`, image inspection of both committed pairs, and task/log review of 120-125 and 192. No code or runtime tests run in this review.
