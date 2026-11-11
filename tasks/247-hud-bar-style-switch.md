@@ -2,8 +2,8 @@
 id: 247
 title: The options menu switches the bottom HUD bar between Original and RP (the belt)
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: any
 priority: medium
 tier: 2
