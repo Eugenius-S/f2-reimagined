@@ -118,11 +118,9 @@ whole-scene sheet, not evidence for cola or shelf framing. This task's Log
 already records both framing failures and the shelf opposite-slot ambiguity.
 Follow-up 259 exists for rotation exceptions and controls, but does not test
 the shelf opposite slot as a solid back texture; the back-texture ambiguity
-remains an owner-check. No separate follow-up was needed because task 259
-covers the missing rotation evidence and the texture ambiguity is explicitly
-recorded for owner review.
-Next: owner-check remains yes; judge whether shelf opposite-slot content is a
-rear drawing or a variant when reviewing these solids.
+remains open. Follow-up 261 covers that texture check separately from rotation.
+Next: owner-check remains yes; compare the accepted back textures and semantic
+slot identification in task 261.
 Check: `gh pr checks 176`, `gh pr checks 180`, visual inspection of the three
 Den pairs and the Klamath tour sheet. No code or runtime tests run in this
 review.
