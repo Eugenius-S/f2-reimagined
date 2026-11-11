@@ -130,3 +130,5 @@ are in the Context above.
 
 - 2026-11-08 glm: the 11-01/11-04 live-capture logs from PR #189 merged into this Log; out-of-combat captures still hang, no code change.
 - 2026-11-10 claude: back to todo: no open PR and no work since the last log line; the card leaves «В работе».
+
+- 2026-11-11 task 248 audit: do not close on the still captures. The owner confirmed the old shots were 2D, and the remaining live-game glow and point-light state is still undiagnosed. Missing: a live diagnostic that records the active 3D/glow/light settings and captures KLATOXCV out of combat.

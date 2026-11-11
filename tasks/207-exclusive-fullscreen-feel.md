@@ -2,7 +2,7 @@
 id: 207
 title: The owner gets an exclusive-fullscreen feel from the borderless setup
 milestone: M1
-status: open
+status: todo
 owner: any
 suggested: owner
 priority: medium
