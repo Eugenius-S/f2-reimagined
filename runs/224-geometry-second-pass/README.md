@@ -18,15 +18,17 @@ New Reno): a 3D devshot at hour 12, one at hour 18 (both
 
 ## Finds (one line per find, per the task's acceptance)
 
-- **F1** kladwtwn e0 — top-right map edge renders as a black wedge
-  in 3D; 2D shows the dirt road continuing to the edge there
-  (view tile 24678). Class: black/cut map edge.
-  finds/f1-kladwtwn-e0-3d.jpg vs finds/f1-kladwtwn-e0-2d.png
-- **F2** denbus2 e1 — 3D scene has only a small lit dirt strip +
-  corner patch; 2D at the same elevation renders the whole level
-  (diner, sidewalk, street, ruined shack). Whole-elevation geometry
-  missing from the scene/export. Class: missing pieces.
-  finds/f2-denbus2-e1-3d.png vs finds/f2-denbus2-e1-2d.png
+- **F1** kladwtwn e0, top-right map edge: FIXED on main (202's
+  quadrant fill, #320). Fresh frame f1-kladwtwn-e0-now.jpg: the road
+  continues to the edge, no wedge (2026-11-12).
+- **F2** denbus2 e1: NOT a 3D defect (2026-11-12). The map's own e1
+  data: 9917/10000 floor squares are the void tile, 66 drawn (the dirt
+  strip), 0 objects. The fresh classic 2D frame renders the same
+  content the 3D does; the old find's description over-read it. The
+  real residual: the vanilla 2D draws the tall walls of elevation 0
+  that reach into the elevation-1 view, the 3D upper scene does not -
+  the next exporter rule. Pair: f2-denbus2-e1-2d-vs-3d-now.jpg,
+  fresh frames f2-denbus2-e1-{2d,3d}-now.jpg.
 - **F3** newr2 e0 — the Shark Club marquee: 2D shows the full lit
   «SHARK CLUB» sign; 3D erases its upper part into a black band
   (letters cut, bulbs row intact). Class: roof/wall hole.
