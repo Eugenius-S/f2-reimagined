@@ -1,0 +1,25 @@
+devtools: startup target kladwtwn e0 accepted=1 blocking=0
+scene: cache [game-cache]
+scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+PREFERENCES_PROBE viewport logical=960x540 frame_x=0..639 scrollbar_x=812
+PREFERENCES_PROBE rows=25 initialScroll=0 zoom=1.000000 enabled=true combat_difficulty=1
+PREFERENCES_PROBE cursor speed slider armed row=3 before=1.000000
+perf present sync=0.97 sharp=0.00 refresh=40.86 frames=2
+PREFERENCES_PROBE PASS cursor_speed staged 1.000000 -> 2.500000
+PREFERENCES_PROBE injected button state event=504 at logical=315,499 rect=308,492..322,507
+PREFERENCES_PROBE queued isolated mouse click for Done after cursor speed change
+PREFERENCES_PROBE mouse override read phase=1 logical=315,499 buttons=0
+PREFERENCES_PROBE footer loop event=-1 mouse_event=0 pos=795,539 phase=1
+perf present sync=0.24 sharp=0.00 refresh=6.07 frames=118
+perf present sync=0.30 sharp=0.00 refresh=7.21 frames=119
+perf present sync=0.29 sharp=0.00 refresh=6.69 frames=120
+perf present sync=0.25 sharp=0.00 refresh=5.99 frames=120
+perf present sync=0.29 sharp=0.00 refresh=6.78 frames=120
+perf present sync=0.28 sharp=0.00 refresh=6.92 frames=121
+perf present sync=0.26 sharp=0.00 refresh=6.37 frames=121
+perf present sync=0.24 sharp=0.00 refresh=5.77 frames=122
+perf present sync=0.27 sharp=0.00 refresh=6.73 frames=120
+PREFERENCES_PROBE FAIL: the scripted preferences sequence timed out
+PREFERENCES_PROBE finished; requesting isolated helper exit
+perf loop input=29.01 world=12372.26 present=54.69 frame=12455.96 frames=2
+scene: hero card skipped: player is hidden, off-map, or on another elevation

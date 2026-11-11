@@ -10,7 +10,7 @@ tier: 0
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 # 205: The F12 screenshot actually writes into shots/game

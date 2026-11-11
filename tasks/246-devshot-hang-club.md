@@ -23,16 +23,16 @@ load / startup, not the 3D scene path. Diagnose and fix, so the
 
 ## The club (evidence: watchdog.txt in each dir)
 
-- klacanyn e0 — stalls at `startup target klacanyn e0 accepted=1
+- klacanyn e0 - stalls at `startup target klacanyn e0 accepted=1
   blocking=0`, empty game_state (never reaches a game state).
   180 s step timeout still stalls (probe 2026-11-10,
   build/probe-klacanyn/): a real hang, not a slow load.
-- klatoxcv e0, klatoxcv e1 — e2 of the same map loads fine.
-- broken2 e1 — e0/e2 of the same map load fine.
-- newrvb e0 — failed 3/3 in the clean single-driver gaps run
+- klatoxcv e0, klatoxcv e1 - e2 of the same map loads fine.
+- broken2 e1 - e0/e2 of the same map load fine.
+- newrvb e0 - failed 3/3 in the clean single-driver gaps run
   (2026-11-10); not yet probed individually, likely a member.
 - Historical echo: klatoxcv hangs blocked task 111's live captures
-  before; 111 notes "caves 2D live = combat stop 135" — a map-enter
+  before; 111 notes "caves 2D live = combat stop 135" - a map-enter
   script that starts combat is one suspect (devshot waits for an
   out-of-combat preview that never comes), but the classic-run stall
   with EMPTY game state predates any preview step, so load itself
