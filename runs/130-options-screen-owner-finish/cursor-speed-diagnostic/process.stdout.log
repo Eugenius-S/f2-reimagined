@@ -1,5 +1,5 @@
 devtools: startup target kladwtwn e0 accepted=1 blocking=0
-scene: cache E:\Projects\fallout2-ce-3d\game\mod-cache\scene\kladwtwn\0
+scene: cache [game-cache]
 scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
 PREFERENCES_PROBE viewport logical=960x540 frame_x=0..639 scrollbar_x=812
 PREFERENCES_PROBE rows=25 initialScroll=0 zoom=1.000000 enabled=true combat_difficulty=1
