@@ -52,3 +52,10 @@ Any code change; fixing the harness (246, 146); the script (249).
 ## Log
 
 - 2026-11-11 claude: cut from the audit.
+
+
+### 2026-11-11 gpt: board audit in progress
+Done: Reviewed the audit findings and current task logs. The stale set includes live captures and code or interaction checks; task 146 remains assigned to glm and its combat-fixture work is active.
+Next: Correct statuses supported by merged main, transfer only live owner capture checks to matching city reviews, and review eligible old done tasks.
+Check: Pre-change 	ools/tasks.ps1 reports status anomalies on 207 and 145; 	ools/tasks.ps1 -Review lists 65 tasks. PR/branch lock checks found no 248 PR or remote task/248 branch.
+Blocker: Acceptance asks to update AGENTS.md, but this work is explicitly limited to task files and the board. Record this conflict in the final Log and leave AGENTS.md unchanged.
