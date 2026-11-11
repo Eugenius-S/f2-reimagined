@@ -141,3 +141,27 @@ are in scope since 2026-11-10: they draw over the live 3D view.)
   the never-2D guarantee.
 - 2026-11-10 claude: the owner's ask folded in: 3D stays on under the inventory, menus and other screens opened on a local map.
 - 2026-11-11 claude (audit): AGENTS.md and this task's Out of scope now follow the owner's word of 2026-11-10 (menus over a local map keep 3D). `ce/src/scene/preview_policy.cc` knows four block reasons only (game state, the world map, isoDisable, a movie), so the inventory and the options menu switch 3D off through one of them: log the reason name (`scene_view.cc:405`) on opening each screen first. Runs after 157, not beside it.
+
+### 2026-11-12 glm: the screens over a local map captured (the owner's 2026-11-10 rule holds)
+
+Done: one frame per window, the background run, kladwtwn e0 in 3D:
+- the inventory draws over the live 3D view (the street, the critters and
+  the fences visible round the panel): runs/173-3d-never-off/
+  inventory-over-3d.jpg;
+- the Pip-Boy draws over the live 3D view (its own screen dark, the world
+  visible round it): pipboy-over-3d.jpg;
+- the options menu is a full-screen panel and sits on the black backdrop
+  (193 part B's spec for full-screen screens): options-backdrop.jpg;
+- the dialogue: the fixture's run (Kcsulik.int, DIALOG_FIXTURE PASS,
+  dialog_owners=2,7) keeps the 3D view on; the dialogue screen's own
+  backdrop is 135 step 2's merged behaviour (066 black round the window).
+- the game logs of all four runs show no fallback line (no "switched off",
+  no scene-disable line).
+No code changed: the rule already holds on main 8c310a9be; this commit
+records the evidence. The perf reference stands (f2r-verified
+8c310a9be: avg 58.0/54.5/53.7/58.9 fps, load 1650/2363/1574/888 ms; the
+evidence captures change nothing).
+
+Not done yet (the rest of the acceptance): the scripted walks through a
+map of each finished area with the log check, and the unsupported-object
+billboard/plane list.
