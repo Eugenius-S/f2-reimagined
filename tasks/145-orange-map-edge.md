@@ -2,7 +2,7 @@
 id: 145
 title: The 3D map edge matches the game, cut where it cuts, with no orange band
 milestone: M1
-status: todo
+status: blocked
 owner: gpt
 suggested: any
 priority: normal
@@ -121,3 +121,8 @@ test results described above.
 - 2026-11-11 claude (audit, folded in from the inbox line of 2026-11-09): at the artemple entrance the sides are black because the authored edge is about 704 px wide; the owner wants the map grown left and right (side clip planes and terrain) with pines planted, so a 21:9 screen sees forest.
 
 - 2026-11-11 task 248 audit: the original edge verification is recorded, but the new Artemple entrance request needs code to extend side clip planes and terrain and plant pines for 21:9. That implementation is still missing.
+
+### 2026-11-12 gpt
+Blocked: the original orange band is already fixed by merged PR #293. The matched e0 view at tile 24678, Classic context, and regression review remain recorded in `runs/145-orange-map-edge/`. The current unresolved find is different: switching into 3D reportedly makes clean map edges appear cell by cell; no fresh transition capture or transition log identifies its cause. Artemple's authored edge is about 704 px wide, leaving black sides at 21:9; the requested side-plane and terrain extension with pines is not implemented.
+Check: fetched `origin/main` at `e1fb3405`; the Kladwtwn tour could not start twice because the harness child PowerShell lacked `Get-FileHash` (once via the runtime PowerShell, once via Windows PowerShell 5.1 with module auto-loading unavailable). Stopped after two attempts as required. The older matched 24678 captures still document the orange EDG fix, not this transition or Artemple scope.
+Next: split out an allowed task to capture/log the 3D transition and implement Artemple's widened side bounds, ground, and pines. Side-plane extension calls into `ce/src/scene_renderer/map_clip.cc`, which is outside this round's allowed files, and terrain/pine placement needs a bounded design. Do not mark done until the new scope has matching 21:9 evidence and the Kladwtwn transition has a cause.
