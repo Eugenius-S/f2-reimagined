@@ -52,13 +52,15 @@ MAX_JPEG = 1_000_000  # CI refuses larger files in runs/
 EMPTY_SHARE = 0.9
 
 
-def powershell_args(command):
-    """Run snapshot scripts with the module that provides Get-FileHash loaded.
+def powershell_args(command, before_prelude=""):
+    """Run snapshot scripts with the hashing modules available.
 
-    PowerShell module auto-loading is not guaranteed in the child process
-    started by the tour, but dev-snapshot.ps1 hashes its config and exe.
+    dev-snapshot.ps1 hashes its config and exe. Its child PowerShell may have
+    module auto-loading disabled, so restore it and load the cmdlet modules.
     """
-    script = ("Import-Module Microsoft.PowerShell.Management -ErrorAction Stop; "
+    script = (before_prelude
+              + "$PSModuleAutoLoadingPreference = 'All'; "
+              + "Import-Module Microsoft.PowerShell.Management -ErrorAction Stop; "
               "Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop; " + command)
     return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script]
 
