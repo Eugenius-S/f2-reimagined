@@ -2,7 +2,7 @@
 id: 229
 title: Front, back, left and right reference views of every landmark object we will model
 milestone: M2
-status: doing
+status: blocked
 owner: gpt
 suggested: gpt
 priority: low
@@ -64,3 +64,9 @@ already builds well.
 ## Log
 
 - 2026-11-08 claude: cut at the owner's request.
+
+### 2026-11-11 gpt
+Done: created a source-backed candidate inventory in `runs/229-landmark-views/list.md`; extracted the active RPU `truck3.frm` and a six-direction contact sheet to ignored `build/task229/source-candidates/` for the controller. The candidate list has seven named landmark groups and records where multiple sprites, painted floor art or unresolved map-to-FRM mapping prevent a complete single-sprite reference.
+Next: restart only after a source set is available that can support consistent requested views; do not keep either rejected generation.
+Check: two controller-generated truck front views were rejected. One enlarged the tank and invented detail; the second added an exhaust and changed the body. No generated output was added.
+Block: the only complete single-file vehicle candidate tested, the New Reno truck, failed twice against its in-game sprite. The larger landmark groups are assembled from multiple sprites/tiles, so their hidden sides cannot be checked from one FRM. No accepted four-view set exists.
