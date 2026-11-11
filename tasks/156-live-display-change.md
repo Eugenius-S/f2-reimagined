@@ -2,8 +2,8 @@
 id: 156
 title: Resolution, window mode and scale change on the fly, without a restart
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: any
 priority: high
 tier: 2
@@ -76,6 +76,13 @@ Speed of the game in general (157).
 ## Log
 
 - 2026-11-02 Cut from the owner's request; 154 asked for a restart.
+
+### 2026-11-12 gpt: rerun scope
+
+Use the options-screen return path: close the settings and options windows, preserve the loaded map state, and reinitialize the display surfaces and screen-sized windows through the engine init paths. Do not exchange live tile/object buffers in place. This matches the task's allowed map-window recreation and avoids repeating the unvalidated 2356-line transaction from PR #227.
+
+Next: confirm whether CE's init/exit paths can safely preserve the loaded map and settings, then implement the smallest runtime-backed slice. Split the remaining acceptance into a separate task if full display reinitialization cannot be validated in one PR.
+Check: source audit only so far; no code or runtime behavior changed.
 
 - 2026-11-08 glm: PR #227 closed by task 221: #329 already applies the window mode live; the rest (live resolution and scale, task 209) is a 2356-line transaction blocked in its own runtime validation (two consecutive failures at refresh stages) and cannot land unvalidated. The branch's implementation-path and blocker notes are preserved in this Log.
 
