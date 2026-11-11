@@ -3,7 +3,7 @@ id: 193
 title: The UI batch, text flush left with room, full-screen screens on a fading backdrop, wide art
 milestone: M1
 status: todo
-owner: gpt
+owner: any
 suggested: any
 priority: high
 tier: 3
@@ -165,3 +165,54 @@ the merged branch.
 - 2026-11-08 claude: owner find 2 (open): after part A the alignment went the wrong way. The text lines now start left of the message window edge and the first letters are clipped. Shift the whole block right so the bullet sits inside the window, then the gap, then the text; wrapped lines level with the text. Crop: `runs/193-text-indent-and-line-height/owner-status-text-clipped.jpg` (his shot `20261108-181342-kladwtwn-e0`).
 - 2026-11-08 claude: priority high - the owner sees the clipped message log text on every screen.
 - 2026-11-10 claude: back to todo: no open PR and no work since the last log line; the card leaves «В работе».
+
+- 2026-11-11 glm (part A, stopped at the night boundary)
+  Checked: the owner's two crops (owner-status-text-clipped.jpg,
+  owner-bullets-ragged-edge.jpg) and the sharp text pass. The clipped block
+  and its fix live in the sharp text renderer itself:
+  ce/src/scene_renderer/text_draw.cc holds the message log's bullet lead
+  (lines 414-447), the per-row hudLogXCorrection (352-364) and the glyph
+  placement from run.x/characterX. The runs are only captured on the scene
+  side (ce/src/scene/text_capture.cc:682 builds characterX). Shifting the
+  block right and re-leveling the wrapped lines has to happen where the
+  glyphs are placed, in the renderer file; a capture-side shift would
+  misalign the erased legacy ink from the sharp glyphs.
+  Per the night queue's boundary (a needed file in ce/src/scene_renderer/
+  means stop), I stop here: the renderer is 157's territory this night.
+  Next: shift the block right and level the wrapped lines at the text edge
+  in renderSharpText (a renderer change), then the EN and RU message window
+  snapshots at x1/x2.
+
+### 2026-11-12 glm: the message window's left edge is straight; part A continues
+
+Done: the message log's sharp rows share one left edge and no letter is
+clipped, in English and in Russian. Two halves:
+- ce/src/display_monitor.cc: the monitor's per-row one-pixel stair (the
+  vanilla depth illusion, buf++) now applies only with the sharp text pass
+  off. With the sharp pass on the monitor draws every row at the same x, so
+  the captured ink sits where the sharp glyphs land. The pixel view keeps
+  the vanilla stair (the acceptance's pixel-for-pixel rule).
+- ce/src/scene_renderer/text_draw.cc: the old per-row -row correction (it
+  assumed the stair in the captured x) is gone; the captured x is already
+  the straight edge. A wrapped continuation row (no bullet) now starts at
+  the block's text column, one bullet advance right of the bullet column,
+  so every text line of a block shares one edge (the owner's 2026-11-08
+  find). The bullet keeps its ink on the pen (151).
+- ce/tests/embedded_fonts/embedded_fonts_test.cc: the HUD log case now pins
+  the flush contract (both rows at the same x from flush captures) and adds
+  a wrapped-continuation case (the ink at the text column).
+
+Measured (the run's own screenshots, the log's leftmost green ink, physical
+px at 1920x1080): before 206/208/210/219 (the stair; the fourth row's
+bullet clipped off the window edge), after 206/206/206/206 in English and
+206/206/206/206 in Russian. Evidence: the before/after sheets in
+runs/193-text-indent-and-line-height/ (message-window-en-before-after.jpg,
+message-window-ru-before-after.jpg). ctest 27/27 with the updated
+embedded_fonts case. The pixel regression runs with the sharp pass off, so
+its points show the legacy view and must stay 0 changed pixels (run logged
+below). Not done yet in part A: the dialogue answer options' hanging indent
+(the same renderer) and the line-pitch check against the dialogue.
+
+Note: the log fixture's date row shows two bullets because the fixture
+feeds the captured date line (which already carries the bullet) back as a
+new message; the real log never does that. Fixture artifact, recorded here.

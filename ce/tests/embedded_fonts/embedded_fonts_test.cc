@@ -113,6 +113,9 @@ int main()
     }
     std::vector<fallout::scene::TextRecord> hudLogLines(2);
     std::vector<fallout::scene::TextVisibilityMask> hudLogVisibility(2);
+    // The monitor draws its rows flush when the sharp pass is on (193): the
+    // captured x is the straight left edge for every row, and the renderer
+    // keeps it there.
     for (int row = 0; row < 2; ++row) {
         fallout::scene::TextRecord& line = hudLogLines[row];
         line.buffer = 77;
@@ -122,11 +125,11 @@ int main()
         line.run.font = 101;
         line.run.colorRole = fallout::scene::TextColorRole::HudMessageLogGreen;
         line.run.colorAndFlags = 1;
-        line.run.x = 30 + row;
+        line.run.x = 30;
         line.run.y = 2 + row * fallout::scene::sharpTextLinePitch(12, true);
         line.run.width = 64;
         line.run.lineHeight = 12;
-        line.run.characterX = { 30 + row, 38 + row };
+        line.run.characterX = { 30, 38 };
         hudLogVisibility[row].bounds = { 0, 0, 256, 32 };
         hudLogVisibility[row].pixels.assign(256 * 32, 1);
     }
@@ -146,6 +149,46 @@ int main()
     if (hudLogLeft[0] != 30 || hudLogLeft[1] != hudLogLeft[0]) {
         std::fprintf(stderr, "HUD log sharp rows did not share a left edge: %d, %d\n",
             hudLogLeft[0], hudLogLeft[1]);
+        return 1;
+    }
+    // A wrapped continuation carries no bullet and starts at the text
+    // column, level with the text after the bulleted rows' bullet.
+    {
+        fallout::scene::TextRecord wrapped = hudLogLines[0];
+        wrapped.run.text = "A";
+        wrapped.run.characterX = { 30 };
+        wrapped.run.y += 3 * fallout::scene::sharpTextLinePitch(12, true);
+        hudLogLines.push_back(wrapped);
+        for (int row = 0; row < 3; ++row) {
+            if (row >= static_cast<int>(hudLogVisibility.size())) {
+                hudLogVisibility.push_back({});
+            }
+            hudLogVisibility[row].bounds = { 0, 0, 256, 64 };
+            hudLogVisibility[row].pixels.assign(256 * 64, 1);
+        }
+    }
+    if (!renderSharpText(hudLogLines, 256, 64, 256, 64, palette, 256, hudLogVisibility, &surface)) {
+        std::fprintf(stderr, "HUD log continuation did not rasterize\n");
+        return 1;
+    }
+    const int bandTop = hudLogLines[2].run.y;
+    auto bandLeft = [&surface](int y0, int y1, int minX) {
+        int left = 256;
+        for (int y = y0; y < y1; ++y) {
+            for (int x = minX; x < surface.width; ++x) {
+                if (surface.pixels[(static_cast<std::size_t>(y) * surface.width + x) * 4 + 3] != 0) {
+                    left = std::min(left, x);
+                }
+            }
+        }
+        return left;
+    };
+    // The bulleted rows' text: the first ink past the bullet's column.
+    const int textLeft = bandLeft(0, 18, 36);
+    const int wrappedLeft = bandLeft(bandTop, surface.height, 0);
+    if (wrappedLeft != textLeft) {
+        std::fprintf(stderr, "HUD log wrapped line not at the text column: %d vs %d\n",
+            wrappedLeft, textLeft);
         return 1;
     }
     // Numeric values, different-length Russian states and both checkbox
