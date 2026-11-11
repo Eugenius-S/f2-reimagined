@@ -246,7 +246,7 @@ bool verifyCursorSpeedMotion(double committedSensitivity)
 {
     const bool exclusiveFullscreen = screenIsExclusiveFullscreen();
     const bool relative = mouseDeviceUsesRelativeMode();
-    printf("PREFERENCES_PROBE cursor_motion display exclusive_fullscreen=%d relative_mode=%d mouse_lock=%d\n",
+    printf("PREFERENCES_PROBE injected_cursor_motion display exclusive_fullscreen=%d relative_mode=%d mouse_lock=%d\n",
         exclusiveFullscreen ? 1 : 0, relative ? 1 : 0, settings.screen.mouse_lock ? 1 : 0);
     fflush(stdout);
     if (settings.screen.windowed == WindowMode::Fullscreen && !exclusiveFullscreen) {
@@ -312,13 +312,13 @@ bool verifyCursorSpeedMotion(double committedSensitivity)
     mouseResetAbsoluteSensitivityTracking();
 
     if (firstDelta != 10 || secondDelta != 25) {
-        printf("PREFERENCES_PROBE FAIL: cursor motion scaling mismatch mode=%s sensitivity=1.0 delta=%d sensitivity=2.5 delta=%d\n",
+        printf("PREFERENCES_PROBE FAIL: injected cursor scaling mismatch mode=%s sensitivity=1.0 delta=%d sensitivity=2.5 delta=%d\n",
             relative ? "relative" : "absolute", firstDelta, secondDelta);
         fflush(stdout);
         return false;
     }
 
-    printf("PREFERENCES_PROBE PASS cursor_motion mode=%s sensitivity=1.0 delta=%d sensitivity=2.5 delta=%d\n",
+    printf("PREFERENCES_PROBE PASS injected_cursor_motion mode=%s sensitivity=1.0 delta=%d sensitivity=2.5 delta=%d\n",
         relative ? "relative" : "absolute", firstDelta, secondDelta);
     fflush(stdout);
     return true;
