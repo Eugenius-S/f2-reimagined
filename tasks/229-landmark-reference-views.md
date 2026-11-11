@@ -2,7 +2,7 @@
 id: 229
 title: Front, back, left and right reference views of every landmark object we will model
 milestone: M2
-status: todo
+status: doing
 owner: gpt
 suggested: gpt
 priority: low
