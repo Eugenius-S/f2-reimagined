@@ -10,6 +10,7 @@
 #include <sstream>
 
 #include "../game_mouse.h"
+#include "../dinput.h"
 #include "../input.h"
 #include "../kb.h"
 #include "../mouse.h"
@@ -237,6 +238,91 @@ bool gFooterOverrideLogged = false;
 bool gFooterLoopLogged = false;
 std::string gEnabledBefore;
 std::chrono::steady_clock::time_point gDeadline;
+bool gCursorMotionProbeActive = false;
+int gCursorMotionProbeX = 0;
+int gCursorMotionProbeY = 0;
+
+bool verifyCursorSpeedMotion(double committedSensitivity)
+{
+    const bool exclusiveFullscreen = screenIsExclusiveFullscreen();
+    const bool relative = mouseDeviceUsesRelativeMode();
+    printf("PREFERENCES_PROBE cursor_motion display exclusive_fullscreen=%d relative_mode=%d mouse_lock=%d\n",
+        exclusiveFullscreen ? 1 : 0, relative ? 1 : 0, settings.screen.mouse_lock ? 1 : 0);
+    fflush(stdout);
+    if (settings.screen.windowed == WindowMode::Fullscreen && !exclusiveFullscreen) {
+        printf("PREFERENCES_PROBE FAIL: background test did not enter configured exclusive fullscreen\n");
+        fflush(stdout);
+        return false;
+    }
+    if (relative != (exclusiveFullscreen || settings.screen.mouse_lock)) {
+        printf("PREFERENCES_PROBE FAIL: background probe did not activate the input mode required by the current display\n");
+        fflush(stdout);
+        return false;
+    }
+    gCursorMotionProbeActive = true;
+
+    int firstDelta = 0;
+    int secondDelta = 0;
+    if (relative) {
+        _mouse_set_position(320, 240);
+        mouseSetSensitivity(1.0);
+        gCursorMotionProbeX = 10;
+        gCursorMotionProbeY = 0;
+        _mouse_info();
+        int beforeX = 0, beforeY = 0;
+        mouseGetPosition(&beforeX, &beforeY);
+        gCursorMotionProbeX = 10;
+        gCursorMotionProbeY = 0;
+        _mouse_info();
+        int afterX = 0, afterY = 0;
+        mouseGetPosition(&afterX, &afterY);
+        firstDelta = afterX - beforeX;
+
+        mouseSetSensitivity(2.5);
+        gCursorMotionProbeX = 10;
+        gCursorMotionProbeY = 0;
+        _mouse_info();
+        beforeX = afterX;
+        mouseGetPosition(&afterX, &afterY);
+        secondDelta = afterX - beforeX;
+    } else {
+        mouseResetAbsoluteSensitivityTracking();
+        mouseSetSensitivity(1.0);
+        gCursorMotionProbeX = 100;
+        gCursorMotionProbeY = 100;
+        _mouse_info();
+        gCursorMotionProbeX = 110;
+        gCursorMotionProbeY = 100;
+        _mouse_info();
+        int beforeX = 0, beforeY = 0;
+        mouseGetPosition(&beforeX, &beforeY);
+        firstDelta = beforeX - 100;
+
+        mouseSetSensitivity(2.5);
+        gCursorMotionProbeX = 120;
+        gCursorMotionProbeY = 100;
+        _mouse_info();
+        int afterX = 0, afterY = 0;
+        mouseGetPosition(&afterX, &afterY);
+        secondDelta = afterX - beforeX;
+    }
+
+    gCursorMotionProbeActive = false;
+    mouseSetSensitivity(committedSensitivity);
+    mouseResetAbsoluteSensitivityTracking();
+
+    if (firstDelta != 10 || secondDelta != 25) {
+        printf("PREFERENCES_PROBE FAIL: cursor motion scaling mismatch mode=%s sensitivity=1.0 delta=%d sensitivity=2.5 delta=%d\n",
+            relative ? "relative" : "absolute", firstDelta, secondDelta);
+        fflush(stdout);
+        return false;
+    }
+
+    printf("PREFERENCES_PROBE PASS cursor_motion mode=%s sensitivity=1.0 delta=%d sensitivity=2.5 delta=%d\n",
+        relative ? "relative" : "absolute", firstDelta, secondDelta);
+    fflush(stdout);
+    return true;
+}
 
 void failProbe(const char* reason)
 {
@@ -354,6 +440,14 @@ bool preferencesProbeUsesSimulatedMouse()
 
 bool preferencesProbeOverrideMouse(int* x, int* y, unsigned char* leftButton, unsigned char* rightButton)
 {
+    if (gCursorMotionProbeActive
+        && x != nullptr && y != nullptr && leftButton != nullptr && rightButton != nullptr) {
+        *x = gCursorMotionProbeX;
+        *y = gCursorMotionProbeY;
+        *leftButton = 0;
+        *rightButton = 0;
+        return true;
+    }
     if (!preferencesProbeActive() || !gWaitingForFooter || gFooterInputPhase == 0
         || x == nullptr || y == nullptr || leftButton == nullptr || rightButton == nullptr) {
         return false;
@@ -417,6 +511,10 @@ void preferencesProbeComplete(bool success, scene::OptionsPanel* panel, int stag
             || std::abs(settings.preferences.mouse_sensitivity - expected) > 0.00001
             || std::abs(mouseGetSensitivity() - expected) > 0.00001) {
             failProbe("Done did not apply the cursor speed to settings and mouse input");
+            return;
+        }
+        if (!verifyCursorSpeedMotion(expected)) {
+            failProbe("cursor movement did not scale with cursor speed in the current display mode");
             return;
         }
         printf("PREFERENCES_PROBE PASS cursor_speed before=%s committed=%s runtime=%.6f\n",
