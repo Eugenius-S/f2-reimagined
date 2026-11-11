@@ -2,7 +2,7 @@
 id: 140
 title: Letters in the dialogue answers are not cut at the top or bottom
 milestone: M1
-status: todo
+status: blocked
 owner: any
 suggested: any
 priority: normal
@@ -124,5 +124,3 @@ claimed.
 Done: rebased the existing branch on current `origin/main` (`f2ef1236`). The two latest answer-hover attempts still do not expose the selected reply in the screen buffer, so there is no valid after-frame for the owner's clipping report. The older dialog, message and character captures do not reproduce that reported state. Task 140 remains incomplete; the claim is released, and PR #206 stays draft.
 Next: resume only when the dialogue fixture can expose and capture the actual selected answer text, then produce the required matched English and Russian crops.
 Check: the last Release build and CTest passed 20/20 before rebase. The rebased PR CI will validate the current SHA; no more runtime retries are made under the two-failure limit.
-
-- 2026-11-11 task 248 audit: no code change is justified yet. Missing work is a dialogue fixture that reaches the selected answer in the screen buffer and reproduces the clipping, then the matched before/after capture.

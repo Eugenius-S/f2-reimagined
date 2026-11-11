@@ -2,7 +2,7 @@
 id: 149
 title: Combat outlines, the hex cursor and floating text follow the 3D turn and zoom
 milestone: M1
-status: done
+status: blocked
 owner: gpt
 suggested: any
 priority: normal
@@ -87,5 +87,3 @@ Check: `runs/149-combat-overlays-follow-view/devhero-20261105-153127-000-zoom2-u
 - 2026-11-08 glm: the fly-camera projection work landed as PR #300 (6e65fccb); what 149 still owes (matched combat captures at zoom 0.5/1/2, turns 0/+30/-30) waits on task 146's fixture.
 
 - 2026-11-08 glm: the fly-camera projection work landed as PR #300 (6e65fccb). Still owed: matched combat captures at zoom 0.5/1/2 and turns 0/+30/-30, waiting on task 146's fixture.
-
-- 2026-11-11 task 248 audit: camera projection changes are in main. The matched live combat overlays at zoom 0.5/1/2 and turns 0/+30/-30 move to the Klamath owner fly-through, task 176, after combat fixture task 146.

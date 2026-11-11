@@ -2,7 +2,7 @@
 id: 145
 title: The 3D map edge matches the game, cut where it cuts, with no orange band
 milestone: M1
-status: reopened
+status: todo
 owner: gpt
 suggested: any
 priority: normal
