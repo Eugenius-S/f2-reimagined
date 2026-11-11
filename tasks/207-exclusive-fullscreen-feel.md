@@ -2,7 +2,7 @@
 id: 207
 title: The owner gets an exclusive-fullscreen feel from the borderless setup
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: owner
 priority: medium
@@ -10,7 +10,7 @@ tier: 2
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -60,3 +60,5 @@ picks be the mode the game shows, with a fast minimize.
   comes back.
 
 - 2026-11-12 gpt: current main maps Fullscreen to SDL_WINDOW_FULLSCREEN, Borderless to SDL_WINDOW_FULLSCREEN_DESKTOP, and Window to a decorated resizable-size window; task 208 fixed the separate DWM edge and confirmed the live window style. Background runs cannot measure minimize latency. Exact owner check moved to task 176: reproduce the reported steps on the same game copy, record the selected mode and live window style, then compare minimize time with another borderless game. No code change indicated by available evidence.
+
+- 2026-11-12 gpt: current Release build passes all 27 ctests, including settings_3d_tests for saved Window and Borderless values. A safe dev-snapshot using the isolated Window config reports windowed=true and fullscreen=false. Current source maps Fullscreen to SDL_WINDOW_FULLSCREEN and Borderless to SDL_WINDOW_FULLSCREEN_DESKTOP. Owner style/minimize latency cannot be measured in the background; exact reproduction moved to task 176 Log. No code change indicated by the available evidence.

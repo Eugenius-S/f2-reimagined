@@ -40,5 +40,6 @@ the pool then turns the shots and notes into fixes.
 The flight itself (the owner's).
 
 ## Log
+- 2026-11-12 task 207: during the Klamath fly-through, reproduce the owner's exact display-mode steps; record selected mode, live window style and minimize latency, and compare with another borderless game.
 
 - 2026-11-12 task 248: capture the remaining F8 FPS-counter demonstration for task 127 during the owner's Klamath fly-through.
