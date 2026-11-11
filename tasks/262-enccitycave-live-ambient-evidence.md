@@ -36,3 +36,4 @@ Renderer changes, exporter changes, map-specific visual fixes, and claims that t
 
 ## Log
 
+- 2026-11-12, gpt. Source: review of task 170 / PR #291 found its background --dev-hour sweep does not exercise play-time ambient dimming; task 194 covers only one Klamath spot. No new live captures were taken for this follow-up. Next: capture matched live day/night 3D views for all 28 encounter elevations and representative 2D comparisons as specified above.
