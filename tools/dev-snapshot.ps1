@@ -215,6 +215,17 @@ param(
     [ValidateRange(1.0, 3.0)]
     [double]$Scale = 2.0
 )
+
+function Get-Sha256FileHash([string]$Path) {
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        return [System.BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
+    } finally {
+        $stream.Dispose()
+        $algorithm.Dispose()
+    }
+}
 $ErrorActionPreference = 'Stop'
 if ($DevInput -and (-not $Preferences -or -not $ConfiguredDisplay -or -not $ReuseTestConfig -or -not $OutputDirectory -or -not $CaptureConsole)) {
     throw '-DevInput requires -Preferences, -ConfiguredDisplay, -ReuseTestConfig, -OutputDirectory and -CaptureConsole.'
@@ -505,7 +516,7 @@ if ($Set3d) {
     }
     [System.IO.File]::WriteAllLines($configPath, $configLines, [System.Text.UTF8Encoding]::new($false))
 }
-$configHashBefore = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+$configHashBefore = Get-Sha256FileHash $configPath
 $initialZoom = Get-TestConfigValue $configPath '3d' 'zoom'
 $initialEnabled = Get-TestConfigValue $configPath '3d' 'enabled'
 $initialDifficulty = Get-TestConfigValue $configPath 'preferences' 'combat_difficulty'
@@ -521,7 +532,7 @@ if ($logicalWidth -lt 640 -or $logicalHeight -lt 480) {
     throw 'The requested scale must leave at least a 640x480 logical framebuffer.'
 }
 if (-not (Test-Path -LiteralPath $exe) -or
-    (Get-FileHash -LiteralPath $built).Hash -ne (Get-FileHash -LiteralPath $exe).Hash) {
+    (Get-Sha256FileHash $built) -ne (Get-Sha256FileHash $exe)) {
     Copy-Item $built $exe -Force
 }
 # The game reads sfall's ddraw.ini next to its exe: a scratch install's own
@@ -750,7 +761,7 @@ try {
         while ((Get-Date) -lt $deadline -and -not $process.HasExited) {
             if (Test-Path -LiteralPath $watchdogStdout) {
                 $lines = Get-Content -LiteralPath $watchdogStdout -Tail 40 -ErrorAction SilentlyContinue
-                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
+                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|CAPTURE|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
                 if ($progress.Count -gt 0 -and $progress[0] -ne $watchdogLastLine) {
                     $watchdogLastLine = [string]$progress[0]
                     $watchdogLastProgress = Get-Date
@@ -773,7 +784,7 @@ try {
         while ((Get-Date) -lt $deadline -and -not $process.HasExited) {
             if (Test-Path -LiteralPath $watchdogStdout) {
                 $lines = Get-Content -LiteralPath $watchdogStdout -Tail 40 -ErrorAction SilentlyContinue
-                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
+                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|CAPTURE|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
                 if ($progress.Count -gt 0 -and $progress[0] -ne $watchdogLastLine) {
                     $watchdogLastLine = [string]$progress[0]
                     $watchdogLastProgress = Get-Date
@@ -822,7 +833,7 @@ try {
                     break
                 }
                 if ($snapshots.Count -ge $shots -and (Test-Path -LiteralPath $combatLog) -and
-                    (Select-String -LiteralPath $combatLog -Pattern ('^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + ' captures=4') -Quiet)) { break }
+                    (Select-String -LiteralPath $combatLog -Pattern ('^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + '(\.map)? captures=4') -Quiet)) { break }
             } elseif ($DevInput -or $SceneInput) {
                 $inputLog = Join-Path $OutputDirectory 'process.stdout.log'
                 if ((Test-Path -LiteralPath $inputLog) -and (Select-String -LiteralPath $inputLog -Pattern '^DEV_INPUT FAIL' -Quiet)) { break }
@@ -993,7 +1004,7 @@ if ($DevInput -or $SceneInput) {
             coordinate_space = 'logical'; snapshots = $snapshots.Count
             initial = @{ resolution_x = $initialDisplayWidth; resolution_y = $initialDisplayHeight; scale_factor = $initialDisplayScale }
             saved = @{ resolution_x = $afterWidth; resolution_y = $afterHeight; scale_factor = $afterScale }
-            config_sha256 = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+            config_sha256 = Get-Sha256FileHash $configPath
         } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $OutputDirectory 'input-result.json')
     }
 }
@@ -1036,7 +1047,7 @@ if ($PreferencesProbe) {
         throw 'Preferences probe did not report a successful production-path assertion.'
     }
     if (-not $probeHarnessStoppedProcess) { throw 'Preferences probe did not stop through the isolated helper harness.' }
-    $configHashAfter = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+    $configHashAfter = Get-Sha256FileHash $configPath
     $zoomAfter = Get-TestConfigValue $configPath '3d' 'zoom'
     $enabledAfter = Get-TestConfigValue $configPath '3d' 'enabled'
     $difficultyAfter = Get-TestConfigValue $configPath 'preferences' 'combat_difficulty'
@@ -1097,7 +1108,7 @@ if ($PreferencesProbe) {
             combat_difficulty = $difficultyAfter
             mouse_sensitivity = $mouseSensitivityAfter
         }
-        executable_sha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+        executable_sha256 = Get-Sha256FileHash $exe
         completion = [ordered]@{
             method = 'C++ finish marker observed before deadline; isolated helper stopped by harness'
             marker_observed_before_deadline = $probeCompletedBeforeDeadline
@@ -1120,7 +1131,7 @@ if ($PreferencesProbe) {
 }
 if ($Combat) {
     $fixtureLog = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
-    if ($fixtureLog -match '(?m)^COMBAT_FIXTURE FAIL ' -or $fixtureLog -notmatch ('(?m)^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + ' captures=4\r?$')) {
+    if ($fixtureLog -match '(?m)^COMBAT_FIXTURE FAIL ' -or $fixtureLog -notmatch ('(?m)^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + '(\.map)? captures=4\r?$')) {
         throw "Combat fixture failed or timed out within $TimeoutSeconds s.`n$fixtureLog"
     }
     if (-not $probeHarnessStoppedProcess -or $snapshots.Count -ne 4) {
@@ -1138,7 +1149,9 @@ if ($Combat) {
         if ($index -lt 3 -and -not $fixture.in_combat) { throw "Combat phase '$($expectedPhases[$index])' was not captured in combat." }
         if ($index -eq 3 -and $fixture.in_combat) { throw 'The final combat fixture frame was captured before combat ended.' }
         if ($index -eq 0 -and -not $fixture.player_turn) { throw 'The targeting frame was not captured during the player turn.' }
-        if ($index -eq 2 -and $fixture.player_turn) { throw 'The enemy frame was not captured during an enemy turn.' }
+        # The engine holds player_turn through enemy turns too: the enemy
+        # frame's proof is whose turn the engine was running.
+        if ($index -eq 2 -and -not $fixture.enemy_turn) { throw 'The enemy frame was not captured during an enemy turn.' }
         if (-not $Classic -and ($metadata.scene_view -ne 'full' -or -not $metadata.preview_requested)) {
             throw "3D combat phase '$($expectedPhases[$index])' lacks a full scene preview."
         }

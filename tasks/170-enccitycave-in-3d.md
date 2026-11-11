@@ -10,7 +10,7 @@ tier: 3
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -109,3 +109,6 @@ other areas (each has its own task).
   the new references captured clean. No defects to move to 189-192 or
   173; the area plays in 3D. Evidence: runs/170-enccitycave-in-3d/ (28
   probe sheets, the mountn5 border 2D-vs-3D pair).
+
+### 2026-11-12 gpt review
+Reviewed merged PR #291 (commit 5f2b8eb). The exporter group and tour spots cover all 22 names in runs/p1-listmaps.log: city1-8, cave0-7 and mountn1-6. Regression has 23 references: one per map plus cave5 elevation 1. Inspected city1-e0.jpg, cave3-e1.jpg, and mountn5-3d-border.jpg; this was a representative sample, not all 28 sheets. Sidecars inspected for the reference set report scene-gl, 1920x1080 drawable, 960x540 logical resolution and scale 2. Historical CI on PR #291 passed exporter, runs-size, scene jobs and windows-game; historical task Log reports export clean, 28/28 spawn walk probes and 129/129 regression with zero changed pixels. The 84-capture 8/12/18 sweep is recorded, but background --dev-hour does not exercise play-time ambient dimming; only city1 at hour 18 was spot-checked against original 2D. That limitation remains for owner-check. Follow-up evidence task: #262. No graphical defect is claimed.

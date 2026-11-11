@@ -10,7 +10,7 @@ tier: 2
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -45,4 +45,9 @@ New 3D models.
 ### 2026-11-04 gpt
 Done: grouped contiguous same-name multipart families using projected sprite bounds, and added a fly-only fixed-plane fallback for groups that cannot be built as solids. Added tests for assembled fly-only rows and for disconnected/mixed-name false matches. Scanned all exported maps; candidate groups are Klamath and Navarro Vertibirds, the New Reno Vertibird, New Reno signage and casino entrance, and the San Francisco tanker. False family matches (graffiti, goo, unrelated furniture and mixed weeds) are filtered. Evidence sheets under `runs/174-multipart-objects-locked/` compare the Klamath Vertibird, both Navarro elevation-2 Vertibirds, New Reno Vertibird and New Reno casino entrance at -45/0/+45. Raw captures and sidecars are in the ignored `build/task174/evidence-raw/` folder.
 Check: Release build; `ctest --test-dir build --output-on-failure` (20/20); scene-export unit tests (125/125); full pixel regression `runs/regression/20261104-222933-516-64992` (83/83, zero changed pixels); focused false-positive spots all zero. `git diff --check` passed.
-Next: runtime evidence is missing for New Reno signage (`NEWR1`) and the San Francisco tanker. Two 90-second live capture attempts for each target timed out; no further retries were made. The owner authorized merging completed code after two runtime failures with this limitation recorded. Task status is done for the implementation; `reviewed: no` remains because regression references were updated.
+Next: runtime evidence is missing for New Reno signage (`NEWR1`) and the San Francisco tanker. Two 90-second live capture attempts for each target timed out; no further retries were made. The owner authorized merging completed code after two runtime failures with this limitation recorded. At merge, `reviewed: no` remained because regression references were updated; this was resolved by the review recorded below.
+
+### 2026-11-12 gpt review
+Done: reviewed merged PR #274 diff, its green CI, and all five saved evidence sheets. Klamath, both Navarro Vertibirds, New Reno Vertibird, and New Reno casino entrance show the expected grouped result at -45/0/+45. Set `reviewed: yes` after checking the implementation, tests, and evidence metadata.
+Check: `gh pr diff 274`; `gh pr checks 274` (all required jobs pass); visual inspection of `runs/174-multipart-objects-locked/*.jpg`; `tasks/192-batch-vehicles.md`; `tasks/224-geometry-second-pass.md`.
+Next: task 265 requests owner runtime evidence for the New Reno signage group and San Francisco tanker. The New Reno Shark Club marquee finding in 224 is a different map and object; task 192 covers the tanker's hull sliver only. Not verified: live alignment for New Reno signage (`NEWR1`, tile 10896) and San Francisco tanker (`SFDOCK`, tile 8896); prior two attempts per target timed out and were not repeated.

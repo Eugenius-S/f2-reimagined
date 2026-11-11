@@ -2,7 +2,7 @@
 id: 186
 title: The Restoration Project plays in CE, in 3D, and the installer offers it
 milestone: M1
-status: todo
+status: doing
 owner: claude
 suggested: claude
 priority: high
@@ -76,3 +76,16 @@ Russian translations (227).
   its scene. Left: the RP map exports and fly tour spots, the walk through two
   restored areas, the installer option; not seen live: the `epac3` reply, an
   edited walking FRM drawn in play, fake perks in the character screen.
+- 2026-11-10 claude: part 3: the installer's RP option. The launcher fetches
+  `rpu_<tag>.zip` from RPU's latest official release on request, applies
+  `rpu-install.bat`'s steps (old patch archives and loose `data/` aside, saves,
+  music, `data/*.txt|gcd` kept), keeps every replaced file in `backup/rpu`, and
+  writes `mods/rpu.dat` last so a cut-short copy is retried. The scene export
+  then takes `all,rp` (the exporter's new `rp` group). Checked end to end on a
+  fake package and game folder (install, re-run keeps it, failed download
+  changes nothing, a failed copy is finished by the next run); not yet run
+  with the real 900 MB package. Walk shots: `runs/186-rp/abbey-walk-part3.jpg`
+  (3D), `runs/186-rp/sfsheng-walk-part3.jpg` (the dead trees draw near black:
+  check against 2D before closing). Left: the real-package install, that
+  SFSHENG tree check, and the not-seen-live items above.
+- 2026-11-10 claude: the owner's Steam install after the RP install (photo of the main menu in chat): the menu shows no wide art and the button labels run over the buttons. Found: `user-assets/fullscreen-20261028` in that folder is empty (emptied 2026-11-09 23:28, cause not found: a fresh install and an update over an empty folder both fill it in a test), so the menu falls back to HR_MAINMENU.FRM from `mods/f2_res.dat`, and that fallback layout puts the labels over the buttons. To do: the launcher checks the menu PNG itself, not its folder, and puts the art back; the fallback layout keeps the labels clear of the buttons.

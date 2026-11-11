@@ -58,10 +58,13 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
   `_archive` and `!marketing`.
 - After every code merge into main the game is verified before anybody
   plays it: rebuild Release from fresh `origin/main`, run one off-screen
-  `tools/dev-snapshot.ps1` launch check on the demo copy, and only then copy
+  `tools/dev-snapshot.ps1` launch check on the demo copy, run
+  `tools/perf-check.ps1` (the speed gate, 251), and only then copy
   `build/fallout2-ce.exe` to `f2r-verified/fallout2-ce.exe`, a folder beside
   the main checkout, with a line in `version.txt` there (commit, date,
-  checks). The owner's
+  checks), and dispatch the players' build for the same commit:
+  `gh workflow run verify.yml -f commit=<that commit>` (253), so the
+  launcher's `latest` release carries exactly the verified build. The owner's
   `Run F2R.lnk` swaps that build into `game/` on its next start (the previous
   one stays as `fallout2-ce.exe.bak`). Main must always be playable. Docs-only
   merges skip the check.
@@ -75,6 +78,11 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
     time, cropped or scaled down; every image stays in the thread.
 - Evidence in `runs/` is a few JPEG sheets or crops of at most 1 MB each
   (CI refuses more); raw captures stay in `game/shots/`.
+- After two consecutive failed background attempts at the same required
+  capture, stop repeating that capture. If the code and automated checks are
+  complete and only owner-visible evidence remains, close the task and move
+  the exact capture request to the matching owner fly-through task. Otherwise
+  leave the task `todo` and name the missing code or fixture in its Log.
 - A task that changed what the game, a tool or a folder looks like ends with
   at most 4 outcome screenshots attached in the chat when the task is done
   (and committed under its `runs/NNN-slug/` folder), so the owner sees the
@@ -88,7 +96,9 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
   `devtools/`) gets a hook or a call at most; the logic lives in our modules.
 - On a local map the 3D view never turns off. An object that cannot be
   built in 3D yet stands as a flat picture (a billboard or a fixed plane),
-  never as a switch back to 2D. The world map, dialogs and menus stay 2D.
+  never as a switch back to 2D. The world map stays 2D; the inventory,
+  dialogs and menus opened over a local map draw over the live 3D view
+  (the owner, 2026-11-10; task 173).
 - Speed is a feature: a steady 60 FPS, a warm-cache map change in 2 s, no
   stall over 100 ms on a settings change. Measure with the frame-time log
   (127) before and after any change that may cost time.
@@ -113,6 +123,7 @@ py -3 -m unittest discover -s tools/scene_export -p 'test*.py'
 py -3 -m unittest discover -s tools/regression -p 'test*.py'
 py -3 tools/scene_export/export.py --game-root ./game
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/regression.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/perf-check.ps1
 ```
 
 For a locally installed Restoration Project copy outside the main checkout,
@@ -187,6 +198,15 @@ folds each new card like any find, and then removes the card from
 also gets a line in `ru-tasks.json` there: a short plain Russian title and
 one or two sentences, no long dash; without it the card shows in English.
 
+Cards move with the work, every agent, every task: started (the draft PR
+of step 2 is open) means the card is in «В работе»; finished (`status: done`
+merged) means «Готово»; stopped without finishing means the draft PR is
+closed with a `Log` line, so the card goes back to the queue. Run
+`update_board.py` right after opening the draft PR and right after the
+merge; an agent without the `!F2R board` folder says so in the PR and
+Claude runs it. A `doing` status sits on `main` only for a task landing in
+parts while its next part is under way (186); otherwise it is set back.
+
 1. Work in your own worktree, never switch branches in the main checkout:
    `git worktree add --detach ../fallout2-ce-3d-<you> origin/main`. It has no
    `game/`: the scripts use the main checkout's `game/` with the worktree's
@@ -197,8 +217,8 @@ one or two sentences, no long dash; without it the card shows in English.
    'task/NNN-*'`); `git switch -c task/NNN-slug`, set `status: doing` and
    `owner: <you>` in the task file, commit, push, and open a draft PR named
    `NNN: <title>` at once. That draft PR is the lock: if another agent's PR
-   for the number is already there, take the next task. The board reads the
-   header from the branch; nothing goes to `main` until the merge.
+   for the number is already there, take the next task. The open PR puts
+   the card in «В работе»; nothing goes to `main` until the merge.
 3. Commit and push each meaningful step, one-line messages. Write a `Log`
    entry only when you stop or finish, in that commit:
 
@@ -219,8 +239,10 @@ one or two sentences, no long dash; without it the card shows in English.
 
 ## Review
 
-The one merge gate is green CI (build, tests, regression). The PR body says
-what it touched. The author merges as soon as CI is green; nothing else is
+The one merge gate is green CI (build, tests, and the unit tests of the
+tools). The pixel regression (`tools/regression.ps1`) needs the game files,
+so CI does not run it: the author runs it by hand before the merge. The PR
+body says what it touched. The author merges as soon as CI is green; nothing else is
 reviewed before the merge. The owner reviews each city later in a fly-through
 with 183's shots (tasks 175 on), and the pool turns the finds into fixes.
 

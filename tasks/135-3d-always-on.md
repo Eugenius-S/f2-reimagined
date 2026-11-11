@@ -2,15 +2,15 @@
 id: 135
 title: The 3D view stays on in combat and whenever the map is on screen
 milestone: M1
-status: blocked
-owner: gpt
+status: done
+owner: glm
 suggested: claude
 priority: high
 tier: 2
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -107,3 +107,33 @@ Next: take the next independent board task.
 Check: `runs/146-combat-fixture/klatoxcv-3d-fixed-startup/process.stdout.log` has no `COMBAT_FIXTURE START`; no 135 combat phase captures were generated.
 
 - 2026-11-08 glm: notes merged as PR #296; combat acceptance waits on task 146's fixture.
+
+### 2026-11-12 glm: the combat acceptance closed on the 146 fixture
+
+Done: the last acceptance item (a whole fight in 3D on both maps, with
+picking) is proven by task 146's combat fixture, merged in #408 on the
+clean main 0aac216e:
+
+- klatoxcv e2 and kladwtwn e0 each give COMBAT_FIXTURE START, four CAPTUREs
+  (player-targeting during the player's turn, player-attack, enemy-turn,
+  combat-ended) and COMBAT_FIXTURE PASS captures=4 in 3D; the same in
+  classic for comparison. Strips: runs/135-3d-always-on/
+  (klatoxcv-3d-four-phases.jpg, kladwtwn-3d-four-phases.jpg, copies of the
+  fixture's strips; the classic strips live next to them in
+  runs/146-combat-fixture/).
+- Clicks in combat hit what they hit in the original view: the fixture's
+  aim gate requires the engine's own pick at the crosshair to name exactly
+  the target critter (gameMouseGetObjectUnderCursor: pointed==target) and
+  the shot to read possible (_combat_to_hit accuracy > 0) before every
+  phase; the click then fires the attack on that critter and the fight
+  reaches the enemy's turn, where the enemy attacks back (the hero takes
+  damage in the message log of the captures). The gate held on all four
+  view/map combinations, so the pick agrees between 3D and classic.
+- The block reasons were listed and resolved in the merged steps 1 and 2
+  (game-state, game-mode world map, iso-disabled, movie kept with reasons;
+  ui-disabled, combat, dialog removed).
+- ctest 27/27 and the pixel regression (150 points, 0 changed pixels) ran
+  on the fixture's merge PR; this PR adds evidence only, no code.
+
+Not verified: a human playing the fight (the owner's fly-through, 175 on);
+the unscaled outlines stay their own task (149).

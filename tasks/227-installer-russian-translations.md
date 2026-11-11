@@ -73,3 +73,4 @@ translation's content.
 - 2026-11-08 claude: cut at the owner's request.
 - 2026-11-08 claude: goes right after 186 (the owner): depends on it, priority high.
 - 2026-11-08 claude: owner order 2026-11-08: claude takes critical bugs, performance, RP and the Russian translations.
+- 2026-11-11 claude (audit, folded in): the launcher takes a cut-off download for a whole one. `ce/src/launcher_main.cc:451` sets `ok = total > 0`; the Content-Length read at line 433 is never compared. `rpu_russian.dat` comes from the mirror as a bare file, so no unpack step catches a stump, and the next run keeps it (`kept the existing`, line 990). Fix here: a download succeeds only when the length is unknown or equals the bytes received; one case in `launcher_routes_test`.

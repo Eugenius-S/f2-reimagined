@@ -85,7 +85,7 @@ other areas (each has its own task).
 - Fly tour 7 spots, before/after identical everywhere. Hour sweep 8/12/18 on
   all 7 spots: outdoor maps shift ambient with the hour, tunnels stable.
 - Suspicious dark view redwan1-e1 checked against the game's own 2D
-  (`-Classic`, same tile, same hour): equally dark there too — the mine's own
+  (`-Classic`, same tile, same hour): equally dark there too - the mine's own
   lighting, not a defect.
 - Walk chain reddown -> redment -> redwame -> redwan1 e0 -> e1 -> reddtun ->
   redmtun: 7/7 captures, 3D stays on.

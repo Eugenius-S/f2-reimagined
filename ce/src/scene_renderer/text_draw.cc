@@ -313,13 +313,13 @@ bool renderSharpText(const std::vector<scene::TextRecord>& records,
     const double sy = static_cast<double>(physicalHeight) / logicalHeight;
     const unsigned char black[3] = { 0, 0, 0 };
 
-    // displayMonitorRefresh advances the source buffer one pixel to the right
-    // for each row to create a perspective effect. Sharp text should remain
-    // level even though the vanilla pixels retain that effect.
+    // The message log's rows share one left edge (193): the monitor draws
+    // them flush when the sharp pass is on, and the block's text column
+    // starts where the text after the bullet starts.
     struct HudLogOwner {
         int window;
         scene::TextBufferId generation;
-        int firstY;
+        int bulletAdvance = 0; // the pen step from the bullet to the text
     };
     std::vector<HudLogOwner> hudLogOwners;
     for (const scene::TextRecord& record : records) {
@@ -330,9 +330,15 @@ bool renderSharpText(const std::vector<scene::TextRecord>& records,
             return candidate.window == record.ownerWindow && candidate.generation == generation;
         });
         if (owner == hudLogOwners.end()) {
-            hudLogOwners.push_back({ record.ownerWindow, generation, run.y });
-        } else {
-            owner->firstY = std::min(owner->firstY, run.y);
+            hudLogOwners.push_back({ record.ownerWindow, generation, 0 });
+            owner = hudLogOwners.end() - 1;
+        }
+        // The text column: every line of the block starts where the text
+        // after the bullet starts (the owner, 2026-11-08: a wrapped line
+        // starts level with the text, not with the bullet).
+        if (owner->bulletAdvance == 0 && run.characterX.size() >= 2
+            && decodeCp1251(static_cast<unsigned char>(run.text[0])) == 0x2022) {
+            owner->bulletAdvance = run.characterX[1] - run.characterX[0];
         }
     }
 
@@ -349,17 +355,17 @@ bool renderSharpText(const std::vector<scene::TextRecord>& records,
         const FontVerticalBounds& verticalBounds = getFontVerticalBounds(bold, font);
         if (!verticalBounds.valid) continue;
 
-        int hudLogXCorrection = 0;
+        // The monitor draws its rows flush when the sharp pass is on (the
+        // vanilla stair is a pixel-view detail), so the captured x is
+        // already the straight left edge; no per-row correction here.
+        const HudLogOwner* logOwner = nullptr;
         if (run.colorRole == scene::TextColorRole::HudMessageLogGreen && run.lineHeight > 0) {
             const scene::TextBufferId generation = record.ownerGeneration != 0 ? record.ownerGeneration : record.buffer;
             const auto owner = std::find_if(hudLogOwners.begin(), hudLogOwners.end(), [&](const HudLogOwner& candidate) {
                 return candidate.window == record.ownerWindow && candidate.generation == generation;
             });
             if (owner != hudLogOwners.end()) {
-                const int row = std::max(0, static_cast<int>(std::lround(
-                    static_cast<double>(run.y - owner->firstY)
-                    / scene::sharpTextLinePitch(run.lineHeight, true))));
-                hudLogXCorrection = -row;
+                logOwner = &(*owner);
             }
         }
         const int fitHeight = verticalBounds.top - verticalBounds.bottom;
@@ -421,7 +427,12 @@ bool renderSharpText(const std::vector<scene::TextRecord>& records,
         const bool logBulletLead = run.colorRole == scene::TextColorRole::HudMessageLogGreen
             && codepoints.size() >= 2 && codepoints[0] == 0x2022
             && run.characterX.size() == codepoints.size();
-        double cursorX = run.x + hudLogXCorrection;
+        double cursorX = run.x;
+        // A wrapped continuation carries no bullet: it starts at the text
+        // column, level with the lines that have one.
+        if (!logBulletLead && logOwner != nullptr && logOwner->bulletAdvance > 0 && !monospaced) {
+            cursorX += logOwner->bulletAdvance;
+        }
         for (std::size_t index = 0; index < codepoints.size(); ++index) {
             int advanceUnits = 0;
             int bearingUnits = 0;
@@ -432,7 +443,7 @@ bool renderSharpText(const std::vector<scene::TextRecord>& records,
             int anchorX = 0;
             if (monospaced) {
                 const double glyphAdvance = logicalAdvance * cellCondense;
-                anchorX = static_cast<int>(std::lround((run.characterCellX[sourceIndices[index]] + hudLogXCorrection
+                anchorX = static_cast<int>(std::lround((run.characterCellX[sourceIndices[index]]
                     + (run.cellWidth - glyphAdvance) * 0.5) * sx));
             } else {
                 anchorX = static_cast<int>(std::lround(cursorX * sx));
@@ -440,10 +451,9 @@ bool renderSharpText(const std::vector<scene::TextRecord>& records,
             const double condense = monospaced ? cellCondense : proportionalCondense;
             const GlyphBitmap* glyph = getGlyph(codepoints[index], static_cast<float>(fontScaleX * condense),
                 static_cast<float>(fontScaleY), bold);
-            if (glyph == nullptr) return false;
             if (logBulletLead && index == 0) {
                 positioned.push_back({ glyph, anchorX - glyph->xoff });
-                cursorX = static_cast<double>(run.characterX[1] + hudLogXCorrection);
+                cursorX = static_cast<double>(run.characterX[1]);
                 continue;
             }
             positioned.push_back({ glyph, anchorX });

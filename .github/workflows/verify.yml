@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    # 253: the players' `latest` release is published only by hand, with the
+    # commit Rule 1 verified on an agent's machine as its input.
+    inputs:
+      commit:
+        description: 'The commit to build and publish (empty: the branch head)'
+        required: false
+        default: ''
 # A newer push to the same branch cancels the older run.
 concurrency:
   group: verify-${{ github.head_ref || github.ref }}
@@ -25,18 +33,22 @@ jobs:
       - run: python3 tools/check_public_content.py origin/${{ github.base_ref }}
   windows-game:
     runs-on: windows-latest
+    env:
+      BUILD_COMMIT: ${{ inputs.commit || github.sha }}
     steps:
       - uses: actions/checkout@v4
-        # runs/ holds only evidence: skip its hundreds of megabytes.
         with:
+          ref: ${{ inputs.commit || github.sha }}
+          # runs/ holds only evidence: skip its hundreds of megabytes.
           sparse-checkout: |
             /*
             !/runs/
           sparse-checkout-cone-mode: false
       - run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release
       - run: ctest --test-dir build --output-on-failure
+      - run: py -3 -m unittest discover -s tools/tour -p 'test*.py' -v
       - name: Stage the release payload
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
         run: |
           New-Item -ItemType Directory -Force -Path staging | Out-Null
           Copy-Item build/fallout2-ce.exe staging/
@@ -46,28 +58,33 @@ jobs:
           # Named parameters: pwsh 7.6 silently swaps the positional path and
           # value of Set-Content when -NoNewline precedes them, writing a file
           # named after the value instead.
-          Set-Content -Path staging/version.txt -Value $env:GITHUB_SHA -Encoding ascii -NoNewline
+          Set-Content -Path staging/version.txt -Value $env:BUILD_COMMIT -Encoding ascii -NoNewline
       - uses: actions/upload-artifact@v4
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
         with:
           name: game-win64
           path: staging/*
           retention-days: 1
   publish-latest:
-    # The rolling `latest` release, rebuilt on every push to main (task 091):
-    # the game, the default cfg, the commit and the exporter as a standalone
-    # exe.  No game file and no scene data goes here: the launcher makes the
-    # 3D data on the player's machine from their own game files.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # The rolling `latest` release (task 091): the game, the default cfg, the
+    # commit and the exporter as a standalone exe.  253: published only by a
+    # manual dispatch with the commit Rule 1 verified as its input, never on
+    # a plain push: CI cannot start the game, so an unchecked build must not
+    # reach the players.  No game file and no scene data goes here: the
+    # launcher makes the 3D data on the player's machine from their own game
+    # files.
+    if: github.event_name == 'workflow_dispatch'
     needs: windows-game
     runs-on: windows-latest
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
+      BUILD_COMMIT: ${{ inputs.commit || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.commit || github.sha }}
           sparse-checkout: |
             /*
             !/runs/
@@ -109,7 +126,7 @@ jobs:
           }
           gh release view latest --repo $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) {
-            gh release create latest --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA `
+            gh release create latest --repo $env:GITHUB_REPOSITORY --target $env:BUILD_COMMIT `
               --title "Latest build" `
               --notes "Rolling build of main. Run Install-F2R.exe to install it onto your Fallout 2; afterwards start the game with Fallout 2 Reimagined.exe in the game folder; the launcher makes the 3D scene data from your own game files."
           }
@@ -181,6 +198,8 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install -r tools/scene_export/requirements.txt
       - run: python -m unittest discover -s tools/scene_export -p 'test*.py' -v
+      - run: python -m unittest discover -s tools/regression -p 'test*.py' -v
+      - run: python -m unittest discover -s tools -p 'test_check_public_content.py' -v
   scene:
     runs-on: ubuntu-latest
     strategy:
