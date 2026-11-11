@@ -2,7 +2,7 @@
 id: 147
 title: Map exits, elevations and the world map come back in 3D
 milestone: M1
-status: blocked
+status: done
 owner: gpt
 suggested: gpt
 priority: high
@@ -131,3 +131,5 @@ branch API reports `78483130`. No new transition capture was made. The PR
 remains draft because acceptance is incomplete.
 
 - 2026-11-08 glm: the transition instrumentation and exit-grid probe landed as PR #221 (conflicts with the combat fixture resolved by keeping both). First-arrival evidence covers KLAMALL to KLADWTWN only; KLAGRAZ exit probes failed twice.
+
+- 2026-11-11 task 248 audit: transition instrumentation and the exit-grid probe are in main. Remaining live route coverage, including KLAMALL to KLADWTWN and the KLAGRAZ exits, moves to the Klamath owner fly-through, task 176.

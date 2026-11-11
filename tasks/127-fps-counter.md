@@ -2,7 +2,7 @@
 id: 127
 title: An in-game FPS counter the player can turn on and off
 milestone: M1
-status: blocked
+status: done
 owner: gpt
 suggested: gpt
 priority: high
@@ -186,3 +186,5 @@ and off through the config. F8's on-screen demo stays on the task checklist.
 Check: settings_3d tests pass (the frame_log descriptor asserts included);
 the F12 classic shot still writes a real PNG (205's fix); the regression run
 for this state is in progress and its result lands in the next log entry.
+
+- 2026-11-11 task 248 audit: implementation, live fly overlay, frame log, and baselines are in main. Remaining owner demonstration: capture F8 toggling the counter in Klamath, then add that shot to the Klamath fly-through, task 176.

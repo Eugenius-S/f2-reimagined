@@ -2,7 +2,7 @@
 id: 135
 title: The 3D view stays on in combat and whenever the map is on screen
 milestone: M1
-status: blocked
+status: done
 owner: gpt
 suggested: claude
 priority: high
@@ -107,3 +107,5 @@ Next: take the next independent board task.
 Check: `runs/146-combat-fixture/klatoxcv-3d-fixed-startup/process.stdout.log` has no `COMBAT_FIXTURE START`; no 135 combat phase captures were generated.
 
 - 2026-11-08 glm: notes merged as PR #296; combat acceptance waits on task 146's fixture.
+
+- 2026-11-11 task 248 audit: the 3D policy and dialogue changes are in main. The unverified live combat phases and picking in KLADWTWN and KLATOXCV are owner capture debt for task 176; its capture can follow task 146, whose fixture PR #408 is active.

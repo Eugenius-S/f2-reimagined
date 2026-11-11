@@ -40,3 +40,5 @@ the pool then turns the shots and notes into fixes.
 The flight itself (the owner's).
 
 ## Log
+
+- 2026-11-11 task 248: capture the F8 FPS-counter toggle (127); the live 3D combat phases and picking in KLADWTWN and KLATOXCV after fixture 146 (135); the remaining map-transition routes, including KLAGRAZ exits (147); camera-matched combat overlays at zoom 0.5/1/2 and turns 0/+30/-30 after fixture 146 (149). Do not treat these checks as complete until their shots and notes are present.
