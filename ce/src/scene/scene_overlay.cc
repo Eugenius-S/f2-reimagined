@@ -106,7 +106,10 @@ void drawOutline(Object* object, void* context)
     // hexagon through the 3D camera and paints scaled ghost rings around the
     // cursor once the view turns or zooms.
     if (object == gGameMouseHexCursor || object == gGameMouseBouncingCursor) return;
-    if (scene_renderer::sceneCameraTransformed()) {
+    // A zoomed or turned view outlines through the shown card's projection
+    // (149): the legacy path outlines the unturned sprite and misses the
+    // critter on the screen.
+    if (scene_renderer::sceneCameraTransformed() || cameraTurned()) {
         OutlineProjection projection = {};
         int fid = object->fid;
         int rotation = object->rotation;
@@ -134,7 +137,8 @@ void drawOutlines(Rect* rect)
 
 bool floatingTextScreenPosition(int tile, int offsetX, int offsetY, int* screenX, int* screenY)
 {
-    if (!scene_renderer::sceneCameraTransformed() || screenX == nullptr || screenY == nullptr) return false;
+    if ((!scene_renderer::sceneCameraTransformed() && !cameraTurned()) || screenX == nullptr
+        || screenY == nullptr) return false;
     scene_renderer::SpriteCardProjection projection;
     if (!scene_renderer::currentGameProjection(&projection)) return false;
     double pixel[2];

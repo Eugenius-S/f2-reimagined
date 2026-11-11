@@ -2,7 +2,7 @@
 id: 149
 title: Combat outlines, the hex cursor and floating text follow the 3D turn and zoom
 milestone: M1
-status: doing
+status: blocked
 owner: glm
 suggested: any
 priority: normal
@@ -87,3 +87,41 @@ Check: `runs/149-combat-overlays-follow-view/devhero-20261105-153127-000-zoom2-u
 - 2026-11-08 glm: the fly-camera projection work landed as PR #300 (6e65fccb); what 149 still owes (matched combat captures at zoom 0.5/1/2, turns 0/+30/-30) waits on task 146's fixture.
 
 - 2026-11-08 glm: the fly-camera projection work landed as PR #300 (6e65fccb). Still owed: matched combat captures at zoom 0.5/1/2 and turns 0/+30/-30, waiting on task 146's fixture.
+
+### 2026-11-12 glm: the zoom half proven on the 146 fixture; the turn half blocked with the diagnosis
+
+Done: the acceptance's zoom captures, on the merged combat fixture
+(#408). kladwtwn e0, the fixture's player-targeting frame at zoom 0.5, 1
+and 2 (turn 0): the outline hugs the critter's shown sprite at every zoom;
+the runs complete all four phases and PASS. Evidence in
+runs/149-combat-overlays-follow-view/ (zoom05/zoom1/zoom2-turn0-targeting
+.jpg). The unturned zoom-1 view and the 2D picture are unchanged (the
+pixel regression on the 146 merge: 150 points, 0 changed pixels).
+
+Blocked (the turn half, two attempts):
+- Attempt 1: the outline's projected path already engages at a turn (the
+  renderer's gFlying is true once the turn's pose lands, so
+  sceneCameraTransformed() is already true); adding cameraTurned() to the
+  gate changed nothing. Captures at turn +30/-30 still show no outline on
+  any critter (zoom1-turn30-targeting.jpg, zoom1-turn-30-targeting.jpg).
+- Attempt 2: instrumented the whole path (F2CE_OUTLINE_DIAG). Findings:
+  shownOutlineProjection succeeds for every outlined critter;
+  objectDrawSceneOutline places its ink (157/133/107 pixels placed) but the
+  placed positions sit far from the drawn critters: the same card's quad
+  projects about 120 logical px above (and left of) where the renderer
+  draws that card, and one critter's outline placed on the hero's hex.
+  The suspect pair: scene_renderer's staticScreenFromWorld fly path
+  (flyCameraMvp over gFly) versus the mvp the cards actually draw with at
+  the turn; the zoom path works because it projects through
+  gameViewProject (the game's oblique view) instead. The second gap: the
+  target's own outline draws in the mouse-cursor pass (the legacy
+  objectDrawOutline), which does not follow the turn at all.
+  What is missing: the exact transform the drawn cards get at the turn
+  (the fly-mvp pipeline in scene_draw versus the camera path the overlay
+  projects with), and a projected outline for the cursor pass.
+
+Next: align the overlay's projection with the card draw's turn pipeline
+(the renderer owns both), then the turn captures complete the acceptance.
+Check: the diag runs' logs under build/probe-149[bcdef]-t30/
+(process.stderr.log); the captures in
+runs/149-combat-overlays-follow-view/.
