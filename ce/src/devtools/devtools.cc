@@ -46,6 +46,7 @@
 #include "../game_dialog.h"
 #include "../game_mouse.h"
 #include "../input.h"
+#include "../interface.h"
 #include "../loadsave.h"
 #include "../object.h"
 #include "../preferences.h"
@@ -64,6 +65,8 @@
 #include "../scene_renderer/perf.h"
 #include "../scene_renderer/game_view.h"
 #include "../scene_renderer/camera.h"
+#include "../scene_renderer/map_clip.h"
+#include "../scene_renderer/sprite_card.h"
 #include "../scene_renderer/context.h"
 #include "../scene_renderer/live_objects.h"
 #include "../scene_renderer/picking.h"
@@ -223,6 +226,7 @@ int gCombatFixtureFrames = 0;
 int gCombatFixtureEnemyTile = -1;
 int gCombatFixtureEnemyPhaseFrames = 0;
 bool gCombatFixtureEndTurnQueued = false;
+bool gCombatFixtureEnemyActed = false;
 bool gCombatFixtureIsClassic = false;
 double gDevZoom = -1.0; // --dev-zoom=D: the background run's 3D zoom (default 1)
 int gDevAmbient = -1; // --dev-ambient: the map's ambient light held there (night views)
@@ -1809,11 +1813,33 @@ static bool combatFixtureAlive(Object* critter)
         && (critter->data.critter.combat.results & DAM_DEAD) == DAM_NONE;
 }
 
+// True when the hex sits where the fight can happen: inside the scene's
+// clean-edges clip in 3D (the devtools elevation landing can stand the hero
+// past it, klatoxcv e2 lands in the rock void, 146, and the 3D view clips
+// every object card away there), inside the map's scroll bounds in classic
+// (a click past them is dropped, so the attack never lands).
+static bool combatFixtureTileInsideScene(int tile)
+{
+    if (gClassic) return !mapEdgeIsEnabled() || mapEdgeTileInBounds(tile);
+    scene_renderer::SpriteCardProjection projection;
+    double pixel[2];
+    double worldX = 0.0;
+    double worldZ = 0.0;
+    if (!scene_renderer::currentGameProjection(&projection)) return false;
+    scene_renderer::gameViewTilePixel(tile, pixel);
+    if (!scene_renderer::spritePixelToGround(projection, pixel[0], pixel[1], &worldX, &worldZ)) return false;
+    return scene_renderer::mapClipContains(scene_renderer::staticMapClip(), worldX, worldZ)
+        && (!mapEdgeIsEnabled() || mapEdgeTileInBounds(tile));
+}
+
 static int combatFixtureDefaultTargetTile()
 {
-    for (int distance = 2; distance <= 6; ++distance) {
+    // Distance 1 first: the dev hero's bare hands reach one hex, and the
+    // aim gate needs a shot the engine rates possible.
+    for (int distance = 1; distance <= 6; ++distance) {
         for (int tile = 0; tile < 40000; ++tile) {
             if (tileDistanceBetween(gDude->tile, tile) == distance
+                && combatFixtureTileInsideScene(tile)
                 && elevationTileFree(tile, gElevation)
                 && objectFindFirstAtLocation(gElevation, tile) == nullptr) {
                 return tile;
@@ -1835,6 +1861,41 @@ static bool prepareCombatFixture()
             gCombatFixtureWaitLogged = true;
         }
         return false;
+    }
+
+    // Fight inside the drawn scene: the devtools elevation landing can stand
+    // the hero past the map's clean-edges clip (klatoxcv e2 lands in the
+    // rock void, 146), where the 3D view clips every object card away, so
+    // neither the aim pick nor a capture sees anything. Move to the nearest
+    // hex the scene keeps first.
+    if (!combatFixtureTileInsideScene(gDude->tile)) {
+        const int from = gDude->tile;
+        int ground = -1;
+        for (int distance = 1; distance <= 60 && ground == -1; ++distance) {
+            for (int tile = 0; tile < HEX_GRID_WIDTH * HEX_GRID_HEIGHT; ++tile) {
+                if (tileDistanceBetween(gDude->tile, tile) == distance
+                    && combatFixtureTileInsideScene(tile)
+                    && elevationTileFree(tile, gElevation)
+                    && objectFindFirstAtLocation(gElevation, tile) == nullptr) {
+                    ground = tile;
+                    break;
+                }
+            }
+        }
+        if (ground == -1) {
+            printf("COMBAT_FIXTURE FAIL map=%s hero=%d reason=no-drawn-floor-hex\n",
+                gMapHeader.name, gDude->tile);
+            fflush(stdout);
+            gCombatFixturePhase = -1;
+            return false;
+        }
+        objectSetLocation(gDude, ground, gElevation, nullptr);
+        // The move is instant: the egg's mask stays glued to the hero's hex.
+        gEgg->x = 0;
+        gEgg->y = 0;
+        printf("COMBAT_FIXTURE GROUND map=%s hero=%d -> %d (drawn floor)\n",
+            gMapHeader.name, from, ground);
+        fflush(stdout);
     }
 
     Object* target = nullptr;
@@ -1875,6 +1936,14 @@ static bool prepareCombatFixture()
         spawned = true;
     }
 
+    // The aiming pick needs a shot the engine rates possible: a dark map
+    // (the toxic caves) reads the light at the defender and caves sit near
+    // zero. The test critter carries a lantern so the to-hit survives any
+    // map's darkness; a map-hostile target keeps its own light.
+    if (spawned) {
+        objectSetLight(target, 4, LIGHT_INTENSITY_MAX, nullptr);
+    }
+
     gCombatFixtureTarget = target;
     gCombatFixtureTargetTile = target->tile;
     gCombatFixtureIsClassic = gClassic;
@@ -1909,20 +1978,142 @@ static bool combatFixturePointAtTarget()
         if (!scene_renderer::staticScreenFromGamePixel(pixel[0] + gCombatFixtureTarget->x,
                 pixel[1] + gCombatFixtureTarget->y - 25.0, &x, &y)) return false;
     } else {
+        // The engine's own sprite rect: the hex anchor plus the art's
+        // offsets, the same arithmetic _obj_intersects_with picks with.
+        // The bare anchor sits on the hex edge, off the critter's pixels.
+        CacheEntry* handle = nullptr;
+        Art* art = artLock(FrmId(gCombatFixtureTarget), &handle);
+        if (art == nullptr) return false;
+        int width = 0;
+        int height = 0;
+        artGetSize(art, gCombatFixtureTarget->frame, gCombatFixtureTarget->rotation, &width, &height);
+        const Rotation rotation = gCombatFixtureTarget->rotation;
         int sx = 0;
         int sy = 0;
         tileToScreenXY(gCombatFixtureTarget->tile, &sx, &sy);
-        x = sx + gCombatFixtureTarget->x;
-        y = sy + gCombatFixtureTarget->y - 25.0;
+        x = sx + 16 + art->xOffsets[rotation] + gCombatFixtureTarget->x;
+        y = sy + 8 + art->yOffsets[rotation] + gCombatFixtureTarget->y - height / 2.0;
+        artUnlock(handle);
     }
-    gCombatFixtureTargetX = static_cast<int>(x);
-    gCombatFixtureTargetY = static_cast<int>(y);
-    _mouse_set_position(gCombatFixtureTargetX, gCombatFixtureTargetY);
-    gameMouseSetMode(GAME_MOUSE_MODE_CROSSHAIR);
-    gameMouseRefresh();
-    Object* pointed = gameMouseGetObjectUnderCursor(OBJ_TYPE_CRITTER, false, gElevation);
+    // The predicted point is exact up to the view's mapping of the sprite,
+    // so a small scan around it takes the nearest pixel that names the
+    // target (the engine's own player moves the pointer the same way).
+    static const int kScanOffsets[][2] = {
+        {0, 0}, {16, 0}, {-16, 0}, {0, -8}, {16, -8}, {-16, -8},
+        {0, 8}, {16, 8}, {-16, 8}, {0, -24}, {16, -24}, {-16, -24},
+        {32, 0}, {-32, 0},
+    };
     int accuracy = 0;
-    return pointed == gCombatFixtureTarget && _combat_to_hit(pointed, &accuracy) && accuracy > 0;
+    for (const auto& offset : kScanOffsets) {
+        const int px = static_cast<int>(x) + offset[0];
+        const int py = static_cast<int>(y) + offset[1];
+        _mouse_set_position(px, py);
+        gameMouseSetMode(GAME_MOUSE_MODE_CROSSHAIR);
+        gameMouseRefresh();
+        Object* pointed = gameMouseGetObjectUnderCursor(OBJ_TYPE_CRITTER, false, gElevation);
+        if (pointed != gCombatFixtureTarget) continue;
+        if (!_combat_to_hit(pointed, &accuracy) || accuracy <= 0) {
+            if (gCombatFixtureFrames % 60 == 0) {
+                // Why the shot reads bad: the hit mode, the engine's own
+                // bad-shot verdict, the light at the target and the range.
+                HitMode hitMode = HIT_MODE_PUNCH;
+                bool aiming = false;
+                const bool haveMode = interfaceGetCurrentHitMode(&hitMode, &aiming) == 0;
+                const CombatBadShot shot = haveMode
+                    ? _combat_check_bad_shot(gDude, pointed, hitMode, aiming)
+                    : COMBAT_BAD_SHOT_OK;
+                printf("COMBAT_FIXTURE AIM map=%s mode=%s point=(%d,%d) pointed=yes accuracy=%d hitMode=%d aiming=%d shot=%d light=%d distance=%d\n",
+                    gMapHeader.name, gCombatFixtureIsClassic ? "classic" : "3d", px, py, accuracy,
+                    static_cast<int>(hitMode), aiming ? 1 : 0, static_cast<int>(shot),
+                    objectGetLightIntensity(pointed),
+                    objectGetDistanceBetweenTiles(gDude, gDude->tile, pointed, pointed->tile));
+                fflush(stdout);
+            }
+            return false;
+        }
+        gCombatFixtureTargetX = px;
+        gCombatFixtureTargetY = py;
+        return true;
+    }
+    if (gCombatFixtureFrames % 60 == 0) {
+        // One line that can answer everything: where the same math puts the
+        // hero's hex, whether the scene's card list holds the target, and
+        // the classic math's own anchor for the target's tile.
+        int heroMappedX = -1;
+        int heroMappedY = -1;
+        int heroClassicX = -1;
+        int heroClassicY = -1;
+        int targetClassicX = -1;
+        int targetClassicY = -1;
+        bool targetInCards = false;
+        int cardCount = 0;
+        if (!gCombatFixtureIsClassic) {
+            double pixel[2];
+            double hx, hy;
+            scene_renderer::gameViewTilePixel(gDude->tile, pixel);
+            if (scene_renderer::staticScreenFromGamePixel(pixel[0] + gDude->x,
+                    pixel[1] + gDude->y, &hx, &hy)) {
+                heroMappedX = static_cast<int>(hx);
+                heroMappedY = static_cast<int>(hy);
+            }
+            for (const auto& entry : scene::pickEntries()) {
+                cardCount++;
+                if (entry.object == gCombatFixtureTarget) targetInCards = true;
+            }
+        }
+        tileToScreenXY(gDude->tile, &heroClassicX, &heroClassicY);
+        tileToScreenXY(gCombatFixtureTarget->tile, &targetClassicX, &targetClassicY);
+        Object* anything = nullptr;
+        const bool pickedAnything = !gCombatFixtureIsClassic
+            && scene::pickObject(static_cast<int>(x), static_cast<int>(y), OBJ_TYPE_INVALID, true, &anything);
+        // The full state goes to devcombat.log (the run folder keeps it even
+        // when the watchdog stops the run); stdout keeps a slow heartbeat.
+        if (FILE* log = fopen(devLogPath("devcombat.log").c_str(), "a")) {
+            fprintf(log, "AIM frame=%d map=%s mode=%s point=(%d,%d) heroMapped=(%d,%d) heroClassic=(%d,%d) targetClassic=(%d,%d) cards=%d targetInCards=%d center=%d overlay=%d pickAny=%d under=%d clipHero=%d clipTarget=%d\n",
+                gCombatFixtureFrames, gMapHeader.name, gCombatFixtureIsClassic ? "classic" : "3d",
+                static_cast<int>(x), static_cast<int>(y),
+                heroMappedX, heroMappedY, heroClassicX, heroClassicY,
+                targetClassicX, targetClassicY, cardCount, targetInCards ? 1 : 0, gCenterTile,
+                tileSceneOverlayActive() ? 1 : 0, pickedAnything ? 1 : 0,
+                anything != nullptr ? 1 : 0,
+                combatFixtureTileInsideScene(gDude->tile) ? 1 : 0,
+                combatFixtureTileInsideScene(gCombatFixtureTarget->tile) ? 1 : 0);
+            if (gCombatFixtureFrames == 120 && !gCombatFixtureIsClassic) {
+                // One grid sweep, once: where does the pick see the target,
+                // if anywhere? Cheap enough once, too slow for every frame.
+                int foundAt = 0;
+                int anyHits = 0;
+                int critterHits = 0;
+                for (int gy = 100; gy < 1000; gy += 48) {
+                    for (int gx = 24; gx < 1900; gx += 48) {
+                        Object* hit = nullptr;
+                        scene::pickObject(gx, gy, OBJ_TYPE_INVALID, true, &hit);
+                        if (hit == nullptr) continue;
+                        anyHits++;
+                        const bool critter = FrmId(hit).objectType() == OBJ_TYPE_CRITTER;
+                        if (critter) critterHits++;
+                        if (hit == gCombatFixtureTarget) {
+                            fprintf(log, "AIMGRID target at (%d,%d)\n", gx, gy);
+                            foundAt++;
+                        } else if (anyHits <= 6) {
+                            fprintf(log, "AIMGRID sample (%d,%d): %s pid=%d type=%d tile=%d\n",
+                                gx, gy, objectGetName(hit), static_cast<int>(hit->pid),
+                                static_cast<int>(FrmId(hit).objectType()), hit->tile);
+                        }
+                    }
+                }
+                fprintf(log, "AIMGRID hits=%d any=%d critters=%d\n", foundAt, anyHits, critterHits);
+            }
+            fclose(log);
+        }
+        if (gCombatFixtureFrames % 300 == 0) {
+            printf("COMBAT_FIXTURE AIM map=%s mode=%s point=(%d,%d) pointed=none cards=%d targetInCards=%d\n",
+                gMapHeader.name, gCombatFixtureIsClassic ? "classic" : "3d",
+                static_cast<int>(x), static_cast<int>(y), cardCount, targetInCards ? 1 : 0);
+            fflush(stdout);
+        }
+    }
+    return false;
 }
 
 static void combatFixtureCapture(const char* phase)
@@ -1943,7 +2134,15 @@ static void combatFixtureCapture(const char* phase)
 
 static void runCombatFixtureFrame()
 {
-    if (!gCombatFixtureRequested || gCombatFixturePhase < 1 || gCombatFixturePhase > 5) return;
+    if (!gCombatFixtureRequested) return;
+    if (gCombatFixturePhase == -1) {
+        // A failed fight leaves the game idle mid-combat: leave cleanly like
+        // the other fixtures, so the runner reads the FAIL and moves on.
+        gCombatFixturePhase = -2;
+        _game_user_wants_to_quit = GAME_QUIT_REQUEST_EXIT;
+        return;
+    }
+    if (gCombatFixturePhase < 1 || gCombatFixturePhase > 5) return;
     if (++gCombatFixtureFrames > 2400) {
         printf("COMBAT_FIXTURE FAIL map=%s phase=%d reason=phase-timeout\n", gMapHeader.name, gCombatFixturePhase);
         fflush(stdout);
@@ -1968,6 +2167,24 @@ static void runCombatFixtureFrame()
         }
     } else if (gCombatFixturePhase == 2) {
         Attack* attack = combat_get_data();
+        if (gCombatFixtureFrames % 60 == 0) {
+            FILE* log = fopen(devLogPath("devcombat.log").c_str(), "a");
+            if (log != nullptr) {
+                fprintf(log, "ATTACK frame=%d inCombat=%d attack=%s attacker=%s defender=%s hp=%d startHp=%d busy=%d point=(%d,%d) edgeClipped=%d isoWindow=%d mode=%d\n",
+                    gCombatFixtureFrames, isInCombat() ? 1 : 0,
+                    attack != nullptr ? "yes" : "no",
+                    attack != nullptr && attack->attacker != nullptr ? (attack->attacker == gDude ? "hero" : "other") : "-",
+                    attack != nullptr && attack->defender != nullptr
+                        ? (attack->defender == gCombatFixtureTarget ? "target" : "other") : "-",
+                    gCombatFixtureTarget != nullptr ? gCombatFixtureTarget->data.critter.hp : -1,
+                    gCombatFixtureStartingHp, animationIsBusy(gDude),
+                    gCombatFixtureTargetX, gCombatFixtureTargetY,
+                    mapEdgeIsOverClippedArea(gCombatFixtureTargetX, gCombatFixtureTargetY) ? 1 : 0,
+                    windowGetAtPoint(gCombatFixtureTargetX, gCombatFixtureTargetY) == gIsoWindow ? 1 : 0,
+                    static_cast<int>(gameMouseGetMode()));
+                fclose(log);
+            }
+        }
         if (isInCombat() && attack != nullptr && attack->attacker == gDude
             && attack->defender == gCombatFixtureTarget
             && (gCombatFixtureTarget->data.critter.hp < gCombatFixtureStartingHp
@@ -1981,8 +2198,27 @@ static void runCombatFixtureFrame()
             enqueueInputEvent(KEY_SPACE);
             gCombatFixtureEndTurnQueued = true;
         } else if (turn != nullptr && turn != gDude) {
-            if (gCombatFixtureEnemyTile == -1) gCombatFixtureEnemyTile = turn->tile;
-            if (animationIsBusy(turn) == -1 || turn->tile != gCombatFixtureEnemyTile) {
+            // The turn handover reads as the enemy's before its AI starts:
+            // wait until the enemy actually animated or moved, then went
+            // idle again, or the turn came back to the hero.
+            if (gCombatFixtureEnemyTile == -1) {
+                gCombatFixtureEnemyTile = turn->tile;
+                gCombatFixtureEnemyActed = false;
+            }
+            if (animationIsBusy(turn) != -1) gCombatFixtureEnemyActed = true;
+            if (gCombatFixtureEnemyPhaseFrames % 60 == 0) {
+                FILE* log = fopen(devLogPath("devcombat.log").c_str(), "a");
+                if (log != nullptr) {
+                    fprintf(log, "ENEMY frame=%d turn=%d hero=%d busy=%d acted=%d tile=%d firstTile=%d playerTurn=%d\n",
+                        gCombatFixtureEnemyPhaseFrames, turn->id, gDude->id,
+                        animationIsBusy(turn), gCombatFixtureEnemyActed ? 1 : 0,
+                        turn->tile, gCombatFixtureEnemyTile,
+                        (gCombatState & COMBAT_STATE_PLAYER_TURN) != 0 ? 1 : 0);
+                    fclose(log);
+                }
+            }
+            if ((gCombatFixtureEnemyActed && animationIsBusy(turn) == -1)
+                || turn->tile != gCombatFixtureEnemyTile) {
                 combatFixtureCapture("enemy-turn");
                 if (gCombatFixturePhase > 0) {
                     gCombatFixturePhase = 4;
@@ -2001,6 +2237,9 @@ static void runCombatFixtureFrame()
             gCombatFixturePhase = 6;
             printf("COMBAT_FIXTURE PASS map=%s captures=4\n", gMapHeader.name);
             fflush(stdout);
+            // The run is complete: leave cleanly, like the other fixtures,
+            // so the runner does not wait out its watchdog on an idle game.
+            _game_user_wants_to_quit = GAME_QUIT_REQUEST_EXIT;
         }
     }
 }
@@ -4535,7 +4774,7 @@ bool takeSnapshot()
         "  \"map\": \"%s\",\n"
         "  \"elevation\": %d,\n"
         "  \"still_snapshot\": %s,\n"
-        "  \"combat_fixture\": {\"phase\":\"%s\",\"in_combat\":%s,\"player_turn\":%s,\"scene_availability\":\"%s\"},\n"
+        "  \"combat_fixture\": {\"phase\":\"%s\",\"in_combat\":%s,\"player_turn\":%s,\"enemy_turn\":%s,\"scene_availability\":\"%s\"},\n"
         "  \"snapshot_run\": \"%s\",\n"
         "  \"view_tile\": %d,\n"
         "  \"preview_requested\": %s,\n"
@@ -4580,6 +4819,10 @@ bool takeSnapshot()
         combatPhase,
         isInCombat() ? "true" : "false",
         (gCombatState & COMBAT_STATE_PLAYER_TURN) != 0 ? "true" : "false",
+        // The engine holds COMBAT_STATE_PLAYER_TURN through enemy turns too
+        // (it gates the player's nested input loop, 146); the turn holder
+        // says whose turn it really is.
+        isInCombat() && _combat_whose_turn() != gDude ? "true" : "false",
         scene::availability(),
         gSnapshotRun,
         gCenterTile,
