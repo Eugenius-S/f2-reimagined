@@ -26,7 +26,7 @@ uniform int uDepthAt;
 // Whether the egg cuts what is drawn: 0 no, 1 the walls whose object row is
 // set in uSeeThroughObjects (the hero stands behind them), 2 the whole draw.
 uniform int uSeeThrough;
-uniform sampler2D uSeeThroughObjects; // per object row: R see-through, G full light
+uniform sampler2D uSeeThroughObjects; // per object row: R see-through, G full light, B group + 1 (241)
 uniform int uLightMode;
 out vec2 vTexcoord;
 out vec3 vWorld;
@@ -36,6 +36,7 @@ out float vCasterId; // the depth pass writes it into the map's id channel
 out float vSelfId; // the screen piece's own object row + 1, for the compare
 flat out int vSeeThrough;
 flat out float vFullLight;
+flat out float vShadowGroup; // 241: the walls.bin row's composite sprite group, -1: none
 flat out int vDepthOnPlane;
 flat out vec4 vDepthPlane; // normal, and its dot with the plane's points
 void main() {
@@ -48,11 +49,15 @@ void main() {
     vSelfId = aObject + 1.0;
     vSeeThrough = uSeeThrough == 2 ? 1 : 0;
     vFullLight = 0.0;
+    vShadowGroup = -1.0;
     if ((uSeeThrough == 1 || uLightMode == 2) && aObject >= 0.0) {
         int row = int(aObject + 0.5);
-        vec2 entry = texelFetch(uSeeThroughObjects, ivec2(row % 1024, row / 1024), 0).rg;
+        vec3 entry = texelFetch(uSeeThroughObjects, ivec2(row % 1024, row / 1024), 0).rgb;
         if (uSeeThrough == 1) vSeeThrough = entry.r > 0.5 ? 1 : 0;
-        if (uLightMode == 2) vFullLight = entry.g;
+        if (uLightMode == 2) {
+            vFullLight = entry.g;
+            vShadowGroup = floor(entry.b * 255.0 + 0.5) - 1.0;
+        }
     }
     vDepthOnPlane = uDepthAt != 0 && dot(aDepthNormal, aDepthNormal) > 0.5 ? 1 : 0;
     vDepthPlane = vec4(aDepthNormal, dot(aDepthNormal, aDepthAt));
@@ -89,6 +94,13 @@ uniform vec3 uClipPlane0;
 uniform vec3 uClipPlane1;
 uniform vec3 uClipPlane2;
 uniform vec3 uClipPlane3;
+// The roof plane (114): x its height, y 1 while the roofs draw. The game's
+// roof picture hides a room's cards above that plane; the 3D roof sits lower
+// and leaves the band open, so a tall card inside (the bathhouse's table
+// stuff) read over its wall from the street. uRoofGrid says where the roofs
+// cover right now, the egg's see-through circle included.
+uniform vec2 uRoofClip;
+uniform sampler2D uRoofGrid;
 uniform int uEgg; // the see-through circle around the hero
 uniform sampler2D uEggMask;
 uniform vec4 uEggRect; // game logical pixels: left, top, width, height
@@ -127,7 +139,11 @@ uniform bool uShadowOn;
 uniform mat4 uShadowMatrix;
 uniform sampler2D uShadowMap;
 uniform sampler2D uShadowIds;
+uniform bool uShadowOccupancyOn;
+uniform sampler2D uShadowOccupancy; // RG32F, a texel per 16x16 map texels: r 1 where a caster stands, g the farthest one's depth (155)
 uniform float uShadowStrength;
+uniform float uMoonStrength;
+uniform vec3 uMoonDirection;
 uniform float uShadowDensity; // the [3d] shadow_density setting, scales the darkening
 uniform vec3 uShadowLight; // towards the sun, GL (x, y up, z)
 uniform float uShadowStep;
@@ -146,6 +162,24 @@ uniform vec2 uShadowAnchor;
 // x 1: a low card reads per pixel on the ground at height y; zw a door's
 // wall normal (x, z) (090).
 uniform vec4 uShadowGround;
+// 1: a card takes its whole verdict at the feet point (109): the people,
+// whose per-pixel read straddles a shadow edge over several pixels of travel.
+uniform float uShadowFeet;
+// 241: a composite sprite's group (the card's uniform, a walls.bin row's
+// vShadowGroup), -1: none; and the groups, a row each: (anchor count),
+// the group's walls.bin casters (row + 1), the feet anchors two a texel.
+uniform int uShadowGroup;
+uniform sampler2D uShadowGroups;
+flat in float vShadowGroup;
+// The casters a group read leaves out at the taps, beside selfId (241).
+vec4 gShadowExclude = vec4(0.0);
+uniform bool uCloudOn;
+uniform vec2 uCloudOffset;
+// The ground's baked light and sun shadow (157): 1 captures it into the
+// half-resolution buffer, 2 has the floor tiles sample it instead of the
+// per-pixel light loop and the 25-tap shadow disk.
+uniform int uGroundBakeMode;
+uniform sampler2D uGroundBakeMap;
 out vec4 outColor;
 // What a texel shines by itself for the glow (task 022): the colour a
 // full-bright texel keeps, premultiplied by its shown coverage; black
@@ -167,7 +201,39 @@ vec2 hexAt(vec3 w) {
 // between hex centers; the big ones smooth, from their own point, and a wall
 // (`facing`, normal n) takes more of one it faces.
 )" R"(
-vec4 pointLights(vec3 w, vec3 n, bool facing) {
+float cloudHash(vec2 cell) {
+    return fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+}
+float cloudNoise(vec2 lattice, float wrap) {
+    vec2 whole = floor(lattice), part = fract(lattice);
+    part = part * part * (3.0 - 2.0 * part);
+    float a = cloudHash(mod(whole, wrap)), b = cloudHash(mod(whole + vec2(1.0, 0.0), wrap));
+    float c = cloudHash(mod(whole + vec2(0.0, 1.0), wrap)), d = cloudHash(mod(whole + vec2(1.0, 1.0), wrap));
+    return mix(mix(a, b, part.x), mix(c, d, part.x), part.y);
+}
+// Desert cloud shadows: tune density, patch size, and their soft edge here.
+const float kCloudWorldPeriod = 48.0;
+const float kCloudPrimaryScale = 8.0;
+const float kCloudPrimaryWrap = 6.0;
+const float kCloudDetailScale = 4.0;
+const float kCloudDetailWrap = 12.0;
+const float kCloudCoverLow = 0.63;
+const float kCloudCoverHigh = 0.88;
+const float kCloudShadowStrength = 0.22;
+const float kCloudShadeInSunShadow = 1.0;
+float gCloudDarkening = 0.0;
+float gUncloudedLight = 1.0;
+float gSunOnlyLight = 1.0;
+float cloudAmbient(vec3 w) {
+    if (!uCloudOn) return 1.0;
+    vec2 t = w.xz + uCloudOffset;
+    float cover = cloudNoise(mod(t, kCloudWorldPeriod) / kCloudPrimaryScale, kCloudPrimaryWrap) * 0.65
+        + cloudNoise(mod(t + 17.0, kCloudWorldPeriod) / kCloudDetailScale, kCloudDetailWrap) * 0.35;
+    float cloudAmount = smoothstep(kCloudCoverLow, kCloudCoverHigh, cover);
+    return 1.0 - uShadowStrength * kCloudShadowStrength
+        * cloudAmount;
+}
+vec4 pointLights(vec3 w, vec3 n, bool facing, float ambientScale) {
     vec2 hex = hexAt(w);
     vec4 small = texture(uLightMap, (hex + 0.5) / 200.0);
     float sum = small.a;
@@ -188,9 +254,14 @@ vec4 pointLights(vec3 w, vec3 n, bool facing) {
         sum += c;
         colored += c * uLightColor[i].rgb;
     }
-    float light = min(max(uAmbient, 655.0 / 65536.0 + sum), 1.0);
+    float ambient = uAmbient * ambientScale;
+    float light = min(max(ambient, 655.0 / 65536.0 + sum), 1.0);
+    float uncloudedLight = min(max(uAmbient, 655.0 / 65536.0 + sum), 1.0);
+    gUncloudedLight = uncloudedLight;
+    gSunOnlyLight = uncloudedLight;
+    if (uCloudOn) gCloudDarkening = max(uncloudedLight - light, 0.0);
     vec3 tint = vec3(1.0);
-    if (sum > 0.0 && light > uAmbient) tint = (vec3(uAmbient) + (light - uAmbient) * colored / sum) / light;
+    if (sum > 0.0 && light > ambient) tint = (vec3(ambient) + (light - ambient) * colored / sum) / light;
     // A colour changes the hue, not how bright the engine lights it.
     tint = min(tint / max(dot(tint, vec3(0.299, 0.587, 0.114)), 0.001), vec3(1.6));
     return vec4(tint, light);
@@ -203,14 +274,17 @@ vec4 pointLights(vec3 w, vec3 n, bool facing) {
 // every tile joint and around every window.
 vec3 gFaceCross;
 vec4 sceneLighting() {
-    if (uLightMode == 1) return pointLights(vWorld, vec3(0.0, 1.0, 0.0), false);
+    if (uLightMode == 1) return pointLights(vWorld, vec3(0.0, 1.0, 0.0), false, cloudAmbient(vWorld));
     if (uLightMode == 2) {
         if (vFullLight > 0.75) return vec4(1.0);
         vec3 n = normalize(gFaceCross);
         if (dot(n, uTowardCamera) < 0.0) n = -n;
-        return pointLights(vWorld, n, true);
+        return pointLights(vWorld, n, true, cloudAmbient(vWorld));
     }
-    if (uLightMode == 3) return pointLights(vec3(uLightAnchor.x, 0.0, uLightAnchor.y), vec3(0.0, 1.0, 0.0), false);
+    if (uLightMode == 3) {
+        vec3 anchor = vec3(uLightAnchor.x, 0.0, uLightAnchor.y);
+        return pointLights(anchor, vec3(0.0, 1.0, 0.0), false, cloudAmbient(anchor));
+    }
     if (uLightMode == 4) return vec4(vec3(1.0), uLightValue);
     return vec4(1.0);
 }
@@ -277,7 +351,7 @@ float shadowTexelDiff(vec3 p, ivec2 texel, vec2 slope, float selfId) {
     vec2 size = vec2(textureSize(uShadowMap, 0));
     if (any(lessThan(texel, ivec2(0))) || any(greaterThanEqual(texel, ivec2(size)))) return -1.0;
     float id = texelFetch(uShadowIds, texel, 0).r * 1024.0;
-    if (id > 0.5 && abs(id - selfId) < 0.5) return -1.0;
+    if (id > 0.5 && (abs(id - selfId) < 0.5 || any(lessThan(abs(gShadowExclude - id), vec4(0.5))))) return -1.0;
     float receiver = p.z + dot(slope, (vec2(texel) + 0.5) / size - p.xy);
     return receiver - texelFetch(uShadowMap, texel, 0).r;
 }
@@ -332,6 +406,45 @@ float shadowAxisStretch(vec3 t) {
     float along = dot(t, uShadowLight);
     return 1.0 / max(sqrt(max(1.0 - along * along, 0.0)), 0.25);
 }
+// Whether the disk of taps (and the ground walk to each) can reach no caster
+// texel at all (155): every tap then reads the cleared far depth, none is a
+// hit, and the coverage is 0 without a single map fetch. The disk lies inside
+// the square of its four corners and the map is orthographic, so the map
+// rectangle it covers follows from the two axes alone; the occupancy texture
+// says per 16x16 block whether the filled map holds anything there. Anything
+// unsure (the map's edge, a receiver near the far plane, a wide rectangle)
+// answers "no" and takes the full loop, so the result never changes.
+// Also: when every caster in reach stands farther from the ground than
+// uShadowContact, no tap of the ground walk can fall in the contact band
+// (blocker nearer than the receiver by more than the bias and at most
+// contact), so the walk's four extra reads per tap decide nothing.
+// 0: the full loop, 1: nothing in reach (coverage 0), 2: the loop without
+// the walk.
+int shadowDiskReach(vec3 base, vec3 a1, vec3 a2) {
+    if (!uShadowOccupancyOn) return 0;
+    vec4 c = uShadowMatrix * vec4(base, 1.0);
+    vec3 m = c.xyz / c.w * 0.5 + 0.5;
+    vec3 reach = (abs((uShadowMatrix * vec4(a1, 0.0)).xyz) + abs((uShadowMatrix * vec4(a2, 0.0)).xyz)) * 0.5;
+    if (m.z + reach.z + 0.05 >= 0.95 || m.z - reach.z - 0.05 <= 0.0) return 0;
+    vec2 size = vec2(textureSize(uShadowMap, 0));
+    vec2 lo = m.xy - reach.xy - 2.0 / size;
+    vec2 hi = m.xy + reach.xy + 2.0 / size;
+    if (lo.x < 0.0 || lo.y < 0.0 || hi.x >= 1.0 || hi.y >= 1.0) return 0;
+    ivec2 b0 = ivec2(lo * size) / 16;
+    ivec2 b1 = ivec2(hi * size) / 16;
+    if (b1.x - b0.x > 3 || b1.y - b0.y > 3) return 0;
+    float farthest = 0.0;
+    for (int y = b0.y; y <= b1.y; y++) {
+        for (int x = b0.x; x <= b1.x; x++) {
+            vec2 block = texelFetch(uShadowOccupancy, ivec2(x, y), 0).rg;
+            if (block.x > 0.5) farthest = max(farthest, block.y);
+        }
+    }
+    if (farthest == 0.0) return 1;
+    // The receiver's depth at a tap is the center's within the disk's reach,
+    // plus the slope term (at most 16 per uv, a texel away: 0.002).
+    return farthest + uShadowContact + 0.004 < m.z - reach.z ? 2 : 0;
+}
 float shadowCoverage(vec3 base, vec3 t1, vec3 t2, vec2 slope, float selfId) {
     float contact = uShadowContact;
     float sum = 0.0;
@@ -339,10 +452,13 @@ float shadowCoverage(vec3 base, vec3 t1, vec3 t2, vec2 slope, float selfId) {
     bool ground = abs(cross(t1, t2).y) > 0.5;
     vec3 a1 = t1 * (ground ? 1.0 : shadowAxisStretch(t1)) * uShadowStep;
     vec3 a2 = t2 * (ground ? 1.0 : shadowAxisStretch(t2)) * uShadowStep;
+    int diskReach = shadowDiskReach(base, a1, a2);
+    if (diskReach == 1) return 0.0;
+    bool walk = ground && diskReach != 2;
     for (int i = 0; i < 25; i++) {
         vec3 q = base + a1 * kShadowTaps[i].x + a2 * kShadowTaps[i].y;
         bool reached = true;
-        for (int k = 0; k <= 3 && i > 0 && ground; k++) {
+        for (int k = 0; k <= 3 && i > 0 && walk; k++) {
             float on = shadowTapDiff(mix(base, q, float(k) * 0.25), slope, selfId);
             if (on > uShadowBias && on <= contact) {
                 reached = false;
@@ -403,7 +519,27 @@ bool seenThroughCaster(vec3 p) {
     if (behind > uShadowContact || front < -32.0 * uShadowBias) return false;
     return shadowCasterId(p) < 0.5 && shadowCasterId(p + v * shaded) > 0.5;
 }
+// A composite sprite shades as one (241, the owner's rule): the group
+// standing on a plane in shadow with one piece in the shadow is shaded
+// whole. The darkest of its pieces' feet verdicts (each read as
+// sunShadowAtAnchor reads one), the group's own walls.bin casters left out
+// at the taps, or a piece's feet in another piece's shadow would shade
+// the whole group at every hour.
+float groupShadow(int g) {
+    int anchors = int(texelFetch(uShadowGroups, ivec2(0, g), 0).x + 0.5);
+    gShadowExclude = texelFetch(uShadowGroups, ivec2(1, g), 0);
+    vec2 slope = shadowPlaneSlope(vec3(0.0, 1.0, 0.0));
+    float verdict = 0.0;
+    for (int i = 0; i < anchors && verdict < 0.5; i++) {
+        vec4 pair = texelFetch(uShadowGroups, ivec2(2 + i / 2, g), 0);
+        vec2 a = (i % 2) == 0 ? pair.xy : pair.zw;
+        verdict = step(0.5, shadowCoverage(vec3(a.x, 0.12, a.y), vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), slope, 0.0));
+    }
+    gShadowExclude = vec4(0.0);
+    return verdict;
+}
 float sunShadow(float selfId) {
+    if (vShadowGroup > -0.5) return groupShadow(int(vShadowGroup + 0.5));
     vec3 n = shadowFaceNormal();
     // A face turned away from the sun is in its own shadow: no map lookup,
     // the shaded value (082). This is what striped the walls before: half of
@@ -447,7 +583,8 @@ float sunShadow(float selfId) {
     else if (coverage > 0.0 && seenThroughCaster(vWorld)) coverage = 0.0;
     return coverage;
 }
-// The whole sprite darkens at its feet (082 round 6, deliberately reversing
+)"
+R"(// The whole sprite darkens at its feet (082 round 6, deliberately reversing
 // 063's per-pixel read): one factor at the card's bottom center, lifted a
 // little off the ground, the disk spread in the ground plane. The sprite's
 // own number is excluded at the taps, else it would shadow itself at the
@@ -477,14 +614,39 @@ bool cardTurned() {
     return dot(w, uShadowLight) <= 0.001;
 }
 float sunShadowCard(float selfId) {
+    if (uShadowGroup >= 0) return groupShadow(uShadowGroup);
     if (cardTurned()) return 1.0;
-    if (uShadowGround.x < 0.5) return sunShadowAtAnchor(selfId);
-    vec3 g = vWorld;
-    vec3 toward = towardViewer();
-    if (toward.y > 0.01) g -= toward * ((vWorld.y - uShadowGround.y) / toward.y);
-    g.y = uShadowGround.y;
-    vec2 slope = shadowPlaneSlope(vec3(0.0, 1.0, 0.0));
-    return shadowCoverage(g, vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), slope, selfId);
+    if (uShadowGround.x > 0.5) {
+        vec3 g = vWorld;
+        vec3 toward = towardViewer();
+        if (toward.y > 0.01) g -= toward * ((vWorld.y - uShadowGround.y) / toward.y);
+        g.y = uShadowGround.y;
+        vec2 slope = shadowPlaneSlope(vec3(0.0, 1.0, 0.0));
+        return shadowCoverage(g, vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), slope, selfId);
+    }
+    // The feet-verdict cards keep their whole verdict at the feet (090,
+    // 109): the people, and a standing body taller than half a wall. The
+    // per-pixel read straddles a shadow edge over several pixels of travel,
+    // a walker came out half dark, and the read left lit contour gaps
+    // between a figure in shadow and its shadow (082 round 6).
+    if (uShadowFeet > 0.5) return sunShadowAtAnchor(selfId);
+    // A standing card reads per pixel at its own place and height on its own
+    // plane (063's read, now on 090's compare), so a shadow edge crosses the
+    // card where the caster crosses it, as it crosses the floor and the
+    // walls: the trough beside a fence's shadow stays lit, the barrel inside
+    // a shadow darkens to its own share. A billboard has no sun side: no
+    // face test, the map decides at every hour. A card that casts is
+    // coplanar with its own map texels, and the receiver-plane compare reads
+    // them equal: nothing shadows itself.
+    vec3 n = normalize(gFaceCross);
+    if (dot(n, towardViewer()) < 0.0) n = -n;
+    vec3 t1, t2;
+    shadowFaceBasis(n, t1, t2);
+    float coverage = shadowCoverage(vWorld, t1, t2, shadowPlaneSlope(n), selfId);
+    // The upright face's ramp (090): the disk's edge is a long ramp where
+    // the sun grazes the plane; a third as wide, round the same middle.
+    if (abs(n.y) < 0.5) coverage = clamp((coverage - 0.5) * 3.0 + 0.5, 0.0, 1.0);
+    return coverage;
 }
 // Whose own texels count as empty for this draw: the wall pieces carry their
 // object row in the vertices, everything else reads the uniform (0: nobody).
@@ -532,24 +694,38 @@ float shadowDarken(float light) {
         if (texels <= 8.0) return 0.8;
         return 0.95;
     }
+    float cloudDarkening = (uShadowOn && uCloudOn) ? gCloudDarkening : 0.0;
+    float solarFactor = 1.0;
     if (uShadowOn && uShadowStrength > 0.0) {
+        // Keep cloud ambient darkening additive when a caster shadows the
+        // fragment: solar attenuation acts on the unclouded base, then the
+        // same cloud delta is applied once. This preserves solar-shadow
+        // contrast while retaining cloud shade in the overlap.
+        light += cloudDarkening;
         if (uLightMode == 1 || uLightMode == 2) {
             // The ground and the walls: crisp shadows, even inside, the flat
             // shaded value on the faces the sun does not hit (082). 0.35 by
             // the owner's eye (082 round 2): 0.425 read too saturated; the
             // [3d] shadow_density setting scales it, 0 turns the cast
             // shadows off.
-            light *= 1.0 - uShadowStrength * uShadowDensity * 0.35 * sunShadow(selfId);
+            solarFactor = 1.0 - uShadowStrength * uShadowDensity * 0.35 * sunShadow(selfId);
+            light *= solarFactor;
         } else if (uLightMode == 3) {
             // A sprite darkens whole at its feet (082 round 6): the old
             // per-pixel read (063) left lit contour gaps between a character
-            // in shadow and its shadow. A low card is ground and darkens as
-            // the ground does (090).
-            float density = uShadowGround.x > 0.5 || cardTurned() ? 0.35 : 0.3;
-            light *= 1.0 - uShadowStrength * uShadowDensity * density * sunShadowCard(selfId);
+            // in shadow and its shadow. A card lying on the ground darkens
+            // as the ground does (090). The ground, a turned card and a
+            // per-pixel card read like the walls (0.35), so a shadow edge
+            // runs off the floor onto a card without a step; the feet
+            // verdict keeps 0.3, a whole body darkens lighter than the
+            // ground and keeps its read (109).
+            float density = uShadowFeet > 0.5 && uShadowGround.x <= 0.5 && !cardTurned() ? 0.3 : 0.35;
+            solarFactor = 1.0 - uShadowStrength * uShadowDensity * density * sunShadowCard(selfId);
+            light *= solarFactor;
         }
     }
-    return light;
+    gSunOnlyLight = gUncloudedLight * solarFactor;
+    return max(light - cloudDarkening, 0.0);
 }
 )"
 R"(// _intensity_mask_buf_to_buf: inside the egg a nonzero mask value is the
@@ -616,6 +792,11 @@ void main() {
             || dot(uClipPlane2.xy, vWorldXZ) + uClipPlane2.z < -0.00001
             || dot(uClipPlane3.xy, vWorldXZ) + uClipPlane3.z < -0.00001) discard;
     }
+    if (uRoofClip.y > 0.5 && vWorld.y > uRoofClip.x) {
+        vec2 square = floor(vWorld.xz + 50.0);
+        if (square == clamp(square, vec2(0.0), vec2(99.0))
+            && texelFetch(uRoofGrid, ivec2(square), 0).r > 0.5) discard;
+    }
     if (uTextured == 0) {
         outColor = uColor;
         outEmissive = vec4(0.0);
@@ -634,6 +815,16 @@ void main() {
         // (082 round 5). The scene's own draws leave the attribute at 0 and
         // discard as always.
         if (vShadowSolid < 0.5 && texel.a < uCutoff && (uShadowPass == 0 || !shadowArtSolid())) discard;
+        if (uGroundBakeMode == 1) {
+            // The ground bake pass (157): the plane's light and sun shadow at
+            // half resolution, alpha already darkened, for the floor tiles to
+            // sample instead of the per-pixel light loop and the shadow disk.
+            vec4 captured = sceneLighting();
+            captured.a = shadowDarken(captured.a);
+            outColor = captured;
+            outEmissive = vec4(0.0);
+            return;
+        }
         // Smooth magnified native art only in the fly view. Keep the nearest
         // texel's alpha: it carries material IDs, transparency and pick data.
         if (uCloseupFilter != 0 && uPick == 0 && uTranslucent == 0) {
@@ -694,8 +885,17 @@ void main() {
             outColor.a = 1.0;
             // _dark_trans_buf_to_buf: the engine darkens a texel by its light in
             // 128 steps, on its 5-bit colour rounded down (setIntensityTableColor).
-            vec4 lit = fullBright ? vec4(1.0) : sceneLighting();
-            if (!effectCore) lit.a = shadowDarken(lit.a);
+            vec4 lit;
+            if (uGroundBakeMode == 2) {
+                // The floor tiles (157): the light and shadow baked this frame
+                // at half resolution, alpha already darkened.
+                vec2 bakeUv = (gl_FragCoord.xy - uViewport.xy) / uViewport.zw;
+                vec4 baked = texture(uGroundBakeMap, bakeUv);
+                lit = vec4(baked.rgb, baked.a);
+            } else {
+                lit = fullBright ? vec4(1.0) : sceneLighting();
+                if (!effectCore) lit.a = shadowDarken(lit.a);
+            }
             if (uShadowDebug == 2) {
                 // The face test itself: white where the sun hits the face and
                 // the map is read, black where the face takes the flat
@@ -743,14 +943,16 @@ void main() {
                 // (090, tools/shadow_seams.py). A face turned from the sun
                 // (the flat shaded value, no cast shadow) reads blue: lit
                 // ground seen between two shaded fence rails is light, not a
-                // hole in a shadow. A standing body or plant (a person, a
-                // tree: a live card darkened whole at its feet, not a door
-                // in its wall) reads green: the metric leaves its own pixels
-                // out, its outline against a lit wall is not a seam, and still
-                // counts the ground round it (090).
+                // hole in a shadow. A standing body (a person, a tree: a
+                // card with the whole verdict at its feet, not a door in its
+                // wall) reads green: the metric leaves its own pixels out,
+                // its outline against a lit wall is not a seam, and still
+                // counts the ground round it (090). Every other standing
+                // card reads per pixel since 109 and stays in the factor
+                // read.
                 outEmissive = vec4(0.0);
                 if (uLightMode == 3 && uShadowGround.x < 0.5
-                    && dot(uShadowGround.zw, uShadowGround.zw) < 0.5) {
+                    && dot(uShadowGround.zw, uShadowGround.zw) < 0.5 && uShadowFeet > 0.5) {
                     outColor = vec4(0.0, 1.0, 0.0, 1.0);
                     return;
                 }
@@ -761,9 +963,32 @@ void main() {
                 outColor = !receiver ? vec4(1.0, 0.0, 1.0, 1.0) : turned ? vec4(0.0, 0.0, 1.0, 1.0) : vec4(vec3(lit.a), 1.0);
                 return;
             }
+)" R"(
             float steps = floor(lit.a * 128.0 + 0.0001);
-            if (steps < 128.0) outColor.rgb = floor(floor(outColor.rgb * 31.0 + 0.5) * steps / 128.0) / 31.0;
+            if (uShadowOn && uCloudOn && uGroundBakeMode != 2 && (uLightMode == 1 || uLightMode == 2)) {
+                float baseSteps = floor(gUncloudedLight * 128.0 + 0.0001);
+                float cloudSteps = floor(max(gUncloudedLight - gCloudDarkening, 0.0) * 128.0 + 0.0001);
+                float sunSteps = floor(gSunOnlyLight * 128.0 + 0.0001);
+                vec3 color5 = floor(outColor.rgb * 31.0 + 0.5);
+                vec3 cloudColor5 = floor(color5 * cloudSteps / 128.0);
+                vec3 sunColor5 = floor(color5 * sunSteps / 128.0);
+                vec3 baseColor5 = floor(color5 * baseSteps / 128.0);
+                vec3 cloudLoss5 = max(baseColor5 - cloudColor5, 0.0);
+                vec3 combinedColor5 = clamp(sunColor5 - floor(cloudLoss5 * kCloudShadeInSunShadow), 0.0, 31.0);
+                outColor.rgb = combinedColor5 / 31.0;
+            } else if (steps < 128.0) {
+                outColor.rgb = floor(floor(outColor.rgb * 31.0 + 0.5) * steps / 128.0) / 31.0;
+            }
             outColor.rgb *= lit.rgb;
+            if (uMoonStrength > 0.0 && (uLightMode == 1 || uLightMode == 2 || uLightMode == 3)) {
+                vec3 n = uLightMode == 1 ? vec3(0.0, 1.0, 0.0)
+                    : uLightMode == 2 ? shadowPaintedNormal(shadowFaceNormal()) : vec3(0.0, 1.0, 0.0);
+                float direct = max(dot(n, uMoonDirection), 0.0);
+                float tint = uMoonStrength * 0.75;
+                outColor.rgb *= 1.0 - uMoonStrength * (1.27 - 0.60 * direct);
+                outColor.rgb *= mix(vec3(1.0), vec3(0.72, 0.84, 1.0), tint);
+                outColor.rgb *= 1.0 + uMoonStrength * 0.3 * direct;
+            }
             if (uEgg != 0) {
                 float m = eggShare();
                 if (m > 0.0) outColor.a *= m / 128.0;
@@ -835,6 +1060,8 @@ int gSceneGlassGrayLocation = -1;
 int gScenePickLocation = -1;
 int gSceneClipEnabledLocation = -1;
 int gSceneClipPlaneLocations[4] = { -1, -1, -1, -1 };
+int gSceneRoofClipLocation = -1;
+int gSceneRoofGridLocation = -1;
 int gSceneEggLocation = -1;
 int gSceneEggMaskLocation = -1;
 int gSceneEggRectLocation = -1;
@@ -863,7 +1090,11 @@ int gSceneShadowOnLocation = -1;
 int gSceneShadowMatrixLocation = -1;
 int gSceneShadowMapLocation = -1;
 int gSceneShadowIdsLocation = -1;
+int gSceneShadowOccupancyLocation = -1;
+int gSceneShadowOccupancyOnLocation = -1;
 int gSceneShadowStrengthLocation = -1;
+int gSceneMoonStrengthLocation = -1;
+int gSceneMoonDirectionLocation = -1;
 int gSceneShadowDensityLocation = -1;
 int gSceneShadowLightLocation = -1;
 int gSceneShadowStepLocation = -1;
@@ -875,6 +1106,13 @@ int gSceneShadowSelfFromVertexLocation = -1;
 int gSceneShadowSelfIdLocation = -1;
 int gSceneShadowAnchorLocation = -1;
 int gSceneShadowGroundLocation = -1;
+int gSceneShadowFeetLocation = -1;
+int gSceneShadowGroupLocation = -1;
+int gSceneShadowGroupsLocation = -1;
+int gSceneCloudOnLocation = -1;
+int gSceneCloudOffsetLocation = -1;
+int gSceneGroundBakeModeLocation = -1;
+int gSceneGroundBakeMapLocation = -1;
 
 bool createSceneShader(std::string* error)
 {
@@ -919,6 +1157,8 @@ bool createSceneShader(std::string* error)
     gSceneClipPlaneLocations[1] = glGetUniformLocation(gSceneProgram, "uClipPlane1");
     gSceneClipPlaneLocations[2] = glGetUniformLocation(gSceneProgram, "uClipPlane2");
     gSceneClipPlaneLocations[3] = glGetUniformLocation(gSceneProgram, "uClipPlane3");
+    gSceneRoofClipLocation = glGetUniformLocation(gSceneProgram, "uRoofClip");
+    gSceneRoofGridLocation = glGetUniformLocation(gSceneProgram, "uRoofGrid");
     gSceneEggLocation = glGetUniformLocation(gSceneProgram, "uEgg");
     gSceneEggMaskLocation = glGetUniformLocation(gSceneProgram, "uEggMask");
     gSceneEggRectLocation = glGetUniformLocation(gSceneProgram, "uEggRect");
@@ -944,10 +1184,16 @@ bool createSceneShader(std::string* error)
     gSceneSeeThroughObjectsLocation = glGetUniformLocation(gSceneProgram, "uSeeThroughObjects");
     gSceneEggPassLocation = glGetUniformLocation(gSceneProgram, "uEggPass");
     gSceneShadowOnLocation = glGetUniformLocation(gSceneProgram, "uShadowOn");
+    gSceneGroundBakeModeLocation = glGetUniformLocation(gSceneProgram, "uGroundBakeMode");
+    gSceneGroundBakeMapLocation = glGetUniformLocation(gSceneProgram, "uGroundBakeMap");
     gSceneShadowMatrixLocation = glGetUniformLocation(gSceneProgram, "uShadowMatrix");
     gSceneShadowMapLocation = glGetUniformLocation(gSceneProgram, "uShadowMap");
     gSceneShadowIdsLocation = glGetUniformLocation(gSceneProgram, "uShadowIds");
+    gSceneShadowOccupancyLocation = glGetUniformLocation(gSceneProgram, "uShadowOccupancy");
+    gSceneShadowOccupancyOnLocation = glGetUniformLocation(gSceneProgram, "uShadowOccupancyOn");
     gSceneShadowStrengthLocation = glGetUniformLocation(gSceneProgram, "uShadowStrength");
+    gSceneMoonStrengthLocation = glGetUniformLocation(gSceneProgram, "uMoonStrength");
+    gSceneMoonDirectionLocation = glGetUniformLocation(gSceneProgram, "uMoonDirection");
     gSceneShadowDensityLocation = glGetUniformLocation(gSceneProgram, "uShadowDensity");
     gSceneShadowLightLocation = glGetUniformLocation(gSceneProgram, "uShadowLight");
     gSceneShadowStepLocation = glGetUniformLocation(gSceneProgram, "uShadowStep");
@@ -959,6 +1205,11 @@ bool createSceneShader(std::string* error)
     gSceneShadowSelfIdLocation = glGetUniformLocation(gSceneProgram, "uShadowSelfId");
     gSceneShadowAnchorLocation = glGetUniformLocation(gSceneProgram, "uShadowAnchor");
     gSceneShadowGroundLocation = glGetUniformLocation(gSceneProgram, "uShadowGround");
+    gSceneShadowFeetLocation = glGetUniformLocation(gSceneProgram, "uShadowFeet");
+    gSceneShadowGroupLocation = glGetUniformLocation(gSceneProgram, "uShadowGroup");
+    gSceneShadowGroupsLocation = glGetUniformLocation(gSceneProgram, "uShadowGroups");
+    gSceneCloudOnLocation = glGetUniformLocation(gSceneProgram, "uCloudOn");
+    gSceneCloudOffsetLocation = glGetUniformLocation(gSceneProgram, "uCloudOffset");
     if (gSceneMvpLocation < 0 || gSceneTextureLocation < 0
         || gSceneTexturedLocation < 0 || gSceneCloseupFilterLocation < 0 || gSceneColorLocation < 0 || gSceneCutoffLocation < 0
         || gSceneDepthAtLocation < 0 || gSceneTranslucentLocation < 0 || gSceneTintLocation < 0
@@ -971,12 +1222,20 @@ bool createSceneShader(std::string* error)
         || gSceneLightOriginLocation < 0 || gSceneLightAnchorLocation < 0 || gSceneAmbientLocation < 0
         || gSceneHexUnitLocation < 0 || gSceneTowardCameraLocation < 0 || gSceneLightCountLocation < 0
         || gSceneLightPosLocation < 0 || gSceneLightColorLocation < 0 || gSceneLightWindowLocation < 0
+        || gSceneMoonStrengthLocation < 0 || gSceneMoonDirectionLocation < 0
+        || gSceneCloudOnLocation < 0 || gSceneCloudOffsetLocation < 0
+        || gSceneGroundBakeModeLocation < 0 || gSceneGroundBakeMapLocation < 0
         || gSceneClipEnabledLocation < 0
         || gSceneClipPlaneLocations[0] < 0 || gSceneClipPlaneLocations[1] < 0
-        || gSceneClipPlaneLocations[2] < 0 || gSceneClipPlaneLocations[3] < 0) {
+        || gSceneClipPlaneLocations[2] < 0 || gSceneClipPlaneLocations[3] < 0
+        || gSceneRoofClipLocation < 0 || gSceneRoofGridLocation < 0) {
         *error = "static floor shader uniforms are missing";
         return false;
     }
+    // 241: no card is in a composite sprite group until a draw says so (an
+    // int uniform starts at 0, group 0).
+    glUseProgram(gSceneProgram);
+    glUniform1i(gSceneShadowGroupLocation, -1);
     return true;
 }
 
@@ -998,6 +1257,8 @@ void destroySceneShader()
     gSceneLightOriginLocation = -1;
     gSceneClipEnabledLocation = -1;
     for (int index = 0; index < 4; index++) gSceneClipPlaneLocations[index] = -1;
+    gSceneRoofClipLocation = -1;
+    gSceneRoofGridLocation = -1;
 }
 
 } // namespace internal

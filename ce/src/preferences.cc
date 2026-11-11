@@ -27,6 +27,7 @@
 #include "scripts.h"
 #include "settings.h"
 #include "scene/options_panel.h"
+#include "scene/text_capture.h"
 #include "svga.h"
 #include "text_font.h"
 #include "text_object.h"
@@ -670,6 +671,7 @@ static int preferencesGetRangeOptionLabelX(int optionIndex, int valuesCount, con
 // 0x491A68 UpdateThing
 static void _UpdateThing(int index)
 {
+    ScopedTextCaptureTag legacyControlText(TextCaptureTag::PreferencesControl);
     fontSetCurrent(101);
 
     PreferenceDescription* meta = &(gPreferenceDescriptions[index]);
@@ -883,6 +885,10 @@ int _SavePrefs(bool save)
 
     if (save) {
         settingsSave();
+        // 209: the display mode takes effect the moment the menu closes. The
+        // resolution and the interface scale still need the restart the panel
+        // notes on their rows.
+        applyWindowModeLive();
     }
 
     return 0;
@@ -1110,7 +1116,7 @@ static int preferencesWindowInit()
     fontSetCurrent(104);
 
     messageItemText = getmsg(&gPreferencesMessageList, &gPreferencesMessageListItem, 100);
-    fontDrawText(gPreferencesWindowBuffer + PREFERENCES_WINDOW_WIDTH * 10 + 74, messageItemText, PREFERENCES_WINDOW_WIDTH, PREFERENCES_WINDOW_WIDTH, COLOR_DARK_YELLOW);
+    fontDrawText(gPreferencesWindowBuffer + PREFERENCES_WINDOW_WIDTH * 10 + 10, messageItemText, PREFERENCES_WINDOW_WIDTH, PREFERENCES_WINDOW_WIDTH, COLOR_DARK_YELLOW);
 
     fontSetCurrent(103);
 
@@ -1229,7 +1235,7 @@ static int preferencesWindowInit()
         BUTTON_FLAG_TRANSPARENT);
     if (btn != -1) {
         buttonSetCallbacks(btn, _gsound_red_butt_press, _gsound_red_butt_release);
-        legacyButtons.push_back({ btn, 450 });
+        legacyButtons.push_back({ btn, gOptionsPanel->footerButtonTop() });
     }
 
     // DONE
@@ -1248,7 +1254,7 @@ static int preferencesWindowInit()
         BUTTON_FLAG_TRANSPARENT);
     if (btn != -1) {
         buttonSetCallbacks(btn, _gsound_red_butt_press, _gsound_red_butt_release);
-        legacyButtons.push_back({ btn, 450 });
+        legacyButtons.push_back({ btn, gOptionsPanel->footerButtonTop() });
     }
 
     // CANCEL
@@ -1267,7 +1273,7 @@ static int preferencesWindowInit()
         BUTTON_FLAG_TRANSPARENT);
     if (btn != -1) {
         buttonSetCallbacks(btn, _gsound_red_butt_press, _gsound_red_butt_release);
-        legacyButtons.push_back({ btn, 450 });
+        legacyButtons.push_back({ btn, gOptionsPanel->footerButtonTop() });
     }
 
     std::vector<int> panelButtons;
@@ -1334,8 +1340,20 @@ int doPreferences(bool animated)
     mainMenuShowSubscreen(animated);
 
     int rc = -1;
-    if (devtools::preferencesSnapshotRequested() && !devtools::preferencesProbeRequested()) {
-        if (gOptionsPanel != nullptr) gOptionsPanel->showPanelForSnapshot(devtools::preferencesSnapshotAtBottom());
+    if (devtools::scriptedInputActive() && gOptionsPanel != nullptr) {
+        devtools::scriptedInputBegin();
+        gOptionsPanel->showDropdownForSnapshot("resolution");
+        gOptionsPanel->handleKey(KEY_ESCAPE);
+        gOptionsPanel->draw();
+        gOptionsPanel->refresh();
+    }
+    if (devtools::preferencesSnapshotRequested() && !devtools::preferencesProbeRequested() && !devtools::scriptedInputActive()) {
+        if (gOptionsPanel != nullptr) {
+            gOptionsPanel->showPanelForSnapshot(devtools::preferencesSnapshotAtBottom());
+            if (devtools::preferencesSnapshotDropdown()[0] != '\0') {
+                gOptionsPanel->showDropdownForSnapshot(devtools::preferencesSnapshotDropdown());
+            }
+        }
         renderPresent();
         devtools::takeSnapshot();
         rc = 1;
@@ -1343,6 +1361,7 @@ int doPreferences(bool animated)
     while (rc == -1) {
         sharedFpsLimiter.mark();
 
+        devtools::scriptedInputPump();
         int eventCode = inputGetInput();
         eventCode = devtools::preferencesProbeNextEvent(eventCode, gOptionsPanel.get(), gPreferencesWindow,
             static_cast<int>(gPreferencesCombatDifficulty1));
@@ -1351,6 +1370,8 @@ int doPreferences(bool animated)
             gOptionsPanel->handleWheel();
         } else if (gOptionsPanel != nullptr && gOptionsPanel->handleKey(eventCode)) {
             // The options panel consumed a navigation or value key.
+        } else if (gOptionsPanel != nullptr && gOptionsPanel->handleEvent(eventCode)) {
+            // The options panel consumed a row click or dropdown selection.
         } else switch (eventCode) {
         case KEY_RETURN:
         case KEY_UPPERCASE_P:
@@ -1388,8 +1409,6 @@ int doPreferences(bool animated)
                 rc = 0;
             } else if (eventCode >= 505 && eventCode <= 524) {
                 _DoThing(eventCode);
-            } else if (gOptionsPanel != nullptr) {
-                gOptionsPanel->handleEvent(eventCode);
             }
             break;
         }
@@ -1399,6 +1418,7 @@ int doPreferences(bool animated)
         }
 
         renderPresent();
+        if (devtools::scriptedInputTakeSnapshotRequest()) devtools::takeSnapshot();
         sharedFpsLimiter.throttle();
     }
 

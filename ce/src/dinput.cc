@@ -1,7 +1,9 @@
 #include "dinput.h"
 
 #include "debug.h"
+#include "devtools/preferences_probe.h"
 #include "settings.h"
+#include "mouse.h"
 #include "sfall_kb_helpers.h"
 #include "svga.h"
 #include "win32.h"
@@ -85,6 +87,7 @@ bool mouseDeviceInitMode()
     // Mouse sensitivity settings can only apply in relative mode.
 
     bool wantsRelativeMode = gProgramIsActive && (screenIsExclusiveFullscreen() || settings.screen.mouse_lock);
+    mouseResetAbsoluteSensitivityTracking();
 
     if (wantsRelativeMode) {
         mouseRelativeMode = true;
@@ -142,6 +145,7 @@ bool mouseDeviceGetData(MouseData* mouseState)
     }
     mouseState->buttons[0] = (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
     mouseState->buttons[1] = (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) != 0;
+    devtools::scriptedInputMouse(&mouseState->x, &mouseState->y, &mouseState->buttons[0], &mouseState->buttons[1]);
     mouseState->wheelX = gMouseWheelDeltaX;
     mouseState->wheelY = gMouseWheelDeltaY;
 
@@ -223,6 +227,7 @@ static void mouseDeviceMapWindowToLogicalPosition(int* x, int* y)
 
 void mouseDeviceRefreshWindowMapping()
 {
+    mouseResetAbsoluteSensitivityTracking();
     // When mouse is in "absolute mode" and scaling is > 1, we need to transform screen coordinates to game coordinates.
     // Cache the window sizes so we have them available in mouseDeviceMapWindowToLogicalPosition.
     // Note: if we add letterboxing or other more complex scaling, we'll have to account for it here.
@@ -251,6 +256,7 @@ void mouseDeviceSetLogicalPosition(int x, int y)
     int windowX = x * mouseWindowMappingWindowWidth / mouseWindowMappingLogicalWidth;
     int windowY = y * mouseWindowMappingWindowHeight / mouseWindowMappingLogicalHeight;
     SDL_WarpMouseInWindow(gSdlWindow, windowX, windowY);
+    mouseResetAbsoluteSensitivityTracking();
 }
 
 } // namespace fallout

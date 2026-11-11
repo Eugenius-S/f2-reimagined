@@ -106,9 +106,11 @@ struct SystemSettings {
 struct ScreenSettings {
     int resolution_x = 640;
     int resolution_y = 480;
+    int resolution_mode = 0;
     WindowMode windowed = WindowMode::Fullscreen;
     bool mouse_lock = false;
     int scale = 1;
+    double scale_factor = 1.0;
 };
 
 struct UISettings {
@@ -294,9 +296,10 @@ struct Scene3dSettings {
     bool lights = true;
     bool sun = true;
     bool shadows = true;
+    bool cloud_shadows = false;
     double shadow_pixel_size = 1.0; // 082: crisp by default, the knob softens
-    double shadow_density = 1.0; // scales the shadow darkening; 0 turns the cast shadows off
-    double sun_swing = 30.0; // degrees off vertical at dawn and dusk (082)
+    double shadow_density = 0.8; // scales the shadow darkening; 0 turns the cast shadows off
+    double sun_swing = 40.0; // degrees off vertical at dawn and dusk (082)
     bool glow = true;
     double glow_strength = 2.0;
     bool camera_rotation = false;
@@ -306,6 +309,9 @@ struct Scene3dSettings {
     double zoom_min = 0.5;
     double zoom_max = 2.0;
     bool clean_edges = true;
+    bool fps_counter = false;
+    bool frame_log = false; // 127: every frame's time to a CSV with a summary
+    double fps_limit = 0.0; // 157: the game view's frame pace; 0 (the default) removes the limit
 };
 
 struct MapperSettings {

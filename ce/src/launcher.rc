@@ -1,0 +1,5 @@
+#define IDI_LAUNCHER_ICON 1
+#define IDB_LAUNCHER_LOGO 201
+IDI_LAUNCHER_ICON ICON "launcher.ico"
+IDB_LAUNCHER_LOGO BITMAP "launcher_logo.bmp"
+1 24 "launcher.manifest"

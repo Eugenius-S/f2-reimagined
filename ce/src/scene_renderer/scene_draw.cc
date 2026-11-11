@@ -8,12 +8,15 @@
 
 #include "context.h"
 #include "gl_api.h"
+#include "perf.h"
 #include "post.h"
 #include "../scene/scene_overlay.h"
+#include "../scene/scene_view.h"
 #include "text_present.h"
 #include "scene_internal.h"
 #include "shadow.h"
 #include "static_scene.h"
+#include "sky.h"
 
 namespace fallout {
 namespace scene_renderer {
@@ -21,6 +24,56 @@ namespace scene_renderer {
 using namespace internal;
 
 namespace {
+
+// 157: the ground light's half-resolution bake. The plane's light and sun
+// shadow cost the scene's most expensive fragment work (the light loop and
+// the 25-tap shadow disk); once per frame they render into this buffer at a
+// quarter of the pixels and the floor tiles sample it instead.
+unsigned int gGroundBakeFbo = 0;
+unsigned int gGroundBakeTexture = 0;
+int gGroundBakeWidth = 0;
+int gGroundBakeHeight = 0;
+
+void destroyGroundBake()
+{
+    if (gContext != nullptr) {
+        if (gGroundBakeFbo != 0) glDeleteFramebuffers(1, &gGroundBakeFbo);
+        if (gGroundBakeTexture != 0) glDeleteTextures(1, &gGroundBakeTexture);
+    }
+    gGroundBakeFbo = 0;
+    gGroundBakeTexture = 0;
+    gGroundBakeWidth = 0;
+    gGroundBakeHeight = 0;
+}
+
+bool ensureGroundBake(int width, int height)
+{
+    if (width <= 0 || height <= 0) return false;
+    if (gGroundBakeFbo != 0 && gGroundBakeWidth == width && gGroundBakeHeight == height) return true;
+    destroyGroundBake();
+    while (glGetError() != 0) {
+    }
+    glGenTextures(1, &gGroundBakeTexture);
+    glBindTexture(kTexture2D, gGroundBakeTexture);
+    glTexImage2D(kTexture2D, 0, kRgba8, width, height, 0, kRGBA, kUnsignedByte, nullptr);
+    glTexParameteri(kTexture2D, kTextureMinFilter, kLinear);
+    glTexParameteri(kTexture2D, kTextureMagFilter, kLinear);
+    glTexParameteri(kTexture2D, kTextureWrapS, kClampToEdge);
+    glTexParameteri(kTexture2D, kTextureWrapT, kClampToEdge);
+    glGenFramebuffers(1, &gGroundBakeFbo);
+    glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, gGroundBakeFbo);
+    glFramebufferTexture2D(0x8D40 /* GL_FRAMEBUFFER */, 0x8CE0 /* GL_COLOR_ATTACHMENT0 */, kTexture2D, gGroundBakeTexture, 0);
+    const bool complete = glGetError() == 0
+        && glCheckFramebufferStatus(0x8D40 /* GL_FRAMEBUFFER */) == 0x8CD5 /* GL_FRAMEBUFFER_COMPLETE */;
+    glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, 0);
+    if (!complete) {
+        destroyGroundBake();
+        return false;
+    }
+    gGroundBakeWidth = width;
+    gGroundBakeHeight = height;
+    return true;
+}
 
 void drawStaticPreview(bool withWalls, bool withHero)
 {
@@ -45,6 +98,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
     glDepthFunc(kLess);
     glDepthMask(1);
     glDisable(kCullFace);
+    if (withWalls) drawSceneSky(static_cast<float>(width) / height, width, height, flying);
     if (withWalls) {
         glDisable(kBlend);
     } else {
@@ -63,6 +117,11 @@ void drawStaticPreview(bool withWalls, bool withHero)
     glUniform1i(gScenePickLocation, 0);
     glUniform1i(gSceneSeeThroughLocation, 0);
     glUniform1i(gSceneEggPassLocation, 0);
+    glUniform2f(gSceneRoofClipLocation, 0.0f, 0.0f);
+    // The roof cut (114) rides with the roofs: where they draw, a card's part
+    // above their plane hides as the game's roof picture hides it.
+    const bool roofsDrawn = withHero && staticSoloKeeps(-1);
+    auto roofClip = [&]() { glUniform2f(gSceneRoofClipLocation, roofClipHeight(), roofsDrawn ? 1.0f : 0.0f); };
     // The game shows the hero through the walls and scenery he stands behind,
     // inside its egg: they are drawn without the egg's part first, and that
     // part blended over the hero and what lies behind at the end.
@@ -73,7 +132,12 @@ void drawStaticPreview(bool withWalls, bool withHero)
     const bool lit = withHero && bindLight();
     // The sun's shadow map renders before the scene; the floor and the walls
     // sample it (uShadowOn). It restores the framebuffer and the viewport.
+    perfMark("sky_light");
     const bool shadowed = withWalls && bindStaticShadows(mvp);
+    perfMark("shadow");
+    // 172: the load chain's split of the first scene draw.
+    perfLoadMark("ff_shadow_done");
+    if (!withWalls) glUniform1i(gSceneCloudOnLocation, 0);
     glUniform1i(gSceneShadowOnLocation, shadowed ? 1 : 0);
     // Nobody's own texels count as empty, until a draw says otherwise (the
     // wall pieces take the number from their vertices, 082 round 6).
@@ -86,9 +150,11 @@ void drawStaticPreview(bool withWalls, bool withHero)
         if (lit && tile >= 0) setLightAnchor(tile);
     };
     auto shadowAtFeet = [&](float x, float z, bool ground = false, float groundY = 0.0f, float wallX = 0.0f,
-                            float wallZ = 0.0f) {
+                            float wallZ = 0.0f, bool feet = false, int group = -1) {
+        glUniform1i(gSceneShadowGroupLocation, group);
         glUniform2f(gSceneShadowAnchorLocation, x, z);
         glUniform4f(gSceneShadowGroundLocation, ground ? 1.0f : 0.0f, groundY, wallX, wallZ);
+        glUniform1f(gSceneShadowFeetLocation, feet ? 1.0f : 0.0f);
     };
     if (withWalls && gWallSeeThroughTexture != 0 && (wallEgg || lit)) {
         flushWallObjectTable();
@@ -96,10 +162,51 @@ void drawStaticPreview(bool withWalls, bool withHero)
         glBindTexture(kTexture2D, gWallSeeThroughTexture);
         glUniform1i(gSceneSeeThroughObjectsLocation, 2);
     }
+    // 241: no card is in a group until its draw says so.
+    glUniform1i(gSceneShadowGroupLocation, -1);
+    if (lit) bindShadowGroups(9);
     glActiveTexture(kTexture0);
     glUniform1i(gSceneTextureLocation, 0);
     glBindVertexArray(gFloorVao);
     glBindTexture(kTexture2D, gFloorTexture);
+
+    // 157: the ground's light and sun shadow bake at a quarter of the pixel
+    // work; the tiles below sample it (uGroundBakeMode 2) instead of running
+    // the light loop and the 25-tap shadow disk per pixel. Same geometry,
+    // same uniforms, half-sized viewport with the same origin, so both passes
+    // share one normalized space.
+    const bool bakeGround = lit && shadowed && gGroundBakeWidth >= 0
+        && SDL_getenv("F2CE_NO_BAKE") == nullptr
+        && ensureGroundBake(width / 2, height / 2);
+    int unit7Texture = 0;
+    if (bakeGround) {
+        int previousFbo = 0;
+        glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &previousFbo);
+        glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, gGroundBakeFbo);
+        glViewport(x, y, width / 2, height / 2);
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClear(kColorBufferBit);
+        glDepthMask(0);
+        glUniform1i(gSceneGroundBakeModeLocation, 1);
+        glUniform1f(gSceneCutoffLocation, -1.0f);
+        glUniform1i(gSceneTexturedLocation, 1);
+        glDrawArrays(kTriangles, 6,
+            (gFloorExtensionFirst > 0 ? gFloorExtensionFirst : gFloorVertexCount) - 6);
+        glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, previousFbo);
+        glViewport(x, y, width, height);
+        glDepthMask(1);
+        glUniform1f(gSceneCutoffLocation, 0.01f);
+        // The bake map rides unit 7 for this frame's floor draw; the binding
+        // restores right after the tiles (the roof grid owns the unit later in
+        // the frame, and the next frame's shadow pass must not see the bake).
+        glActiveTexture(kTexture0 + 7);
+        glGetIntegerv(0x8069 /* GL_TEXTURE_BINDING_2D */, &unit7Texture);
+        glBindTexture(kTexture2D, gGroundBakeTexture);
+        glUniform1i(gSceneGroundBakeMapLocation, 7);
+        glActiveTexture(kTexture0);
+    }
+    // 172: the load chain's split of the first scene draw.
+    perfLoadMark("ff_bake_done");
 
     // Nothing lies below the floor, so it is painted first and hides nothing
     // (the donor's game view): cards and solids take the depth of their hex
@@ -110,34 +217,66 @@ void drawStaticPreview(bool withWalls, bool withHero)
     glUniform1i(gSceneTexturedLocation, 0);
     glUniform1f(gSceneCutoffLocation, 0.01f);
     glUniform4f(gSceneColorLocation, 0.0f, 0.0f, 0.0f, 1.0f);
-    glDrawArrays(kTriangles, 0, 6);
+    // The map's empty floor fill belongs to the game camera. In flight, it
+    // would paint a black sheet over the sky where the map ends.
+    if (!flying) glDrawArrays(kTriangles, 0, 6);
     glDepthMask(flying ? 1 : 0);
     glUniform1i(gSceneTexturedLocation, 1);
     glUniform1f(gSceneCutoffLocation, 0.01f);
     glUniform1i(gSceneLightModeLocation, lit ? 1 : 0);
-    glDrawArrays(kTriangles, 6, gFloorVertexCount - 6);
+    if (bakeGround) glUniform1i(gSceneGroundBakeModeLocation, 2);
+    // The sea extensions sit past the tiles in the buffer; an older sidecar
+    // without them ends the buffer at the tiles (the count falls back so a
+    // version 6 floor.bin keeps its whole draw).
+    glDrawArrays(kTriangles, 6,
+        (gFloorExtensionFirst > 0 ? gFloorExtensionFirst : gFloorVertexCount) - 6);
+    if (bakeGround) {
+        glUniform1i(gSceneGroundBakeModeLocation, 0);
+        glActiveTexture(kTexture0 + 7);
+        glBindTexture(kTexture2D, unit7Texture);
+        glActiveTexture(kTexture0);
+    }
+    // The sea past the map's water edges (168): flight and turned views only
+    // (the game's own view stays pixel for pixel), and never cut by the clean
+    // map edges, whose whole point is where the map ends - the sea goes on.
+    // Flat colour: the water squares' own art is the sea's near-black, and a
+    // tile stretched over miles would read as grids.
+    if (gFloorExtensionCount > 0 && (flying || scene::cameraTurned())) {
+        glUniform1i(gSceneClipEnabledLocation, 0);
+        glUniform1i(gSceneTexturedLocation, 0);
+        glUniform4f(gSceneColorLocation, gFloorSeaColor[0], gFloorSeaColor[1], gFloorSeaColor[2], 1.0f);
+        glDrawArrays(kTriangles, gFloorExtensionFirst, gFloorExtensionCount);
+        glUniform1i(gSceneTexturedLocation, 1);
+        bindStaticMapClipUniforms();
+    }
     glDepthMask(1);
+    perfMark("floor");
 
     const bool withObjects = withHero && !gObjectDraws.empty() && gObjectVao != 0;
+    if (withObjects) cullStaticObjectDraws(mvp);
     if (withObjects) {
         // Flat objects lie on the floor in the engine's draw order: later ones
         // paint over earlier ones, and they hide nothing drawn after them.
         glDepthMask(0);
         glUniform1f(gSceneCutoffLocation, 0.5f);
+        roofClip();
+        if (roofsDrawn) bindRoofGrid(7);
         glBindVertexArray(gObjectVao);
         for (const ObjectDraw& draw : gObjectDraws) {
-            if (draw.pickOnly || !draw.flat || draw.tint[0] >= 0.0f) continue;
+            if (draw.pickOnly || draw.offView || !draw.flat || draw.tint[0] >= 0.0f) continue;
             lightSprite(draw.tile);
-            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ);
+            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
             glBindTexture(kTexture2D, draw.texture);
             glDrawArrays(kTriangles, draw.firstVertex, 6);
         }
         glDepthMask(1);
     }
 
+    perfMark("flat_objects");
     // Depth anchors are made for the game camera: a fly camera looks from
     // anywhere and takes each vertex's own depth.
     glUniform1i(gSceneDepthAtLocation, flying ? 0 : 1);
+    glUniform2f(gSceneRoofClipLocation, 0.0f, 0.0f);
     if (withWalls) {
         // Wall faces are seen from outside only, as in the donor's game view.
         glEnable(kCullFace);
@@ -157,26 +296,35 @@ void drawStaticPreview(bool withWalls, bool withHero)
         glUniform1i(gSceneShadowSelfFromVertexLocation, 0);
         glDisable(kCullFace);
     }
+    perfMark("walls");
     if (withObjects) {
         glUniform1f(gSceneCutoffLocation, 0.5f);
         glUniform1i(gSceneEggPassLocation, egg ? 1 : 0);
+        roofClip();
+        if (roofsDrawn) bindRoofGrid(7);
         glBindVertexArray(gObjectVao);
         for (const ObjectDraw& draw : gObjectDraws) {
-            if (draw.pickOnly || draw.flat || draw.tint[0] >= 0.0f) continue;
+            if (draw.pickOnly || draw.offView || draw.flat || draw.tint[0] >= 0.0f) continue;
             glUniform1i(gSceneSeeThroughLocation, egg && draw.seeThrough ? 2 : 0);
             lightSprite(draw.tile);
-            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ);
+            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
             glBindTexture(kTexture2D, draw.texture);
             glDrawArrays(kTriangles, draw.firstVertex, 6);
         }
     }
+    perfMark("objects");
     glUniform1i(gSceneSeeThroughLocation, 0);
     glUniform1i(gSceneEggPassLocation, 0);
+    glUniform2f(gSceneRoofClipLocation, 0.0f, 0.0f);
     if (withHero && gHeroLoaded) {
         StaticHeroInfo hero;
         lightSprite(staticHeroInfo(&hero) ? hero.tile : -1);
         double hx = 0.0, hz = 0.0;
-        if (lightAnchorGround(hero.tile, &hx, &hz)) shadowAtFeet(static_cast<float>(hx), static_cast<float>(hz));
+        // The hero is a critter: the feet verdict keeps the walker's crisp
+        // one-pixel darkening at a shadow edge (109).
+        if (lightAnchorGround(hero.tile, &hx, &hz)) {
+            shadowAtFeet(static_cast<float>(hx), static_cast<float>(hz), false, 0.0f, 0.0f, 0.0f, true);
+        }
         glUniform1f(gSceneCutoffLocation, 0.5f);
         glBindVertexArray(gHeroVao);
         glBindTexture(kTexture2D, gHeroTexture);
@@ -188,6 +336,8 @@ void drawStaticPreview(bool withWalls, bool withHero)
         glDepthMask(0);
         glUniform1i(gSceneEggPassLocation, 2);
         glUniform1f(gSceneCutoffLocation, 0.5f);
+        glUniform2f(gSceneRoofClipLocation, 0.0f, 0.0f);
+        scissorToEgg();
         if (wallEgg) {
             glEnable(kCullFace);
             glUniform1i(gSceneSeeThroughLocation, 1);
@@ -202,16 +352,19 @@ void drawStaticPreview(bool withWalls, bool withHero)
         }
         if (withObjects) {
             glUniform1i(gSceneSeeThroughLocation, 2);
+            roofClip();
+            if (roofsDrawn) bindRoofGrid(7);
             glBindVertexArray(gObjectVao);
             for (const ObjectDraw& draw : gObjectDraws) {
-                if (draw.pickOnly || draw.flat || draw.tint[0] >= 0.0f || !draw.seeThrough) continue;
+                if (draw.pickOnly || draw.offView || draw.flat || draw.tint[0] >= 0.0f || !draw.seeThrough) continue;
                 lightSprite(draw.tile);
                 shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX,
-                    draw.wallNormalZ);
+                    draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
                 glBindTexture(kTexture2D, draw.texture);
                 glDrawArrays(kTriangles, draw.firstVertex, 6);
             }
         }
+        glDisable(kScissorTest);
         glUniform1i(gSceneSeeThroughLocation, 0);
         glUniform1i(gSceneEggPassLocation, 0);
         glDepthMask(1);
@@ -224,11 +377,13 @@ void drawStaticPreview(bool withWalls, bool withHero)
         glDepthMask(0);
         glUniform1i(gSceneTranslucentLocation, 1);
         glUniform1f(gSceneCutoffLocation, 0.5f);
+        roofClip();
+        if (roofsDrawn) bindRoofGrid(7);
         glBindVertexArray(gObjectVao);
         for (const ObjectDraw& draw : gObjectDraws) {
-            if (draw.pickOnly || draw.tint[0] < 0.0f) continue;
+            if (draw.pickOnly || draw.offView || draw.tint[0] < 0.0f) continue;
             lightSprite(draw.tile);
-            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ);
+            shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
             glUniform3f(gSceneTintLocation, draw.tint[0], draw.tint[1], draw.tint[2]);
             glUniform1i(gSceneGlassGrayLocation, draw.glassGray ? 1 : 0);
             glBindTexture(kTexture2D, draw.texture);
@@ -238,11 +393,14 @@ void drawStaticPreview(bool withWalls, bool withHero)
         glDepthMask(1);
         glDisable(kBlend);
     }
+    perfMark("hero_egg_glass");
+    glUniform2f(gSceneRoofClipLocation, 0.0f, 0.0f);
     glUniform1i(gSceneLightModeLocation, 4); // roof material, also when lights are disabled
     glUniform1f(gSceneLightValueLocation, lightAmbient());
     if (withHero && staticSoloKeeps(-1)) drawRoofs(x, y, width, height); // solo: no roofs
     glUniform1i(gSceneLightModeLocation, 0);
     glUniform1i(gSceneDepthAtLocation, 0);
+    perfMark("roofs");
 
     glDisable(kBlend);
     glDisable(kDepthTest);
@@ -270,17 +428,23 @@ void drawStaticHeroPreview()
 
 namespace {
 
-// The back buffer as drawn so far into a new PNG (top-down rows).
-bool writeBackBufferPng(const std::filesystem::path& path, int drawableWidth, int drawableHeight, std::string* error)
+// The back buffer as drawn so far, into top-down RGBA rows: the GL readback
+// the file variants encode (183), and the buffer form the save preview reads
+// (134).
+bool readBackBuffer(std::vector<unsigned char>& topDown, int drawableWidth, int drawableHeight, std::string* error)
 {
+    if (drawableWidth <= 0 || drawableHeight <= 0) {
+        if (error != nullptr) *error = "invalid OpenGL backbuffer dimensions";
+        return false;
+    }
     const size_t rowBytes = static_cast<size_t>(drawableWidth) * 4;
     std::vector<unsigned char> bottomUp(rowBytes * static_cast<size_t>(drawableHeight));
-    std::vector<unsigned char> topDown(bottomUp.size());
+    topDown.resize(bottomUp.size());
     glPixelStorei(kPackAlignment, 1);
     glReadPixels(0, 0, drawableWidth, drawableHeight, kRGBA, kUnsignedByte, bottomUp.data());
     glPixelStorei(kPackAlignment, kDefaultPackAlignment);
     if (glGetError() != 0) {
-        *error = "OpenGL backbuffer read failed";
+        if (error != nullptr) *error = "OpenGL backbuffer read failed";
         return false;
     }
     for (int row = 0; row < drawableHeight; row++) {
@@ -288,13 +452,40 @@ bool writeBackBufferPng(const std::filesystem::path& path, int drawableWidth, in
         unsigned char* destination = topDown.data() + rowBytes * static_cast<size_t>(row);
         std::copy(source, source + rowBytes, destination);
     }
+    return true;
+}
+
+bool writeBackBufferPng(const std::filesystem::path& path, int drawableWidth, int drawableHeight, std::string* error)
+{
+    std::vector<unsigned char> topDown;
+    if (!readBackBuffer(topDown, drawableWidth, drawableHeight, error)) return false;
     const unsigned encodeError = lodepng::encode(path.string(), topDown,
         static_cast<unsigned>(drawableWidth), static_cast<unsigned>(drawableHeight), LCT_RGBA, 8);
     if (encodeError != 0) {
         std::error_code ec;
         std::filesystem::remove(path, ec); // Remove only output this call may have partially written.
-        *error = std::string("PNG encode failed: ") + lodepng_error_text(encodeError);
+        if (error != nullptr) *error = std::string("PNG encode failed: ") + lodepng_error_text(encodeError);
         return false;
+    }
+    return true;
+}
+
+// The redraw behind every frame capture: the frame shown in the window,
+// presented again so the readback below sees it whole.
+bool presentFrameForCapture(const unsigned char* rgba, int frameWidth, int frameHeight, int pitch, std::string* error)
+{
+    // Reuse the prepared sharp pass from the same frame shown live.
+    const PreparedSharpTextFrame& text = preparedSharpTextFrame();
+    const bool sharpReady = text.active && text.width == frameWidth && text.height == frameHeight
+        && uploadSharpTextOverlay(text.overlay.pixels.data(), text.overlay.width,
+            text.overlay.height, text.overlay.pitch);
+    if (text.active && !sharpReady) disableSharpText("OpenGL upload failed during frame capture");
+    // The next present clears and redraws the back buffer; nothing is swapped.
+    presentFrame(sharpReady ? text.restoredRgba.data() : rgba,
+        frameWidth, frameHeight, sharpReady ? text.rgbaPitch : pitch);
+    if (sharpReady && !drawPreparedSharpTextOverlay()) {
+        disableSharpText("OpenGL draw failed during frame capture");
+        presentFrame(rgba, frameWidth, frameHeight, pitch);
     }
     return true;
 }
@@ -317,21 +508,52 @@ bool captureFramePng(const std::filesystem::path& path, const unsigned char* rgb
     if (drawableWidth <= 0 || drawableHeight <= 0) return fail("OpenGL drawable has no pixels");
     while (glGetError() != 0) {
     }
-    // Reuse the prepared sharp pass from the same frame shown live.
-    const PreparedSharpTextFrame& text = preparedSharpTextFrame();
-    const bool sharpReady = text.active && text.width == frameWidth && text.height == frameHeight
-        && uploadSharpTextOverlay(text.overlay.pixels.data(), text.overlay.width,
-            text.overlay.height, text.overlay.pitch);
-    if (text.active && !sharpReady) disableSharpText("OpenGL upload failed during frame capture");
-    // The next present clears and redraws the back buffer; nothing is swapped.
-    presentFrame(sharpReady ? text.restoredRgba.data() : rgba,
-        frameWidth, frameHeight, sharpReady ? text.rgbaPitch : pitch);
-    if (sharpReady && !drawPreparedSharpTextOverlay()) {
-        disableSharpText("OpenGL draw failed during frame capture");
-        presentFrame(rgba, frameWidth, frameHeight, pitch);
-    }
+    presentFrameForCapture(rgba, frameWidth, frameHeight, pitch, error);
     std::string message;
     if (!writeBackBufferPng(path, drawableWidth, drawableHeight, &message)) return fail(message);
+    if (width != nullptr) *width = drawableWidth;
+    if (height != nullptr) *height = drawableHeight;
+    if (error != nullptr) error->clear();
+    return true;
+}
+
+bool capturePresentedFramePng(const std::filesystem::path& path, int* width, int* height, std::string* error)
+{
+    auto fail = [&](const std::string& message) {
+        if (error != nullptr) *error = message;
+        return false;
+    };
+    if (!gInitialized) return fail("OpenGL renderer is unavailable");
+    std::error_code existsError;
+    if (std::filesystem::exists(path, existsError)) return fail("snapshot path already exists");
+    int drawableWidth = 0;
+    int drawableHeight = 0;
+    SDL_GL_GetDrawableSize(gWindow, &drawableWidth, &drawableHeight);
+    if (drawableWidth <= 0 || drawableHeight <= 0) return fail("OpenGL drawable has no pixels");
+    std::string message;
+    if (!writeBackBufferPng(path, drawableWidth, drawableHeight, &message)) return fail(message);
+    if (width != nullptr) *width = drawableWidth;
+    if (height != nullptr) *height = drawableHeight;
+    if (error != nullptr) error->clear();
+    return true;
+}
+
+bool captureFrameBuffer(const unsigned char* rgba, int frameWidth, int frameHeight, int pitch,
+    std::vector<unsigned char>& out, int* width, int* height, std::string* error)
+{
+    auto fail = [&](const std::string& message) {
+        if (error != nullptr) *error = message;
+        return false;
+    };
+    if (!gInitialized || rgba == nullptr) return fail("OpenGL renderer is unavailable");
+    int drawableWidth = 0;
+    int drawableHeight = 0;
+    SDL_GL_GetDrawableSize(gWindow, &drawableWidth, &drawableHeight);
+    if (drawableWidth <= 0 || drawableHeight <= 0) return fail("OpenGL drawable has no pixels");
+    while (glGetError() != 0) {
+    }
+    presentFrameForCapture(rgba, frameWidth, frameHeight, pitch, error);
+    if (!readBackBuffer(out, drawableWidth, drawableHeight, error)) return false;
     if (width != nullptr) *width = drawableWidth;
     if (height != nullptr) *height = drawableHeight;
     if (error != nullptr) error->clear();
@@ -343,32 +565,27 @@ bool captureStaticFloorPng(const std::filesystem::path& path, int* width, int* h
     return captureStaticPreviewPng(path, false, false, width, height, error);
 }
 
-bool captureStaticPreviewPng(const std::filesystem::path& path, bool withWalls, bool withHero,
-    int* width, int* height, std::string* error, bool includeOverlay)
+namespace {
+
+// The redraw behind both preview captures: the preview render into the back
+// buffer, no swap, no file write (183). Callers read the back buffer after it.
+bool presentStaticPreview(bool withWalls, bool withHero, bool includeOverlay,
+    int drawableWidth, int drawableHeight, std::string* error)
 {
     auto fail = [&](const std::string& message) {
         if (error != nullptr) *error = message;
         return false;
     };
-    if (!gInitialized || !gFloorLoaded) return fail("static floor preview is not loaded");
-    if (withWalls && !gWallsLoaded) return fail("static wall preview is not loaded");
-    if (withHero && !gHeroLoaded) return fail("current hero frame is unavailable");
-    std::error_code existsError;
-    if (std::filesystem::exists(path, existsError)) return fail("snapshot path already exists");
-    if (existsError) return fail("cannot inspect snapshot path");
-
-    int drawableWidth = 0;
-    int drawableHeight = 0;
-    SDL_GL_GetDrawableSize(gWindow, &drawableWidth, &drawableHeight);
-    if (drawableWidth <= 0 || drawableHeight <= 0) return fail("OpenGL drawable has no pixels");
-
     // Read only our preview render. Do not swap or touch game/map state.
     while (glGetError() != 0) {
     }
     const bool glow = beginSceneCapture();
     drawStaticPreview(withWalls, withHero);
     if (glow) compositeGlow();
-    if (includeOverlay && withHero && gSceneOverlayReady && !staticFlyCameraActive()) {
+    // 157 diagnostics: F2CE_CAPTURE_NO_OVERLAY strips the game overlay quad,
+    // so a capture shows the scene render alone.
+    const bool captureOverlay = includeOverlay && SDL_getenv("F2CE_CAPTURE_NO_OVERLAY") == nullptr;
+    if (captureOverlay && withHero && gSceneOverlayReady && !staticFlyCameraActive()) {
         // With what the game draws over it, as presented.
         glViewport(0, 0, drawableWidth, drawableHeight);
         glEnable(kBlend);
@@ -398,12 +615,79 @@ bool captureStaticPreviewPng(const std::filesystem::path& path, bool withWalls, 
     }
     if (glGetError() != 0) return fail(withWalls
         ? "static wall draw failed before snapshot" : "static floor draw failed before snapshot");
+    if (error != nullptr) error->clear();
+    return true;
+}
+
+} // namespace
+
+bool captureStaticPreviewPng(const std::filesystem::path& path, bool withWalls, bool withHero,
+    int* width, int* height, std::string* error, bool includeOverlay)
+{
+    auto fail = [&](const std::string& message) {
+        if (error != nullptr) *error = message;
+        return false;
+    };
+    if (!gInitialized || !gFloorLoaded) return fail("static floor preview is not loaded");
+    if (withWalls && !gWallsLoaded) return fail("static wall preview is not loaded");
+    if (withHero && !gHeroLoaded) return fail("current hero frame is unavailable");
+    std::error_code existsError;
+    if (std::filesystem::exists(path, existsError)) return fail("snapshot path already exists");
+    if (existsError) return fail("cannot inspect snapshot path");
+
+    int drawableWidth = 0;
+    int drawableHeight = 0;
+    SDL_GL_GetDrawableSize(gWindow, &drawableWidth, &drawableHeight);
+    if (drawableWidth <= 0 || drawableHeight <= 0) return fail("OpenGL drawable has no pixels");
+
     std::string message;
+    if (!presentStaticPreview(withWalls, withHero, includeOverlay, drawableWidth, drawableHeight, &message)) {
+        return fail(message);
+    }
     if (!writeBackBufferPng(path, drawableWidth, drawableHeight, &message)) return fail(message);
     if (width != nullptr) *width = drawableWidth;
     if (height != nullptr) *height = drawableHeight;
     if (error != nullptr) error->clear();
     return true;
+}
+
+bool captureStaticPreviewBuffer(bool withWalls, bool withHero, bool includeOverlay,
+    std::vector<unsigned char>& rgba, int* width, int* height, std::string* error)
+{
+    auto fail = [&](const std::string& message) {
+        if (error != nullptr) *error = message;
+        return false;
+    };
+    if (!gInitialized || !gFloorLoaded) return fail("static floor preview is not loaded");
+    if (withWalls && !gWallsLoaded) return fail("static wall preview is not loaded");
+    if (withHero && !gHeroLoaded) return fail("current hero frame is unavailable");
+
+    int drawableWidth = 0;
+    int drawableHeight = 0;
+    SDL_GL_GetDrawableSize(gWindow, &drawableWidth, &drawableHeight);
+    if (drawableWidth <= 0 || drawableHeight <= 0) return fail("OpenGL drawable has no pixels");
+
+    std::string message;
+    if (!presentStaticPreview(withWalls, withHero, includeOverlay, drawableWidth, drawableHeight, &message)) {
+        return fail(message);
+    }
+    if (!readBackBuffer(rgba, drawableWidth, drawableHeight, &message)) return fail(message);
+    if (width != nullptr) *width = drawableWidth;
+    if (height != nullptr) *height = drawableHeight;
+    if (error != nullptr) error->clear();
+    return true;
+}
+
+// 134: the pointer form the save preview reads; the same static scene render
+// into a caller's buffer, without touching a file.
+bool captureStaticPreviewRgba(bool withWalls, bool withHero, std::vector<unsigned char>* rgba,
+    int* width, int* height, std::string* error, bool includeOverlay)
+{
+    if (rgba == nullptr) {
+        if (error != nullptr) *error = "RGBA destination is null";
+        return false;
+    }
+    return captureStaticPreviewBuffer(withWalls, withHero, includeOverlay, *rgba, width, height, error);
 }
 
 } // namespace scene_renderer

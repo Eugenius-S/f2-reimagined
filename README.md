@@ -1,52 +1,108 @@
-# Fallout 2 CE 3D
+<h1 align="center"><img src="docs/images/logo.png" alt="Fallout 2: Reimagined" width="500"></h1>
 
-https://github.com/user-attachments/assets/e2fb04bc-243a-49a0-a775-7aa46c1ee8d2
+**English** | [Русский](README.ru.md)
 
-This project gives Fallout 2 a volumetric 3D world around its original sprites.
-Turn-based combat, dialogs, quests, saves and the rules stay the same. The view
-keeps Fallout's oblique angle and atmosphere; this is still the same game, not
-a shooter.
+https://github.com/user-attachments/assets/a922572c-d8ae-4121-b489-971a467a1e6a
+
+[Watch in 1080p on YouTube](https://www.youtube.com/watch?v=rFMGHM7ZNDc)
+
+This project is made out of love for, and as a tribute to, Fallout 2, the
+best game in the world: the game I grew up on and still play through every
+couple of years.
+
+The main goal: make the game run, and run smoothly, on modern computers with
+monitors of any resolution. Along the way the visuals get a gentle lift, with
+nothing extreme: the 3D view is there, but mostly for fun. Fallout 2's
+atmosphere is kept whole; the original game is at the core.
+
+It is a non-commercial project made for myself, but anyone is welcome to
+contribute. If you want to take part, message me on
+[Telegram](https://t.me/stepanov_e) or just send a PR.
 
 ## Install
 
-[Download the launcher](https://github.com/Eugenius-S/fallout2-ce-3d/releases/download/latest/fallout2-ce-3d-launcher.exe)
-from the rolling [latest release](https://github.com/Eugenius-S/fallout2-ce-3d/releases/tag/latest).
+[Download the launcher](https://github.com/Eugenius-S/f2-reimagined/releases/download/latest/Install-F2R.exe)
+from the rolling [latest release](https://github.com/Eugenius-S/f2-reimagined/releases/tag/latest).
 
 1. Install Fallout 2 from Steam or GOG.
 2. Run the launcher. It detects those installs; if it cannot find the game,
    choose its folder containing `master.dat` and `critter.dat`.
-3. The first install and later updates need an internet connection.
+3. Choose English or Russian for the launcher. To play in Russian, select
+   **Install Russian text**; the launcher downloads it from the official RPU
+   release. To play the Restoration Project, select **Restoration Project**:
+   the launcher downloads RPU from its official GitHub release (about
+   900 MB), installs it the way RPU's own manual install does and builds its
+   maps in 3D. Install it on a clean Fallout 2, as RPU asks; the files it
+   replaces are kept in `backup/rpu`.
+4. Choose **Install / Update**. Turn on automatic updates if you want the
+   launcher to install a newer build when it starts. Press **Play** when the
+   installation finishes. **Roll back** restores the previous build.
+
+The download is the launcher. After the install your Fallout 2 folder holds
+a copy of it named `Fallout 2 Reimagined.exe` (with the radiation icon): run
+that file to start the game and to update it. Ignore the other `.exe` files
+in the folder.
+
+An internet connection is needed for a new install, updates and the optional
+Russian text and Restoration Project downloads.
 
 The launcher installs or updates `fallout2-ce.exe`, `ce.dat` and
 `scene-exporter.exe`, then builds scene data from your game files. An existing
-`fallout2.cfg` is kept; a default is installed only when it is missing. The
-launcher does not replace the original `fallout2.exe` or alter save files. The
-game may add missing `[3d]` defaults when it saves its settings.
+`fallout2.cfg` is kept during install and updates; if you choose Russian, only
+`[system].language` is set to `russian`. A default config is installed only
+when it is missing. The launcher does not alter save files, and it replaces
+the original `fallout2.exe` only for the Restoration Project, which ships its
+own (the original goes to `backup/rpu`).
 
 ## What works
 
-- Floors, walls, roofs and large objects form a 3D scene. Characters remain
-  the original sprites and move as they do in Fallout 2.
-- Sun and moon lighting and shadows follow game time. Lamps and other point
-  lights add local light and glow.
-- The perspective camera follows the game smoothly and can turn. Mouse-wheel
-  zoom eases to its new level. The scene works at any screen resolution.
-- The in-game `3D OPTIONS` panel includes `Camera zoom` and
-  `Shadow edge softness` for softer shadow borders. A developer fly camera is
-  available for scene inspection.
-- Scene data is currently generated for Klamath areas. Where scene data is
-  unavailable, the game uses its original 2D view.
+- Buildings and many objects are converted into full 3D by algorithm.
+- A sky above the 3D view instead of black.
+- Sun and moon shadows: every solid 3D object casts a shadow that follows
+  game time. Characters darken as they step into a building's shadow.
+- Cloud shadows.
+- Glow: toxic slime pools, burning barrels, lamps, screens and energy
+  weapons.
+- Dynamic light: lamps, fires and muzzle flashes light the walls and floor
+  around them.
+- The camera can turn; mouse-wheel zoom is smooth. Characters and objects
+  that have several views in the game turn with the camera.
+- Sharp text: a more readable, softer-contrast font, and dialogue and small
+  interface text are no longer blurry (can be turned off in the menu).
+- The game runs at any resolution and on wide monitors; loading screens and
+  menus fill the screen.
+- A launcher installs the game in one click over Fallout 2 from Steam or GOG
+  and pulls updates by itself.
 
-## Switch to 2D
+Every new feature can be turned off and tuned in the `3D OPTIONS` menu.
+During combat and dialogue the game shows the original view for now.
 
-The in-game `3D OPTIONS` panel and the `[3d]` section of `fallout2.cfg` control
-the scene. Press `Ctrl+F10` to return to the original view. To start with 3D
-off, set:
+## Where it works
+
+Every map of the game is in 3D: Arroyo, Klamath, the Den, Modoc and
+the Ghost Town, Vault City, Gecko, Broken Hills, New Reno, Redding, NCR,
+Vault 13 and Vault 15, the Sierra Army Depot, the Military Base, San
+Francisco and Navarro, and every random encounter.
+
+## Keys
+
+- `Ctrl+F10`: switch between the original and the new view
+- `Ctrl+F12`: free fly camera over the 3D scene
+
+To start with 3D off, set in `fallout2.cfg`:
 
 ```ini
 [3d]
 enabled=0
 ```
+
+## Plans
+
+- Restoration Project support
+- 3D models of unique landmarks: the Vault Dweller's head, the New Reno
+  sign, the Vault City gate and more
+- macOS support
+- DLSS 5 support (a long shot, but worth a try)
 
 ## Build from source
 
@@ -63,8 +119,9 @@ py -3 -m unittest discover -s tools/scene_export -p 'test*.py' -v
 py -3 tools/scene_export/export.py --game-root ./game --maps klamath
 ```
 
-The game files and generated scene data stay local. See [game setup](docs/game-setup.md),
-the [technical plan](docs/2026-10-17-fallout2-ce-3d-env-p0-p1.md) and the
+The game files and generated scene data stay local. See
+[game setup](docs/game-setup.md), the
+[technical plan](docs/2026-10-17-fallout2-ce-3d-env-p0-p1.md) and the
 [3D design](docs/2026-10-17-fallout2-sprite-lighting-design.md).
 
 ## Thanks
@@ -83,3 +140,9 @@ the [technical plan](docs/2026-10-17-fallout2-ce-3d-env-p0-p1.md) and the
 The engine and converter code are distributed under the terms of the original
 projects: Sustainable Use License 1.0 (see `ce/LICENSE.md` and the licenses
 in `tools/scene_export/`). This is an unofficial non-commercial fan project.
+
+## Buy me a coffee
+
+If you enjoy the project and want to say thanks, you can
+[buy me a coffee](https://app.lava.top/eugenius_s?tabId=donate).
+It is entirely optional: the project stays free either way.

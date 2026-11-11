@@ -51,6 +51,8 @@ View activeView();
 // True while the active view may replace the game's picture: not during
 // dialogs, combat, movies and other modal states (it comes back after them).
 bool shouldPresent();
+// Project an attached floating-text anchor when camera turn or zoom is active.
+bool floatingTextScreenPosition(int tile, int offsetX, int offsetY, int* screenX, int* screenY);
 // Why the scene is not presented now, or "available" / "not-requested".
 const char* availability();
 
@@ -73,16 +75,22 @@ RefreshResult refreshForPresent();
 // up and presenting.
 void adjustZoom(int steps);
 
-// Camera rotation ([3d] camera_rotation): `steps` 45-degree turns round the
+// Camera rotation ([3d] camera_rotation): `steps` 10-degree turns round the
 // point the view looks at, animated; false when it is off or the full 3D view
 // is not shown. A turned camera is for looking only (the fly camera's
 // drawing: cards face it, no interface); returning to zero lands it.
-// Limited to +/-45 unless camera_rotation_unlimited is enabled.
+// Limited to +/-30 unless camera_rotation_unlimited is enabled.
 bool turnCamera(int steps);
 // The camera at once `degrees` round, whatever the setting says
 // (dev snapshots).
 void setCameraTurnNow(double degrees);
 bool cameraTurned();
+// Degrees the camera is turned now (0 unless cameraTurned()).
+double cameraTurnAngle();
+// The game scroll step (dx right, dy down) that moves the turned view toward
+// the screen edge (dx, dy) best, from the game's real ground projection. Left
+// untouched when the camera is not turned or the projection is not known.
+void cameraTurnScrollStepNow(int dx, int dy, int* outDx, int* outDy);
 // Every frame, from the main loop.
 void updateCameraTurn();
 

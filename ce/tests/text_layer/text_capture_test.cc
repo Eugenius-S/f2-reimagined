@@ -316,6 +316,54 @@ void testFont101SharpEligibility()
     gCurrentFont = 101;
 }
 
+void testPreferencesControlKeepsPixelLabels()
+{
+    using namespace fallout;
+    std::vector<unsigned char> pixels(32, 1);
+    textCaptureRegisterExternalBuffer(pixels.data(), pixels.size(), 8, 4, 8, false);
+    const auto id = textCaptureBufferId(pixels.data());
+    fontDrawTextPtr = drawTwoGlyphs;
+    gCurrentFont = 101;
+    {
+        ScopedTextCaptureTag tag(TextCaptureTag::PreferencesControl);
+        fontDrawText(pixels.data(), "ab", 8, 8, static_cast<ColorWithFlags>(5));
+    }
+    fontDrawText(pixels.data() + 4, "ab", 8, 8, static_cast<ColorWithFlags>(5));
+    const auto records = scene::textCaptureRecords(id);
+    check(records.size() == 2 && !records[0].run.sharpEligible && records[1].run.sharpEligible,
+        "legacy preference value labels stay pixel-aligned while other text remains sharp");
+    textCaptureUnregisterExternalBuffer(pixels.data());
+}
+
+void testRightAlignmentFollowsBufferCopies()
+{
+    using namespace fallout;
+    std::vector<unsigned char> source(32, 1);
+    std::vector<unsigned char> destination(64, 2);
+    textCaptureRegisterExternalBuffer(source.data(), source.size(), 8, 4, 8, false);
+    textCaptureRegisterExternalBuffer(destination.data(), destination.size(), 16, 4, 16, false);
+    const auto sourceId = textCaptureBufferId(source.data());
+    const auto destinationId = textCaptureBufferId(destination.data());
+    fontDrawTextPtr = drawTwoGlyphs;
+    gCurrentFont = 101;
+    {
+        ScopedTextRightAlign align(6);
+        fontDrawText(source.data(), "ab", 8, 8, static_cast<ColorWithFlags>(5));
+    }
+    fontDrawText(source.data() + 4, "ab", 8, 8, static_cast<ColorWithFlags>(5));
+    const auto original = scene::textCaptureRecords(sourceId);
+    check(original.size() == 2 && original[0].run.sharpRightAlignX == 6
+            && original[1].run.sharpRightAlignX == -1,
+        "right alignment is scoped to the intended run");
+    textCaptureCopy(source.data(), 8, 4, 8, destination.data() + 4, 16, false, fakeCopy);
+    const auto copied = scene::textCaptureRecords(destinationId);
+    check(copied.size() == 2 && copied[0].run.sharpRightAlignX == 10
+            && copied[1].run.sharpRightAlignX == -1,
+        "right alignment anchor follows copied text and leaves ordinary runs untouched");
+    textCaptureUnregisterExternalBuffer(source.data());
+    textCaptureUnregisterExternalBuffer(destination.data());
+}
+
 void testSemanticGreenCaptureRoles()
 {
     using namespace fallout;
@@ -368,6 +416,7 @@ void testSemanticGreenCaptureRoles()
     if (captured.size() == 13) {
         rolesMatch = rolesMatch
             && captured[7].run.colorRole == scene::TextColorRole::HudMessageLogGreen
+            && captured[7].run.sharpTextOffsetY == -2
             && captured[8].run.colorRole == scene::TextColorRole::Palette
             && captured[9].run.colorRole == scene::TextColorRole::InterfaceGreen
             && captured[10].run.colorRole == scene::TextColorRole::Palette
@@ -807,8 +856,9 @@ void testFont101SizePreviewExtendsCaptureOnly()
     check(records.size() == 1 && records.front().bounds.height == 11
             && records.front().pixels.size() == 1
             && scene::textCaptureVisibilityMask(records.front(), 20, 40, &mask)
-            && mask.bounds.height == 11,
-        "font-101 preview extends only captured coverage, not legacy pixels or visibility logic");
+            && mask.bounds.height == 11
+            && mask.visibleAt(mask.bounds.x, mask.bounds.y + mask.bounds.height - 1),
+        "font-101 sharp visibility covers the expanded line box beyond legacy glyph pixels");
 
     scene::setFont101PreviewScale(1.29, 12);
     {
@@ -990,6 +1040,8 @@ int main()
     fallout::fontGetMonospacedCharacterWidth = fallout::fakeMonospacedWidth;
     testAllocatorGenerationAndShadowGuard();
     testFont101SharpEligibility();
+    testPreferencesControlKeepsPixelLabels();
+    testRightAlignmentFollowsBufferCopies();
     testSemanticGreenCaptureRoles();
     testSafeClippedCaptureAndBlit();
     testAllocationEdgeBounds();

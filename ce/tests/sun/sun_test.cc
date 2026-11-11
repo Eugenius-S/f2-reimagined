@@ -31,14 +31,14 @@ int main()
     int failures = 0;
     const unsigned int day = 3 * 24 * kHour; // some day of the game
 
-    // 082 round 2: one vertical plane, the tilt linear through the day: -30
-    // degrees at 6:00, 0 at noon, +30 at 18:00.
-    const Sun dawn = sunAt(day + 6 * kHour, 1.0, true);
+    // 082 round 2: one vertical plane, the tilt linear through the day: with
+    // a 30 degree swing, -30 degrees at 6:00, 0 at noon, +30 at 18:00.
+    const Sun dawn = sunAt(day + 6 * kHour, 1.0, true, 30.0);
     failures += !check(!dawn.up, "6:00: not shining yet");
     failures += !check(close(dawn.tilt, -30.0, 1e-9), "6:00: tilted -30 degrees");
     failures += !check(close(dawn.height, 60.0, 1e-9), "6:00: 60 degrees above the horizon");
 
-    const Sun noon = sunAt(day + 12 * kHour, 1.0, true);
+    const Sun noon = sunAt(day + 12 * kHour, 1.0, true, 30.0);
     failures += !check(noon.up && close(noon.tilt, 0.0, 1e-9), "12:00: straight overhead");
     failures += !check(close(noon.direction[0], 0.0, 1e-6) && close(noon.direction[1], 1.0, 1e-6)
             && close(noon.direction[2], 0.0, 1e-6),
@@ -46,13 +46,16 @@ int main()
     failures += !check(std::fabs(noon.strength - 1.0f) < 1e-6f, "12:00 full ambient: full strength");
     failures += !check(noon.color[2] > 0.85f, "12:00: nearly white, the sun stays high");
 
-    const Sun dusk = sunAt(day + 18 * kHour, 1.0, true);
+    const Sun dusk = sunAt(day + 18 * kHour, 1.0, true, 30.0);
     failures += !check(!dusk.up, "18:00: the day's end, no light");
     failures += !check(close(dusk.tilt, 30.0, 1e-9), "18:00: tilted +30 degrees");
+    const Sun duskMoon = sunAt(day + 18 * kHour + kHour / 2, 1.0, true);
+    failures += !check(duskMoon.up && duskMoon.moon && duskMoon.strength > 0.0f && duskMoon.strength < 0.3f,
+        "18:30: moonlight fades in at dusk");
 
     // Linear between, in one plane, always a unit vector.
-    const Sun morning = sunAt(day + 7 * kHour, 1.0, true);
-    const Sun evening = sunAt(day + 17 * kHour, 1.0, true);
+    const Sun morning = sunAt(day + 7 * kHour, 1.0, true, 30.0);
+    const Sun evening = sunAt(day + 17 * kHour, 1.0, true, 30.0);
     failures += !check(morning.up && close(morning.tilt, -25.0, 1e-9), "7:00: linear tilt of -25 degrees");
     failures += !check(evening.up && close(evening.tilt, 25.0, 1e-9), "17:00: linear tilt of +25 degrees");
     failures += !check(close(morning.height, 65.0, 1e-9) && morning.height > 60.0 && morning.height < 90.0,
@@ -71,6 +74,8 @@ int main()
         "dawn and dusk lean to opposite sides of the plane");
 
     // The [3d] sun_swing setting (082 round 2): the swing is a parameter.
+    failures += !check(close(sunAt(day + 6 * kHour, 1.0, true).tilt, -40.0, 1e-9),
+        "the default swing is 40 degrees");
     const Sun wide = sunAt(day + 7 * kHour, 1.0, true, 60.0);
     failures += !check(wide.up && close(wide.tilt, -50.0, 1e-9), "swing 60 at 7:00: tilted -50 degrees");
     failures += !check(close(wide.height, 40.0, 1e-9), "swing 60 at 7:00: 40 degrees above the horizon");
@@ -83,10 +88,15 @@ int main()
     failures += !check(close(sunAt(day + 7 * kHour, 1.0, true, 90.0).tilt, -50.0, 1e-9),
         "the swing clamps at 60 degrees");
 
-    failures += !check(!sunAt(day + 19 * kHour, 1.0, true).up, "19:00: set");
-    failures += !check(!sunAt(day, 1.0, true).up, "0:00: none");
-    failures += !check(!sunAt(day + 12 * kHour, 1.0, false).up, "underground: none");
-    failures += !check(!sunAt(day + 12 * kHour, 0.25, true).up, "the night ambient: none");
+    const Sun night = sunAt(day + 0 * kHour, 1.0, true);
+    failures += !check(night.up && night.moon, "0:00: the moon replaces the sun");
+    failures += !check(night.strength > 0.0f && night.strength < 0.5f, "0:00: the moon is dim");
+    failures += !check(night.color[0] < night.color[2] && night.color[1] < night.color[2],
+        "0:00: moonlight is cool");
+    failures += !check(!sunAt(day + 19 * kHour, 1.0, false).up, "19:00 underground: no moon");
+    failures += !check(!sunAt(day + 12 * kHour, 1.0, false).up, "daytime underground: no sun");
+    failures += !check(!sunAt(day, 1.0, false).up, "night underground: no moon");
+    failures += !check(sunAt(day, 0.25, true).up, "night moon does not depend on ambient");
     const Sun dim = sunAt(day + 12 * kHour, 0.625, true);
     failures += !check(dim.up && std::fabs(dim.strength - 0.5f) < 1e-5f, "half the ambient over night: half strength");
 
@@ -100,7 +110,7 @@ int main()
     failures += !check(std::fabs(tracker.sun().strength - 0.5f) < 1e-5f, "and arrives");
     tracker.update(day + 12 * kHour + 30, 1.0, true, 0.016);
     tracker.update(day + 20 * kHour, 1.0, true, 0.016);
-    failures += !check(!tracker.sun().up, "waiting until 20:00 sets it at once");
+    failures += !check(tracker.sun().up && tracker.sun().moon, "waiting until 20:00 sets the moon at once");
     tracker.update(day + 12 * kHour, 1.0, true, 0.016);
     failures += !check(std::fabs(tracker.sun().strength - 1.0f) < 1e-6f, "a load back to noon sets it at once");
 
@@ -113,7 +123,7 @@ int main()
         clock = stepClockHour(clock, 1);
         const unsigned int hour = clock / kHour % 24;
         overnight.update(clock, hour >= 6 ? 1.0 : 0.43, true, 0.016);
-        if (hour == 2) failures += !check(!overnight.sun().up, "2:00 stays night");
+        if (hour == 2) failures += !check(overnight.sun().up && overnight.sun().moon, "2:00 stays moonlit");
         if (hour == 9) failures += !check(overnight.sun().up && overnight.sun().strength > 0.9f,
             "next morning restores daylight after a clock jump");
     }

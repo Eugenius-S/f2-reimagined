@@ -1,9 +1,15 @@
 #include "main.h"
 
+#include <lodepng.h>
+
 #include <algorithm>
+#include <limits>
 #include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
+#include <vector>
 
 #include "art.h"
 #include "autorun.h"
@@ -43,7 +49,9 @@
 #include "window_manager_private.h"
 #include "word_wrap.h"
 #include "devtools/devtools.h"
+#include "devtools/owner_shot.h"
 #include "scene/scene_view.h"
+#include "scene_renderer/perf.h"
 #include "worldmap.h"
 
 namespace fallout {
@@ -56,6 +64,9 @@ static int main_loadgame_new();
 static void main_unload_new();
 static void mainParseCommandLineArguments(int argc, char** argv);
 static bool mainTryParseDevLoadGameSlot(const char* value, int* slotPtr);
+static bool mainLoadOwnerWideArt(const char* assetPath, int width, int height,
+    std::vector<unsigned char>& rgba, std::vector<unsigned char>& mask);
+static void mainMaskRgbaRect(std::vector<unsigned char>& mask, int width, int height, int x, int y, int rectWidth, int rectHeight);
 static void mainHandleDevEndgameRequests();
 static void mainRequestDevEndgameIfNeeded();
 static void mainRunDevEndgameMovieIfNeeded();
@@ -291,6 +302,7 @@ static void mainParseCommandLineArguments(int argc, char** argv)
         if (devtools::parseOption(argv[arg])) {
             continue;
         }
+        owner_shot::parseOption(argv[arg]);
         if (strncmp(argv[arg], devLoadGamePrefix, devLoadGamePrefixLength) == 0) {
             int slot;
             if (mainTryParseDevLoadGameSlot(argv[arg] + devLoadGamePrefixLength, &slot)) {
@@ -460,16 +472,45 @@ static void mainLoop()
     while (_game_user_wants_to_quit == GAME_QUIT_REQUEST_NONE) {
         sharedFpsLimiter.mark();
 
+        // 157: where the frame's CPU goes. A plain SDL-ticks breakdown of the
+        // main loop's own spans; the render keeps its GL timers.
+        static double inputMs = 0.0;
+        static double worldMs = 0.0;
+        static double presentMs = 0.0;
+        static double frameMs = 0.0;
+        static int loopFrames = 0;
+        static Uint64 windowStart = 0;
+        const Uint64 loopStart = SDL_GetPerformanceCounter();
+
         int keyCode = inputGetInput();
 
         // SFALL: MainLoopHook.
         sfall_gl_scr_process_main();
 
-        gameHandleKey(keyCode, false);
+        const Uint64 inputEnd = SDL_GetPerformanceCounter();
+        scene_renderer::perfCpuMark("input");
 
+        gameHandleKey(keyCode, false);
+        scene_renderer::perfCpuMark("key");
+
+        // The owner's region mark holds the frame (183): no scripts, no map
+        // transitions, no camera updates - present and take input only.
+        if (owner_shot::markMode()) {
+            renderFpsCounter();
+            renderPresent();
+            sharedFpsLimiter.throttle();
+            continue;
+        }
+
+        // 172: the loop's stages in the load chain, so the gap between the
+        // scene's first draw and the first Full present reads as its owner.
+        scene_renderer::perfLoadMark("loop_input");
         scriptsHandleRequests();
+        scene_renderer::perfLoadMark("loop_scripts");
+        scene_renderer::perfCpuMark("scripts");
 
         mapHandleTransition();
+        scene_renderer::perfLoadMark("loop_transition");
 
         // Sprite-lighting mod: dev-panel pending elevation corrections are
         // applied here - after a completed mapHandleTransition, in the main
@@ -479,6 +520,8 @@ static void mainLoop()
         if (devtools::sceneStartupReady()) {
             scene::syncSettings(devtools::suppressInitialSceneEnable());
         }
+        scene_renderer::perfLoadMark("loop_sync");
+        scene_renderer::perfCpuMark("loop");
 
         if (_main_game_paused != 0) {
             _main_game_paused = 0;
@@ -490,9 +533,32 @@ static void mainLoop()
             _game_user_wants_to_quit = GAME_QUIT_REQUEST_MAIN_MENU;
         }
 
+        const Uint64 worldEnd = SDL_GetPerformanceCounter();
+
         renderFpsCounter();
         renderPresent();
-        sharedFpsLimiter.throttle();
+        // 157: the game view paces to the player's [3d] fps_limit; 0 runs the
+        // loop at whatever the render costs. The world itself advances by
+        // real time, so a faster picture does not speed the game up.
+        sharedFpsLimiter.throttle(settings.scene3d.fps_limit);
+        scene_renderer::perfLoadMark("loop_present");
+
+        const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+        inputMs += static_cast<double>(inputEnd - loopStart) * toMs;
+        worldMs += static_cast<double>(worldEnd - inputEnd) * toMs;
+        const Uint64 now = SDL_GetPerformanceCounter();
+        presentMs += static_cast<double>(now - worldEnd) * toMs;
+        frameMs += static_cast<double>(now - loopStart) * toMs;
+        if (windowStart == 0) windowStart = now;
+        loopFrames++;
+        if (static_cast<double>(now - windowStart) / SDL_GetPerformanceFrequency() >= 2.0) {
+            printf("perf loop input=%.2f world=%.2f present=%.2f frame=%.2f frames=%d\n",
+                inputMs / loopFrames, worldMs / loopFrames, presentMs / loopFrames, frameMs / loopFrames, loopFrames);
+            fflush(stdout);
+            inputMs = worldMs = presentMs = frameMs = 0.0;
+            loopFrames = 0;
+            windowStart = now;
+        }
     }
 
     scriptsDisable();
@@ -521,6 +587,72 @@ static void mainRunGameLoopAndCleanup()
 }
 
 // 0x48118C
+static bool mainLoadOwnerWideArt(const char* assetPath, int width, int height,
+    std::vector<unsigned char>& rgba, std::vector<unsigned char>& mask)
+{
+    unsigned int sourceWidth = 0;
+    unsigned int sourceHeight = 0;
+    std::vector<unsigned char> source;
+    unsigned error = lodepng::decode(source, sourceWidth, sourceHeight, assetPath);
+    if (error != 0) {
+        std::string gameRelativePath = std::string("game/") + assetPath;
+        error = lodepng::decode(source, sourceWidth, sourceHeight, gameRelativePath);
+    }
+    if (error != 0 || sourceWidth == 0 || sourceHeight == 0 || sourceWidth > INT_MAX || sourceHeight > INT_MAX
+        || width <= 0 || height <= 0) {
+        debugPrint("MAIN: owner wide art unavailable (%s)\n", lodepng_error_text(error));
+        return false;
+    }
+
+    size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
+    if (pixelCount > std::numeric_limits<size_t>::max() / 4) {
+        return false;
+    }
+    rgba.assign(pixelCount * 4, 0);
+    mask.assign(pixelCount, 0);
+
+    // Scale proportionally until the image covers the target, then take a centered crop.
+    int64_t scaledWidth64;
+    int64_t scaledHeight64;
+    if (static_cast<int64_t>(width) * sourceHeight > static_cast<int64_t>(height) * sourceWidth) {
+        scaledWidth64 = width;
+        scaledHeight64 = (static_cast<int64_t>(width) * sourceHeight + sourceWidth - 1) / sourceWidth;
+    } else {
+        scaledHeight64 = height;
+        scaledWidth64 = (static_cast<int64_t>(height) * sourceWidth + sourceHeight - 1) / sourceHeight;
+    }
+    if (scaledWidth64 > INT_MAX || scaledHeight64 > INT_MAX) {
+        return false;
+    }
+    int scaledWidth = static_cast<int>(scaledWidth64);
+    int scaledHeight = static_cast<int>(scaledHeight64);
+    int cropX = (scaledWidth - width) / 2;
+    int cropY = (scaledHeight - height) / 2;
+    for (int y = 0; y < height; y++) {
+        int srcY = (static_cast<int64_t>(y) + cropY) * sourceHeight / scaledHeight;
+        for (int x = 0; x < width; x++) {
+            int srcX = (static_cast<int64_t>(x) + cropX) * sourceWidth / scaledWidth;
+            size_t sourceOffset = (static_cast<size_t>(srcY) * sourceWidth + srcX) * 4;
+            size_t destOffset = (static_cast<size_t>(y) * width + x) * 4;
+            memcpy(rgba.data() + destOffset, source.data() + sourceOffset, 4);
+            mask[static_cast<size_t>(y) * width + x] = 1;
+        }
+    }
+    return true;
+}
+
+static void mainMaskRgbaRect(std::vector<unsigned char>& mask, int width, int height, int x, int y, int rectWidth, int rectHeight)
+{
+    int left = std::max(0, x);
+    int top = std::max(0, y);
+    int right = std::min(width, x + rectWidth);
+    int bottom = std::min(height, y + rectHeight);
+    if (left >= right || top >= bottom) return;
+    for (int row = top; row < bottom; row++) {
+        memset(mask.data() + static_cast<size_t>(row) * width + left, 0, right - left);
+    }
+}
+
 static void showDeath()
 {
     artCacheFlush();
@@ -567,10 +699,19 @@ static void showDeath()
             inputEventQueueReset();
 
             colorPaletteLoad("art\\intrface\\death.pal");
-            Rect deathFrameBounds = blitBuffer2DCenteredAspectFit(backgroundFrmImage.getBuffer(),
+            Rect deathFrameBounds = blitBuffer2DCenteredAspectFitHeightIfWider(backgroundFrmImage.getBuffer(),
                 Buffer2D(windowBuffer, screenWidth, screenHeight),
                 COLOR_BLACK,
                 settings.ui.death_screen_size != 0);
+
+            std::vector<unsigned char> deathRgba;
+            std::vector<unsigned char> deathMask;
+            bool useOwnerDeathArt = mainLoadOwnerWideArt(
+                "user-assets/fullscreen-20261028/wallpapers-selected/common/death/death.png",
+                screenWidth,
+                screenHeight,
+                deathRgba,
+                deathMask);
 
             const char* deathFileName = endgameDeathEndingGetFileName();
 
@@ -589,6 +730,9 @@ static void showDeath()
                         int y = std::max(deathFrameBounds.top, deathFrameBounds.top + deathFrameHeight - textHeight - 8);
                         int x = std::max(2, deathFrameBounds.left + (deathFrameWidth - textMaxWidth) / 2);
                         bufferFill(windowBuffer + screenWidth * y + x - 2, textMaxWidth + 4, textHeight + 2, screenWidth, COLOR_FIRST);
+                        if (useOwnerDeathArt) {
+                            mainMaskRgbaRect(deathMask, screenWidth, screenHeight, x - 2, y, textMaxWidth + 4, textHeight + 2);
+                        }
                         unsigned char* p = windowBuffer + screenWidth * y + x;
                         for (int index = 0; index < count; index++) {
                             fontDrawText(p, text + beginnings[index], textMaxWidth, screenWidth, COLOR_WHITE);
@@ -596,6 +740,10 @@ static void showDeath()
                         }
                     }
                 }
+            }
+
+            if (useOwnerDeathArt) {
+                renderSetRgbaBackground(deathRgba.data(), deathMask.data(), screenWidth, screenHeight);
             }
 
             windowRefresh(win);
@@ -647,6 +795,7 @@ static void showDeath()
             }
 
             paletteFadeTo(gPaletteBlack);
+            renderClearRgbaBackground();
             colorPaletteLoad("color.pal");
         } while (0);
         windowDestroy(win);

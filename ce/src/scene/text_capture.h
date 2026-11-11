@@ -21,6 +21,7 @@ enum class TextCaptureTag {
     InterfacePlaqueOffset,
     CharacterStatsPlaque,
     FloatingCharacterBark,
+    PreferencesControl,
 };
 
 class ScopedTextOutlineCapture {
@@ -52,6 +53,16 @@ private:
     TextCaptureTag previous_;
     ColorWithFlags previousOutlineColor_;
     int previousSharpTextOffsetY_;
+};
+
+class ScopedTextRightAlign {
+public:
+    explicit ScopedTextRightAlign(int right);
+    ~ScopedTextRightAlign();
+    ScopedTextRightAlign(const ScopedTextRightAlign&) = delete;
+    ScopedTextRightAlign& operator=(const ScopedTextRightAlign&) = delete;
+private:
+    int previous_;
 };
 
 class ScopedTextSizeRole {
@@ -99,6 +110,7 @@ void textCaptureAllocationDestroyed(void* buffer);
 void textCaptureAllocationResized(void* oldBuffer, void* newBuffer, std::size_t newSize);
 void textCaptureRegisterExternalBuffer(void* buffer, std::size_t size, int width, int height, int pitch, bool orphan);
 void textCaptureUnregisterExternalBuffer(void* buffer);
+void textCaptureEraseTextRuns(unsigned char* buffer, const char* prefix);
 void textCaptureMarkBufferOwned(void* buffer);
 void textCaptureMarkWindowBuffer(void* buffer, int window);
 void textCaptureForgetWindow(int window, void* buffer);

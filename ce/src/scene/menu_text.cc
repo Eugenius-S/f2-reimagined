@@ -53,32 +53,66 @@ const std::vector<Translation>& catalog()
         { "fly camera landed", cp1251(u8"полёт завершён") },
         { "fly camera landed: the 3D scene is not shown", cp1251(u8"полёт завершён: 3D-сцена не показана") },
         { "Enable 3D scene", cp1251(u8"Включить 3D-сцену") },
+        { "Ctrl+F10 - original / reimagined view", cp1251(u8"Ctrl+F10 - оригинальный / 3D вид") },
+        { "Ctrl+F11 - 3D fly camera", cp1251(u8"Ctrl+F11 - 3D полёт") },
+        { "F12 - screenshot, Ctrl+F12 - mark a spot", cp1251(u8"F12 - скриншот, Ctrl+F12 - рамка на место") },
+        { "F8 - FPS counter", cp1251(u8"F8 - счётчик FPS") },
+        { "F1 - this help", cp1251(u8"F1 - эта справка") },
         { "Show the 3D world view where a scene is available.", cp1251(u8"Показывать мир в 3D там, где доступна сцена.") },
+        { "Resolution", cp1251(u8"Разрешение") },
+        { "Select an available display resolution.", cp1251(u8"Выберите доступное разрешение экрана.") },
+        { "Window mode", cp1251(u8"Режим окна") },
+        { "Choose fullscreen, windowed, or borderless mode.", cp1251(u8"Выберите полный экран, окно или режим без рамки.") },
+        { "Fullscreen", cp1251(u8"Полный экран") },
+        { "Window", cp1251(u8"Окно") },
+        { "Borderless", cp1251(u8"Без рамки") },
+        { "Picture and interface scale", cp1251(u8"Масштаб картинки и интерфейса") },
+        { "Scales the game picture and interface from 1.0x to 3.0x.", cp1251(u8"Масштабирует картинку и интерфейс от 1.0x до 3.0x.") },
         { "Sharp interface text", cp1251(u8"Чёткий текст интерфейса") },
         { "Draw small interface text with a high-resolution font.", cp1251(u8"Рисовать мелкий текст интерфейса шрифтом высокого разрешения.") },
+        { "FPS counter", cp1251(u8"Счётчик FPS") },
+        { "Show average frames per second and frame time. Press F8 to toggle it while playing.", cp1251(u8"Показывать среднюю частоту кадров и время кадра. Нажмите F8, чтобы переключить счётчик во время игры.") },
+        { "Frame time log", cp1251(u8"Журнал времени кадра") },
+        { "Write every frame's time to frame_log.csv and a summary next to it when the log closes.", cp1251(u8"Записывать время каждого кадра в frame_log.csv, а при закрытии журнала рядом итоговую сводку.") },
+        { "FPS limit", cp1251(u8"Ограничение FPS") },
+        { "The frame rate the game view is paced to: 60 keeps the classic feel, 0 removes the limit.", cp1251(u8"Темп кадров игрового вида: 60 держит классическое ощущение, 0 снимает ограничение.") },
         { "Clean map edges", cp1251(u8"Чёткие границы карты") },
         { "Cut the 3D scene to the map boundary, leaving black beyond it.", cp1251(u8"Обрезать 3D-сцену по границам карты. За границами остаётся чёрный фон.") },
         { "Sun", cp1251(u8"Солнце") },
         { "A sun that follows game time on maps under the sky: low and warm in the morning and evening, none at night or underground.", cp1251(u8"Солнце следует игровому времени: утром и вечером свет низкий и тёплый. Ночью и под землёй солнца нет.") },
         { "Sun shadows", cp1251(u8"Тени от солнца") },
         { "Buildings and big things cast sharp sun shadows on the floor and the walls in the 3D view.", cp1251(u8"Здания и крупные объекты отбрасывают чёткие тени на пол и стены 3D-сцены.") },
+        { "Cloud shadows (not recommended)", cp1251(u8"Тени от облаков (не рекомендуется)") },
+        { "Soft clouds drift over the 3D view and dim the sun's light, never the lamps.", cp1251(u8"Мягкие облака движутся над 3D-сценой и приглушают солнечный свет, не лампы.") },
         { "Shadow edge softness", cp1251(u8"Мягкость краёв теней") },
         { "How wide, in game pixels, a shadow's edge softens over; the shadow itself stays crisp.", cp1251(u8"Ширина смягчения края тени в игровых пикселях. Сама тень остаётся чёткой.") },
         { "Shadow density", cp1251(u8"Плотность теней") },
         { "How dark the sun shadows read: 0 turns them off, 1 is the default, above 1 darker than default.", cp1251(u8"Насколько темны тени от солнца: 0 выключает их, 1 обычная плотность, больше 1 темнее обычного.") },
-        { "Sun swing", cp1251(u8"Размах солнца") },
+        { "Sun swing", cp1251(u8"Угол хода солнца") },
         { "How far, in degrees, the sun leans off straight overhead at dawn and dusk; 0 keeps it overhead all day.", cp1251(u8"На сколько градусов солнце отклоняется от зенита утром и вечером. 0 держит его над головой весь день.") },
         { "Glow", cp1251(u8"Свечение") },
         { "Things that shine in Fallout 2 (fire, monitors, signs) bleed light softly in the 3D view.", cp1251(u8"Огонь, мониторы, вывески и другие источники света получают мягкое свечение в 3D.") },
         { "Glow strength", cp1251(u8"Сила свечения") },
         { "How far the glow of shining things spreads and brightens.", cp1251(u8"Насколько далеко распространяется свечение и насколько оно яркое.") },
-        { "Camera rotation", cp1251(u8"Поворот камеры от −45° до +45°") },
-        { "[ and ] turn the camera up to 45 degrees left or right. Return to the original view to control the game with the mouse.", cp1251(u8"Клавиши [ и ] поворачивают камеру в пределах 45 градусов влево и вправо. Верните камеру в исходное положение, чтобы управлять игрой мышью.") },
+        { "Picture and interface scale", cp1251(u8"Масштаб изображения и интерфейса") },
+        { "Scales the game picture and interface from 1.0x to 3.0x.", cp1251(u8"Масштабирует изображение и интерфейс от 1,0x до 3,0x.") },
+        { "Resolution", cp1251(u8"Разрешение") },
+        { "Select an available display resolution.", cp1251(u8"Выберите доступное разрешение экрана.") },
+        { "Cursor speed", cp1251(u8"Скорость курсора") },
+        { "How far the cursor moves when you move the mouse.", cp1251(u8"Насколько далеко перемещается курсор при движении мыши.") },
+        { "Window mode", cp1251(u8"Режим окна") },
+        { "Choose fullscreen, windowed, or borderless mode.", cp1251(u8"Выберите полный экран, окно или окно без рамки.") },
+        { "Fullscreen", cp1251(u8"Полный экран") },
+        { "Window", cp1251(u8"Окно") },
+        { "Borderless", cp1251(u8"Без рамки") },
+        { "Requires restart", cp1251(u8"Нужен перезапуск игры") },
+        { "Camera rotation", cp1251(u8"Поворот камеры от −30° до +30°") },
+        { "[ and ] turn the camera up to 30 degrees left or right. Return to the original view to control the game with the mouse.", cp1251(u8"Клавиши [ и ] поворачивают камеру в пределах 30 градусов влево и вправо. Верните камеру в исходное положение, чтобы управлять игрой мышью.") },
         { "Unlimited camera rotation (not recommended)", cp1251(u8"Полный оборот (не рекомендуется)") },
         { "Remove the 45-degree limit. Objects and walls may render incorrectly at larger angles.", cp1251(u8"Снимает ограничение в 45 градусов. При большем повороте объекты и стены могут отображаться с ошибками.") },
         { "Characters turn with the camera", cp1251(u8"Персонажи поворачиваются с камерой") },
         { "A turned camera sees the side of people, creatures and thrown things that faces it.", cp1251(u8"Повёрнутая камера видит ту сторону людей, существ и брошенных предметов, что обращена к ней.") },
-        { "Light", cp1251(u8"Освещение") },
+        { "Light", cp1251(u8"Игровой свет") },
         { "Light the 3D scene with the game's light.", cp1251(u8"Освещать 3D-сцену игровым светом.") },
         { "Camera zoom", cp1251(u8"Масштаб камеры") },
         { "How much the 3D view is zoomed. Kept between sessions.", cp1251(u8"Масштаб 3D-вида. Сохраняется между запусками игры.") },
@@ -139,6 +173,21 @@ const std::vector<Translation>& catalog()
         { "snapshot: invalid framebuffer row pitch", cp1251(u8"снимок: неверный шаг строки кадра") },
         { "snapshot: vanilla PNG write failed", cp1251(u8"снимок: не удалось записать PNG") },
         { "snapshot: metadata write failed", cp1251(u8"снимок: не удалось записать метаданные") },
+        { "shot saved:", cp1251(u8"скриншот сохранён:") },
+        { "shot failed", cp1251(u8"скриншот не удался") },
+        { "mark saved:", cp1251(u8"рамка сохранена:") },
+        { "mark failed:", cp1251(u8"рамка не удалась:") },
+        { "mark cancelled", cp1251(u8"рамка отменена") },
+        { "MARK: drag rectangles, Enter saves, Esc cancels", cp1251(u8"РАМКА: выделяй мышью, Enter - сохранить, Esc - отмена") },
+        { "teleported:", cp1251(u8"переход выполнен:") },
+        { "3D scene is disabled in settings", cp1251(u8"3D-сцена выключена в настройках") },
+        { "no map is loaded", cp1251(u8"карта не загружена") },
+        { "this map has no 3D scene", cp1251(u8"у этой карты нет 3D-сцены") },
+        { "the 3D scene failed to load", cp1251(u8"3D-сцена не загрузилась") },
+        // The word goes through the catalog too: a narrow Cyrillic literal
+        // would land in the compiler's execution charset, which is only
+        // CP1251 on a Russian machine.
+        { " (elevation ", cp1251(u8" (этаж ") },
     };
     return strings;
 }
@@ -177,12 +226,37 @@ std::string menuStatusText(const std::string& status, const std::string& languag
     return std::string(menuText(prefix.c_str(), language)) + status.substr(colon + 1);
 }
 
+std::string toggleRefusalText(const char* reason, const std::string& map, int elevation,
+    const std::string& language)
+{
+    // The 3D toggle's refusal (211): a status-line phrase naming the map and
+    // the elevation, in the game's language. Map names stay as they are.
+    if (reason == nullptr) return std::string();
+    const std::string place = ": " + map
+        + std::string(menuText(" (elevation ", language)) + std::to_string(elevation) + ")";
+    if (std::strcmp(reason, "disabled") == 0) {
+        return menuText("3D scene is disabled in settings", language);
+    }
+    if (std::strcmp(reason, "no-map") == 0) {
+        return menuText("no map is loaded", language);
+    }
+    if (std::strcmp(reason, "no-scene") == 0) {
+        return std::string(menuText("this map has no 3D scene", language)) + place;
+    }
+    if (std::strcmp(reason, "load-failed") == 0) {
+        return std::string(menuText("the 3D scene failed to load", language)) + place;
+    }
+    return reason;
+}
+
 void localizeMenuDescriptors(std::vector<SettingDescriptor>& descriptors, const std::string& language)
 {
+    // Every row goes through the catalog; rows without a pair keep their
+    // English fallback unchanged.
     for (auto& descriptor : descriptors) {
-        if (descriptor.section != "3d") continue;
         descriptor.fallbackLabel = menuText(descriptor.fallbackLabel.c_str(), language);
         descriptor.fallbackDescription = menuText(descriptor.fallbackDescription.c_str(), language);
+        for (auto& choice : descriptor.choices) choice.fallbackLabel = menuText(choice.fallbackLabel.c_str(), language);
     }
 }
 

@@ -2,7 +2,10 @@
 
 #include <stdio.h>
 #include <string>
+#include <algorithm>
 #include <map>
+#include <mutex>
+#include <vector>
 
 #include "../art.h"
 #include "../color.h"
@@ -10,6 +13,7 @@
 #include "../game_mouse.h"
 #include "../map.h"
 #include "../object.h"
+#include "../proto.h"
 #include "clean_edges_boundary_mask.h"
 #include "effect_emission.h"
 #include "muzzle_flash.h"
@@ -20,6 +24,7 @@
 #include "../scene_renderer/static_scene.h"
 #include "scene_settings.h"
 #include "../settings.h"
+#include "../scene_renderer/perf.h"
 #include "../svga.h"
 #include "../tile.h"
 
@@ -37,13 +42,119 @@ unsigned char spriteAlpha(unsigned char colorIndex)
     return colorIndex >= 0xE5 ? 254 : 255;
 }
 
+// 122: a scenery art turns when its six stored directions are six sides of one
+// thing: no direction is the unused-art placeholder card or empty, and every
+// adjacent pair of silhouettes, anchored at their bottom centres, overlaps by
+// at least 40%. Variant slots (six different cacti, a shelf's damage states)
+// and the unused-art placeholders fail and keep the game's own rotation.
+bool sceneryArtTurns(const FrmId& frmId)
+{
+    static std::map<unsigned int, bool> cache;
+    static std::mutex cacheMutex;
+    constexpr unsigned int kRotationBits = 0x70000000;
+    const unsigned int key = frmId.fid() & ~kRotationBits;
+    std::lock_guard<std::mutex> guard(cacheMutex);
+    const auto found = cache.find(key);
+    if (found != cache.end()) return found->second;
+    FrmImage images[ROTATION_COUNT];
+    bool lockable = true;
+    for (int d = 0; d < ROTATION_COUNT && lockable; d++) {
+        lockable = images[d].lock(FrmId(frmId.fid() & ~kRotationBits), 0, static_cast<Rotation>(d));
+    }
+    bool turns = false;
+    if (lockable) {
+        // A direction with an absurd frame (a broken placeholder) fails the
+        // turning: the card pass rejects frames over 2048 either way.
+        for (int d = 0; d < ROTATION_COUNT; d++) {
+            if (images[d].getWidth() <= 0 || images[d].getHeight() <= 0
+                || images[d].getWidth() > 2048 || images[d].getHeight() > 2048) {
+                lockable = false;
+                break;
+            }
+        }
+    }
+    if (lockable) {
+        // A direction that is opaque edge to edge is the arts' UNUSED ART
+        // placeholder card, and an empty one is no side at all: such slots are
+        // not sides of one thing (the tire piles' TIRE004 turned its four
+        // placeholder cards into the fly view; 120 measured the placeholders
+        // in the multi-direction arts). The empty check also keeps the
+        // silhouette anchoring below away from masks without pixels, which
+        // would land outside the comparison grid.
+        for (int d = 0; d < ROTATION_COUNT; d++) {
+            const int w = images[d].getWidth();
+            const int h = images[d].getHeight();
+            const unsigned char* p = images[d].getData();
+            const long long total = static_cast<long long>(w) * h;
+            long long opaque = 0;
+            for (long long i = 0; i < total; i++) opaque += p[i] != 0;
+            if (opaque == 0 || opaque * 100 >= total * 97) {
+                lockable = false;
+                break;
+            }
+        }
+    }
+    if (lockable) {
+        struct Silhouette {
+            std::vector<unsigned char> mask;
+            int minX = 0, maxX = -1, maxY = -1, w = 0, h = 0;
+        };
+        Silhouette sides[ROTATION_COUNT];
+        for (int d = 0; d < ROTATION_COUNT; d++) {
+            Silhouette& s = sides[d];
+            s.w = images[d].getWidth();
+            s.h = images[d].getHeight();
+            const unsigned char* p = images[d].getData();
+            s.mask.assign(static_cast<size_t>(s.w) * s.h, 0);
+            s.minX = s.w;
+            for (int y = 0; y < s.h; y++) {
+                for (int x = 0; x < s.w; x++) {
+                    if (p[y * s.w + x] != 0) {
+                        s.mask[y * s.w + x] = 1;
+                        if (x < s.minX) s.minX = x;
+                        if (x > s.maxX) s.maxX = x;
+                        if (y > s.maxY) s.maxY = y;
+                    }
+                }
+            }
+        }
+        double minIou = 1.0;
+        for (int d = 0; d < ROTATION_COUNT; d++) {
+            const Silhouette& a = sides[d];
+            const Silhouette& b = sides[(d + 1) % ROTATION_COUNT];
+            const int h = std::max(a.h, b.h);
+            const int w = std::max(a.w, b.w) * 2 + 8;
+            std::vector<unsigned char> ma(static_cast<size_t>(h) * w, 0), mb(static_cast<size_t>(h) * w, 0);
+            for (int y = 0; y < a.h; y++) {
+                for (int x = 0; x < a.w; x++) {
+                    if (a.mask[y * a.w + x]) ma[(y - a.maxY + h - 1) * w + x - a.minX - (a.maxX - a.minX) / 2 + w / 2] = 1;
+                }
+            }
+            for (int y = 0; y < b.h; y++) {
+                for (int x = 0; x < b.w; x++) {
+                    if (b.mask[y * b.w + x]) mb[(y - b.maxY + h - 1) * w + x - b.minX - (b.maxX - b.minX) / 2 + w / 2] = 1;
+                }
+            }
+            int inter = 0, unionPx = 0;
+            for (size_t i = 0; i < ma.size(); i++) {
+                inter += ma[i] && mb[i];
+                unionPx += ma[i] || mb[i];
+            }
+            minIou = std::min(minIou, unionPx ? static_cast<double>(inter) / unionPx : 0.0);
+        }
+        turns = minIou >= 0.4;
+    }
+    cache[key] = turns;
+    return turns;
+}
+
 // The art and rotation a standing sprite is drawn in (087). A fly or turned
 // camera sees another side of a critter, item or projectile whose art has more
 // than one: its art in the rotation that side faces. Art with fewer sides
 // shows the nearest one it has, as the game would for that rotation. Scenery
-// keeps its own rotation: its art spends rotations on variants (wrecks, cacti,
-// a shelf breaking up; tools/shapes/art_sides.py), not on sides. So do flat
-// sprites, which turn with the ground, and things walls.bin draws.
+// turns too when its art's six directions are six sides of one thing (122);
+// arts that spend the slots on variants or placeholders keep their own. Flat
+// sprites turn with the ground, and things walls.bin draws never do.
 using ShownArt = SceneObjectArt;
 
 ShownArt shownArt(Object* object, bool flat)
@@ -51,7 +162,9 @@ ShownArt shownArt(Object* object, bool flat)
     const ShownArt own = { object->fid, object->rotation };
     const FrmId frmId(object);
     const ObjectType type = frmId.objectType();
-    if (!settings.scene3d.sprite_sides || flat || (type != OBJ_TYPE_CRITTER && type != OBJ_TYPE_ITEM && type != OBJ_TYPE_MISC)) return own;
+    if (!settings.scene3d.sprite_sides || flat
+        || (type != OBJ_TYPE_CRITTER && type != OBJ_TYPE_ITEM && type != OBJ_TYPE_MISC
+            && (type != OBJ_TYPE_SCENERY || !sceneryArtTurns(frmId)))) return own;
     const int rotation = scene_renderer::staticShownRotation(object->rotation);
     if (rotation == object->rotation) return own;
     // Art stored a file per side (.fr0 .. .fr5) names its side in the fid; a
@@ -96,13 +209,16 @@ bool updateHeroFromGame()
     if (gDude->rotation < ROTATION_FIRST || gDude->rotation >= ROTATION_COUNT) {
         return unavailable("player rotation is invalid");
     }
+    const Uint64 heroStart = SDL_GetPerformanceCounter();
 
     const ShownArt shown = shownArt(gDude, (gDude->flags & OBJECT_FLAT) != OBJECT_NONE);
+    const Uint64 shownDone = SDL_GetPerformanceCounter();
     FrmImage image;
     const FrmId frmId(shown.fid);
     if (!image.lock(frmId, gDude->frame, static_cast<Rotation>(shown.rotation))) {
         return unavailable("current player FRM frame could not be locked");
     }
+    const Uint64 lockedDone = SDL_GetPerformanceCounter();
     const int width = image.getWidth();
     const int height = image.getHeight();
     if (width <= 0 || height <= 0 || width > 2048 || height > 2048
@@ -135,8 +251,20 @@ bool updateHeroFromGame()
     };
     frame.stack = gHeroStack;
     frame.pickId = gHeroPickId;
+    const Uint64 decodedDone = SDL_GetPerformanceCounter();
     std::string error;
     if (!scene_renderer::updateStaticHero(frame, &error)) return unavailable(error.c_str());
+    const Uint64 builtDone = SDL_GetPerformanceCounter();
+    static int reports = 0;
+    if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
+        const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+        printf("perf hero shown=%.2f lock=%.2f decode=%.2f build=%.2f\n",
+            static_cast<double>(shownDone - heroStart) * toMs,
+            static_cast<double>(lockedDone - shownDone) * toMs,
+            static_cast<double>(decodedDone - lockedDone) * toMs,
+            static_cast<double>(builtDone - decodedDone) * toMs);
+        fflush(stdout);
+    }
     gHeroUnavailableLogged = false;
     return true;
 }
@@ -148,6 +276,32 @@ struct ObjectCardPass {
     int lastTile; // tile of the previous standing sprite, for the per-hex count
     int onTile; // standing sprites painted on lastTile so far
 };
+
+// 241: the art set a scenery piece belongs to: its file name without the
+// trailing number and extension (TEMPLE01..temple08: "temple"), interned
+// per fid; 0 when the name ends in no number. A composite sprite's pieces
+// share it, and the renderer shades touching pieces of one set as one.
+int sceneryArtSet(int fid, const char* path)
+{
+    static std::map<int, int> byFid;
+    static std::map<std::string, int> byStem;
+    const auto found = byFid.find(fid);
+    if (found != byFid.end()) return found->second;
+    std::string stem = path != nullptr ? path : "";
+    const size_t slash = stem.find_last_of("\\/");
+    if (slash != std::string::npos) stem.erase(0, slash + 1);
+    const size_t dot = stem.find_last_of('.');
+    if (dot != std::string::npos) stem.erase(dot);
+    const size_t named = stem.find_last_not_of("0123456789");
+    int set = 0;
+    if (named != std::string::npos && named + 1 < stem.size()) {
+        stem.erase(named + 1);
+        std::transform(stem.begin(), stem.end(), stem.begin(), [](unsigned char c) { return static_cast<char>(tolower(c)); });
+        set = byStem.emplace(stem, static_cast<int>(byStem.size()) + 1).first->second;
+    }
+    byFid.emplace(fid, set);
+    return set;
+}
 
 // How many standing sprites the game paints on this object's hex before it
 // (the walk is in the game's own painting order).
@@ -170,21 +324,36 @@ void addObjectCard(Object* object, void* context)
         return;
     }
     const FrmId objectFid(object);
-    if (scene::isCleanEdgesBoundaryMask(scene::cleanEdges(), scene_renderer::staticMapClip().enabled,
-            objectFid.objectType() == OBJ_TYPE_SCENERY, objectFid.filePath())) {
-        return;
+    if (objectFid.objectType() == OBJ_TYPE_SCENERY && scene::cleanEdges() && scene_renderer::staticMapClip().enabled) {
+        // The art name depends on the fid alone: build its path once per fid,
+        // not once per object per frame.
+        static std::map<int, bool> boundaryMask;
+        auto found = boundaryMask.find(object->fid);
+        if (found == boundaryMask.end()) {
+            found = boundaryMask.emplace(object->fid,
+                scene::isCleanEdgesBoundaryMask(true, true, true, objectFid.filePath())).first;
+        }
+        if (found->second) return;
     }
     const int pickId = static_cast<int>(gPickObjects.size());
     gPickObjects.push_back({ object, object->tile });
     // walls.bin draws it: its card is only picked, and the game's count of
     // sprites on its hex does not include it.
-    const bool pickOnly = scene_renderer::staticObjectBaked(object->tile, object->fid);
+    // Keep exit grids pickable so movement still finds the live transition,
+    // but do not draw their translucent boundary markers into the 3D map.
+    const bool pickOnly = scene_renderer::staticObjectBaked(object->tile, object->fid)
+        || isExitGridProtoId(ProtoId(object->pid));
     const EffectEmission emission = effectEmission(object->fid); // calibrated material tag, independent of local light
     if (pickOnly && emission.sign) scene_renderer::markStaticWallEmissive(object->tile, object->fid);
     // The game shows the hero through walls and scenery he stands behind.
     const bool seeThrough = objectSeeThroughAroundDude(object);
     if (pickOnly && seeThrough) scene_renderer::markStaticWallSeeThrough(object->tile, object->fid);
     if (pickOnly && (object->flags & OBJECT_FLAG_0xFC000) == OBJECT_TRANS_WALL) {
+        scene_renderer::markStaticWallFullLight(object->tile, object->fid);
+    }
+    // A fly-only solid's game views are its card's (which lights itself); the
+    // solid has no light of its own, so first person draws it fully lit.
+    if (pickOnly && scene_renderer::staticObjectFlyOnly(object->tile, object->fid)) {
         scene_renderer::markStaticWallFullLight(object->tile, object->fid);
     }
     const int stack = pickOnly ? (object->tile == pass.lastTile ? pass.onTile : 0) : nextStackOnTile(pass, object);
@@ -209,8 +378,27 @@ void addObjectCard(Object* object, void* context)
         if (handle != nullptr) artUnlock(handle);
         if (frames > 1 && object->frame == frames - 1) return;
     }
-    const bool flat = (object->flags & OBJECT_FLAT) != OBJECT_NONE
+    // 157: an object whose cheap state is unchanged reuses the card built
+    // before - the art locks, the decodes and the projection rebuild only
+    // ran for the things that moved, turned or changed frame.
+    const bool flatNow = (object->flags & OBJECT_FLAT) != OBJECT_NONE
         || scene_renderer::staticObjectFlat(object->tile, object->fid);
+    const scene_renderer::StaticObjectSnapshot snapshot = {
+        static_cast<unsigned int>(object->fid), object->frame, object->rotation,
+        object->tile, object->x, object->y, object->pid,
+        static_cast<unsigned int>(object->flags), stack, seeThrough, flatNow,
+        scene_renderer::staticFlyCameraActive(), scene_renderer::staticShownRotation(0),
+        settings.scene3d.shadows, settings.scene3d.sprite_sides,
+        scene_renderer::staticMapClip().enabled,
+    };
+    // Read once: an environment lookup for each of thousands of objects cost
+    // milliseconds a frame.
+    static const bool noCards = SDL_getenv("F2CE_NO_CARDS") != nullptr;
+    if (!noCards && scene_renderer::staticObjectCardFresh(object, snapshot)) {
+        scene_renderer::appendStaticObjectCard(object, pickId);
+        return;
+    }
+    const bool flat = flatNow;
     const bool flyFlat = scene_renderer::staticFlyCameraActive()
         && scene_renderer::staticObjectFlyFlat(object->tile, object->fid);
     const ShownArt shown = shownArt(object, flat || flyFlat || pickOnly);
@@ -280,6 +468,8 @@ void addObjectCard(Object* object, void* context)
     frame.pickId = pickId;
     frame.pickOnly = pickOnly;
     frame.seeThrough = seeThrough;
+    frame.noBlock = (object->flags & OBJECT_NO_BLOCK) != OBJECT_NONE;
+    if (objectFid.objectType() == OBJ_TYPE_SCENERY) frame.artSet = sceneryArtSet(object->fid, objectFid.filePath());
     // The engine's translucent kinds and their tints (_obj_render_object).
     Color tint = COLOR_WHITE;
     bool translucent = true;
@@ -312,7 +502,7 @@ void addObjectCard(Object* object, void* context)
         frame.tint[2] = (rgb & 0x1F) / 31.0f;
     }
     std::string error;
-    if (!scene_renderer::addStaticObject(frame, &error)) pass.skipped++;
+    if (!scene_renderer::addStaticObjectCached(object, snapshot, frame, &error)) pass.skipped++;
 }
 
 struct PickFilter {
@@ -349,14 +539,26 @@ bool objectArtOffsetForInspection(Object* object,int* x,int* y)
 
 bool updateObjectsFromGame()
 {
+    const Uint64 start = SDL_GetPerformanceCounter();
     scene_renderer::beginStaticObjects();
     scene_renderer::beginStaticWallSeeThrough();
     gPickObjects.clear();
     gHeroPickId = -1;
     ObjectCardPass pass = { directDrawGetPalette(), {}, 0, -1, 0 };
     if (pass.palette != nullptr) objectForEachAtElevation(gElevation, addObjectCard, &pass);
+    const Uint64 walked = SDL_GetPerformanceCounter();
+    scene_renderer::perfCpuMark("r_walk");
     scene_renderer::endStaticObjects();
     scene_renderer::endStaticWallSeeThrough();
+    const Uint64 ended = SDL_GetPerformanceCounter();
+    scene_renderer::perfCpuMark("r_upload");
+    static int reports = 0;
+    if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
+        const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+        printf("perf objwalk walk=%.2f upload=%.2f\n",
+            static_cast<double>(walked - start) * toMs, static_cast<double>(ended - walked) * toMs);
+        fflush(stdout);
+    }
     gObjectCardsSkipped = pass.skipped;
     return updateHeroFromGame();
 }

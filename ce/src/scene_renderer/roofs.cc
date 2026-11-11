@@ -1,6 +1,7 @@
 #include "static_scene.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -23,9 +24,20 @@ std::vector<RoofSquare> gRoofSquares;
 unsigned char gRoofVisible[kSquareCount] = {};
 bool gRoofVisibilityKnown = false;
 bool gRoofBufferStale = true;
+// Whether the buffer was built for a fly camera (the wall-top bands stand there).
+bool gRoofBufferFlying = false;
+// What the roofs cover right now, for the cards' roof cut (114): a square per
+// byte, 255 covered, as the shader's uRoofGrid reads it.
+unsigned char gRoofGrid[kSquareCount] = {};
+bool gRoofGridStale = true;
+unsigned int gRoofGridTexture = 0;
 unsigned int gRoofVao = 0;
 unsigned int gRoofVbo = 0;
 int gRoofVertexCount = 0;
+// The wall-top bands (fly camera only) follow the flat squares in the buffer, from their own texture.
+int gRoofFlatVertexCount = 0;
+int gRoofPatchVertexCount = 0;
+unsigned int gRoofFringeTexture = 0;
 // All squares, hidden ones included, for the sun's shadow map (task 045).
 unsigned int gRoofShadowVao = 0;
 unsigned int gRoofShadowVbo = 0;
@@ -40,13 +52,67 @@ int gEggHeight = 0;
 int gEggLeft = 0;
 int gEggTop = 0;
 bool gEggShown = false;
+// The egg's rect in GL window pixels as bindEgg last set it (x, y, w, h).
+int gEggScissor[4] = {};
+
+// The broken top of a wall (task 129, find 6), under the fly camera. The roof
+// edge tiles that carry it are told by their art (roof_fringe.py), which
+// unrolls each run of them into a strip, the way a wall's art is unrolled along
+// the wall: concrete along the bottom, rebar and ragged concrete above. Here the
+// strip stands on the wall under the roof edge, as one band along the run in
+// the plane of the wall's outer face, its bottom on the wall's top and its
+// ends where the wall's are (the exporter matches each run to its wall), a
+// stretch of it per square so a hidden roof square hides its stretch. The texels the art leaves empty are cut out (the roofs' alpha
+// cutoff), so the band's top edge is the ragged one. Drawn from both sides.
+// The game's camera keeps the flat squares, as the game painted them.
+constexpr float kBandStorey = 0.5f; // of the wall's storey (the roof stands one storey up)
+
+void pushFringeBand(std::vector<FloorVertex>& vertices, const RoofSquare& square, float roofY)
+{
+    for (int n = 0; n < square.pieceCount; n++) {
+        const RoofSquare::FringePiece& piece = square.pieces[n];
+        const bool alongU = piece.edge < 2;
+        const float span0 = piece.span0, span1 = piece.span1;
+        const float top = piece.bottom + roofY * (piece.rows / static_cast<float>(kRoofPixels));
+        auto at = [&](float along, float y, float tu, float tv) {
+            return alongU ? FloorVertex { along, y, piece.plane, tu, tv } : FloorVertex { piece.plane, y, along, tu, tv };
+        };
+        const FloorVertex a = at(span0, piece.bottom, piece.uLow, piece.vBottom);
+        const FloorVertex b = at(span1, piece.bottom, piece.uHigh, piece.vBottom);
+        const FloorVertex c = at(span1, top, piece.uHigh, piece.vTop);
+        const FloorVertex d = at(span0, top, piece.uLow, piece.vTop);
+        const FloorVertex quad[6] = { a, b, c, a, c, d };
+        for (const FloorVertex& vertex : quad) vertices.push_back(vertex);
+        for (int i = 5; i >= 0; i--) vertices.push_back(quad[i]);
+    }
+}
 
 void rebuildRoofBuffer()
 {
     std::vector<FloorVertex> vertices;
+    std::vector<FloorVertex> patches;
+    std::vector<FloorVertex> bands;
     const float y = static_cast<float>(kRoofPixels / gHeroProjection.hpx);
+    const bool flying = staticFlyCameraActive();
+    gRoofBufferFlying = flying;
     for (const RoofSquare& square : gRoofSquares) {
         if (gRoofVisibilityKnown && gRoofVisible[square.index] == 0) continue;
+        // Only the fly camera sees the bands: the game's view is slightly
+        // in perspective and keeps the game's own pixels on the flat square.
+        if ((square.fringe || square.patch) && flying && gRoofFringeTexture != 0) {
+            pushFringeBand(bands, square, y);
+            if (square.patch) {
+                // The mixed tile's roof, its wall-top part cut out: a flat square
+                // drawn from the fringe texture.
+                patches.push_back({ square.x0, y, square.z0, square.patchU0, square.patchV0 });
+                patches.push_back({ square.x1, y, square.z0, square.patchU1, square.patchV0 });
+                patches.push_back({ square.x1, y, square.z1, square.patchU1, square.patchV1 });
+                patches.push_back({ square.x0, y, square.z0, square.patchU0, square.patchV0 });
+                patches.push_back({ square.x1, y, square.z1, square.patchU1, square.patchV1 });
+                patches.push_back({ square.x0, y, square.z1, square.patchU0, square.patchV1 });
+            }
+            continue;
+        }
         vertices.push_back({ square.x0, y, square.z0, square.u0, square.v0 });
         vertices.push_back({ square.x1, y, square.z0, square.u1, square.v0 });
         vertices.push_back({ square.x1, y, square.z1, square.u1, square.v1 });
@@ -54,6 +120,10 @@ void rebuildRoofBuffer()
         vertices.push_back({ square.x1, y, square.z1, square.u1, square.v1 });
         vertices.push_back({ square.x0, y, square.z1, square.u0, square.v1 });
     }
+    gRoofFlatVertexCount = static_cast<int>(vertices.size());
+    gRoofPatchVertexCount = static_cast<int>(patches.size());
+    vertices.insert(vertices.end(), patches.begin(), patches.end());
+    vertices.insert(vertices.end(), bands.begin(), bands.end());
     if (gRoofVao == 0) glGenVertexArrays(1, &gRoofVao);
     if (gRoofVbo == 0) glGenBuffers(1, &gRoofVbo);
     glBindVertexArray(gRoofVao);
@@ -69,6 +139,28 @@ void rebuildRoofBuffer()
     gRoofBufferStale = false;
 }
 
+// The grid as the shader reads it: a square's roof, less where the egg shows
+// through it right now.
+void rebuildRoofGrid()
+{
+    std::memset(gRoofGrid, 0, sizeof(gRoofGrid));
+    for (const RoofSquare& square : gRoofSquares) {
+        if (gRoofVisibilityKnown && gRoofVisible[square.index] == 0) continue;
+        gRoofGrid[square.index] = 255;
+    }
+    if (gRoofGridTexture == 0) glGenTextures(1, &gRoofGridTexture);
+    glBindTexture(kTexture2D, gRoofGridTexture);
+    glPixelStorei(kUnpackAlignment, 1);
+    glPixelStorei(kUnpackRowLength, 0);
+    glTexImage2D(kTexture2D, 0, 0x8229 /* GL_R8 */, 100, 100, 0, 0x1903 /* GL_RED */, kUnsignedByte, gRoofGrid);
+    glPixelStorei(kUnpackAlignment, 4);
+    glTexParameteri(kTexture2D, kTextureMinFilter, kNearest);
+    glTexParameteri(kTexture2D, kTextureMagFilter, kNearest);
+    glTexParameteri(kTexture2D, kTextureWrapS, kClampToEdge);
+    glTexParameteri(kTexture2D, kTextureWrapT, kClampToEdge);
+    gRoofGridStale = false;
+}
+
 } // namespace
 
 namespace internal {
@@ -78,7 +170,15 @@ void setRoofSquares(std::vector<RoofSquare> squares)
     gRoofSquares = std::move(squares);
     gRoofVisibilityKnown = false;
     gRoofBufferStale = true;
+    gRoofGridStale = true;
     gRoofShadowStale = true;
+}
+
+void setRoofFringeTexture(unsigned int texture)
+{
+    if (gRoofFringeTexture != 0 && gContext != nullptr) glDeleteTextures(1, &gRoofFringeTexture);
+    gRoofFringeTexture = texture;
+    gRoofBufferStale = true;
 }
 
 void roofShadowCasters(unsigned int* vao, int* vertexCount)
@@ -113,6 +213,7 @@ void roofShadowCasters(unsigned int* vao, int* vertexCount)
         glBindVertexArray(0);
         gRoofShadowVertexCount = static_cast<int>(positions.size() / 3);
         gRoofShadowStale = false;
+        shadowCastersChanged();
         // One-shot load diagnostics (082 round 6), alongside the walls'
         // CASTERS print: the shadow map's content vs the receivers' lookups.
         float rx0 = 1e9f, rx1 = -1e9f, rz0 = 1e9f, rz1 = -1e9f;
@@ -138,8 +239,13 @@ void destroyRoofs()
         if (gRoofVao != 0) glDeleteVertexArrays(1, &gRoofVao);
         if (gRoofShadowVbo != 0) glDeleteBuffers(1, &gRoofShadowVbo);
         if (gRoofShadowVao != 0) glDeleteVertexArrays(1, &gRoofShadowVao);
+        if (gRoofGridTexture != 0) glDeleteTextures(1, &gRoofGridTexture);
         if (gEggTexture != 0) glDeleteTextures(1, &gEggTexture);
+        if (gRoofFringeTexture != 0) glDeleteTextures(1, &gRoofFringeTexture);
     }
+    gRoofFringeTexture = 0;
+    gRoofFlatVertexCount = 0;
+    gRoofPatchVertexCount = 0;
     setShadowRoofCasters(0, 0);
     gRoofVbo = 0;
     gRoofVao = 0;
@@ -151,6 +257,8 @@ void destroyRoofs()
     gRoofSquares.clear();
     gRoofVisibilityKnown = false;
     gRoofBufferStale = true;
+    gRoofGridTexture = 0;
+    gRoofGridStale = true;
     gEggTexture = 0;
     gEggMask = nullptr;
     gEggShown = false;
@@ -159,7 +267,7 @@ void destroyRoofs()
 void drawRoofs(int viewportX, int viewportY, int viewportWidth, int viewportHeight)
 {
     if (gRoofSquares.empty() || !gHeroProjectionLoaded) return;
-    if (gRoofBufferStale) rebuildRoofBuffer();
+    if (gRoofBufferStale || gRoofBufferFlying != staticFlyCameraActive()) rebuildRoofBuffer();
     if (gRoofVertexCount == 0) return;
 
     // The engine paints roofs over everything on the map, so they come last
@@ -182,10 +290,48 @@ void drawRoofs(int viewportX, int viewportY, int viewportWidth, int viewportHeig
     if (bindEgg(viewportX, viewportY, viewportWidth, viewportHeight)) glUniform1i(gSceneEggLocation, 1);
     glBindTexture(kTexture2D, gFloorTexture);
     glBindVertexArray(gRoofVao);
-    glDrawArrays(kTriangles, 0, gRoofVertexCount);
+    glDrawArrays(kTriangles, 0, gRoofFlatVertexCount);
+    if (gRoofVertexCount > gRoofFlatVertexCount) {
+        // The mixed tiles' roofs (cells of the fringe texture) go after the flat ones.
+        glBindTexture(kTexture2D, gRoofFringeTexture);
+        if (gRoofPatchVertexCount > 0) glDrawArrays(kTriangles, gRoofFlatVertexCount, gRoofPatchVertexCount);
+        // The flat roofs do not write depth, so a wall-top band behind a nearer
+        // roof would paint over it: the opaque roof texels (the cutoff drops
+        // the rest) go into the depth buffer, colors off, before the bands.
+        glColorMask(0, 0, 0, 0);
+        glDepthMask(1);
+        glDepthFunc(kLess);
+        if (gRoofPatchVertexCount > 0) glDrawArrays(kTriangles, gRoofFlatVertexCount, gRoofPatchVertexCount);
+        glBindTexture(kTexture2D, gFloorTexture);
+        glDrawArrays(kTriangles, 0, gRoofFlatVertexCount);
+        glDepthMask(0);
+        glColorMask(1, 1, 1, 1);
+        glBindTexture(kTexture2D, gRoofFringeTexture);
+        const int bandStart = gRoofFlatVertexCount + gRoofPatchVertexCount;
+        glDrawArrays(kTriangles, bandStart, gRoofVertexCount - bandStart);
+        glBindTexture(kTexture2D, gFloorTexture);
+    }
     glUniform1i(gSceneEggLocation, 0);
     glDisable(kBlend);
     if (flying) glDepthMask(1);
+}
+
+// The height the cards are cut at where a roof covers them (114): the roofs'
+// plane, 0 with no roofs on the map.
+float roofClipHeight()
+{
+    return gRoofSquares.empty() || !gHeroProjectionLoaded
+        ? 0.0f
+        : static_cast<float>(kRoofPixels / gHeroProjection.hpx);
+}
+
+void bindRoofGrid(int unit)
+{
+    if (gRoofGridStale) rebuildRoofGrid();
+    glActiveTexture(kTexture0 + unit);
+    glBindTexture(kTexture2D, gRoofGridTexture);
+    glUniform1i(gSceneRoofGridLocation, unit);
+    glActiveTexture(kTexture0);
 }
 
 bool bindEgg(int viewportX, int viewportY, int viewportWidth, int viewportHeight)
@@ -207,12 +353,32 @@ bool bindEgg(int viewportX, int viewportY, int viewportWidth, int viewportHeight
     glActiveTexture(kTexture0 + 1);
     glBindTexture(kTexture2D, gEggTexture);
     glUniform1i(gSceneEggMaskLocation, 1);
-    glUniform4f(gSceneEggRectLocation, anchorX - zx * 0.5f, anchorY - (zy - 1.0f), zx, zy);
+    const float left = anchorX - zx * 0.5f;
+    const float top = anchorY - (zy - 1.0f);
+    glUniform4f(gSceneEggRectLocation, left, top, zx, zy);
+    // The same rect in window pixels, the inverse of eggShare's mapping (GL y
+    // runs up), one pixel wider on each side for the rounding.
+    const double sx = static_cast<double>(viewportWidth) / gLogicalWidth;
+    const double sy = static_cast<double>(viewportHeight) / gLogicalHeight;
+    const int x0 = viewportX + static_cast<int>(std::floor(left * sx)) - 1;
+    const int x1 = viewportX + static_cast<int>(std::ceil((left + zx) * sx)) + 1;
+    const int y0 = viewportY + static_cast<int>(std::floor((gLogicalHeight - top - zy) * sy)) - 1;
+    const int y1 = viewportY + static_cast<int>(std::ceil((gLogicalHeight - top) * sy)) + 1;
+    gEggScissor[0] = x0;
+    gEggScissor[1] = y0;
+    gEggScissor[2] = std::max(0, x1 - x0);
+    gEggScissor[3] = std::max(0, y1 - y0);
     glUniform4f(gSceneViewportLocation, static_cast<float>(viewportX), static_cast<float>(viewportY),
         static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
     glUniform2f(gSceneLogicalLocation, static_cast<float>(gLogicalWidth), static_cast<float>(gLogicalHeight));
     glActiveTexture(kTexture0);
     return true;
+}
+
+void scissorToEgg()
+{
+    glEnable(kScissorTest);
+    glScissor(gEggScissor[0], gEggScissor[1], gEggScissor[2], gEggScissor[3]);
 }
 
 } // namespace internal
@@ -223,6 +389,7 @@ void setStaticRoofVisibility(const unsigned char* visible)
     std::memcpy(gRoofVisible, visible, kSquareCount);
     gRoofVisibilityKnown = true;
     gRoofBufferStale = true;
+    gRoofGridStale = true;
 }
 
 void setStaticEgg(const unsigned char* mask, int width, int height, int left, int top)

@@ -5,6 +5,8 @@
 #endif
 
 #include "color.h"
+#include "cursor_sensitivity.h"
+#include "devtools/preferences_probe.h"
 #include "dinput.h"
 #include "input.h"
 #include "interface.h"
@@ -15,6 +17,9 @@
 #include "touch.h"
 #include "window_manager.h"
 #include "scene/text_capture.h"
+
+#include <algorithm>
+#include <cmath>
 
 namespace fallout {
 
@@ -60,6 +65,8 @@ static unsigned char* _mouse_fptr = nullptr;
 
 // 0x51E2A0 mouse_sensitivity
 static double gMouseSensitivity = 1.0;
+static bool gPreviousMouseInputWasRelative = false;
+static AbsoluteCursorSensitivity gAbsoluteSensitivity;
 
 // 0x51E2AC last_buttons
 static int last_buttons = 0;
@@ -578,6 +585,7 @@ void _mouse_info()
 
     MouseData mouseData;
     if (mouseDeviceGetData(&mouseData)) {
+        devtools::preferencesProbeOverrideMouse(&mouseData.x, &mouseData.y, &mouseData.buttons[0], &mouseData.buttons[1]);
         x = mouseData.x;
         y = mouseData.y;
 
@@ -593,14 +601,27 @@ void _mouse_info()
         y = 0;
     }
 
-    // Mouse sensitivity only applies to relative movement. In windowed mode
-    // SDL provides absolute coordinates that should not be scaled.
     if (mouseDeviceUsesRelativeMode()) {
         x = (int)(x * gMouseSensitivity);
         y = (int)(y * gMouseSensitivity);
+        gAbsoluteSensitivity.reset();
+        gPreviousMouseInputWasRelative = true;
+    } else {
+        if (gPreviousMouseInputWasRelative) gAbsoluteSensitivity.reset();
+        const auto scaled = gAbsoluteSensitivity.update(mouseData.x, mouseData.y, gMouseSensitivity,
+            screenGetWidth() - 1, screenGetHeight() - 1);
+        x = scaled.first;
+        y = scaled.second;
+        gPreviousMouseInputWasRelative = false;
     }
 
     _mouse_simulate_input(x, y, buttons);
+    if (!mouseDeviceUsesRelativeMode()) {
+        int cursorX = 0;
+        int cursorY = 0;
+        mouseGetPosition(&cursorX, &cursorY);
+        if (cursorX != x || cursorY != y) gAbsoluteSensitivity.sync(cursorX, cursorY);
+    }
 
     // TODO: Move to `_mouse_simulate_input`.
     gMouseWheelX = mouseData.wheelX;
@@ -847,6 +868,16 @@ void mouseSetSensitivity(double value)
     if (value >= MOUSE_SENSITIVITY_MIN && value <= MOUSE_SENSITIVITY_MAX) {
         gMouseSensitivity = value;
     }
+}
+
+double mouseGetSensitivity()
+{
+    return gMouseSensitivity;
+}
+
+void mouseResetAbsoluteSensitivityTracking()
+{
+    gAbsoluteSensitivity.reset();
 }
 
 void mouseGetPositionInWindow(int win, int* x, int* y)

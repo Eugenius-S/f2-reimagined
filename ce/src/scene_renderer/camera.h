@@ -9,6 +9,7 @@ namespace scene_renderer {
 
 struct GameView;
 struct SpriteCardProjection;
+struct SpriteCardVertex;
 
 struct StaticPreviewCamera {
     float eye[3];
@@ -54,12 +55,23 @@ struct StaticFlyCamera {
 // nullptr: back to the game view.
 void setStaticFlyCamera(const StaticFlyCamera* camera);
 bool staticFlyCameraActive();
+bool staticFlyCamera(StaticFlyCamera* camera);
 // Where the game view looks from and at (GL), as a fly camera's start; false
 // before the view is known.
 bool staticGameViewPose(StaticFlyCamera* camera);
 // The game view's camera itself: its eye and field of view (camera rotation
 // circles it).
 bool staticGameViewCamera(StaticFlyCamera* camera);
+// Project a GL world point to game logical screen pixels.
+bool staticScreenFromWorld(double worldX, double worldY, double worldZ, double* logicalX, double* logicalY);
+// True while the scene uses a turned camera or a non-default zoom.
+bool sceneCameraTransformed();
+// Turn a standing card to face an active fly camera, as live sprites do.
+void staticFaceSpriteCardToCamera(SpriteCardVertex corners[4]);
+// The ground (GL x, z) distance the game view moves for a screen step of
+// stepX right and stepY down (game pixels) at its center: what an edge scroll
+// step really does on the ground. False before the view is known.
+bool gameViewGroundStep(double stepX, double stepY, double horizontal[2], double vertical[2]);
 // The direction a fly camera looks in, and its screen right, in GL world.
 void staticFlyCameraAxes(const StaticFlyCamera& camera, float forward[3], float right[3]);
 

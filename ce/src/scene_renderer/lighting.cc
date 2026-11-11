@@ -159,7 +159,7 @@ bool bindLight()
     prepareLights(&reach);
 
     glActiveTexture(kTexture0 + 3);
-    while (glGetError() != 0) {
+    if (glErrorChecksEnabled()) while (glGetError() != 0) {
     }
     if (gReachTexture == 0) {
         glGenTextures(1, &gReachTexture);
@@ -177,7 +177,7 @@ bool bindLight()
         glPixelStorei(kUnpackAlignment, 4);
         gReach = std::move(reach);
     }
-    if (gReachTexture == 0 || glGetError() != 0) {
+    if (gReachTexture == 0 || (glErrorChecksEnabled() && glGetError() != 0)) {
         fprintf(stderr, "scene_renderer: the light could not be uploaded; the scene stays unlit\n");
         fflush(stderr);
         gLightFailed = true;
@@ -215,7 +215,7 @@ bool bindLight()
         glPixelStorei(kUnpackAlignment, 4);
         gHexStale = false;
     }
-    if (gHexTexture == 0 || glGetError() != 0) {
+    if (gHexTexture == 0 || (glErrorChecksEnabled() && glGetError() != 0)) {
         fprintf(stderr, "scene_renderer: the light could not be uploaded; the scene stays unlit\n");
         fflush(stderr);
         gLightFailed = true;

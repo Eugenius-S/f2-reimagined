@@ -16,6 +16,7 @@
 #include "queue.h"
 #include "random.h"
 #include "scripts.h"
+#include "sfall_gaps.h"
 #include "skill.h"
 #include "worldmap.h"
 
@@ -186,12 +187,43 @@ ProgramValue ScriptHookCall::getNextArgFromScript(Program* program)
     return _args[_scriptArgs++].toProgramValue(program);
 }
 
+// The hooks CE never runs: a script can register them, but they never fire.
+static bool scriptHookIsFired(int hookType)
+{
+    switch (hookType) {
+    case 3: // HOOK_DEATHANIM1
+    case 7: // HOOK_FINDTARGET
+    case 12: // HOOK_HEXMOVEBLOCKING
+    case 13: // HOOK_HEXAIBLOCKING
+    case 14: // HOOK_HEXSHOOTBLOCKING
+    case 15: // HOOK_HEXSIGHTBLOCKING
+    case HOOK_CARTRAVEL:
+    case HOOK_SETGLOBALVAR:
+    case 36: // HOOK_ONEXPLOSION
+    case 37: // HOOK_SUBCOMBATDAMAGE
+    case 38: // HOOK_SETLIGHTING
+    case HOOK_SNEAK:
+    case 42: // HOOK_TARGETOBJECT
+    case 44: // HOOK_ADJUSTPOISON
+    case HOOK_ROLLCHECK:
+    case HOOK_BESTWEAPON:
+    case HOOK_BUILDSFXWEAPON:
+        return false;
+    }
+    return hookType < 49 || hookType > 60;
+}
+
 bool scriptHooksRegister(Program* program, const HookType hookType, const int procedureIndex)
 {
     assert(program != nullptr && hookType >= 0 && hookType < HOOK_COUNT && procedureIndex >= 0 && procedureIndex < program->procedureCount());
 
     auto& hooksByType = scriptHooks[hookType];
     const bool isUnregisterRequest = procedureIndex == 0;
+    if (!isUnregisterRequest && !scriptHookIsFired(hookType)) {
+        char hookName[16];
+        snprintf(hookName, sizeof(hookName), "%d", hookType);
+        sfallGapNote("hook", hookName, program);
+    }
     // Check for existing registration.
     for (auto it = hooksByType.begin(); it != hooksByType.end(); ++it) {
         if (it->program == program) {

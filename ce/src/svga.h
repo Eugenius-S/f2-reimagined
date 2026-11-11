@@ -19,6 +19,11 @@ extern SDL_Texture* gSdlTexture;
 extern SDL_Surface* gSdlTextureSurface;
 extern FpsLimiter sharedFpsLimiter;
 
+// Optional RGBA background for art that cannot use the game's indexed palette.
+// The mask keeps menu controls and labels on top of the image.
+void renderSetRgbaBackground(const unsigned char* rgba, const unsigned char* mask, int width, int height);
+void renderClearRgbaBackground();
+
 enum class WindowMode : int {
     Fullscreen = 0,
     Windowed = 1,
@@ -37,7 +42,7 @@ void _get_start_mode_();
 void _zero_vid_mem();
 int _GNW95_init_mode_ex(int width, int height, int bpp);
 int _init_vesa_mode(int width, int height);
-int _GNW95_init_window(int width, int height, WindowMode mode, int scale);
+int _GNW95_init_window(int width, int height, WindowMode mode, int outputWidth, int outputHeight);
 int directDrawInit(int width, int height, int bpp);
 void directDrawFree();
 void directDrawSetPaletteInRange(unsigned char* palette, int start, int count);
@@ -50,6 +55,7 @@ int screenGetWidth();
 int screenGetHeight();
 int screenGetVisibleHeight();
 void handleWindowSizeChanged();
+void applyWindowModeLive();
 void renderFpsCounter();
 void renderPresent();
 bool screenIsExclusiveFullscreen();

@@ -69,6 +69,10 @@ void clearStaticLight();
 
 // Objects walls.bin already draws (baked.bin): the caller only picks them.
 bool staticObjectBaked(int tile, int fid);
+bool staticObjectFlyOnly(int tile, int fid);
+// The object's row in walls.bin, -1 when walls.bin has none (its casters
+// write row + 1 into the shadow map's id channel).
+int staticWallObjectRow(int tile, int fid);
 // Things standing on a solid (an item on a table) are moved onto it, along the
 // game's view ray: GL offset (x, y up, z). False when the object stays put.
 bool staticObjectLift(int tile, int fid, float lift[3]);
@@ -80,6 +84,11 @@ bool staticObjectFlat(int tile, int fid);
 bool staticObjectPlane(int tile, int fid, float plane[3]);
 // Low cards (a cabbage, a tin): flat under the fly camera.
 bool staticObjectFlyFlat(int tile, int fid);
+// A card on the hand list of flat items (task 129): it keeps its game-view plane in flight.
+bool staticObjectFixedCard(int tile, int fid);
+// Half the map's wall height: a standing card taller than that is a body
+// (a tree, a statue) and keeps its whole verdict at the feet (109).
+float staticHalfWallHeight();
 // Dev (--dev-solo): draw only the things within radius hexes of tile, without
 // walls and roofs, to look at one thing from every side. Set before a map loads.
 void setStaticSolo(int tile, int radius);

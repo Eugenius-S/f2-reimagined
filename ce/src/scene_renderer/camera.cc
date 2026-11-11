@@ -5,6 +5,7 @@
 
 #include "ground_pick.h"
 #include "scene_internal.h"
+#include "perf.h"
 #include "../tile.h"
 
 namespace fallout {
@@ -230,6 +231,14 @@ bool staticFlyCameraActive()
     return gFlying;
 }
 
+bool staticFlyCamera(StaticFlyCamera* camera)
+{
+    if (!gFlying || camera == nullptr) return false;
+    *camera = gFly;
+    if (camera->fovY <= 0.0f) camera->fovY = kFlyFovY;
+    return true;
+}
+
 void staticFlyCameraAxes(const StaticFlyCamera& camera, float forward[3], float right[3])
 {
     forward[0] = std::cos(camera.pitch) * std::cos(camera.yaw);
@@ -284,6 +293,69 @@ bool staticGameViewCamera(StaticFlyCamera* camera)
     return true;
 }
 
+bool sceneCameraTransformed()
+{
+    return gFlying || std::abs(gZoom - 1.0) > 1e-6;
+}
+
+void staticFaceSpriteCardToCamera(SpriteCardVertex corners[4])
+{
+    if (!gFlying || corners == nullptr) return;
+    double rightX, rightZ;
+    if (!flyCameraRight(&rightX, &rightZ)) return;
+    const double middleX = (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4.0;
+    const double middleZ = (corners[0].z + corners[1].z + corners[2].z + corners[3].z) / 4.0;
+    const double leftX = (corners[0].x + corners[1].x) / 2.0 - middleX;
+    const double leftZ = (corners[0].z + corners[1].z) / 2.0 - middleZ;
+    const double half = std::hypot(leftX, leftZ);
+    for (int index = 0; index < 4; index++) {
+        const double side = index < 2 ? -half : half;
+        corners[index].x = middleX + rightX * side;
+        corners[index].z = middleZ + rightZ * side;
+    }
+}
+
+bool staticScreenFromWorld(double worldX, double worldY, double worldZ, double* logicalX, double* logicalY)
+{
+    if (logicalX == nullptr || logicalY == nullptr) return false;
+    GameView view;
+    if (!currentGameView(&view)) return false;
+    if (!gFlying) return gameViewProject(view, worldX, worldY, worldZ, logicalX, logicalY);
+    float mvp[16];
+    if (!flyCameraMvp(static_cast<float>(view.logicalWidth) / view.logicalHeight, mvp)) return false;
+    const float point[4] = { static_cast<float>(worldX), static_cast<float>(worldY), static_cast<float>(worldZ), 1.0f };
+    float clip[4] = {};
+    for (int row = 0; row < 4; row++) {
+        for (int column = 0; column < 4; column++) clip[row] += mvp[column * 4 + row] * point[column];
+    }
+    if (!(clip[3] > 1e-6f) || !std::isfinite(clip[3])) return false;
+    *logicalX = (clip[0] / clip[3] + 1.0) * 0.5 * view.logicalWidth;
+    *logicalY = (1.0 - clip[1] / clip[3]) * 0.5 * view.logicalHeight;
+    return std::isfinite(*logicalX) && std::isfinite(*logicalY);
+}
+
+bool gameViewGroundStep(double stepX, double stepY, double horizontal[2], double vertical[2])
+{
+    GameView view;
+    if (!currentGameView(&view) || view.logicalHeight <= 0) return false;
+    const double middleX = view.screenCenterSet ? view.screenCenter[0] : view.logicalWidth / 2.0;
+    const double middleY = view.screenCenterSet ? view.screenCenter[1] : view.logicalHeight / 2.0;
+    // Central differences: the projection is oblique and in perspective, so the
+    // step is measured on both sides of the center.
+    double leftX, leftZ, rightX, rightZ, upX, upZ, downX, downZ;
+    if (!gameViewPickGround(view, middleX - stepX, middleY, &leftX, &leftZ)
+        || !gameViewPickGround(view, middleX + stepX, middleY, &rightX, &rightZ)
+        || !gameViewPickGround(view, middleX, middleY - stepY, &upX, &upZ)
+        || !gameViewPickGround(view, middleX, middleY + stepY, &downX, &downZ)) {
+        return false;
+    }
+    horizontal[0] = (rightX - leftX) / 2.0;
+    horizontal[1] = (rightZ - leftZ) / 2.0;
+    vertical[0] = (downX - upX) / 2.0;
+    vertical[1] = (downZ - upZ) / 2.0;
+    return true;
+}
+
 StaticPreviewCamera staticPreviewCamera(bool withWalls)
 {
     GroundPickCamera camera = staticPreviewCameraParameters(withWalls);
@@ -328,6 +400,7 @@ bool loadStaticProjection(const std::filesystem::path& cacheDirectory, std::stri
         return false;
     };
     if (!gInitialized) return fail("OpenGL renderer is unavailable");
+    PerfScope stage("projection");
 
     constexpr size_t kHeaderSize = 12;
     constexpr size_t kValueCount = 10;

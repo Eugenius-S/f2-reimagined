@@ -1,0 +1,262 @@
+# 172: the map-change phase tables
+
+All values in ms, from the chain start (the engine's mapLoadByName entry)
+to the mark. `first_frame` = the first full 3D frame. Measured with
+F2CE_PERF=1 in dev runs (dev-snapshot, view tile 25075, elevation 0),
+the scene cache warm on disk. The stage scopes (floor/walls/... sub-phases)
+live in each run's logs/devperf.log.
+
+## before kladwtwn (run 994e62e8a897)
+
+```
+perf load chain map_change begin
+perf load map_tiles ms=44.66 since chain start
+perf load map_scripts ms=45.37 since chain start
+perf load map_objects ms=1366.66 since chain start
+perf load map_elevation ms=1367.46 since chain start
+perf load map_load ms=1821.68 since chain start
+perf load floor ms=96.65
+perf load walls ms=227.74
+perf load projection ms=0.09
+perf load scene_loaded ms=2193.36 since chain start
+perf load scene_total ms=333.47
+perf load first_frame ms=2486.92 since chain start
+```
+
+## before newr1 (run c6c5e8e67461)
+
+```
+perf load chain map_change begin
+perf load map_tiles ms=70.03 since chain start
+perf load map_scripts ms=70.74 since chain start
+perf load map_objects ms=1972.24 since chain start
+perf load map_elevation ms=1973.09 since chain start
+perf load map_load ms=2545.56 since chain start
+perf load floor ms=96.38
+perf load walls ms=245.32
+perf load projection ms=0.10
+perf load scene_loaded ms=2901.26 since chain start
+perf load scene_total ms=350.26
+perf load first_frame ms=3376.74 since chain start
+```
+
+## before vctyctyd (run bb71451cafca)
+
+```
+perf load chain map_change begin
+perf load map_tiles ms=51.38 since chain start
+perf load map_scripts ms=52.15 since chain start
+perf load map_objects ms=1342.18 since chain start
+perf load map_elevation ms=1342.98 since chain start
+perf load map_load ms=1640.86 since chain start
+perf load floor ms=54.00
+perf load walls ms=183.27
+perf load projection ms=0.07
+perf load scene_loaded ms=1891.43 since chain start
+perf load scene_total ms=244.34
+perf load first_frame ms=2298.74 since chain start
+```
+
+## before cave0 (run 32b6f8ace55d)
+
+```
+perf load chain map_change begin
+perf load map_tiles ms=47.10 since chain start
+perf load map_scripts ms=47.65 since chain start
+perf load map_objects ms=114.85 since chain start
+perf load map_elevation ms=115.39 since chain start
+perf load map_load ms=243.84 since chain start
+perf load floor ms=36.00
+perf load walls ms=12.96
+perf load projection ms=0.08
+perf load scene_loaded ms=305.15 since chain start
+perf load scene_total ms=52.45
+perf load first_frame ms=484.39 since chain start
+```
+
+## after (run 4f452ae4bbb9)
+
+```
+perf load objects_load ms=427.26
+perf load objects_load ms=0.00
+perf load objects_load ms=0.00
+perf load objects_light ms=237.61
+perf load map_objects ms=727.38 since chain start
+perf load map_elevation ms=734.85 since chain start
+perf load art_preload ms=446.50
+perf load map_load ms=1227.32 since chain start
+perf load floor ms=93.00
+perf load walls ms=230.96
+perf load projection ms=0.23
+perf load scene_loaded ms=1598.46 since chain start
+perf load scene_total ms=334.07
+perf load first_frame ms=1945.83 since chain start
+```
+
+## after (run c9ea9e8e90f9)
+
+```
+perf load objects_load ms=488.53
+perf load objects_load ms=44.16
+perf load objects_load ms=25.19
+perf load objects_light ms=297.37
+perf load map_objects ms=932.33 since chain start
+perf load map_elevation ms=1039.45 since chain start
+perf load art_preload ms=525.26
+perf load map_load ms=1628.18 since chain start
+perf load floor ms=98.08
+perf load walls ms=299.95
+perf load projection ms=0.08
+perf load scene_loaded ms=2072.92 since chain start
+perf load scene_total ms=405.48
+perf load first_frame ms=2519.49 since chain start
+```
+
+## after (run 5d86ef7e7aa9)
+
+```
+perf load objects_load ms=334.47
+perf load objects_load ms=0.00
+perf load objects_load ms=0.00
+perf load objects_light ms=259.65
+perf load map_objects ms=650.93 since chain start
+perf load map_elevation ms=694.85 since chain start
+perf load art_preload ms=351.31
+perf load map_load ms=1086.73 since chain start
+perf load floor ms=53.30
+perf load walls ms=189.54
+perf load projection ms=0.08
+perf load scene_loaded ms=1352.43 since chain start
+perf load scene_total ms=249.35
+perf load first_frame ms=1756.95 since chain start
+```
+
+## after (run e4a245b5ef68)
+
+```
+perf load objects_load ms=58.10
+perf load objects_load ms=0.00
+perf load objects_load ms=0.00
+perf load objects_light ms=0.11
+perf load map_objects ms=119.67 since chain start
+perf load map_elevation ms=120.37 since chain start
+perf load art_preload ms=130.73
+perf load map_load ms=255.69 since chain start
+perf load floor ms=35.30
+perf load walls ms=11.19
+perf load projection ms=0.11
+perf load scene_loaded ms=311.36 since chain start
+perf load scene_total ms=49.66
+perf load first_frame ms=462.01 since chain start
+```
+
+
+## the parallel proto warm (2026-11-08, glm)
+
+The planned lever (the light spread on worker threads) turned out to be
+aimed at the wrong cost: with the protos warm the whole spread walk is
+~2 ms. The rebuild's real cost was the lazy proto loads - the walk reads
+wall extendedFlags per visited tile and every miss pays a .lst and a .pro
+file read (~2 ms each, 219 unique wall protos on newr1). So this round
+parallelizes the proto warm instead: the unique wall pids parse over up to
+4 threads (pure file reads, no list touches), the inserts stay on the main
+thread, the spread keeps the vanilla shape. The spread result is
+pixel-identical (0 changed px against the before runs' snapshots on all
+four maps).
+
+Second chain, warm OS cache, view tile 25075, elevation 0
+(kladwtwn 5d5d0b2cd2e4 / newr1 5a825a4592af + 21a04d543180 /
+vctyctyd 13e788383eff / cave0 71f851ba8218; before rows from
+5fe157771fa3 / 6ebfe956afba / 4daf112f8c99 / df764d284470):
+
+| map | objects_light | first_frame before | first_frame after |
+| --- | --- | --- | --- |
+| kladwtwn | 238 -> 48 | 1933 | 1793 |
+| newr1 | 295/297 -> 46/48 | 2609/2524 | 2397/2319 |
+| vctyctyd | 260 -> 45 | 1827 | 1508 |
+| cave0 | 0.1 -> 0.8 | 638 | 619 |
+
+## the scene PNG decodes in parallel (2026-11-08, glm)
+
+Walls: the pages decode over up to 4 workers (read + decode + alpha
+validation on private buffers), the upload loop is untouched. The
+walls_decode scope now reads as the longest page (157 ms on newr1)
+instead of the sum of the pages (~240 ms). Floor: roof_fringe.png
+decodes in one worker while tiles.png decodes on the main path.
+
+Second chain, warm OS cache (kladwtwn 95bda9a8ea6f / newr1 b13ecbf0a06c
++ b3cdd3edee9a / vctyctyd 12e4225a3ff2 / cave0 a9e8a1beca8b; before rows
+from 5d5d0b2cd2e4 / 5a825a4592af / 13e788383eff / 71f851ba8218):
+
+| map | walls before | walls after | scene_total before | scene_total after | first_frame before | first_frame after |
+| --- | --- | --- | --- | --- | --- | --- |
+| kladwtwn | 313 (decode 240ish) | 221 | 408 | 337 | 1793 | 1710 |
+| newr1 | 320 | 212/181 | 437 | 329/280 | 2397/2319 | 2280/2230 |
+| vctyctyd | 176 | 182 | 247 | 280 | 1508 | 1637 |
+| cave0 | 12 | 37 | 60 | 113 | 619 | 701 |
+
+The first_frame column swings +-100 ms between identical runs (driver and
+OS cache); the scene stage's own drop of ~90-110 ms on the big maps is
+the lever. Pixel-identical: 0 changed px on all four maps.
+
+## the first-frame split and the dead ends (2026-11-08, glm, probes)
+
+Load-chain marks now split the scene_loaded -> first_frame gap
+(ff_present_top, ff_sync_done, ff_draw_begin, ff_shadow_done,
+ff_bake_done; deduped per chain like the rest).
+
+newr1 (fd78cf6af0d6): scene_loaded 1629 -> shadow done 1693 (the shadow
+map render, +64) -> bake done 1694 (+1) -> ff_draw_begin 2142 (+448: the
+game loop's own frame work between presents, which in a dev-snapshot run
+includes the preview policy and the travel retry) -> first_frame 2145
+(the Full draw itself, +3).
+
+Dead ends measured and dropped:
+- The per-object script link block (objectLoadAll's scriptGetScript tail)
+  is free: 6341 objects, every construction at 0.00 ms. The old Log's
+  "~590 ms of per-object script links" was wrong (it was the lazy proto
+  loads, fixed above). The probe itself poisoned the run: per-object
+  PerfScope constructions cost ~0.09 ms each, 12k of them added ~1.1 s
+  (the same trap as the per-read perf writes).
+- The art warm at 8 threads instead of 4: art_preload 390 -> 370 ms on
+  newr1 (noise), 325 -> 328 on kladwtwn, 166 -> 152 on vctyctyd. The
+  warm stops scaling past 4 threads on this machine (16 logical cores
+  idle), so the cap stays at 4.
+- objects_load (~560 ms on newr1) is the engine's serial objectRead over
+  one stream; splitting it needs a restructure, not a warm.
+
+## the proto .lst miss re-read, cached (2026-11-08, glm)
+
+The probes first split the object loop (PerfSum spans, one line per
+section) and the first-present gap. objects_read was 552 of the 560 ms
+of objects_load on newr1, and the ~450 ms between the scene's first
+draw and the Full present is the devshot's own takeSnapshot (frame
+readback plus PNG encode, dev tooling; the owner's game does not pay
+it). A buffered section (one bulk read, then the section parsed from a
+memory stream) left objects_read at 547 ms - the tiny reads were not
+the cost. It was protoGetProto's misses: every miss re-read and
+re-walked the type's .lst to find the .pro's name (~2 ms each), and
+objectDataRead misses once per unique item or scenery pid (the parse
+needs the proto's subtype to know its tail's field count).
+
+The fix: each type's .lst table loads once into memory, with the same
+space and end-of-line cuts as the old walk, so a miss pays the .pro
+read alone. The buffer experiment came back out. Second chain, warm OS
+cache (newr1 before = cf2d297ba33a, after = 7dbe555c6173; kladwtwn
+c43402292bd3, vctyctyd d7be2063d99d, cave0 ada9387d42e3; before
+first_frame from the PNG-decode table above, whose runs predate this
+one by only the mark-only #364):
+
+| map | objects_read before | objects_read after | map_load before | map_load after | first_frame before | first_frame after |
+| --- | --- | --- | --- | --- | --- | --- |
+| kladwtwn | - | 48.29 (n=9204) | - | 606 | 1710 | 1306 |
+| newr1 | 551.72 (n=10472) | 78.08 | 1304 | 806 | 2089 | 1668 |
+| vctyctyd | - | 42.67 (n=7130) | - | 462 | 1637 | 1242 |
+| cave0 | - | 6.95 (n=1904) | - | 183 | ~700 | 597 |
+
+All four maps hold the 2 s budget with the dev-shot overhead included;
+the owner's side sits under it by half a second and more. The chain's
+next candidates: the ~150 ms between map_objects and map_elevation
+(critter combat data fix plus mapSetElevation), art_preload ~390 ms
+(capped at 4 threads), the object-card atlas rebuild on the first
+refresh (~57 ms). ctest 24/24.

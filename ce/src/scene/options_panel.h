@@ -25,18 +25,23 @@ public:
     unsigned char* contentBuffer();
     unsigned char* footerBuffer();
     int contentHeight() const;
+    int footerButtonTop() const;
     int rowCount() const;
     int rowTop(int index) const;
     int rowHeight(int index) const;
     int rowButtonX() const;
     int rowButtonWidth() const;
     int frameInset() const;
+    int legacyColumnOffset() const;
     int sliderTrackLeft() const;
     int sliderTrackRight() const;
     int sliderTrackTargetX(double ratio) const;
     int sliderTrackY(int index) const;
     int findRowBySettingId(const std::string& id) const;
     std::string settingValueForProbe(const std::string& id) const;
+    // Probe hook: moves the keyboard selection to the named setting's row,
+    // so a scripted Space acts on that row and not on the first one.
+    void selectRowForProbe(const std::string& id);
     int scroll() const;
     int maxScroll() const;
     int scrollbarX() const;
@@ -49,6 +54,7 @@ public:
     void setButtonLayout(const std::vector<std::pair<int, int>>& legacyButtons, int speedButton, int speedTop, const std::vector<int>& rowButtons);
     void setScroll(int value);
     void showPanelForSnapshot(bool bottom);
+    void showDropdownForSnapshot(const std::string& settingId);
     void draw();
     void refresh();
     bool handleEvent(int eventCode);
@@ -68,6 +74,9 @@ private:
         int top = 0;
     };
     void drawRows();
+    void drawDropdown();
+    int dropdownVisibleItemCount();
+    void updateScaleRange();
     void buildRowLayout();
     void compose();
     void buildBackgroundTexture();
@@ -87,6 +96,8 @@ private:
     int pageY_ = 0;
     LabelResolver labelResolver_ = nullptr;
     int contentHeight_ = 480;
+    int panelBottom_ = 0;
+    int footerButtonTop_ = 450;
     int scroll_ = 0;
     int sliderTrackOffset_ = 0;
     std::vector<unsigned char> content_;
@@ -106,6 +117,12 @@ private:
     std::unique_ptr<OptionsSettingsModel> model_;
     std::string error_;
     int selectedRow_ = 0;
+    int dropdownRow_ = -1;
+    int dropdownScroll_ = 0;
+    int dropdownHighlight_ = 0;
+    bool dropdownAbove_ = false;
+    bool dropdownWaitRelease_ = false;
+    int displayIndex_ = 0;
     std::vector<std::pair<int, int>> legacyButtons_;
     std::unordered_map<int, int> buttonLefts_;
     std::unordered_map<int, int> buttonWidths_;

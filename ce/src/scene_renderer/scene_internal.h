@@ -44,6 +44,7 @@ constexpr unsigned int kArrayBuffer = 0x8892;
 constexpr unsigned int kStaticDraw = 0x88E4;
 constexpr unsigned int kColorBufferBit = 0x4000;
 constexpr unsigned int kBlend = 0x0BE2;
+constexpr unsigned int kScissorTest = 0x0C11;
 constexpr unsigned int kTexture0 = 0x84C0;
 constexpr unsigned int kDepthBufferBit = 0x0100;
 constexpr unsigned int kDepthTest = 0x0B71;
@@ -163,6 +164,8 @@ extern int gSceneGlassGrayLocation;
 extern int gScenePickLocation;
 extern int gSceneClipEnabledLocation;
 extern int gSceneClipPlaneLocations[4];
+extern int gSceneRoofClipLocation;
+extern int gSceneRoofGridLocation;
 // The see-through circle (roofs.cc): on/off, its mask (texture unit 1), its
 // rect in game logical pixels, and the GL viewport and logical size to find
 // a fragment's game pixel.
@@ -204,7 +207,11 @@ extern int gSceneShadowOnLocation;
 extern int gSceneShadowMatrixLocation;
 extern int gSceneShadowMapLocation;
 extern int gSceneShadowIdsLocation;
+extern int gSceneShadowOccupancyLocation;
+extern int gSceneShadowOccupancyOnLocation;
 extern int gSceneShadowStrengthLocation;
+extern int gSceneMoonStrengthLocation;
+extern int gSceneMoonDirectionLocation;
 extern int gSceneShadowDensityLocation;
 extern int gSceneShadowLightLocation;
 extern int gSceneShadowStepLocation;
@@ -222,6 +229,21 @@ extern int gSceneShadowAnchorLocation;
 // 090: x 1 when a low card reads the shadow per pixel on the ground it shows,
 // y the height of that ground.
 extern int gSceneShadowGroundLocation;
+// 109: 1 when a card takes its whole shadow verdict at its feet point (the
+// people); a standing card of any other kind reads it per pixel on its own
+// plane.
+extern int gSceneShadowFeetLocation;
+extern int gSceneShadowGroupLocation; // 241: a card's composite sprite group, -1: none
+extern int gSceneShadowGroupsLocation; // 241: the groups' anchors and casters
+// The drifting cloud shadows: whether they shade the ambient sun light and
+// their world-space wind offset.
+extern int gSceneCloudOnLocation;
+extern int gSceneCloudOffsetLocation;
+// The ground's baked light and shadow (157): 1 captures it into the
+// half-resolution buffer (unit 7), 2 has the floor tiles sample it, 0 the
+// usual per-pixel path for everything else.
+extern int gSceneGroundBakeModeLocation;
+extern int gSceneGroundBakeMapLocation;
 
 bool createSceneShader(std::string* error);
 void destroySceneShader();
@@ -232,6 +254,11 @@ extern unsigned int gFloorVao;
 extern unsigned int gFloorTexture;
 extern int gFloorVertexCount;
 extern bool gFloorLoaded;
+// The sea past the map's water edges (168): the vertex range in the floor's
+// buffer, drawn in flight and turned views only, flat in gFloorSeaColor.
+extern int gFloorExtensionFirst;
+extern int gFloorExtensionCount;
+extern float gFloorSeaColor[3];
 
 void destroyStaticFloor();
 
@@ -241,9 +268,35 @@ struct RoofSquare {
     int index; // square index, y * 100 + x, as the engine's tileFid
     float x0, z0, x1, z1;
     float u0, v0, u1, v1;
+    // A wall-top tile (roof_fringe.py) stands up under the fly camera: its
+    // pieces, one per wall edge the tile sits on (a corner tile has two), are
+    // the tile's stretch of a band on the wall top below that roof edge.
+    bool fringe = false;
+    float tileX = 0, tileZ = 0; // the square's own corner, GL units
+    struct FringePiece {
+        int edge = 0; // 0: v = plane, 1: v = plane, 2: u = plane, 3: u = plane
+        float plane = 0; // the wall's plane, GL units
+        // The band's bottom (the wall's top, GL height) and its stretch along
+        // the wall, GL units; plane is the wall's outer face.
+        float bottom = 0, span0 = 0, span1 = 0;
+        // The strip's texture (normalized): u at the stretch's low and high
+        // end along the wall, v at the strip's top and bottom row.
+        float uLow = 0, uHigh = 0, vTop = 0, vBottom = 0;
+        // The band's height in strip rows (art pixels, one row a pixel of the game's wall).
+        float rows = 0;
+    };
+    FringePiece pieces[2];
+    int pieceCount = 0;
+    // A mixed tile's roof under the free camera: the flat square comes from a
+    // cell of roof_fringe.png (the wall-top part cut out), drawn with that
+    // texture, in these coordinates.
+    bool patch = false;
+    float patchU0 = 0, patchV0 = 0, patchU1 = 0, patchV1 = 0;
 };
 
 void setRoofSquares(std::vector<RoofSquare> squares);
+// roof_fringe.png as a texture the roofs own (deleted with them); 0 for none.
+void setRoofFringeTexture(unsigned int texture);
 void destroyRoofs();
 // With the scene program in use and the game view's matrix set.
 void drawRoofs(int viewportX, int viewportY, int viewportWidth, int viewportHeight);
@@ -253,6 +306,16 @@ void roofShadowCasters(unsigned int* vao, int* vertexCount);
 // Binds the egg's mask (unit 1) and sets its rect and the viewport; false when
 // no egg is shown.
 bool bindEgg(int viewportX, int viewportY, int viewportWidth, int viewportHeight);
+// Clips drawing to the rect the last bindEgg set (157: the egg passes redraw
+// every wall, and only the egg's few pixels can show). The caller disables
+// the scissor test after.
+void scissorToEgg();
+// The height cards are cut at where a roof covers them (114): the roof plane,
+// 0 when the map has no roofs. The game's own view hides a room's cards above
+// it behind the roof's picture; bindRoofGrid gives the shader the squares the
+// roofs cover right now, the egg's see-through circle included.
+float roofClipHeight();
+void bindRoofGrid(int unit);
 
 // --- lighting.cc: the game's light as point lights -----------------------------
 
@@ -288,8 +351,10 @@ extern bool gWallsLoaded;
 extern unsigned int gWallSeeThroughTexture;
 extern bool gWallSeeThroughAny;
 // Uploads the wall object table (R: see-through, G: the light of the object's
-// hex) when it changed.
+// hex, B: its composite sprite group + 1, 241) when it changed.
 void flushWallObjectTable();
+// 241: this frame's composite sprite group of a walls.bin row.
+void markStaticWallShadowGroup(int row, int group);
 
 void destroyStaticWalls();
 
@@ -341,24 +406,45 @@ struct ObjectDraw {
     int tile; // its hex, for its light; -1: full light
     float anchorX; // its feet on the ground (bottom-center of the card),
     float anchorZ; // for the whole-sprite sun shadow (082 round 6)
-    // A low thing (lying flat, or a card under kLowCardHeight: straw, grass,
-    // rubble) takes the sun shadow per pixel on the ground it shows (090).
+    // A thing lying on the ground, and ground clutter (OBJECT_NO_BLOCK),
+    // takes the sun shadow per pixel on the ground it shows (090); a standing
+    // card takes it per pixel on its own plane (109).
     bool groundShadow = false;
     float groundY = 0.0f; // the height of that ground
     // A card standing in a wall's plane (a door): that plane's normal (x, z),
     // 0 for any other card. It takes its wall's side of the sun (090).
     float wallNormalX = 0.0f;
     float wallNormalZ = 0.0f;
+    // 109: a card with the whole verdict at the feet point: the people
+    // (OBJ_TYPE_CRITTER by the fid) and a standing body taller than half a
+    // wall (a tree, a statue). Every other standing card reads the shadow per
+    // pixel on its own plane.
+    bool feetShadow = false;
+    // 241: a composite sprite (pieces of one art set whose cards touch on
+    // the game's screen) takes one sun verdict: the set, the art file
+    // (type and index of the fid), the card's rect on the game's screen
+    // (left, top, right, bottom), its walls.bin row (-1: a live card), and
+    // this frame's group (-1: none).
+    int artSet = 0;
+    int artFile = 0;
+    float screenRect[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    int wallRow = -1;
+    int shadowGroup = -1;
+    bool tall = false; // standing taller than half a wall: a group needs one
+    bool offView = false; // 157: this frame's card lies wholly off the view
 };
 
-// Below this height (GL units) a standing card is ground clutter, not a body.
-constexpr float kLowCardHeight = 0.5f;
-
 extern std::vector<ObjectDraw> gObjectDraws;
+// 157: marks each card whose six vertices all lie past one side of the view
+// (the clip-space x or y bound of mvp): it can give no pixel, so its draw
+// and its uniforms are skipped. Depth and the near plane are not tested.
+void cullStaticObjectDraws(const float mvp[16]);
 extern unsigned int gObjectVao;
 extern unsigned int gHeroVao;
 extern unsigned int gHeroTexture;
 extern bool gHeroLoaded;
+// 241: binds this frame's composite sprite groups (uShadowGroups) to `unit`.
+void bindShadowGroups(int unit);
 extern int gHeroPickId;
 
 void destroyStaticHero();

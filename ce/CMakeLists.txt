@@ -134,6 +134,8 @@ set(FALLOUT_ENGINE_SOURCES
     "src/game_vars.h"
     "src/game.cc"
     "src/game.h"
+    "src/fps_counter.cc"
+    "src/fps_counter.h"
     "src/geometry.cc"
     "src/geometry.h"
     "src/graph_lib.cc"
@@ -299,6 +301,7 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/settings.h"
     "src/devtools/devtools.cc"
     "src/devtools/fixed_screen_options.cc"
+    "src/devtools/owner_shot.cc"
     "src/devtools/snapshot_rows.cc"
     "src/devtools/preferences_probe.cc"
     "src/devtools/test_run_state.cc"
@@ -348,8 +351,11 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/devtools/test_run_state.h"
     "src/devtools/ui_fixture.h"
     "src/scene_renderer/gl_api.cc"
+    "src/scene_renderer/band_span.h"
     "src/scene_renderer/gl_api.h"
     "src/scene_renderer/gl_procs.h"
+    "src/scene_renderer/perf.cc"
+    "src/scene_renderer/perf.h"
     "src/scene_renderer/camera.cc"
     "src/scene_renderer/camera.h"
     "src/scene_renderer/context.cc"
@@ -370,6 +376,8 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/scene_renderer/scene_internal.cc"
     "src/scene_renderer/scene_internal.h"
     "src/scene_renderer/scene_shader.cc"
+    "src/scene_renderer/sky.cc"
+    "src/scene_renderer/sky.h"
     "src/scene_renderer/shadow.cc"
     "src/scene_renderer/shadow.h"
     "src/scene_renderer/board_shadows.cc"
@@ -392,6 +400,8 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/sfall_ext.h"
     "src/sfall_filesystem.cc"
     "src/sfall_filesystem.h"
+    "src/sfall_gaps.cc"
+    "src/sfall_gaps.h"
     "src/sfall_global_vars.cc"
     "src/sfall_global_vars.h"
     "src/sfall_global_scripts.cc"
@@ -407,6 +417,8 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/sfall_object_name.cc"
     "src/sfall_object_name.h"
     "src/sfall_opcodes.cc"
+    "src/sfall_perks.cc"
+    "src/sfall_perks.h"
     "src/sfall_opcodes.h"
     "src/sfall_script_hooks.cc"
     "src/script_sound.cc"
@@ -425,6 +437,54 @@ set(FALLOUT_PLATFORM_SOURCES
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(camera_turn_tests
+        "tests/camera_turn/camera_turn_test.cc"
+    )
+    target_include_directories(camera_turn_tests PRIVATE "src/scene")
+    add_test(NAME camera_turn_tests COMMAND camera_turn_tests)
+
+    add_executable(fps_counter_tests
+        "tests/fps_counter/fps_counter_test.cc"
+    )
+    target_include_directories(fps_counter_tests PRIVATE "src")
+    add_test(NAME fps_counter_tests COMMAND fps_counter_tests)
+
+    add_executable(launcher_progress_tests
+        "tests/launcher_progress/launcher_progress_test.cc"
+    )
+    target_include_directories(launcher_progress_tests PRIVATE "src")
+    if (MSVC)
+        target_compile_options(launcher_progress_tests PRIVATE /utf-8)
+    endif()
+    add_test(NAME launcher_progress_tests COMMAND launcher_progress_tests)
+
+    add_executable(launcher_routes_tests
+        "tests/launcher_progress/launcher_routes_test.cc"
+    )
+    target_include_directories(launcher_routes_tests PRIVATE "src")
+    add_test(NAME launcher_routes_tests COMMAND launcher_routes_tests)
+
+    add_executable(launcher_ru_tests
+        "tests/launcher_progress/launcher_ru_test.cc"
+    )
+    target_include_directories(launcher_ru_tests PRIVATE "src")
+    if (MSVC)
+        target_compile_options(launcher_ru_tests PRIVATE /utf-8)
+    endif()
+    add_test(NAME launcher_ru_tests COMMAND launcher_ru_tests)
+
+    add_executable(launcher_uninstall_tests
+        "tests/launcher_progress/launcher_uninstall_test.cc"
+    )
+    target_include_directories(launcher_uninstall_tests PRIVATE "src")
+    add_test(NAME launcher_uninstall_tests COMMAND launcher_uninstall_tests)
+
+    add_executable(launcher_rp_tests
+        "tests/launcher_progress/launcher_rp_test.cc"
+    )
+    target_include_directories(launcher_rp_tests PRIVATE "src")
+    add_test(NAME launcher_rp_tests COMMAND launcher_rp_tests)
+
     add_executable(preview_policy_tests
         "src/scene/preview_policy.cc"
         "tests/preview_policy/preview_policy_test.cc"
@@ -463,6 +523,7 @@ if(BUILD_TESTING)
     add_subdirectory(tests/effect_emission)
     add_subdirectory(tests/muzzle_mask)
     add_subdirectory(tests/sun)
+    add_subdirectory(tests/band_span)
     add_subdirectory(tests/text_layer)
     add_subdirectory(tests/dialogue_layout)
 endif()
@@ -660,6 +721,13 @@ endif()
 
 if(BUILD_TESTING)
     add_subdirectory(tests/settings_3d)
+
+    add_executable(sfall_perks_tests
+        "src/sfall_perks.cc"
+        "tests/sfall_perks/sfall_perks_test.cc"
+    )
+    target_include_directories(sfall_perks_tests PRIVATE ${ZLIB_INCLUDE_DIRS})
+    add_test(NAME sfall_perks_tests COMMAND sfall_perks_tests)
 endif()
 
 add_subdirectory("third_party/fpattern")
@@ -740,10 +808,17 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
     # rolling latest release onto a clean Fallout 2 and starts the game.
     add_executable(fallout2-ce-3d-launcher
         "src/launcher_main.cc"
+        "src/launcher_ui.cc"
+        "src/launcher.rc"
     )
     target_include_directories(fallout2-ce-3d-launcher PRIVATE "src")
     if(WIN32)
-        target_link_libraries(fallout2-ce-3d-launcher winhttp bcrypt advapi32 ole32 uuid)
+        target_link_libraries(fallout2-ce-3d-launcher winhttp bcrypt advapi32 ole32 uuid comctl32 shell32)
+        if(MSVC)
+            target_compile_options(fallout2-ce-3d-launcher PRIVATE /utf-8)
+            # launcher.rc embeds the manifest (asInvoker, supportedOS): the linker must not add a second one.
+            target_link_options(fallout2-ce-3d-launcher PRIVATE /MANIFEST:NO)
+        endif()
     endif()
     if(MINGW)
         target_link_options(fallout2-ce-3d-launcher PRIVATE

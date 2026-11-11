@@ -77,6 +77,32 @@ std::uint64_t pixelKey(int x, int y)
         | static_cast<std::uint32_t>(x);
 }
 
+struct UnderlyingKey {
+    std::uint64_t pixel;
+    unsigned char after;
+    bool operator==(const UnderlyingKey& other) const { return pixel == other.pixel && after == other.after; }
+};
+
+struct UnderlyingKeyHash {
+    std::size_t operator()(const UnderlyingKey& key) const
+    {
+        return std::hash<std::uint64_t>()(key.pixel * 257 + key.after);
+    }
+};
+
+bool sameRun(const TextRunInfo& a, const TextRunInfo& b)
+{
+    return a.text == b.text && a.font == b.font && a.sizeRole == b.sizeRole
+        && a.colorAndFlags == b.colorAndFlags && a.colorRole == b.colorRole
+        && a.outlineColor == b.outlineColor && a.hasOutline == b.hasOutline
+        && a.x == b.x && a.y == b.y && a.width == b.width && a.cellWidth == b.cellWidth
+        && a.lineHeight == b.lineHeight && a.verticalAlignmentBoxY == b.verticalAlignmentBoxY
+        && a.verticalAlignmentBoxHeight == b.verticalAlignmentBoxHeight
+        && a.sharpTextOffsetY == b.sharpTextOffsetY && a.sharpRightAlignX == b.sharpRightAlignX
+        && a.sharpEligible == b.sharpEligible && a.characterX == b.characterX
+        && a.characterCellX == b.characterCellX;
+}
+
 bool traceEnabled()
 {
     static const bool enabled = []() {
@@ -184,15 +210,22 @@ FloatingTextOutlineLayout floatingTextOutlineLayout(int legacyWidth, int legacyH
     layout.bufferWidth = legacyWidth;
     layout.bufferHeight = legacyHeight;
     layout.lineHeight = std::max(lineHeight, 0);
-    layout.linePitch = std::max(lineHeight + 1, 1);
+    layout.linePitch = modernOutline ? sharpTextLinePitch(lineHeight, true) : std::max(lineHeight + 1, 1);
     layout.legacyTopMargin = hasOutline ? 1 : 0;
     if (!modernOutline || legacyWidth <= 0 || legacyHeight <= 0 || lineHeight <= 0 || lines <= 0) return layout;
     layout.offsetX = 2;
     layout.offsetY = 2;
     layout.bufferWidth += layout.offsetX * 2;
-    layout.lineOffset = std::max(0, font101PreviewCoverageHeight(lineHeight, -1) - lineHeight);
+    layout.lineOffset = std::max(std::max(0, font101PreviewCoverageHeight(lineHeight, -1) - lineHeight),
+        layout.linePitch - lineHeight);
     layout.bufferHeight += layout.offsetY + lines * layout.lineOffset;
     return layout;
+}
+
+int sharpTextLinePitch(int lineHeight, bool sharpTextEnabled)
+{
+    if (lineHeight <= 0 || !sharpTextEnabled) return std::max(lineHeight, 0);
+    return std::max(lineHeight + 1, (lineHeight * 13 + 9) / 10);
 }
 
 bool setFont101PreviewBold(bool bold, int ownerWindow)
@@ -364,6 +397,25 @@ void TextLayer::copy(TextBufferId source, TextBufferId destination, bool destina
         return;
     }
 
+    // 157: what a destination pixel showed under the ink it holds now: the
+    // newest destination record's first pixel at that spot with that ink.
+    // Built once per copy; a scan per glyph pixel cost a floating bark ~15 ms
+    // a frame, since the tile window keeps the bark's last-frame pixels.
+    std::unordered_map<UnderlyingKey, unsigned char, UnderlyingKeyHash> underlyingIndex;
+    bool underlyingBuilt = false;
+    auto destinationUnderlying = [&]() -> const std::unordered_map<UnderlyingKey, unsigned char, UnderlyingKeyHash>& {
+        if (!underlyingBuilt) {
+            underlyingBuilt = true;
+            for (const auto& record : records_) {
+                if (record.buffer != destination) continue;
+                for (auto pixelIt = record.pixels.rbegin(); pixelIt != record.pixels.rend(); ++pixelIt) {
+                    underlyingIndex[{ pixelKey(pixelIt->x, pixelIt->y), pixelIt->after }] = pixelIt->before;
+                }
+            }
+        }
+        return underlyingIndex;
+    };
+
     std::vector<TextRecord> copies;
     for (const auto& sourceRecord : records_) {
         if (sourceRecord.buffer != source) continue;
@@ -382,6 +434,9 @@ void TextLayer::copy(TextBufferId source, TextBufferId destination, bool destina
         clone.ownerOffsetX = destinationOwnerWindow >= 0 ? 0 : sourceRecord.ownerOffsetX + static_cast<int>(shiftX);
         clone.ownerOffsetY = destinationOwnerWindow >= 0 ? 0 : sourceRecord.ownerOffsetY + static_cast<int>(shiftY);
         clone.run.x = static_cast<int>(static_cast<std::int64_t>(clone.run.x) + shiftX);
+        if (clone.run.sharpRightAlignX >= 0) {
+            clone.run.sharpRightAlignX = static_cast<int>(static_cast<std::int64_t>(clone.run.sharpRightAlignX) + shiftX);
+        }
         clone.run.y = static_cast<int>(static_cast<std::int64_t>(clone.run.y) + shiftY);
         if (clone.run.verticalAlignmentBoxHeight > 0) {
             clone.run.verticalAlignmentBoxY = static_cast<int>(
@@ -578,17 +633,8 @@ void TextLayer::copy(TextBufferId source, TextBufferId destination, bool destina
             unsigned char underlying = pixel.before;
             if (transparent && pixel.before == transparentIndex) {
                 underlying = beforeValue;
-                for (auto recordIt = records_.rbegin(); recordIt != records_.rend(); ++recordIt) {
-                    if (recordIt->buffer != destination) continue;
-                    const auto found = std::find_if(recordIt->pixels.begin(), recordIt->pixels.end(),
-                        [destX, destY, beforeValue](const TextPixelRecord& oldPixel) {
-                            return oldPixel.x == destX && oldPixel.y == destY && oldPixel.after == beforeValue;
-                        });
-                    if (found != recordIt->pixels.end()) {
-                        underlying = found->before;
-                        break;
-                    }
-                }
+                const auto found = destinationUnderlying().find({ pixelKey(destX, destY), beforeValue });
+                if (found != destinationUnderlying().end()) underlying = found->second;
             }
             clone.pixels.push_back({ destX, destY, underlying, afterValue });
         }
@@ -650,7 +696,39 @@ void TextLayer::copy(TextBufferId source, TextBufferId destination, bool destina
         if (mask.empty()) recordIt = records_.erase(recordIt);
         else ++recordIt;
     }
-    for (auto& clone : copies) records_.push_back(std::move(clone));
+    for (auto& clone : copies) {
+        // A cursor save-under/restore copies a text run back in pieces. Joining a
+        // piece to the run it came from keeps the count of records (and the
+        // oldest-first trim below) from growing with every mouse move.
+        auto same = std::find_if(records_.begin(), records_.end(), [&clone](const TextRecord& old) {
+            return old.buffer == clone.buffer && old.orphan == clone.orphan
+                && old.ownerWindow == clone.ownerWindow && old.ownerGeneration == clone.ownerGeneration
+                && old.ownerWitnessWindow == clone.ownerWitnessWindow
+                && old.ownerWitnessGeneration == clone.ownerWitnessGeneration
+                && old.ownerOffsetX == clone.ownerOffsetX && old.ownerOffsetY == clone.ownerOffsetY
+                && sameRun(old.run, clone.run);
+        });
+        if (same == records_.end()) {
+            records_.push_back(std::move(clone));
+            continue;
+        }
+        std::unordered_set<std::uint64_t> have;
+        for (const auto& pixel : same->coverage) have.insert(pixelKey(pixel.x, pixel.y));
+        for (const auto& pixel : clone.coverage) {
+            if (have.insert(pixelKey(pixel.x, pixel.y)).second) same->coverage.push_back(pixel);
+        }
+        have.clear();
+        for (const auto& pixel : same->pixels) have.insert(pixelKey(pixel.x, pixel.y));
+        for (const auto& pixel : clone.pixels) {
+            if (have.insert(pixelKey(pixel.x, pixel.y)).second) same->pixels.push_back(pixel);
+        }
+        have.clear();
+        for (const auto& witness : same->ownerWitnesses) have.insert(pixelKey(witness.x, witness.y));
+        for (const auto& witness : clone.ownerWitnesses) {
+            if (have.insert(pixelKey(witness.x, witness.y)).second) same->ownerWitnesses.push_back(witness);
+        }
+        same->bounds = coverageBounds(same->coverage);
+    }
     trim();
 }
 
@@ -708,6 +786,13 @@ void TextLayer::eraseBuffer(TextBufferId buffer)
                 record.ownerWindow, static_cast<unsigned long long>(record.ownerGeneration));
         }
         return record.buffer == buffer;
+    }), records_.end());
+}
+
+void TextLayer::eraseTextRuns(TextBufferId buffer, const std::string& prefix)
+{
+    records_.erase(std::remove_if(records_.begin(), records_.end(), [&buffer, &prefix](const TextRecord& record) {
+        return record.buffer == buffer && record.run.text.compare(0, prefix.size(), prefix) == 0;
     }), records_.end());
 }
 

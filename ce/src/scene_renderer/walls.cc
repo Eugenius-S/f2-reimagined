@@ -4,11 +4,14 @@
 #include <cmath>
 #include <map>
 #include <stdio.h>
+#include <thread>
+#include <unordered_map>
 
 #include <lodepng.h>
 
 #include "gl_api.h"
 #include "scene_internal.h"
+#include "perf.h"
 #include "shadow.h"
 #include "board_shadows.h"
 #include "../tile.h"
@@ -34,12 +37,14 @@ struct BakedObject {
     // door, on its wall's plane under the fly camera.
     // FlyFlat: a low card, laid flat under the fly camera; FlySkip: a card a
     // solid made by name stands for in flight only.
-    enum Mode { Skip, Lift, Flat, Plane, FlyFlat, FlySkip } mode;
+    // FixedCard: a flat item's card that keeps its game-view plane in flight (task 129).
+    enum Mode { Skip, Lift, Flat, Plane, FlyFlat, FlySkip, FixedCard } mode;
     float offset[3]; // GL x, y, z when lifted; a plane's point x, its direction, z
     bool noCast = false; // a plant's crown: its cards throw no shadow (task 045's follow-up)
 };
 
 unsigned int gWallTriangleCount = 0;
+float gHalfWallHeight = 1.6f; // half the map's wall height, until the walls load
 std::unordered_map<unsigned long long, BakedObject> gBakedObjects;
 int gSoloTile = -1;
 int gSoloRadius = 0;
@@ -72,7 +77,11 @@ std::unordered_map<unsigned long long, unsigned int> gWallObjectRows;
 std::vector<unsigned char> gWallSeeThrough;
 // Rows the engine paints at full light, whatever their hex (OBJECT_TRANS_WALL).
 std::vector<unsigned char> gWallFullLight;
-std::vector<unsigned char> gWallObjectTable; // as uploaded: R, G per row
+std::vector<unsigned char> gWallShadowGroup; // 241: per row, its group + 1 (0: none)
+std::vector<unsigned char> gWallObjectTable; // as uploaded: R, G, B, A per row
+std::vector<bool> gFlyOnlyRows; // rows a fly-only batch references (task 119)
+std::vector<unsigned int> gRowTotalRefs; // triangles per object row
+std::vector<unsigned int> gRowFlyRefs;   // of those, in a fly-only batch
 
 struct WallVertex {
     DepthVertex vertex;
@@ -108,12 +117,16 @@ void destroyStaticWalls()
     gShadowVbo = 0;
     gWallsLoaded = false;
     gBakedObjects.clear();
+    gFlyOnlyRows.clear();
+    gRowTotalRefs.clear();
+    gRowFlyRefs.clear();
     if (gContext != nullptr && gWallSeeThroughTexture != 0) glDeleteTextures(1, &gWallSeeThroughTexture);
     gWallSeeThroughTexture = 0;
     gWallSeeThroughAny = false;
     gWallObjectRows.clear();
     gWallSeeThrough.clear();
     gWallFullLight.clear();
+    gWallShadowGroup.clear();
     gWallObjectTable.clear();
 }
 
@@ -138,6 +151,24 @@ bool staticObjectBaked(int tile, int fid)
     double rightX, rightZ;
     return found->second.mode == BakedObject::Skip
         || (found->second.mode == BakedObject::FlySkip && flyCameraRight(&rightX, &rightZ));
+}
+
+bool staticObjectFlyOnly(int tile, int fid)
+{
+    // A fly-only solid (a row the exporter tags for the fly camera alone): the
+    // game's own views draw its card, the fly camera draws the solid. Its card
+    // lights itself; the solid does not - the caller marks it full light.
+    const auto found = gWallObjectRows.find(bakedObjectKey(tile, fid));
+    if (found == gWallObjectRows.end()) return false;
+    const unsigned int row = found->second;
+    return row < gFlyOnlyRows.size() && gFlyOnlyRows[row]
+        && gRowTotalRefs[row] > 0 && gRowFlyRefs[row] == gRowTotalRefs[row];
+}
+
+int staticWallObjectRow(int tile, int fid)
+{
+    const auto found = gWallObjectRows.find(bakedObjectKey(tile, fid));
+    return found == gWallObjectRows.end() ? -1 : static_cast<int>(found->second);
 }
 
 void setStaticSolo(int tile, int radius)
@@ -169,10 +200,21 @@ bool staticObjectPlane(int tile, int fid, float plane[3])
     return true;
 }
 
+bool staticObjectFixedCard(int tile, int fid)
+{
+    const auto found = gBakedObjects.find(bakedObjectKey(tile, fid));
+    return found != gBakedObjects.end() && found->second.mode == BakedObject::FixedCard;
+}
+
 bool staticObjectFlyFlat(int tile, int fid)
 {
     const auto found = gBakedObjects.find(bakedObjectKey(tile, fid));
     return found != gBakedObjects.end() && found->second.mode == BakedObject::FlyFlat;
+}
+
+float staticHalfWallHeight()
+{
+    return gHalfWallHeight;
 }
 
 bool staticObjectFlat(int tile, int fid)
@@ -251,6 +293,24 @@ bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* e
     batches.reserve(batchCount);
     std::vector<bool> seenPages(static_cast<size_t>(pageCount) * 3, false); // by page and flags
     std::vector<bool> decodedPages(pageCount, false);
+    std::vector<bool> flyOnlyRows(objectCount, false); // rows a fly-only batch references
+    std::vector<unsigned int> rowTotalRefs(objectCount, 0);
+    std::vector<unsigned int> rowFlyRefs(objectCount, 0);
+    // One decode per page (172): the batch loop registers them, the workers
+    // below read and decode on private buffers, and the first batch naming
+    // the page takes the bytes. The file reads moved into the workers, so
+    // the stage scope covers read + decode.
+    struct PageDecode {
+        unsigned int page;
+        std::string name;
+        unsigned int width;
+        unsigned int height;
+        std::filesystem::path path;
+        std::vector<unsigned char> rgba;
+        std::string error;
+    };
+    std::vector<PageDecode> pageDecodes;
+    std::unordered_map<unsigned int, size_t> pageDecodeIndex;
     size_t offset = kHeaderSize;
     unsigned long long observedTriangles = 0;
     unsigned long long totalDecodedBytes = 0;
@@ -329,6 +389,15 @@ bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* e
         offset += static_cast<size_t>(vertexBytes);
 
         // A page's second batch draws with the first one's texture.
+        for (const WallVertex& vertex : batch.vertices) {
+            if (vertex.object < 0.0f) continue;
+            const size_t row = static_cast<size_t>(vertex.object);
+            rowTotalRefs[row]++;
+            if (batch.flyOnly) {
+                rowFlyRefs[row]++;
+                flyOnlyRows[row] = true;
+            }
+        }
         if (decodedPages[page]) {
             for (const WallBatchData& other : batches) {
                 if (other.page == page && (other.width != width || other.height != height)) {
@@ -342,46 +411,107 @@ bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* e
 
         char textureName[32];
         snprintf(textureName, sizeof(textureName), "sprites%u.png", page);
-        const std::filesystem::path texturePath = cacheDirectory / textureName;
-        std::vector<unsigned char> png;
-        if (!readBinary(texturePath, png)) {
-            return fail(std::string(textureName) + " is missing, unreadable, or exceeds 64 MB");
-        }
-        if (png.empty()) {
-            return fail(std::string(textureName) + " is empty");
-        }
-        lodepng::State pngState;
-        unsigned pngWidth = 0;
-        unsigned pngHeight = 0;
-        unsigned pngError = lodepng_inspect(&pngWidth, &pngHeight, &pngState, png.data(), png.size());
-        if (pngError != 0) {
-            return fail(std::string(textureName) + " PNG header is invalid: " + lodepng_error_text(pngError));
-        }
-        if (pngWidth == 0 || pngHeight == 0 || pngWidth > kMaxImageDimension || pngHeight > kMaxImageDimension
-            || pngWidth != width || pngHeight != height) {
-            return fail(std::string(textureName) + " dimensions do not match walls.bin batch");
-        }
-        const unsigned long long decodedBytes = static_cast<unsigned long long>(pngWidth) * pngHeight * 4;
-        totalDecodedBytes += decodedBytes;
-        if (decodedBytes > 256ULL * 1024 * 1024 || totalDecodedBytes > 512ULL * 1024 * 1024) {
-            return fail(std::string(textureName) + " decoded size is too large");
-        }
-        pngError = lodepng::decode(batch.rgba, pngWidth, pngHeight, pngState, png);
-        if (pngError != 0) {
-            return fail(std::string(textureName) + " decode failed: " + lodepng_error_text(pngError));
-        }
-        if (batch.rgba.size() != decodedBytes) {
-            return fail(std::string(textureName) + " decoded byte count is inconsistent");
-        }
-        for (size_t alphaOffset = 3; alphaOffset < batch.rgba.size(); alphaOffset += 4) {
-            // The exporter marks the engine's animated colours 254 (they glow)
-            // or 252 (they only glow: tiles and walls); the shader reads it.
-            const unsigned char alpha = batch.rgba[alphaOffset];
-            if (alpha != 0 && alpha != 255 && alpha < 252) {
-                return fail(std::string(textureName) + " alpha is not binary cutout data");
-            }
+        pageDecodeIndex.emplace(page, pageDecodes.size());
+        {
+            PageDecode& decode = pageDecodes.emplace_back();
+            decode.page = page;
+            decode.name = textureName;
+            decode.width = width;
+            decode.height = height;
+            decode.path = cacheDirectory / textureName;
         }
         batches.push_back(std::move(batch));
+    }
+
+    {
+        PerfScope stage("walls_decode");
+        auto decodePage = [&pageDecodes, kMaxImageDimension](size_t index) {
+            PageDecode& decode = pageDecodes[index];
+            std::vector<unsigned char> png;
+            if (!readBinary(decode.path, png)) {
+                decode.error = decode.name + " is missing, unreadable, or exceeds 64 MB";
+                return;
+            }
+            if (png.empty()) {
+                decode.error = decode.name + " is empty";
+                return;
+            }
+            lodepng::State pngState;
+            unsigned pngWidth = 0;
+            unsigned pngHeight = 0;
+            const unsigned pngError = lodepng_inspect(&pngWidth, &pngHeight, &pngState, png.data(), png.size());
+            if (pngError != 0) {
+                decode.error = decode.name + " PNG header is invalid: " + lodepng_error_text(pngError);
+                return;
+            }
+            if (pngWidth == 0 || pngHeight == 0 || pngWidth > kMaxImageDimension || pngHeight > kMaxImageDimension
+                || pngWidth != decode.width || pngHeight != decode.height) {
+                decode.error = decode.name + " dimensions do not match walls.bin batch";
+                return;
+            }
+            if (static_cast<unsigned long long>(pngWidth) * pngHeight * 4 > 256ULL * 1024 * 1024) {
+                decode.error = decode.name + " decoded size is too large";
+                return;
+            }
+            if (lodepng::decode(decode.rgba, pngWidth, pngHeight, pngState, png) != 0) {
+                decode.error = decode.name + " decode failed: " + lodepng_error_text(pngError);
+                return;
+            }
+            if (decode.rgba.size() != static_cast<unsigned long long>(pngWidth) * pngHeight * 4) {
+                decode.error = decode.name + " decoded byte count is inconsistent";
+                return;
+            }
+            for (size_t alphaOffset = 3; alphaOffset < decode.rgba.size(); alphaOffset += 4) {
+                // The exporter marks the engine's animated colours 254 (they glow)
+                // or 252 (they only glow: tiles and walls); the shader reads it.
+                const unsigned char alpha = decode.rgba[alphaOffset];
+                if (alpha != 0 && alpha != 255 && alpha < 252) {
+                    decode.error = decode.name + " alpha is not binary cutout data";
+                    return;
+                }
+            }
+        };
+
+        unsigned int decodeThreads = std::thread::hardware_concurrency();
+        if (decodeThreads > 4) decodeThreads = 4;
+        if (decodeThreads < 1) decodeThreads = 1;
+        if (decodeThreads <= 1 || pageDecodes.size() <= 1) {
+            for (size_t index = 0; index < pageDecodes.size(); index++) {
+                decodePage(index);
+            }
+        } else {
+            std::vector<std::thread> threads;
+            threads.reserve(pageDecodes.size());
+            for (size_t index = 0; index < pageDecodes.size(); index++) {
+                threads.emplace_back([&decodePage, index]() {
+                    decodePage(index);
+                });
+            }
+            for (auto& thread : threads) {
+                thread.join();
+            }
+        }
+    }
+    for (PageDecode& decode : pageDecodes) {
+        if (!decode.error.empty()) {
+            return fail(decode.error);
+        }
+        // The size caps from the inline path: 256 MB per page held in the
+        // worker, 512 MB per scene checked here.
+        totalDecodedBytes += decode.rgba.size();
+        if (decode.rgba.size() > 0 && totalDecodedBytes > 512ULL * 1024 * 1024) {
+            return fail(decode.name + " decoded size is too large");
+        }
+    }
+    // The first batch naming the page carries its bytes; the page's other
+    // batches draw with its texture (their rgba stays empty, as before).
+    for (WallBatchData& batch : batches) {
+        const auto found = pageDecodeIndex.find(batch.page);
+        if (found == pageDecodeIndex.end()) continue;
+        PageDecode& decode = pageDecodes[found->second];
+        if (!decode.rgba.empty()) {
+            batch.rgba = std::move(decode.rgba);
+        }
     }
     if (sidecar.size() - offset < static_cast<size_t>(objectCount) * kObjectSize) {
         return fail("walls.bin has a truncated object table");
@@ -418,12 +548,13 @@ bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* e
         return fail("baked.bin is missing or unreadable; re-run the scene exporter");
     }
     if (baked.size() < kBakedHeaderSize || baked[0] != 'F' || baked[1] != '2' || baked[2] != 'B' || baked[3] != 'K'
-        || readU16(baked.data() + 4) < 2 || readU16(baked.data() + 4) > 6
+        || readU16(baked.data() + 4) < 2 || readU16(baked.data() + 4) > 7
         || readU16(baked.data() + 6) != kBakedHeaderSize) {
         return fail("baked.bin has an invalid header");
     }
     const unsigned int bakedVersion = readU16(baked.data() + 4); // 3 adds Flat, 4 Plane and FlyFlat, 5 FlySkip,
-                                                                 // 6 the no-cast flag in the mode's high bit
+                                                                 // 6 the no-cast flag in the mode's high bit,
+                                                                 // 7 FixedCard
     const unsigned int bakedCount = readU32(baked.data() + 8);
     if (bakedCount > kMaxBakedEntries || baked.size() != kBakedHeaderSize + bakedCount * kBakedEntrySize) {
         return fail("baked.bin has a bad length");
@@ -560,6 +691,7 @@ bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* e
     }
     if (wallHeight <= 0.0f) wallHeight = 3.2f; // a wall with no walls on the map
     const float halfWall = wallHeight * 0.5f;
+    gHalfWallHeight = halfWall; // the cards' whole-verdict bound (109)
     // The caster triangles gather per atlas page, positions with UVs: the
     // shadow pass binds each page's texture and cuts the art's transparent
     // holes out of the depth map (063). The buffer and ranges are built after
@@ -658,6 +790,7 @@ bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* e
         return fail("walls.bin has trailing data or a mismatched triangle count");
     }
 
+    PerfScope stage("walls_upload");
     while (glGetError() != 0) {
     }
     glPixelStorei(kUnpackAlignment, 1);
@@ -763,21 +896,26 @@ bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* e
             static_cast<size_t>(std::count(rowOnWall.begin(), rowOnWall.end(), true)));
         fflush(stderr);
         setShadowWallCasters(gShadowVao, wallHeight, std::move(ranges));
+        prepareStaticShadows();
     }
     if (objectCount > 0) {
         const unsigned int rows = (objectCount + kSeeThroughRowWidth - 1) / kSeeThroughRowWidth;
         gWallSeeThrough.assign(static_cast<size_t>(rows) * kSeeThroughRowWidth, 0);
         gWallFullLight.assign(gWallSeeThrough.size(), 0);
-        gWallObjectTable.assign(gWallSeeThrough.size() * 2, 255);
+        gWallShadowGroup.assign(gWallSeeThrough.size(), 0);
+        gWallObjectTable.assign(gWallSeeThrough.size() * 4, 255);
         glGenTextures(1, &gWallSeeThroughTexture);
         glBindTexture(kTexture2D, gWallSeeThroughTexture);
-        glTexImage2D(kTexture2D, 0, kRG8, kSeeThroughRowWidth, rows, 0, kRG, kUnsignedByte,
+        glTexImage2D(kTexture2D, 0, kRgba8, kSeeThroughRowWidth, rows, 0, kRGBA, kUnsignedByte,
             gWallObjectTable.data());
         glTexParameteri(kTexture2D, kTextureMinFilter, kNearest);
         glTexParameteri(kTexture2D, kTextureMagFilter, kNearest);
         if (glGetError() != 0) return fail("OpenGL failed to upload the wall object table");
     }
     gWallObjectRows = std::move(objectRows);
+    gFlyOnlyRows = std::move(flyOnlyRows);
+    gRowTotalRefs = std::move(rowTotalRefs);
+    gRowFlyRefs = std::move(rowFlyRefs);
     gWallTriangleCount = totalTriangles;
     gBakedObjects = std::move(bakedObjects);
     gWallsLoaded = true;
@@ -791,6 +929,7 @@ void beginStaticWallSeeThrough()
 {
     std::fill(gWallSeeThrough.begin(), gWallSeeThrough.end(), 0);
     std::fill(gWallFullLight.begin(), gWallFullLight.end(), 0);
+    std::fill(gWallShadowGroup.begin(), gWallShadowGroup.end(), 0);
 }
 
 void markStaticWallFullLight(int tile, int fid)
@@ -818,21 +957,27 @@ void endStaticWallSeeThrough()
 
 namespace internal {
 
+void markStaticWallShadowGroup(int row, int group)
+{
+    if (row >= 0 && static_cast<size_t>(row) < gWallShadowGroup.size() && group >= 0 && group < 255) {
+        gWallShadowGroup[row] = static_cast<unsigned char>(group + 1);
+    }
+}
+
 void flushWallObjectTable()
 {
     if (gWallSeeThroughTexture == 0) return;
-    std::vector<unsigned char> table(gWallSeeThrough.size() * 2);
+    std::vector<unsigned char> table(gWallSeeThrough.size() * 4);
     for (size_t row = 0; row < gWallSeeThrough.size(); row++) {
-        table[row * 2] = gWallSeeThrough[row];
-        table[row * 2 + 1] = gWallFullLight[row] == 3 ? 64 : (gWallFullLight[row] == 2 ? 128 : (gWallFullLight[row] != 0 ? 255 : 0));
+        table[row * 4] = gWallSeeThrough[row];
+        table[row * 4 + 2] = gWallShadowGroup[row];
+        table[row * 4 + 1] = gWallFullLight[row] == 3 ? 64 : (gWallFullLight[row] == 2 ? 128 : (gWallFullLight[row] != 0 ? 255 : 0));
     }
     if (table == gWallObjectTable) return;
     gWallObjectTable = std::move(table);
     glBindTexture(kTexture2D, gWallSeeThroughTexture);
-    glPixelStorei(kUnpackAlignment, 2);
     glTexSubImage2D(kTexture2D, 0, 0, 0, kSeeThroughRowWidth,
-        static_cast<int>(gWallSeeThrough.size() / kSeeThroughRowWidth), kRG, kUnsignedByte, gWallObjectTable.data());
-    glPixelStorei(kUnpackAlignment, 4);
+        static_cast<int>(gWallSeeThrough.size() / kSeeThroughRowWidth), kRGBA, kUnsignedByte, gWallObjectTable.data());
 }
 
 } // namespace internal

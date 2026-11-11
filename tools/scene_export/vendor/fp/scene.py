@@ -25,6 +25,7 @@ import base64
 import json
 import math
 import os
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -33,7 +34,7 @@ import numpy as np
 from f2lib import MapFile, geometry, ids, mapstxt, pro
 from f2lib import map as mapfile
 
-from . import boxes, light, proj, props, rock, sets, tents, things, walls
+from . import atlas, boxes, light, proj, props, rock, sets, tents, things, walls
 from .atlas import Atlas, save_png
 
 TILE_RES = 88       # texels per square side. > 80 makes the un-projection lossless: every
@@ -41,7 +42,14 @@ TILE_RES = 88       # texels per square side. > 80 makes the un-projection lossl
 TILE_MARGIN = 6     # texels around the square: tile art overhangs its rhombus by a pixel or two
 MAX_IDLE_FRAMES = 24
 WALL_BLOCKER_REACH = 0.3    # an invisible blocker this close to a wall face is part of that wall (units)
-NO_TILE = 1
+NO_TILE = 1       # the sentinel for "this square draws nothing" (the raw square's hidden bit,
+                  # 0x1000, becomes this in layers[]). It collides with tile id 1 on purpose:
+                  # grid000.frm, the near-black tile the retail maps paint their sea with, stays
+                  # undrawn like the hidden corners, so the atlases, the light bake and the walls
+                  # stay what they always were (168). The sea returns as the renderer's flat
+                  # extension planes, guided by build_water's flags and colour.
+WATER_ART = re.compile(r"^(grid|seas|cwater)\d+\.frm$")    # open-water tile families (168)
+SHORE_ART = re.compile(r"^shore\d+\.frm$")                 # the waterline tile family (168)
 DARK_TILE = 40      # mean brightness (0..255) below which the commonest floor tile is rock or blackness,
                     # which makes a map without any roof an underground one
 SET_LIGHT_LEVEL = b"\x80\xE9"       # script opcode (interpreter_extra.cc); its argument is pushed just before
@@ -62,6 +70,9 @@ ON_TOP = 0.05       # units outside a solid's footprint that still count as on i
 AT_SOLID = 0.3      # an invisible blocker this close to a solid is part of it (units)
 PLANT = (0.33, 0.45, 0.5)   # a plant: this share of its pixels on its outline at least, this share of its rectangle
                             # filled at most, and this share of its pixels covered by its mirror image
+BACK_COVER = 0.5    # the carve's back view: the opposite body must cover this share of the near
+                    # body's opaque texels at the world alignment, or the faces keep the mirror
+                    # (124; the Den's real pairs measured 0.55-0.82, CAR1's tiny slot 0.10)
 
 
 def _b64(array):
@@ -70,6 +81,12 @@ def _b64(array):
 
 def _round(values, digits=4):
     return [round(float(v), digits) for v in values]
+
+
+def renderable_map_objects(objects):
+    """Return placed objects with prototypes; PID -1 records are engine-only script helpers."""
+    return [obj for obj in sorted(objects, key=lambda item: item.tile)
+            if obj.pid != -1 and geometry.is_valid(obj.tile)]
 
 
 class SceneBuilder:
@@ -157,11 +174,13 @@ class SceneBuilder:
         sheet = np.zeros((max(rows, 1) * (cell + 1), per_row * (cell + 1), 4), np.uint8)
         assert sheet.shape[0] <= 4096, "too many tiles for one atlas"   # retail maximum is 381 tiles = 1843 px
         cells = []
+        names = {}
         index_of = {}
         bright = np.zeros(0x1000, bool)                 # tiles that are floor, not the black top of the rock (rock.py)
         self.clipped_tiles = []
         for n, tile_id in enumerate(used):
             frm = self.gf.art.load(ids.make_fid(ids.OBJ_TYPE_TILE, tile_id))
+            names[n] = (self.gf.art.name(ids.make_fid(ids.OBJ_TYPE_TILE, tile_id)) or "").lower()
             rgba = frm.rgba(self.gf.palette.glow_tile)
             h, w = rgba.shape[:2]
             inside = (src_x >= 0) & (src_x < w) & (src_y >= 0) & (src_y < h)
@@ -175,14 +194,67 @@ class SceneBuilder:
             index_of[tile_id] = n + 1
             bright[tile_id] = rgba[..., :3][rgba[..., 3] > 0].mean() >= rock.DARK if rgba[..., 3].any() else False
         index_of[NO_TILE] = 0
+        self.tile_index_of = dict(index_of)
         lookup = np.zeros(0x1000, np.uint16)
         for tile_id, n in index_of.items():
             lookup[tile_id] = n
+        self.water_cells = {n + 1 for n, name in names.items() if WATER_ART.match(name)}
+        self.shore_cells = {n + 1 for n, name in names.items() if SHORE_ART.match(name)}
+        self.water_names = names
         self.floor, self.roof = lookup[layers[0]], lookup[layers[1]]
         self.floor_ids, self.roof_ids = layers
         self.lit = bright[layers[0]].reshape(100, 100)
         self.tile_sheet, self.tile_cells = sheet, cells
         self.build_ground(sheet)
+        self.build_water()
+
+    def build_water(self):
+        """Per floor square, what continues past a map edge there (168).
+
+        1 open water: the square's tile is grid000 (raw value 1: the retail
+        maps paint their sea with it and leave it undrawn) or its drawn cell
+        is open-water art (the grid, seas and cwater families). 2 the shore
+        line (the shore family). 0 ordinary land or nothing. The sea itself
+        stays undrawn - the renderer fills the flagged squares with its flat
+        water colour in flight and turned views.
+        """
+        flags = np.zeros(10000, np.uint8)
+        raw = np.asarray(self.map.tiles[self.elevation]).ravel()
+        floor = self.floor.ravel()
+        weights = {}
+        for index in range(10000):
+            value = int(raw[index])
+            if value & 0x1000:
+                continue
+            tile = value & 0xFFF
+            if tile == 1 or int(floor[index]) in self.water_cells:
+                flags[index] = 1
+            elif int(floor[index]) in self.shore_cells:
+                flags[index] = 2
+            else:
+                continue
+            if tile == 1 and int(floor[index]):
+                tile = self.tile_index_of.get(tile, tile)
+            weights[tile] = weights.get(tile, 0) + 1
+        self.water = flags.reshape(100, 100)
+        # The flat water colour: the water squares' own art, opaque pixels
+        # only, weighted by how many squares each tile covers (the docks'
+        # near-black grid000, the abbey's seas).
+        total = np.zeros(3)
+        pixels = 0
+        for tile, count in weights.items():
+            try:
+                art = self.gf.art.load(ids.make_fid(ids.OBJ_TYPE_TILE, tile))
+                rgba = art.rgba(self.gf.palette.glow_tile)
+            except (FileNotFoundError, ValueError, KeyError):
+                continue
+            opaque = rgba[..., 3] > 0
+            if not opaque.any():
+                continue
+            share = count * int(opaque.sum())
+            total += rgba[..., :3][opaque].mean(axis=0) * share
+            pixels += share
+        self.water_color = [round(float(v), 4) for v in total / pixels / 255.0] if pixels else [0.04, 0.04, 0.045]
 
     def build_ground(self, sheet):
         """The commonest floor tile says what lies around the map and whether we are underground."""
@@ -353,6 +425,7 @@ class SceneBuilder:
         (boxes.py) and emit a row each."""
         runs = walls.align(self.pieces)
         runs_by_tile = {(run.along_u, face.obj.tile): run for run in runs for face in run.faces}
+        self.wall_runs = runs_by_tile
         self.join_odd_walls(runs_by_tile)
         wall_faces = [face for piece in self.pieces for face in piece]
         wall_faces += walls.fold_ends(runs)
@@ -381,6 +454,12 @@ class SceneBuilder:
                 frm = self.gf.art.load(fid)
                 cut = walls.unshear(frm.rgba(self.gf.palette.glow_tile, rotation, frame), face.left, face.top,
                                     face.slope, face.x_from, face.x_to, face.mask)
+                # A wall's face carries no holes: the art's enclosed transparent
+                # texels fill with the edge colours, so a wall does not sparkle
+                # with the room behind it (115). The backs and ends take their
+                # material from this picture, and the openings of doors stay:
+                # they open at the picture's border.
+                cut = cut and (props.fill_holes(cut[0]),) + cut[1:]
                 textures[key] = cut and (self.sprite(cut[0]),) + cut[1:]
             if textures[key] is not None:
                 sprite, x0, x1, y_top = textures[key]           # the floor line is un-sheared y = c
@@ -482,6 +561,7 @@ class SceneBuilder:
         x, y = (int(round(c)) for c in proj.hex_px(obj.tile))
         piece = props.Piece(obj, frm.frame(obj.rotation, frame).array(), frm.rgba(self.gf.palette.glow_sprite, obj.rotation, frame),
                             x + left, y + top, order, self.gf.protos.name(obj.pid), board, sheet)
+        piece.family = props.art_family(self.gf.art.name(obj.fid))
         piece.stands = top + height > 0                 # else it hangs over its hex: on a wall
         return piece
 
@@ -510,7 +590,10 @@ class SceneBuilder:
         beside a wall came out through it (a round stove in a corner), and two things side by
         side overlapped in plan and showed through each other from the air (a dresser and the
         crates against it). A box is cut back at the slabs of the walls as it is made
-        (out_of_walls); a drum here, on the side of its own hex. Two solids whose heights meet
+        (out_of_walls); a drum here, on the side of its own hex. A fly-only drum (row[15] 1)
+        is not cut here at all: the game's views are its card's, and solids.solid_faces
+        slices its mesh at the walls it crosses instead (row[16]), so it keeps its size and
+        ends flat at the wall face (120). Two solids whose heights meet
         are each cut back by half of their overlap, across the axis where they overlap less. A
         drum is cut as its square and becomes the largest drum within what is left: it keeps
         its near side and moves off the cut, so it still shows the sprite it was made of.
@@ -534,6 +617,31 @@ class SceneBuilder:
 
         for row, seen in zip(rows, fly):
             if not row[4] or not seen:
+                continue
+            if row[15] == 1:
+                # A fly-only drum keeps its size: the game's own views are its card's
+                # either way. What it would lose to a wall the mesh loses instead
+                # (solids.solid_faces slices the drum at row[16]'s planes, task 120):
+                # the old shrink stumped a drum whose center sat on the slab, keeping
+                # at most 2 * MIN_DRUM of a full diameter, and it took the kept side
+                # from the hex while the fit may put the drum's center half a unit
+                # away from it. The cut runs at the slab face the drum's center is
+                # nearest, and the mesh's cut face (solids.solid_faces) closes the
+                # end there: the drum ends flush at the wall, nothing pokes out the
+                # far side, and no view into the cut sees the hollow inside.
+                radius = row[7] / proj.BB_PX
+                for u0, v0, u1, v1 in self.boxes:
+                    if math.hypot(row[5] - min(max(row[5], u0), u1), row[6] - min(max(row[6], v0), v1)) >= radius:
+                        continue
+                    axis = int(u1 - u0 > v1 - v0)               # across the slab
+                    slab, home = ((u0, u1), (v0, v1))[axis], row[5 + axis]
+                    keep_ge = home > (slab[0] + slab[1]) / 2
+                    face = slab[1] if keep_ge else slab[0]
+                    if len(row) == 16:
+                        row.append([])
+                    clip = [axis, face, 1 if keep_ge else 0]
+                    if clip not in row[16]:
+                        row[16].append(clip)
                 continue
             for u0, v0, u1, v1 in self.boxes:
                 radius = row[7] / proj.BB_PX
@@ -580,16 +688,95 @@ class SceneBuilder:
                 row[15], cut[15] = 2, 1
                 self.props.append(cut)
 
-    def solid_of(self, index, left, top, force=False):
+    def solid_of(self, index, left, top, force=False, allow_lid=False):
         """-> (the floor's shade in a sprite, props.fit of the rest); cached, sprites repeat."""
-        key = (index.shape, index.tobytes(), left, top, force)
+        key = (index.shape, index.tobytes(), left, top, force, allow_lid)
         if key not in self._solids:
             shade = light.outer_dark(index)
             painted = light.painted_shadow(index, top)
             if painted is not None:
                 shade |= painted
-            self._solids[key] = shade, props.fit((index != 0) & ~shade, left, top, force)
+            self._solids[key] = shade, props.fit((index != 0) & ~shade, left, top, force, allow_lid)
         return self._solids[key]
+
+    def wall_join(self, piece, centre, left, top, run):
+        """(123) A burnt rebar piece stands on its wall: the fly camera draws
+        its live card on the wall run's plane (baked.bin's PLANE, the doors'
+        machinery), and the game's views keep the card they always had. The
+        row carries the wall line's two ground points and the card's object."""
+        obj = piece.obj
+        axis = "u" if run.along_u else "v"
+        slope, c, x_from, x_to = walls.floor_line(piece.index, left, top, axis)
+        face = walls.Face(obj, (obj.fid, obj.rotation, 0), centre, slope, c, x_from, x_to, False, False, "panel", 0,
+                          (piece.index, left, top))
+        face.move_to(run.plane)
+        (ua, va), (ub, vb) = face.ends()
+        self.wall_cards.append(_round((ua, va, ub, vb)) + [self.serial[id(obj)]])
+
+    def carve_art(self, fid):
+        """The art holds more than one real stored direction (task 120's carve
+        candidates): a direction whose only frame fills its own bounding box
+        is the engine's UNUSED ART placeholder card, not a view, and drops
+        out; at least two real directions must remain. -> the real views'
+        frames, or None. Cached per art."""
+        key = fid & 0x0FFFFFFF
+        got = self._carve_arts.get(key, "")
+        if got == "":
+            got = None
+            try:
+                frm = self.gf.art.load(fid)
+            except (FileNotFoundError, ValueError, KeyError):
+                frm = None
+            if frm is not None and frm.direction_count > 1:
+                frames = [frm.frame(d, 0).array() != 0 for d in range(frm.direction_count)]
+                if props.real_directions(frames) >= 2:
+                    got = frames
+            self._carve_arts[key] = got
+        return got
+
+    def back_sprite(self, piece, body, frames, left, top):
+        """(124) The carve's back view: the art's own opposite direction
+        composed into the near view's pixel frame - the opposite body where
+        it is opaque, the near body's own texel where it is not - so the far
+        sides' mirrored sampling reads the artist's back drawing and never
+        lands on a transparent texel, whatever the two silhouettes do. A
+        byte-mirror pair composes into the mirror itself and reads exactly
+        as the plain mirror did. -> the sprite index, or -1: the art holds
+        no opposite direction (1 or 3 stored directions), the slot is the
+        placeholder card, or too little of the near body is covered
+        (BACK_COVER)."""
+        obj = piece.obj
+        frm = self.gf.art.load(obj.fid)
+        count = frm.direction_count
+        if count not in (2, 6):
+            return -1
+        opposite = (obj.rotation + count // 2) % count
+        if not props.real_view(frames[opposite]):
+            return -1
+        frame = min(max(obj.frame, 0), frm.frame_count - 1)
+        index = frm.frame(opposite, frame).array()
+        rgba = frm.rgba(self.gf.palette.glow_sprite, opposite, frame)
+        opp_left, opp_top, _, _ = frm.placement(opposite, frame, obj.x, obj.y)
+        shade = light.outer_dark(index)
+        painted = light.painted_shadow(index, opp_top)
+        if painted is not None:
+            shade |= painted
+        back_body = props.fill_holes(rgba * ~shade[..., None])
+        # the opposite body aligned by world position: its array pixel (i, j)
+        # stands at the anchor-relative point (opp_top + i, opp_left + j),
+        # the near body's at (top + i, left + j)
+        rows = np.arange(body.shape[0])[:, None] + top - opp_top
+        columns = np.arange(body.shape[1])[None, :] + left - opp_left
+        inside = (rows >= 0) & (rows < back_body.shape[0]) & (columns >= 0) & (columns < back_body.shape[1])
+        there = back_body[np.clip(rows, 0, back_body.shape[0] - 1), np.clip(columns, 0, back_body.shape[1] - 1)]
+        take = inside & (there[..., 3] > 0)
+        composite = body.copy()
+        composite[take] = there[take]
+        near_opaque = body[..., 3] > 0
+        cover = float((take & near_opaque).sum()) / max(1, int(near_opaque.sum()))
+        if cover < BACK_COVER:
+            return -1
+        return self.cropped(composite, left, top)
 
     def build_props(self):
         """What first person shows as solids instead of cards and sheets (props.py).
@@ -602,11 +789,18 @@ class SceneBuilder:
         views keep the cards: there a solid is only drawn over its own card.
         """
         self.props, self.rests, self.lifts, self.casts = [], [], [], []
+        self.fly_decals = set()
         self.hidden, self.hidden_sheets = [], []        # boards / walls that first person does not draw
         self.blocks, self.posts, self.prop_blobs = [], [], []
         self.forced_boards = set()                      # boards the fly camera alone draws as solids: their cards shade the light
+        self.live_fly_boards = set()                    # of them, those whose live card the light bake shades as the solid did
+        self.fly_shadows = set()                        # boards whose painted shadow the light bake reads as it read main's
+        self.fly_sprites = set()                        # sprites the fly camera's own rows alone name (atlas-pinned)
         self.propped = set()                            # objects that stop the player as solids, or not at all
         pieces = [self.piece(obj, frm, order, board=n) for n, (obj, frm, order) in enumerate(self.card_info) if n not in self.set_boards]
+        flat_pieces = [self.piece(obj, frm, order) for obj, frm, order, _ in self.decal_info]
+        for piece, (_, _, _, decal) in zip(flat_pieces, self.decal_info):
+            piece.decal = decal
         formed = set(self.hidden_walls)                 # ... nor of the sheets that a form stands for
         pieces += [self.piece(face.obj, frm, face.order, sheet=self.sheet_rows[id(face)])       # not what is painted on walls
                    for face, frm, _ in self.panels if id(face) in self.sheet_rows and not face.obj.flags & mapfile.OBJECT_NO_BLOCK
@@ -618,8 +812,13 @@ class SceneBuilder:
         # is the fly camera's (seen 1). A thing that is the same either way is both cameras' (0), and
         # so are the pieces of a joined thing that made no solid.
         standing = [piece for piece in pieces if piece.stands]
-        joined = props.groups(standing)
-        apart = props.groups(standing, details=False)
+        assemblies = props.multipart_groups(pieces + flat_pieces)
+        assembly_keys = {frozenset(map(id, group)) for group in assemblies}
+        assembly_members = {id(piece) for group in assemblies for piece in group}
+        joined = [group for group in props.groups(standing)
+                  if not any(id(piece) in assembly_members for piece in group)] + assemblies
+        apart = [group for group in props.groups(standing, details=False)
+                 if not any(id(piece) in assembly_members for piece in group)]
         keys = {frozenset(map(id, group)) for group in joined}
         alone = {frozenset(map(id, group)) for group in apart}
         whole = {id(piece): frozenset(map(id, group)) for group in joined for piece in group}
@@ -629,37 +828,116 @@ class SceneBuilder:
         fly_hidden = []                                 # boards that only a fly camera's solid stands for
         for thing, (group, seen) in enumerate(todo):
             first = group[0]
+            multipart = frozenset(map(id, group)) in assembly_keys
             if seen is None:
                 seen = 2 if whole[id(first)] in made else 0
             # The mapper's loose clutter: its flag word carries nothing but light-through and its
             # own light, no bit that says the game treats it as a thing of the world (usable, flat,
             # walk-through, shoot-through). Such a pile keeps the card everywhere: stood up, its box
             # read as junk standing in an alley the game's own view keeps hidden behind a wall
-            # (the bathhouse's junk piles, the pot-belly stoves: 2026-10-28).
-            if all(not piece.obj.flags & ~PLAIN_OBJECT_FLAGS & 0xFFFFFFFF for piece in group):
-                continue
+            # (the bathhouse's junk piles, 2026-10-28). A stove is the exception its art carries:
+            # a drum with a lid on top. The fit below tells them apart; a refusal still keeps
+            # the card.
+            loose = all(not piece.obj.flags & ~PLAIN_OBJECT_FLAGS & 0xFFFFFFFF for piece in group)
             blocking = any(not piece.obj.flags & mapfile.OBJECT_NO_BLOCK for piece in group)
             # A box by name (tools/scene_export/shapes/overrides.json): chairs and
             # crates the fit takes for plants.
-            forced = FORCED.get((self.gf.art.name(first.obj.fid) or "").lower()) if len(group) == 1 else None
-            if len(group) == 1 and not blocking and first.index.shape[1] < WALK_THROUGH and not forced:
-                continue                                # loose things: cards
+            forced = FORCED.get((self.gf.art.name(first.obj.fid) or "").lower()) if len(group) == 1 else \
+                ("multipart-flat" if multipart else None)
+            narrow = len(group) == 1 and not blocking and first.index.shape[1] < WALK_THROUGH and not forced
             index, rgba, x, y = props.compose(group) if len(group) > 1 else (first.index, first.rgba, first.x, first.y)
             ax, ay = (int(round(c)) for c in proj.hex_px(first.obj.tile))       # the anchor: the first piece's hex
             left, top = x - ax, y - ay
-            shade, found = self.solid_of(index, left, top, forced)
+            # A thing main kept a card (loose clutter, a narrow thing nobody bumps into) stands
+            # only as a drum with a lid: its art vouches for the shape, and its game views keep
+            # the card either way (a lid's gap is transparent there), so nothing they see moves.
+            shade, found = self.solid_of(index, left, top, forced, allow_lid=loose or narrow)
+            carve = False
+            # (125) every scenery box may carry the art's own back view, the plain
+            # fit's no less than the carve's; carve_art caches per art, so the ask
+            # costs a dict look. A drum keeps its mirror: its row 16 holds the
+            # keep-apart clip planes and a drum's art has no sides to speak of.
+            frames = self.carve_art(first.obj.fid) if first.obj.obj_type == ids.OBJ_TYPE_SCENERY and not multipart else None
+            if not found and frames is not None and props.real_aspect(frames) >= props.CARVE_LONG:
+                # The carve fallback (task 120): a multi-view scenery art the
+                # plain fit refused - the game's big multi-quarter things, a
+                # car - stands as the forced box raised to the art's own
+                # height bands, and only the fly camera draws it: the game's
+                # views keep the card. Long and low only (123): the carve's
+                # ground boxes would lie a tall leaning frame down.
+                _, forced_found = self.solid_of(index, left, top, "box")
+                if forced_found and forced_found[1].cover >= 0.7:
+                    found = forced_found[0], props.carved(forced_found[0], forced_found[1])
+                    carve = True
+            if not found and frames is not None:
+                # The burnt rebar (123): a tall multi-view piece the carve
+                # declines stands on its wall - the fly camera draws its
+                # live card on the wall run that passes beside it (the
+                # doors' plane machinery), and the game's views keep the
+                # card they always had.
+                run = walls.line_through(first.obj.tile, self.wall_runs) if self.wall_runs else None
+                if run is not None:
+                    self.wall_join(first, (ax, ay), left, top, run)
             if not found:
+                if multipart:
+                        # A nearly flat multi-part picture may have no valid box
+                        # fit. In flight, draw one fixed plane of the composed
+                        # group and skip its source cards; the game view keeps
+                        # every original map object.
+                    rows, columns = np.flatnonzero(rgba[..., 3].any(axis=1)), np.flatnonzero(rgba[..., 3].any(axis=0))
+                    if len(rows) and len(columns):
+                        image = rgba[rows[0]:rows[-1] + 1, columns[0]:columns[-1] + 1]
+                        image_left, image_top = x + int(columns[0]) - ax, y + int(rows[0]) - ay
+                        center_dx = image_left + image.shape[1] / 2
+                        center_dy = image_top + image.shape[0] / 2
+                        max_width = atlas.PAGE_WIDTH - 2 * atlas.PAD
+                        scale = 1.0
+                        if image.shape[1] > max_width:
+                            from PIL import Image
+                            scale = max_width / image.shape[1]
+                            height = max(1, round(image.shape[0] * max_width / image.shape[1]))
+                            image = np.array(Image.fromarray(image).resize(
+                                (max_width, height), Image.Resampling.LANCZOS))
+                            image[..., 3] = np.where(image[..., 3] >= 128, 255, 0)
+                        center = np.asarray(self.anchor(first.obj)) + proj.delta_to_ground(
+                            center_dx * scale, center_dy * scale)
+                        sprite = self.sprite(image, -(image.shape[1] // 2), -image.shape[0])
+                        self.rests.append([sprite] + _round((*center, 0.0, 0.0)) + [3])
+                        self.fly_sprites.add(sprite)
+                        fly_hidden += [piece.board for piece in group if piece.board is not None]
+                        self.fly_decals.update(piece.decal for piece in group if hasattr(piece, "decal"))
+                        made.add(frozenset(map(id, group)))
+                        continue
                 continue
             shape, fit = found
+            if (loose or narrow) and not fit.lid:
+                continue
+            # A container whose art animates (a locker, a fridge): main stood it and live_solids
+            # un-solid-ed it again, so its game views know only the live card. Its solid flies
+            # alone now, and every other mark stays as main's had been (tasks 116/119).
+            animating = not loose and not narrow and first.obj.obj_type == ids.OBJ_TYPE_ITEM \
+                and first.board is not None and self.card_info[first.board][1].frame_count > 1
+            if carve or fit.lid or animating:
+                seen = 1                                # their game views keep the card: a lid's gap is
+                                                        # transparent there and a container's card is
+                                                        # live (it opens); first person gets the solid
             if fit.side_fill >= props.BULK:             # no legs to see through: the black on it is its own
                 shade = shade.copy()
                 shade[shape.top - top:shape.top - top + shape.h, shape.left - left:shape.left - left + shape.w] &= ~fit.covers(shape)
             u, v = self.anchor(first.obj)
             du, dv = fit.ground()
             cu, cv = u + du, v + dv
-            body = rgba * ~shade[..., None]
+            body = props.fill_holes(rgba * ~shade[..., None])
             sprite = self.cropped(body, left, top)
-            if shade.any() and not forced and seen != 1:   # a solid by name: its card keeps the shade
+            back = -1
+            if frames is not None and (carve or fit.kind != "drum"):
+                                                            # (125) any scenery box's far sides may take
+                                                            # the art's own back view; a drum keeps its
+                                                            # mirror (its row 16 holds the clip planes)
+                back = self.back_sprite(first, body, frames, left, top)
+            if shade.any() and not forced and (seen != 1 or animating):
+                                                            # a solid by name: its card keeps the shade; a live
+                                                            # card's cast stays as main's stood solid had left it
                 self.casts.append([self.cropped(rgba * shade[..., None], left, top)] + _round((u, v)))
             above, below = fit.rest(shape)
             window = body[shape.top - top:shape.top - top + shape.h, shape.left - left:shape.left - left + shape.w]
@@ -670,6 +948,7 @@ class SceneBuilder:
                 bx, by = int(round(base[0])), int(round(base[1]))
                 self.rests.append([self.cropped(window * mask[..., None], shape.left - bx, shape.top - by)] + _round((cu, cv, z, top)) + [seen])
 
+            props_start, rests_start = len(self.props), len(self.rests)
             round_ = fit.kind == "drum"
             if round_:
                 radius = fit.a / proj.BB_PX
@@ -688,18 +967,25 @@ class SceneBuilder:
                 if not round_:
                     (pu, pv), a, b = self.out_of_walls(u + pu, v + pv, a, b)
                     pu, pv = pu - u, pv - v
-                self.props.append([sprite] + _round((u, v)) + [board, int(round_)]
-                                  + _round((u + pu, v + pv, a, b, z0, z1, wall_u, wall_v)) + [self.name_id(first.obj.pid)]
-                                  + [int(bool(forced)), seen])
+                row = [sprite] + _round((u, v)) + [board, int(round_)]
+                row += _round((u + pu, v + pv, a, b, z0, z1, wall_u, wall_v)) + [self.name_id(first.obj.pid)]
+                row += [int(bool(forced)), seen]
+                if back >= 0:                       # (124) the art's own back view rides the row at 17;
+                    row += [[], back]               # the empty 16 reads as a box's no clip planes
+                    self.fly_sprites.add(back)      # (125) only the away faces sample it, and the
+                                                    # game's camera culls away faces - so the sprite
+                                                    # pins to the fly page whatever the row's seen
+                self.props.append(row)
                 things.append(thing)
                 half = (radius, radius) if round_ else (a / 2, b / 2)
                 area = math.pi * radius ** 2 if round_ else a * b
-                if seen == 1:                           # the game's view and the player go by the pieces apart
+                if seen == 1 and not animating:         # the game's view and the player go by the pieces apart
                     continue
                 if not forced:                          # a solid by name lifts nothing: the game's view keeps its cards
                     solids.append((round_, u + pu, v + pv, half, z1))
                 if forced:
-                    self.forced_boards.add(first.board)
+                    if first.board is not None:         # a sheet piece has no card to mark
+                        self.forced_boards.add(first.board)
                 else:
                     self.prop_blobs.append((u + pu, v + pv, 1.15 * max(half), 1.15 * min(half)))
                 if blocking and (area >= SMALL_AREA or z1 >= TALL):
@@ -708,8 +994,30 @@ class SceneBuilder:
                     else:
                         self.blocks.append(_round((u + pu - half[0], v + pv - half[1], u + pu + half[0], v + pv + half[1])))
             if seen == 1:
-                made.add(frozenset(map(id, group)))
-                fly_hidden += [piece.board for piece in group if piece.board is not None]
+                if animating:
+                    # The marks main's stood solid left: the board hidden (no card blob in the
+                    # light bake, nothing lifted onto it), the player stopped as before. The
+                    # flyBoards mark is new: the fly camera skips the live card, whose closed
+                    # box the fly-only solid now is.
+                    for piece in group:
+                        if piece.board is not None:
+                            self.hidden.append(piece.board)
+                            self.forced_boards.add(piece.board)
+                            self.live_fly_boards.add(piece.board)
+                    self.propped.update(id(piece.obj) for piece in group)
+                else:
+                    made.add(frozenset(map(id, group)))
+                    fly_hidden += [piece.board for piece in group if piece.board is not None]
+                    self.fly_decals.update(piece.decal for piece in group if hasattr(piece, "decal"))
+                    if carve or fit.lid:            # a thing main kept a card: its painted shadow row
+                        self.fly_shadows.update(piece.board for piece in group if piece.board is not None)
+                                                        # stays, so the light bake reads the same sprite
+                        for row in self.props[props_start:] + self.rests[rests_start:]:
+                            self.fly_sprites.add(row[0])    # its sprites are the fly camera's own
+                                                            # (a row's back view pins at its emit site)
+                for piece in group:
+                    if piece.board is None and piece.sheet is not None:
+                        self.hidden_sheets.append(piece.sheet)
                 continue
             self.shape_use["drum" if round_ else "box"] += 1
             for piece in group:
@@ -750,7 +1058,7 @@ class SceneBuilder:
                     self.plants.append(piece.board)
                     if piece.board not in hidden:
                         self.crossed.append(piece.board)
-        self.shadows = [row for row in self.shadows if row[0] not in hidden]
+        self.shadows = [row for row in self.shadows if row[0] not in hidden or row[0] in self.fly_shadows]
         self.solids = solids
 
     def lift(self, pieces, solids, hidden, fly_hidden):
@@ -773,12 +1081,16 @@ class SceneBuilder:
     # ------------------------------------------------------------------ objects
     def build_objects(self):
         self.walls, self.boards, self.decals, self.critters, self.sets = [], [], [], [], []
+        self.decal_info = []
         self.pieces = []                # wall faces per object, until build_walls()
         self.things = []                # doors, scenery and items: placed once the walls stand
         self.stacked = Counter()        # cards per hex so far (proj.row_plane)
         self.sheets = []                # their faces, where they are wall-like
         self.panels = []                # (face, frm, scene row) of those that are not doors
         self.door_quads = []
+        self.wall_cards = []            # (123) burnt rebar rows: [ua, va, ub, vb, object]; their
+                                        # cards stand on the wall run's plane for the fly camera
+        self.wall_runs = {}             # the walls' runs by (along_u, tile), for the rebar's join
         self.shadows = []               # [board, sprite without its painted shadow, the shadow, frame, rotation]
         self.plants = []                # boards of plants: their crowns throw no real shadow
         self.exits = []                 # which decals are exit grid hatching
@@ -787,13 +1099,13 @@ class SceneBuilder:
         self.card_info = []             # (object, frm, draw order) of every board
         self.sheet_rows = {}            # id(face) -> its row in self.walls
         self._solids = {}
+        self._carve_arts = {}           # of the carve fallback's qualifying arts (task 120)
         self.faced = set()              # objects whose collision is their wall face
         set_ids = {}
-        self.wall_tiles = {o.tile for o in self.objects if o.obj_type == ids.OBJ_TYPE_WALL}
+        self.wall_tiles = {o.tile for o in renderable_map_objects(self.objects)
+                           if o.obj_type == ids.OBJ_TYPE_WALL}
         # The engine draws hex by hex in ascending tile order, file order within a hex.
-        for order, obj in enumerate(sorted(self.objects, key=lambda o: o.tile)):
-            if not geometry.is_valid(obj.tile):
-                continue
+        for order, obj in enumerate(renderable_map_objects(self.objects)):
             frm = self.load_art(obj)
             if frm is None:
                 continue
@@ -806,6 +1118,7 @@ class SceneBuilder:
                 if ids.is_exit_grid(obj.pid):
                     self.exits.append(len(self.decals))
                 self.decals.append([self.frame_sprite(frm, obj.rotation, frame, obj.x, obj.y)] + entry)
+                self.decal_info.append((obj, frm, order, len(self.decals) - 1))
             elif kind == ids.OBJ_TYPE_WALL:
                 if not self.add_wall(obj, frm, order):
                     self.things.append((obj, frm, order, entry))
@@ -951,7 +1264,7 @@ class SceneBuilder:
         for board, body, _, _, _ in self.shadows:       # what stands there is the sprite without its painted shadow
             cards[board] = (body,) + cards[board][1:]
         cards += [(self.sets[row[0]]["dirs"][row[3]][0], row[1], row[2], row[-1]) for row in self.critters]
-        solid = set(self.hidden) - self.forced_boards  # these throw the shade of their solid
+        solid = set(self.hidden) - (self.forced_boards - self.live_fly_boards)  # these throw the shade of their solid
         blobs = [light.blob(*self.sprite_pixels(sprite), u, v) for n, (sprite, u, v, _) in enumerate(cards) if n not in solid]
         blobs += self.prop_blobs
         stops = self.colliders + [door[1:5] for door in self.door_quads]
@@ -995,7 +1308,19 @@ class SceneBuilder:
         Image.fromarray(self.light_image).save(os.path.join(out_dir, "light.png"), optimize=True)
         light_bytes = os.path.getsize(os.path.join(out_dir, "light.png"))
         rock_bytes = save_png(os.path.join(out_dir, "rock.png"), self.rock_texture) if self.rock else 0
-        self.atlas.pack()
+        # The new stands' own images (the rows main never emitted) pack on a
+        # trailing page of their own: every image any other row names keeps the
+        # texel it had, and the game's own views sample exactly what they sampled
+        # before (task 119). The rows name sprites; the atlas packs images.
+        rows_sprites = {row[0] for row in self.walls} | {row[0] for row in self.trims} \
+            | {row[0] for row in self.door_quads} | {row[0] for row in self.boards} \
+            | {row[0] for row in self.decals} | {row[0] for row in self.forms} \
+            | {row[0] for row in self.casts} \
+            | {index for row in self.shadows for index in row[1:3]} \
+            | {row[0] for row in self.props} | {row[0] for row in self.rests}
+        others_images = {self.sprites[i][0] for i in rows_sprites - self.fly_sprites}
+        fly_images = {self.sprites[i][0] for i in self.fly_sprites}
+        self.atlas.pack(pinned=fly_images - others_images)
         pages = self.atlas.save(out_dir, "sprites")
         sprites = [list(self.atlas.rect(a)) + [ox, oy] for a, ox, oy in self.sprites]
         m = self.map
@@ -1030,6 +1355,8 @@ class SceneBuilder:
             "walls": self.walls,                            # [sprite, ua, va, ub, vb, z0, z1, name, object, zc, thick, back]
             "trims": self.trims,                            # [sprite, ua, va, ub, vb, z0, z1, tx, ty, tw, th]: ends of slabs
             "doors": self.door_quads,                       # [sprite, ua, va, ub, vb, z0, z1, name, object]; they open
+            "wallCards": self.wall_cards,                   # [ua, va, ub, vb, object]: the burnt rebar's cards stand
+                                                            # on their wall run's plane for the fly camera (123)
             "boards": self.boards,                          # [sprite, u, v, stack, name, object]: stack = see proj.row_plane
             "shadows": self.shadows,                        # [board, sprite without painted shadow, shadow sprite, frame, rotation]
             # First person only (props.py). A solid shows `sprite`, whose anchor is ground point
@@ -1062,6 +1389,7 @@ class SceneBuilder:
             "blocks": self.blocks,                          # [u0, v0, u1, v1]: boxes that stop the player
             "posts": self.posts,                            # [u, v, radius]: drums that do
             "decals": self.decals,                          # [sprite, u, v, name, object]
+            "flyDecals": sorted(self.fly_decals),           # flat parts replaced by a composite prop in flight
             "exits": self.exits,                            # indices into decals: the exit grid (drawn faintly in first person)
             "sets": self.sets,                              # {fps, dirs: 6 x [sprite per frame]}
             "critters": self.critters,                      # [set, u, v, rotation, stack, name, object]

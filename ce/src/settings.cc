@@ -3,6 +3,7 @@
 #include "audio_channels.h"
 #include "debug.h"
 #include "game_config.h"
+#include "mouse.h"
 #include "platform_compat.h"
 #include "sound.h"
 #include "scene/menu_text.h"
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -292,9 +294,59 @@ void initSettingsRegistry(bool isMapper)
 #define SECT screen
     SETTING_P(resolution_x, clamp(640, 7680));
     SETTING_P(resolution_y, clamp(480, 4320));
-    SETTING_P(windowed, clamp(WindowMode::Fullscreen, WindowMode::WindowedFullscreen));
+    SETTING_P(resolution_mode, clamp(0, 76804320));
+    // 216: the lower bound is Windowed, not Fullscreen - the settings window
+    // offers Window (0) as a choice, and a Fullscreen-bounded clamp silently
+    // turned every saved Window pick into exclusive fullscreen on the next
+    // launch, which is the mode that is hard to minimize.
+    SETTING_P(windowed, clamp(WindowMode::Windowed, WindowMode::WindowedFullscreen));
     SETTING(mouse_lock);
     SETTING_P(scale, clamp(1, 4));
+    registerSetting("screen", "scale_factor", settings.screen.scale_factor, clamp(1.0, 3.0));
+    settingsRegistry.back().read = []() {
+        double factor = settings.screen.scale;
+        if (settingsKeyExists("screen", "scale_factor")) {
+            settingsRead("screen", "scale_factor", factor);
+        }
+        factor = std::clamp(factor, 1.0, 3.0);
+        settings.screen.scale_factor = std::round((factor - 1.0) * 5.0) / 5.0 + 1.0;
+    };
+    SettingDescriptor& scaleFactorDescriptor = settingDescriptors.back();
+    scaleFactorDescriptor.category = SettingCategory::Screen;
+    scaleFactorDescriptor.applyPolicy = SettingApplyPolicy::Restart;
+    scaleFactorDescriptor.subsection = "Display";
+    scaleFactorDescriptor.fallbackLabel = "Picture and interface scale";
+    scaleFactorDescriptor.fallbackDescription = "Scales the game picture and interface from 1.0x to 3.0x.";
+    scaleFactorDescriptor.numericRange = SettingNumericRange { 1.0, 3.0, 0.2 };
+    settingsRegistry.back().descriptor = scaleFactorDescriptor;
+    settingsRegistry.back().write = [](bool onlyAdd) {
+        if (onlyAdd && (settingsKeyExists("screen", "scale_factor") || settingsKeyExists("screen", "scale"))) return;
+        settingsWrite("screen", "scale_factor", onlyAdd ? 1.0 : settings.screen.scale_factor);
+    };
+    SettingDescriptor& resolutionModeDescriptor = settingDescriptors[settingDescriptors.size() - 5];
+    resolutionModeDescriptor.valueType = SettingValueType::Choice;
+    resolutionModeDescriptor.category = SettingCategory::Screen;
+    resolutionModeDescriptor.applyPolicy = SettingApplyPolicy::Restart;
+    resolutionModeDescriptor.subsection = "Display";
+    resolutionModeDescriptor.fallbackLabel = "Resolution";
+    resolutionModeDescriptor.fallbackDescription = "Select an available display resolution.";
+    settingsRegistry[settingsRegistry.size() - 5].descriptor = resolutionModeDescriptor;
+
+    SettingDescriptor& windowModeDescriptor = settingDescriptors[settingDescriptors.size() - 4];
+    windowModeDescriptor.valueType = SettingValueType::Choice;
+    windowModeDescriptor.category = SettingCategory::Screen;
+    // 209: the mode itself applies live on menu close; only the resolution
+    // and the interface scale keep the restart note.
+    windowModeDescriptor.applyPolicy = SettingApplyPolicy::OnClose;
+    windowModeDescriptor.subsection = "Display";
+    windowModeDescriptor.fallbackLabel = "Window mode";
+    windowModeDescriptor.fallbackDescription = "Choose fullscreen, windowed, or borderless mode.";
+    windowModeDescriptor.choices = {
+        { static_cast<int>(WindowMode::Fullscreen), "Fullscreen" },
+        { static_cast<int>(WindowMode::Windowed), "Window" },
+        { static_cast<int>(WindowMode::WindowedFullscreen), "Borderless" },
+    };
+    settingsRegistry[settingsRegistry.size() - 4].descriptor = windowModeDescriptor;
 #undef SECT
 
 #define SECT ui
@@ -353,7 +405,16 @@ void initSettingsRegistry(bool isMapper)
     SETTING(text_base_delay);
     SETTING(text_line_delay);
     SETTING(brightness);
-    SETTING(mouse_sensitivity);
+    registerSetting("preferences", "mouse_sensitivity", settings.preferences.mouse_sensitivity,
+        clamp(MOUSE_SENSITIVITY_MIN, MOUSE_SENSITIVITY_MAX));
+    SettingDescriptor& mouseSensitivityDescriptor = settingDescriptors.back();
+    mouseSensitivityDescriptor.category = SettingCategory::Preferences;
+    mouseSensitivityDescriptor.applyPolicy = SettingApplyPolicy::OnClose;
+    mouseSensitivityDescriptor.subsection = "3D";
+    mouseSensitivityDescriptor.fallbackLabel = "Cursor speed";
+    mouseSensitivityDescriptor.fallbackDescription = "How far the cursor moves when you move the mouse.";
+    mouseSensitivityDescriptor.numericRange = SettingNumericRange { MOUSE_SENSITIVITY_MIN, MOUSE_SENSITIVITY_MAX, 0.05 };
+    settingsRegistry.back().descriptor = mouseSensitivityDescriptor;
     SETTING(running_burning_guy);
 #undef SECT
 
@@ -439,6 +500,26 @@ void initSettingsRegistry(bool isMapper)
         "Show the 3D world view where a scene is available.", SettingApplyPolicy::OnClose);
     registerThreeDBoolean("sharp_text", settings.scene3d.sharp_text, "Sharp interface text",
         "Draw small interface text with a high-resolution font.", SettingApplyPolicy::OnClose);
+    registerThreeDBoolean("fps_counter", settings.scene3d.fps_counter, "FPS counter",
+        "Show average frames per second and frame time. Press F8 to toggle it while playing.",
+        SettingApplyPolicy::OnClose);
+    registerThreeDBoolean("frame_log", settings.scene3d.frame_log, "Frame time log",
+        "Write every frame's time to frame_log.csv and a summary next to it when the log closes.",
+        SettingApplyPolicy::OnClose);
+    registerSetting("3d", "fps_limit", settings.scene3d.fps_limit, clamp(0.0, 360.0));
+    SettingDescriptor& fpsLimitDescriptor = settingDescriptors.back();
+    fpsLimitDescriptor.category = SettingCategory::Uncategorized;
+    fpsLimitDescriptor.applyPolicy = SettingApplyPolicy::OnClose;
+    fpsLimitDescriptor.subsection = "3D";
+    fpsLimitDescriptor.fallbackLabel = "FPS limit";
+    fpsLimitDescriptor.fallbackDescription =
+        "The frame rate the game view is paced to: 60 keeps the classic feel, 0 removes the limit.";
+    fpsLimitDescriptor.numericRange = SettingNumericRange { 0.0, 360.0, 5.0 };
+    settingsRegistry.back().descriptor = fpsLimitDescriptor;
+    settingsRegistry.back().write = [](bool onlyAdd) {
+        if (onlyAdd && settingsKeyExists("3d", "fps_limit")) return;
+        settingsWrite("3d", "fps_limit", onlyAdd ? 0.0 : settings.scene3d.fps_limit);
+    };
     registerThreeDBoolean("clean_edges", settings.scene3d.clean_edges, "Clean map edges",
         "Cut the 3D scene to the map boundary, leaving black beyond it.", SettingApplyPolicy::OnClose);
     registerThreeDBoolean("sun", settings.scene3d.sun, "Sun",
@@ -447,6 +528,9 @@ void initSettingsRegistry(bool isMapper)
         SettingApplyPolicy::OnClose);
     registerThreeDBoolean("shadows", settings.scene3d.shadows, "Sun shadows",
         "Buildings and big things cast sharp sun shadows on the floor and the walls in the 3D view.",
+        SettingApplyPolicy::OnClose);
+    registerThreeDBoolean("cloud_shadows", settings.scene3d.cloud_shadows, "Cloud shadows (not recommended)",
+        "Soft clouds drift over the 3D view and dim the sun's light, never the lamps.",
         SettingApplyPolicy::OnClose);
     registerSetting("3d", "shadow_pixel_size", settings.scene3d.shadow_pixel_size, clamp(1.0, 16.0));
     SettingDescriptor& shadowPixelDescriptor = settingDescriptors.back();
@@ -474,7 +558,7 @@ void initSettingsRegistry(bool isMapper)
     settingsRegistry.back().descriptor = shadowDensityDescriptor;
     settingsRegistry.back().write = [](bool onlyAdd) {
         if (onlyAdd && settingsKeyExists("3d", "shadow_density")) return;
-        settingsWrite("3d", "shadow_density", onlyAdd ? 1.0 : settings.scene3d.shadow_density);
+        settingsWrite("3d", "shadow_density", onlyAdd ? 0.8 : settings.scene3d.shadow_density);
     };
     registerSetting("3d", "sun_swing", settings.scene3d.sun_swing, clamp(0.0, 60.0));
     SettingDescriptor& sunSwingDescriptor = settingDescriptors.back();
@@ -488,7 +572,7 @@ void initSettingsRegistry(bool isMapper)
     settingsRegistry.back().descriptor = sunSwingDescriptor;
     settingsRegistry.back().write = [](bool onlyAdd) {
         if (onlyAdd && settingsKeyExists("3d", "sun_swing")) return;
-        settingsWrite("3d", "sun_swing", onlyAdd ? 30.0 : settings.scene3d.sun_swing);
+        settingsWrite("3d", "sun_swing", onlyAdd ? 40.0 : settings.scene3d.sun_swing);
     };
     registerThreeDBoolean("glow", settings.scene3d.glow, "Glow",
         "Things that shine in Fallout 2 (fire, monitors, signs) bleed light softly in the 3D view.",
@@ -507,7 +591,7 @@ void initSettingsRegistry(bool isMapper)
         settingsWrite("3d", "glow_strength", onlyAdd ? 2.0 : settings.scene3d.glow_strength);
     };
     registerThreeDBoolean("camera_rotation", settings.scene3d.camera_rotation, "Camera rotation",
-        "[ and ] turn the camera up to 45 degrees left or right. "
+        "[ and ] turn the camera up to 30 degrees left or right. "
         "Return to the original view to control the game with the mouse.",
         SettingApplyPolicy::OnClose);
     registerThreeDBoolean("camera_rotation_unlimited", settings.scene3d.camera_rotation_unlimited,
@@ -694,6 +778,19 @@ void settingsWriteToConfig(bool onlyAdd)
             }
         } else {
             entry.write(onlyAdd);
+        }
+    }
+    // Keep the legacy resolution keys in sync with a pending menu choice.
+    // The active framebuffer is not resized until restart.
+    if (!onlyAdd) {
+        for (const auto& entry : settingsRegistry) {
+            if (entry.descriptor.id != "screen.resolution_mode" || !entry.restartValue.has_value()) continue;
+            const int* resolution = std::get_if<int>(&*entry.restartValue);
+            if (resolution != nullptr && *resolution > 0) {
+                settingsWrite("screen", "resolution_x", *resolution / 10000);
+                settingsWrite("screen", "resolution_y", *resolution % 10000);
+            }
+            break;
         }
     }
 }

@@ -19,12 +19,15 @@
 #include "scene_settings.h"
 #include "scene_lights.h"
 #include "scene_objects.h"
+#include "menu_text.h"
 #include "../art.h"
 #include "../devtools/devtools.h"
 #include "../dialog.h"
+#include "../display_monitor.h"
 #include "../map_edge.h"
 #include "../object.h"
 #include "../scene_renderer/game_view.h"
+#include "../scene_renderer/perf.h"
 #include "../scene_renderer/ground_pick.h"
 #include "../scene_renderer/picking.h"
 #include "../combat.h"
@@ -56,6 +59,8 @@ constexpr double kZoomGlideSeconds = 0.2;
 double gZoomShown = 0.0; // the zoom applied last frame (0: nothing applied yet)
 bool gZoomGliding = false;
 double gZoomGlideFrom = 1.0;
+double gZoomGlideStartVelocity = 0.0;
+double gZoomGlideVelocity = 0.0;
 Uint64 gZoomGlideStarted = 0;
 // The map elevation whose scene the renderer holds, and the last one that
 // could not be loaded (not tried again until the game leaves it).
@@ -71,6 +76,7 @@ std::uint64_t gCleanEdgesRevision = static_cast<std::uint64_t>(-1);
 std::string gClipMap;
 int gClipElevation = -1;
 bool gClipBottomExtended = false;
+unsigned gClipEdgeSerial = 0;
 std::string gClipFailureMap;
 int gClipFailureElevation = -1;
 std::uint64_t gClipFailureRevision = static_cast<std::uint64_t>(-1);
@@ -210,12 +216,15 @@ void updateMapClip()
     const bool extendBottom = cleanEdges() && tileSceneOverlayActive() && mapEdgeIsLoaded()
         && mapEdgeTilePastBottomStop(gCenterTile);
     if (gClipMap == gLoadedMap && gClipElevation == gLoadedElevation
-        && gCleanEdgesRevision == revision && gClipBottomExtended == extendBottom) return;
+        && gCleanEdgesRevision == revision && gClipBottomExtended == extendBottom
+        && gClipEdgeSerial == mapEdgeSerial()) return;
     scene_renderer::MapClip clip;
     if (cleanEdges()) {
         const char* requested = devtools::isEnabled() ? SDL_getenv("F2CE_DEV_CLEAN_EDGES") : nullptr;
         if (requested != nullptr && compat_stricmp(requested, "floor") == 0) {
             clip = scene_renderer::staticFloorMapClip();
+        } else if (requested != nullptr && compat_stricmp(requested, "off") == 0) {
+            clip = {};
         } else {
             clip = authoredMapClip();
         }
@@ -241,6 +250,7 @@ void updateMapClip()
     gClipMap = gLoadedMap;
     gClipElevation = gLoadedElevation;
     gClipBottomExtended = extendBottom;
+    gClipEdgeSerial = mapEdgeSerial();
     gCleanEdgesRevision = revision;
 }
 
@@ -261,8 +271,9 @@ bool readDaylight(const std::filesystem::path& cacheDirectory)
     return value != std::string::npos && json.compare(value, 4, "true") == 0;
 }
 
-// Loads what `view` needs of the current map's scene.
-bool loadScene(View view, const std::string& map, int elevation, std::string* message)
+// The map's scene cache directory: the dev cache override when the dev
+// tools run, the game's mod-cache otherwise.
+static std::filesystem::path sceneCacheDirectory(const std::string& map, int elevation)
 {
     // F2CE_SCENE_CACHE (dev tools only): a worktree's own scene cache, so a test
     // run of a new exporter leaves the cache of a game running alongside alone.
@@ -270,18 +281,57 @@ bool loadScene(View view, const std::string& map, int elevation, std::string* me
     const std::filesystem::path scenes = devCache != nullptr && devCache[0] != '\0'
         ? std::filesystem::path(devCache)
         : gameRootPath() / "mod-cache" / "scene";
-    const std::filesystem::path cacheDirectory = scenes / map / std::to_string(elevation);
+    return scenes / map / std::to_string(elevation);
+}
+
+// The 3D toggle's refusal (211) goes to the game's status line, in the
+// game's language: which map has no scene, or what failed. A refused
+// enable that stays silent reads to the player as a button that does not
+// work. Dev panels keep their own status line on top of this.
+static void reportToggleRefusal(const std::string& rawMessage)
+{
+    if (gameGetState() != GameState::Normal || rawMessage.empty()) return;
+    const char* reason = nullptr;
+    std::string map;
+    int elevation = 0;
+    if (rawMessage == "3D scene is disabled in settings") {
+        reason = "disabled";
+    } else if (rawMessage == "no map is loaded") {
+        reason = "no-map";
+    } else {
+        map = currentMapName();
+        elevation = static_cast<int>(gElevation);
+        // A map that was never exported has no cache directory at all; every
+        // other failure means the scene exists but did not load.
+        const bool sceneless = !std::filesystem::exists(sceneCacheDirectory(map, elevation));
+        reason = sceneless ? "no-scene" : "load-failed";
+    }
+    const std::string text = toggleRefusalText(reason, map, elevation, settings.system.language);
+    displayMonitorAddMessage(text.c_str());
+}
+
+// Loads what `view` needs of the current map's scene.
+bool loadScene(View view, const std::string& map, int elevation, std::string* message)
+{
+    const std::filesystem::path cacheDirectory = sceneCacheDirectory(map, elevation);
     printf("scene: cache %s\n", cacheDirectory.string().c_str());
     fflush(stdout);
     std::string error;
-    if (!scene_renderer::loadStaticFloor(cacheDirectory, &error)) {
-        *message = "floor preview unavailable: " + error;
-        return false;
+    scene_renderer::PerfScope total("scene_total");
+    {
+        scene_renderer::PerfScope stage("floor");
+        if (!scene_renderer::loadStaticFloor(cacheDirectory, &error)) {
+            *message = "floor preview unavailable: " + error;
+            return false;
+        }
     }
     setSceneDaylight(readDaylight(cacheDirectory));
-    if (view != View::Floor && !scene_renderer::loadStaticWalls(cacheDirectory, &error)) {
-        *message = "wall preview unavailable: " + error;
-        return false;
+    if (view != View::Floor) {
+        scene_renderer::PerfScope stage("walls");
+        if (!scene_renderer::loadStaticWalls(cacheDirectory, &error)) {
+            *message = "wall preview unavailable: " + error;
+            return false;
+        }
     }
     if (view == View::Full && !scene_renderer::loadStaticProjection(cacheDirectory, &error)) {
         *message = "hero projection unavailable: " + error;
@@ -296,6 +346,7 @@ bool loadScene(View view, const std::string& map, int elevation, std::string* me
     gClipMap.clear(); // Full loads add the projection needed to convert legacy EDG pixels.
     gClipElevation = -1;
     gCleanEdgesRevision = static_cast<std::uint64_t>(-1);
+    scene_renderer::perfLoadMark("scene_loaded");
     return true;
 }
 
@@ -345,11 +396,8 @@ PreviewRuntimeState runtimeState()
 {
     return {
         gameGetState() == GameState::Normal,
-        GameMode::getCurrentGameMode() == GameMode::kNone,
-        !gameUiIsDisabled(),
+        gameModeShowsMap(static_cast<unsigned int>(GameMode::getCurrentGameMode())),
         !isoIsDisabled(),
-        !isInCombat(),
-        _inDialog == 0,
         _moviePlaying() == 0,
     };
 }
@@ -360,10 +408,7 @@ const char* blockReasonName(PreviewBlockReason reason)
     case PreviewBlockReason::None: return "available";
     case PreviewBlockReason::GameState: return "game-state";
     case PreviewBlockReason::GameMode: return "game-mode";
-    case PreviewBlockReason::UiDisabled: return "ui-disabled";
     case PreviewBlockReason::IsoDisabled: return "iso-disabled";
-    case PreviewBlockReason::Combat: return "combat";
-    case PreviewBlockReason::Dialog: return "dialog";
     case PreviewBlockReason::Movie: return "movie";
     }
     return "unknown";
@@ -503,17 +548,38 @@ void syncToMap()
             gFailure.clear();
         } else {
             scene_renderer::unloadStaticScene();
-            gLoadedMap.clear();
-            gLoadedElevation = -1;
-            gFailedMap = map;
-            gFailedElevation = elevation;
-            gFailure = message;
-            printf("scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
-            fflush(stdout);
-            // A file too: the Windows build has no console.
-            if (FILE* log = fopen((dev_output::outputDirectory("logs") / "scene.log").string().c_str(), "a")) {
-                fprintf(log, "scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
-                fclose(log);
+            std::string floorError;
+            // Keep a usable 3D ground plane when a map's wall or projection
+            // sidecar is missing or damaged. This is also the fallback for
+            // incomplete exports; it must not silently turn the whole map 2D.
+            if (gView != View::Floor && loadScene(View::Floor, map, elevation, &floorError)) {
+                gLoadedMap = map;
+                gLoadedElevation = elevation;
+                gLoadedView = View::Floor;
+                gFailedMap = map;
+                gFailedElevation = elevation;
+                gFailure = message;
+                const std::string line = "scene: " + map + " elevation " + std::to_string(elevation)
+                    + " uses 3D ground plane: " + message;
+                printf("%s\n", line.c_str());
+                fflush(stdout);
+                if (FILE* log = fopen((dev_output::outputDirectory("logs") / "scene.log").string().c_str(), "a")) {
+                    fprintf(log, "%s\n", line.c_str());
+                    fclose(log);
+                }
+            } else {
+                gLoadedMap.clear();
+                gLoadedElevation = -1;
+                gFailedMap = map;
+                gFailedElevation = elevation;
+                gFailure = message;
+                printf("scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
+                fflush(stdout);
+                // A file too: the Windows build has no console.
+                if (FILE* log = fopen((dev_output::outputDirectory("logs") / "scene.log").string().c_str(), "a")) {
+                    fprintf(log, "scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
+                    fclose(log);
+                }
             }
         }
     }
@@ -544,6 +610,7 @@ bool enable(View view, std::string* message)
     }
     if (!settings.scene3d.enabled) {
         *message = "3D scene is disabled in settings";
+        reportToggleRefusal(*message);
         return false;
     }
     gView = view;
@@ -553,6 +620,7 @@ bool enable(View view, std::string* message)
     syncToMap();
     if (!showsCurrentMap()) {
         *message = gFailure.empty() ? "no map is loaded" : gFailure;
+        reportToggleRefusal(*message);
         return false;
     }
     message->clear();
@@ -590,7 +658,7 @@ View requestedView()
 
 View activeView()
 {
-    return settings.scene3d.enabled && gView != View::Off && showsCurrentMap() ? gView : View::Off;
+    return settings.scene3d.enabled && gView != View::Off && showsCurrentMap() ? gLoadedView : View::Off;
 }
 
 bool shouldPresent()
@@ -613,11 +681,11 @@ namespace {
 
 double gTurnAt = 0.0; // degrees round, where the camera is
 double gTurnTo = 0.0; // and where it goes
+double gTurnSpeed = 0.0; // degrees a second, signed, of the eased turn
 bool gTurnOwnsCamera = false;
 bool gTurnDevOverride = false;
 Uint64 gTurnLast = 0;
 scene_renderer::StaticFlyCamera gTurnPose = {};
-constexpr double kTurnSpeed = 360.0; // degrees a second
 
 double cameraTurnDegrees()
 {
@@ -626,7 +694,7 @@ double cameraTurnDegrees()
 
 void landCameraTurn()
 {
-    gTurnAt = gTurnTo = 0.0;
+    gTurnAt = gTurnTo = gTurnSpeed = 0.0;
     if (gTurnOwnsCamera) scene_renderer::setStaticFlyCamera(nullptr);
     gTurnOwnsCamera = false;
     gTurnDevOverride = false;
@@ -653,12 +721,32 @@ void setCameraTurnNow(double degrees)
 {
     gTurnDevOverride = true;
     gTurnAt = gTurnTo = degrees;
+    gTurnSpeed = 0.0;
     gTurnLast = 0;
 }
 
 bool cameraTurned()
 {
     return gTurnOwnsCamera;
+}
+
+double cameraTurnAngle()
+{
+    return gTurnOwnsCamera ? gTurnAt : 0.0;
+}
+
+void cameraTurnScrollStepNow(int dx, int dy, int* outDx, int* outDy)
+{
+    *outDx = dx;
+    *outDy = dy;
+    if (!gTurnOwnsCamera || gTurnAt == 0.0) return;
+    ScrollGroundBasis basis {};
+    scene_renderer::StaticFlyCamera pose;
+    if (!scene_renderer::gameViewGroundStep(kScrollStepX, kScrollStepY, basis.horizontal, basis.vertical)
+        || !scene_renderer::staticGameViewCamera(&pose)) return;
+    basis.yaw = pose.yaw;
+    basis.pitch = pose.pitch;
+    cameraTurnScrollStep(dx, dy, gTurnAt, basis, outDx, outDy);
 }
 
 void updateCameraTurn()
@@ -678,9 +766,10 @@ void updateCameraTurn()
     const double seconds = gTurnLast == 0 ? 0.0
         : static_cast<double>(now - gTurnLast) / static_cast<double>(SDL_GetPerformanceFrequency());
     gTurnLast = now;
-    const double step = std::min(kTurnSpeed * seconds, std::abs(gTurnTo - gTurnAt));
-    gTurnAt += gTurnTo > gTurnAt ? step : -step;
-    if (gTurnAt == gTurnTo && std::fmod(gTurnTo, 360.0) == 0.0) {
+    // The step eases in and out; a press mid-turn keeps the speed and bends
+    // the turn into the new target.
+    const bool landed = cameraTurnEaseStep(gTurnAt, gTurnTo, gTurnSpeed, seconds);
+    if (landed && std::fmod(gTurnTo, 360.0) == 0.0) {
         landCameraTurn();
         return;
     }
@@ -712,9 +801,10 @@ void adjustZoom(int steps)
     if (zoom < low) zoom = low;
     if (zoom > high) zoom = high;
     settings.scene3d.zoom = zoom; // written back on save, kept between sessions
-    // Ease from what is on the screen now: a step in mid-glide re-anchors and
-    // keeps the motion continuous.
+    // Re-anchor on the visible zoom and carry its current velocity into the
+    // next glide, so a wheel event during motion does not jump the speed.
     if (gZoomShown <= 0.0) gZoomShown = zoom;
+    gZoomGlideStartVelocity = gZoomGliding ? gZoomGlideVelocity : 0.0;
     gZoomGlideFrom = gZoomShown;
     gZoomGlideStarted = SDL_GetPerformanceCounter();
     gZoomGliding = true;
@@ -729,9 +819,21 @@ double shownZoom()
             / static_cast<double>(SDL_GetPerformanceFrequency());
         if (seconds < kZoomGlideSeconds) {
             const double t = seconds / kZoomGlideSeconds;
-            zoom = gZoomGlideFrom + (zoom - gZoomGlideFrom) * (1.0 - std::pow(1.0 - t, 3.0));
+            const double t2 = t * t;
+            const double t3 = t2 * t;
+            const double h00 = 2.0 * t3 - 3.0 * t2 + 1.0;
+            const double h10 = t3 - 2.0 * t2 + t;
+            const double h01 = -2.0 * t3 + 3.0 * t2;
+            zoom = h00 * gZoomGlideFrom + h10 * kZoomGlideSeconds * gZoomGlideStartVelocity
+                + h01 * settings.scene3d.zoom;
+            const double dh00 = 6.0 * t2 - 6.0 * t;
+            const double dh10 = 3.0 * t2 - 4.0 * t + 1.0;
+            const double dh01 = -6.0 * t2 + 6.0 * t;
+            gZoomGlideVelocity = (dh00 * gZoomGlideFrom + dh10 * kZoomGlideSeconds * gZoomGlideStartVelocity
+                + dh01 * settings.scene3d.zoom) / kZoomGlideSeconds;
         } else {
             gZoomGliding = false;
+            gZoomGlideVelocity = 0.0;
         }
     }
     return zoom;
@@ -749,11 +851,31 @@ RefreshResult refreshForPresent()
     // view goes with it.
     if (!gCameraGlide) scene_renderer::setStaticCameraCenterTile(-1);
     scene_renderer::setStaticCameraCenterTile(gCenterTile);
+    const Uint64 cameraDone = SDL_GetPerformanceCounter();
+    scene_renderer::perfCpuMark("r_camera");
+    // 172: the chain's split of the first refresh (the between-presents gap).
+    scene_renderer::perfLoadMark("ff_refresh_camera");
     const bool heroUpdated = updateObjectsFromGame();
+    scene_renderer::perfLoadMark("ff_refresh_objects");
+    const Uint64 objectsDone = SDL_GetPerformanceCounter();
     updateRoofsFromGame();
+    scene_renderer::perfCpuMark("r_roofs");
     updateLightsFromGame();
+    scene_renderer::perfCpuMark("r_lights");
     updateSunFromGame();
-    const double seconds = static_cast<double>(SDL_GetPerformanceCounter() - start) / SDL_GetPerformanceFrequency();
+    scene_renderer::perfCpuMark("r_sun");
+    scene_renderer::perfLoadMark("ff_refresh_rest");
+    const Uint64 end = SDL_GetPerformanceCounter();
+    static int reports = 0;
+    if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
+        const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+        printf("perf refresh camera=%.2f objects=%.2f rest=%.2f\n",
+            static_cast<double>(cameraDone - start) * toMs,
+            static_cast<double>(objectsDone - cameraDone) * toMs,
+            static_cast<double>(end - objectsDone) * toMs);
+        fflush(stdout);
+    }
+    const double seconds = static_cast<double>(end - start) / SDL_GetPerformanceFrequency();
     return { heroUpdated, seconds };
 }
 

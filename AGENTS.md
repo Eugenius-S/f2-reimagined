@@ -1,12 +1,23 @@
-# Working on Fallout 2 CE 3D
+# Working on Fallout 2: Reimagined
 
-Three agents: `claude`, `gpt` (GPT Sol 6.1), `glm` (GLM 5.3). The owner
-accepts the visuals and changes these rules as the work goes. Goals and
+**Rule 1: the owner can always start the latest version of the game.** After
+every code merge, the verified build goes where the owner's shortcut picks it
+up (below). A merge whose build is not handed over is not finished.
+
+Three agents: `claude`, `gpt`, `glm`. The owner accepts the visuals and
+changes these rules as the work goes.
+
+- `gpt` and `glm` share one pool of tasks: whoever has limits left takes the
+  top free task (`owner: any`) in the board order below. `claude` keeps the
+  strategy and the board. The per-city reviews are the owner's flights
+  (`owner: owner`); the pool turns their shots into fixes.
+- `gpt` works through exactly one `gpt-6-luna` subagent as its controller
+  and writes no code itself. `glm` works by itself, with no subagent. Goals and
 decisions: [the roadmap](docs/2026-10-19-roadmap-design.md).
 
-- One agent works at a time, whoever has limits. Any agent may stop at any
-  moment: the next one continues from the last pushed commit and the task's
-  `Log`, without asking anybody.
+- Agents work in parallel, each in its own worktree. Any agent may stop at
+  any moment: the next one continues from the last pushed commit and the
+  task's `Log`, without asking anybody.
 - Nobody waits. Nothing waits for the owner's or Claude's approval; whatever
   the owner rejects later becomes a new task.
 - Claude keeps the strategy (the order of the board, big tasks cut into
@@ -14,6 +25,10 @@ decisions: [the roadmap](docs/2026-10-19-roadmap-design.md).
   the design-heavy core; the board always has free work for `gpt` and `glm`.
 - The owner's finds from chat go to [tasks/inbox.md](tasks/inbox.md), not
   into the current work, unless the owner says "now".
+- Fold first. A new find or task first goes through the open tasks and
+  batches: if one fits, it joins that one (a Context line there); a new task
+  is cut only when nothing fits. Every new board entry (an inbox line, a
+  task) names the batch it joined, or says why it stands alone.
 
 Where things are: [shapes and camera rotation](docs/2026-10-20-shapes-and-rotation-design.md),
 [dev tools](docs/p1-devtools.md) (snapshots, tours, the fly camera, restarting
@@ -23,7 +38,8 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
 
 ## Rules
 
-- Everything in the repository is in English. Never write the long dash
+- Everything in the repository is in English, except `README.ru.md`, the
+  Russian copy of `README.md`: change both together. Never write the long dash
   (U+2014): use a colon, a comma, a full stop or parentheses.
 - Never commit `game/`, `game-vanilla/`, `build/`, game files, tokens or keys.
 - The owner may have `game/fallout2-ce.exe` open: never close it, never steal
@@ -33,6 +49,25 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
   different worktrees run side by side, each writing only its own run
   folder; runs from one worktree queue up.
 - Python is `py -3` (`python` is a Store stub).
+- Project folders follow "merged, then gone" (the owner, 2026-11-07): when a
+  task's PR lands in main, its worktree folder leaves the projects root the
+  same day (`git worktree remove --force`); open-task folders with local
+  debris move to `_archive/worktrees` instead. Experiment outputs the owner
+  called keepsakes (regenerated sprites, art trials, marketing sources) are
+  never deleted: they live committed under `runs/<task>/`, or moved to
+  `_archive` and `!marketing`.
+- After every code merge into main the game is verified before anybody
+  plays it: rebuild Release from fresh `origin/main`, run one off-screen
+  `tools/dev-snapshot.ps1` launch check on the demo copy, run
+  `tools/perf-check.ps1` (the speed gate, 251), and only then copy
+  `build/fallout2-ce.exe` to `f2r-verified/fallout2-ce.exe`, a folder beside
+  the main checkout, with a line in `version.txt` there (commit, date,
+  checks), and dispatch the players' build for the same commit:
+  `gh workflow run verify.yml -f commit=<that commit>` (253), so the
+  launcher's `latest` release carries exactly the verified build. The owner's
+  `Run F2R.lnk` swaps that build into `game/` on its next start (the previous
+  one stays as `fallout2-ce.exe.bak`). Main must always be playable. Docs-only
+  merges skip the check.
 - Limits go on re-reading the context: every call pays for the whole
   thread so far (measured in 079: 99% of the tokens). So:
   - one task per thread; after its PR, or once the thread is long, start a
@@ -43,6 +78,11 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
     time, cropped or scaled down; every image stays in the thread.
 - Evidence in `runs/` is a few JPEG sheets or crops of at most 1 MB each
   (CI refuses more); raw captures stay in `game/shots/`.
+- After two consecutive failed background attempts at the same required
+  capture, stop repeating that capture. If the code and automated checks are
+  complete and only owner-visible evidence remains, close the task and move
+  the exact capture request to the matching owner fly-through task. Otherwise
+  leave the task `todo` and name the missing code or fixture in its Log.
 - A task that changed what the game, a tool or a folder looks like ends with
   at most 4 outcome screenshots attached in the chat when the task is done
   (and committed under its `runs/NNN-slug/` folder), so the owner sees the
@@ -54,6 +94,14 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
   and did not, or changed and should not, is fixed before the merge.
 - Upstream CE code (`ce/src/*.cc` outside `scene/`, `scene_renderer/`,
   `devtools/`) gets a hook or a call at most; the logic lives in our modules.
+- On a local map the 3D view never turns off. An object that cannot be
+  built in 3D yet stands as a flat picture (a billboard or a fixed plane),
+  never as a switch back to 2D. The world map stays 2D; the inventory,
+  dialogs and menus opened over a local map draw over the live 3D view
+  (the owner, 2026-11-10; task 173).
+- Speed is a feature: a steady 60 FPS, a warm-cache map change in 2 s, no
+  stall over 100 ms on a settings change. Measure with the frame-time log
+  (127) before and after any change that may cost time.
 - A fix in the 3D scene is a rule that holds for every map, object and
   wall of its kind, never a case for one prototype, tile or map (the owner,
   2026-10-27). A PR names the rule and shows it on more than the one spot
@@ -75,9 +123,40 @@ py -3 -m unittest discover -s tools/scene_export -p 'test*.py'
 py -3 -m unittest discover -s tools/regression -p 'test*.py'
 py -3 tools/scene_export/export.py --game-root ./game
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/regression.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/perf-check.ps1
 ```
 
+For a locally installed Restoration Project copy outside the main checkout,
+check that CE still boots and loads maps with
+`powershell -NoProfile -ExecutionPolicy Bypass -File tools/rp-check.ps1
+-GameRoot <scratch-game> -BuildExecutable build/fallout2-ce.exe`. The check
+keeps test executables, configs, logs and saves under `build/`.
+
 Read a check's result before the next step; never chain a merge after it.
+
+## Board order
+
+Take tasks in this order (the owner, 2026-11-04); the `tier` field in the
+header carries it and `tools/tasks.ps1 -Next` sorts by it:
+
+0. Out of turn, always first: anything that crashes the game or leaves a
+   place the player cannot get past. Cut it with `tier: 0`.
+1. Measurement tools: 127 (the FPS counter and frame-time log), then 183
+   (the screenshot with its metadata).
+2. Whole-game systems: speed (172 location load, 156 no stall on a settings
+   change, 157 a steady 60 FPS), 173 (3D never off, the plane fallback),
+   174 (multi-part objects), the Restoration Project (184-188).
+3. Batches by kind: geometry, one class of objects across every map per
+   task and per PR (189 walls, 190 roofs, 191 furniture and props, 192
+   vehicles; the area exports 164-171 feed them); the UI as one batch
+   (140, 130, 134, 149, 128, 193).
+4. Local fixes per location, last: only from the owner's fly-through
+   screenshots (183), one batch per city (175 on, `owner: owner` until the
+   owner's shots land); local-only tasks wait here.
+
+One batch is one PR in size. Speed work and geometry work run one after the
+other, never side by side (both touch the renderer); work on other files
+(RP sfall, tools, UI) may run in parallel with either.
 
 ## Tasks
 
@@ -89,9 +168,10 @@ id: 003
 title: Regression snapshot test
 milestone: M0
 status: todo        # todo | doing | done
-owner: none         # claude | gpt | glm | none
+owner: any          # claude | gpt | glm | any | owner (the owner's own step)
 suggested: gpt      # a preference: if that agent is out of limits, take it
 priority: normal    # high: taken before the other free tasks
+tier: 3             # the board order below (0 first)
 claude-only: no
 user-check: no      # yes: the owner looks after the merge (never blocks)
 depends-on: []
@@ -100,19 +180,45 @@ reviewed: no        # see Review
 
 `tools/tasks.ps1` shows the board; `-Next <you>` prints the task to take:
 your own doing task, else a stale one (no commit on its branch for three
-days), else the first free `todo` suggested for you, else any free one;
-`priority: high` tasks come first. Finish the task you took before taking
+days), else the top free `todo` in the board order (`tier`, then
+`priority`, then the id). Never skip past a tier 0 task (a crash or a
+blocker). Finish the task you took before taking
 another: a hard task is split (step 4), not handed over.
+
+The owner sees and orders the board in Polka: the folder `!F2R board` next
+to the checkouts, `polka.html`. `py -3 "../!F2R board/update_board.py"`
+(from a checkout) syncs it
+both ways; run it after a merge that changes a task file, and when the owner
+says he added cards. His edits come back as a PR named `board: the owner's
+Polka edits`: changed priorities and assignees go into the task files (his order, so
+`-Next` follows them once merged), his new cards go into `tasks/inbox.md`
+as `(Polka card <id>, ...)` lines. Claude merges that PR first, cuts or
+folds each new card like any find, and then removes the card from
+`new-cards.json` there, since the task's own card replaces it. A new task
+also gets a line in `ru-tasks.json` there: a short plain Russian title and
+one or two sentences, no long dash; without it the card shows in English.
+
+Cards move with the work, every agent, every task: started (the draft PR
+of step 2 is open) means the card is in «В работе»; finished (`status: done`
+merged) means «Готово»; stopped without finishing means the draft PR is
+closed with a `Log` line, so the card goes back to the queue. Run
+`update_board.py` right after opening the draft PR and right after the
+merge; an agent without the `!F2R board` folder says so in the PR and
+Claude runs it. A `doing` status sits on `main` only for a task landing in
+parts while its next part is under way (186); otherwise it is set back.
 
 1. Work in your own worktree, never switch branches in the main checkout:
    `git worktree add --detach ../fallout2-ce-3d-<you> origin/main`. It has no
    `game/`: the scripts use the main checkout's `game/` with the worktree's
    build. A changed exporter writes to the worktree (`export.py --game-root
    <main>/game --maps klamath --cache-root build/scene-cache`).
-2. Claim by pushing the branch: `git switch -c task/NNN-slug`, set `status:
-   doing` and `owner: <you>` in the task file, commit, `git push -u origin
-   task/NNN-slug`. The board reads the header from the branch; nothing goes
-   to `main` until the merge.
+2. Claim with a lock: check that no open PR and no branch exists for the
+   task's number (`gh pr list --search "NNN:"`, `git ls-remote origin
+   'task/NNN-*'`); `git switch -c task/NNN-slug`, set `status: doing` and
+   `owner: <you>` in the task file, commit, push, and open a draft PR named
+   `NNN: <title>` at once. That draft PR is the lock: if another agent's PR
+   for the number is already there, take the next task. The open PR puts
+   the card in «В работе»; nothing goes to `main` until the merge.
 3. Commit and push each meaningful step, one-line messages. Write a `Log`
    entry only when you stop or finish, in that commit:
 
@@ -132,6 +238,13 @@ another: a hard task is split (step 4), not handed over.
    ride in the same PR; no separate commits to `main` for bookkeeping.
 
 ## Review
+
+The one merge gate is green CI (build, tests, and the unit tests of the
+tools). The pixel regression (`tools/regression.ps1`) needs the game files,
+so CI does not run it: the author runs it by hand before the merge. The PR
+body says what it touched. The author merges as soon as CI is green; nothing else is
+reviewed before the merge. The owner reviews each city later in a fly-through
+with 183's shots (tasks 175 on), and the pool turns the finds into fixes.
 
 The checks are the review. The author sets `reviewed: yes` on finishing,
 except when the PR retook regression references, changed a file format the
