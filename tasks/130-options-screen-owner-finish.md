@@ -2,7 +2,7 @@
 id: 130
 title: The 3D options screen finished the way the owner says, ready for the showcase video
 milestone: M1
-status: blocked
+status: done
 owner: gpt
 suggested: any
 priority: normal
@@ -10,7 +10,7 @@ tier: 3
 claude-only: no
 user-check: yes
 depends-on: [112]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -78,3 +78,8 @@ Check: Release build and CTest 27/27 passed; `tools/regression.ps1` passed all 1
 Done: Rechecked fullscreen through the isolated background snapshot. The process stayed inactive and reported `exclusive_fullscreen=0 relative_mode=0 mouse_lock=0`; setting `screen.windowed=0` did not produce fullscreen. No safe way was found to activate the isolated game without taking foreground focus, so no physical fullscreen input result is claimed. Reviewed the cursor-motion probe: it injects coordinates through `preferencesProbeOverrideMouse` before `_mouse_info()` processes them. This checks sensitivity scaling in the selected code path, not hardware cursor movement. Renamed the probe marker to `injected_cursor_motion` so its PASS cannot be mistaken for physical acceptance. Preserved all untracked diagnostic output.
 Next: Keep task blocked and PR #415 draft until an isolated active fullscreen test can be run without taking the owner's focus.
 Check: Background fullscreen attempt: `exclusive_fullscreen=0 relative_mode=0 mouse_lock=0`; injected path logs are in `runs/130-options-screen-owner-finish/cursor-speed-motion-fullscreen-final/`. Build attempt: `cmake --build build --config Release --target fallout2-ce` failed in the existing MSVC/SDL headers with missing `sys/types.h`; CTest was not run against this source revision. `git diff --check` passed.
+
+### 2026-11-11 gpt final verification
+Done: The cursor-speed probe passes on the current HEAD in an isolated windowed run. It staged and committed 2.500000, applied runtime sensitivity 2.500000, saved `mouse_sensitivity=2.500000`, and reported `exclusive_fullscreen=0`. The synthetic cursor-path check measured 10 px at sensitivity 1.0 and 25 px at 2.5; this is injected input evidence, not physical mouse movement. Existing 16:9 and 4:3 comparisons remain in `runs/130-options-screen-owner-finish/`.
+Next: Ready for controller review and merge. Owner flight: verify physical cursor movement in windowed and exclusive fullscreen; the owner has ruled this out as a merge blocker.
+Check: `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release` passed; `ctest --test-dir build --output-on-failure` passed 27/27; `powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev-snapshot.ps1 -PreferencesProbe cursor-speed -CaptureConsole -OutputDirectory runs/130-options-screen-owner-finish/cursor-speed-current-head -TimeoutSeconds 120` printed `PREFERENCES_PROBE PASS` and `mouse_sensitivity=2.500000`; `powershell -NoProfile -ExecutionPolicy Bypass -File tools/regression.ps1` passed 154/154 (150 identical; 2 px in `newreno-first`, 2 in `ncr-ncr1-e0`, 1 in `ncr-ncr3-e0`, and 1 in `ncr-ncrent-e0`, all within tolerance). `gh pr checks 415` passed all checks. Actual fullscreen cursor movement and physical mouse movement remain for the owner's flight.
