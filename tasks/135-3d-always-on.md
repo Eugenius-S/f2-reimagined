@@ -2,8 +2,8 @@
 id: 135
 title: The 3D view stays on in combat and whenever the map is on screen
 milestone: M1
-status: blocked
-owner: gpt
+status: doing
+owner: glm
 suggested: claude
 priority: high
 tier: 2
