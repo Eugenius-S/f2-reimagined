@@ -761,7 +761,7 @@ try {
         while ((Get-Date) -lt $deadline -and -not $process.HasExited) {
             if (Test-Path -LiteralPath $watchdogStdout) {
                 $lines = Get-Content -LiteralPath $watchdogStdout -Tail 40 -ErrorAction SilentlyContinue
-                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
+                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|CAPTURE|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
                 if ($progress.Count -gt 0 -and $progress[0] -ne $watchdogLastLine) {
                     $watchdogLastLine = [string]$progress[0]
                     $watchdogLastProgress = Get-Date
@@ -784,7 +784,7 @@ try {
         while ((Get-Date) -lt $deadline -and -not $process.HasExited) {
             if (Test-Path -LiteralPath $watchdogStdout) {
                 $lines = Get-Content -LiteralPath $watchdogStdout -Tail 40 -ErrorAction SilentlyContinue
-                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
+                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|CAPTURE|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
                 if ($progress.Count -gt 0 -and $progress[0] -ne $watchdogLastLine) {
                     $watchdogLastLine = [string]$progress[0]
                     $watchdogLastProgress = Get-Date
@@ -833,7 +833,7 @@ try {
                     break
                 }
                 if ($snapshots.Count -ge $shots -and (Test-Path -LiteralPath $combatLog) -and
-                    (Select-String -LiteralPath $combatLog -Pattern ('^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + ' captures=4') -Quiet)) { break }
+                    (Select-String -LiteralPath $combatLog -Pattern ('^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + '(\.map)? captures=4') -Quiet)) { break }
             } elseif ($DevInput -or $SceneInput) {
                 $inputLog = Join-Path $OutputDirectory 'process.stdout.log'
                 if ((Test-Path -LiteralPath $inputLog) -and (Select-String -LiteralPath $inputLog -Pattern '^DEV_INPUT FAIL' -Quiet)) { break }
@@ -1131,7 +1131,7 @@ if ($PreferencesProbe) {
 }
 if ($Combat) {
     $fixtureLog = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
-    if ($fixtureLog -match '(?m)^COMBAT_FIXTURE FAIL ' -or $fixtureLog -notmatch ('(?m)^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + ' captures=4\r?$')) {
+    if ($fixtureLog -match '(?m)^COMBAT_FIXTURE FAIL ' -or $fixtureLog -notmatch ('(?m)^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + '(\.map)? captures=4\r?$')) {
         throw "Combat fixture failed or timed out within $TimeoutSeconds s.`n$fixtureLog"
     }
     if (-not $probeHarnessStoppedProcess -or $snapshots.Count -ne 4) {
@@ -1149,7 +1149,9 @@ if ($Combat) {
         if ($index -lt 3 -and -not $fixture.in_combat) { throw "Combat phase '$($expectedPhases[$index])' was not captured in combat." }
         if ($index -eq 3 -and $fixture.in_combat) { throw 'The final combat fixture frame was captured before combat ended.' }
         if ($index -eq 0 -and -not $fixture.player_turn) { throw 'The targeting frame was not captured during the player turn.' }
-        if ($index -eq 2 -and $fixture.player_turn) { throw 'The enemy frame was not captured during an enemy turn.' }
+        # The engine holds player_turn through enemy turns too: the enemy
+        # frame's proof is whose turn the engine was running.
+        if ($index -eq 2 -and -not $fixture.enemy_turn) { throw 'The enemy frame was not captured during an enemy turn.' }
         if (-not $Classic -and ($metadata.scene_view -ne 'full' -or -not $metadata.preview_requested)) {
             throw "3D combat phase '$($expectedPhases[$index])' lacks a full scene preview."
         }
