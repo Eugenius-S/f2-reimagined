@@ -2,7 +2,7 @@
 id: 247
 title: The options menu switches the bottom HUD bar between Original and RP (the belt)
 milestone: M1
-status: blocked
+status: doing
 owner: gpt
 suggested: any
 priority: high
@@ -51,3 +51,8 @@ Check: Inspected `ce/src/settings.cc`, `ce/src/settings.h`, `ce/src/scene/option
 Done: Implementation remains blocked because the installed RP archive has no bottom-bar FRM. The original `art/intrface/iface.frm` in `master.dat` is 640x99 (one frame). `mods/rpu.dat` has no `art/intrface/iface.frm` and no corresponding 640x99 interface FRM; its 18 interface FRMs are unrelated screens or dialogue art. No code was changed.
 Next: Supply the intended RP bottom-bar FRM in `mods/rpu.dat`, then implement and verify the selector.
 Check: Read-only scan of `master.dat` and `mods/rpu.dat` with `tools/scene_export/vendor/f2lib/dat2.py` and `f2lib/frm.py`; original decoded as 640x99, RP counterpart absent.
+
+### 2026-11-12 gpt
+Done: Found the installed RP interface bar art in `mods/rpu_russian.dat`, member `art/intrface/iface.frm`. It is 640x99, one frame, 63,434 bytes, and differs from `master.dat`'s `art/intrface/iface.frm`. `mods/rpu.dat` itself still has no `iface.frm`. No implementation or game files were changed.
+Next: Implement the selector using the installed RP member and verify it in classic and 3D modes.
+Check: Read-only scan of every `.dat` in the installed RP `mods/` directory using the repository's DAT2 and FRM readers; checked the loose `data/art/intrface/` location (absent), `mods/mods_order.txt` (the Russian archive follows `rpu.dat`), and `ddraw.ini` interface keys (`ActionPointsBar`, `ExpandBarter`, and other interface options; no bar-art path key). Compared decoded dimensions and SHA-256 for the base and RP `iface.frm` members. Rendered the RP FRM with the installed game palette to an ignored `build/` preview and visually confirmed it is the complete bottom interface bar with belt slots. Build, ctest, regression, and runtime checks were not run.
