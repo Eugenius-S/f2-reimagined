@@ -81,7 +81,8 @@ Per the queue in `runs/glm-night-2026-11-12.md`, top to bottom.
 
 - **189 (walls on all maps): not taken.** The painted-post rule's
   diagnose (face selection across maps, the 2026-11-12 audit) is a deep
-  renderer research task; the night went to the higher-tier items first.
+  renderer research task; the night went to the higher-tier items first
+  and then to the second pass (148 done, 143 attempted).
 
 - **224 (geometry second pass): PR #446, draft, the finds worked off.**
   F1 (kladwtwn's black edge wedge) verified FIXED on main by 202's
@@ -94,8 +95,12 @@ Per the queue in `runs/glm-night-2026-11-12.md`, top to bottom.
   in `runs/224-geometry-second-pass/`. F3 (the Shark Club marquee) stays
   open. Not verified: F3's diagnosis, the full 154-spot re-walk.
 
-- **143 (cloud shadow edges): not taken** (the budget went to the
-  higher-tier items above).
+- **143 (cloud shadow edges): attempted, still open.** Three hour frames
+  at the owner's spot did not reproduce the hard curved edge (the clouds
+  drift), and a sharp-step measurement is dominated by the road's own art
+  edges. The attempt is recorded in the task Log (PR #450); the 5-bit
+  quantization suspicion stays the first suspect once a controlled
+  clouds-off/on pair exists.
 
 - **148 (README turn and combat): not taken** (the budget went to the
   higher-tier items above).
