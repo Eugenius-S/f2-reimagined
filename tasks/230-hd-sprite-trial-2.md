@@ -79,3 +79,9 @@ Tried: two individual image-generation requests for `stand-dir0`, each with its 
 Saw: attempt 1 turned the character around and spread the legs widely. Attempt 2 changed the foot positions and the silhouette proportions. Neither met the pose and shape constraints.
 Next: blocked after two failed attempts. No other frames were generated or accepted. Resumption needs a generation setup that preserves the reference pose, foot placement, silhouette, and frame proportions.
 Check: controller visual review reported both failures. Controller wait times were about 10 s for attempt 1 and 19 s for attempt 2; these are approximate waits, not exact generation timings.
+
+### 2026-11-12 gpt
+Tried: eight more individual `stand-dir0` generations, each using the source frame and a revised description. Together with the two attempts logged above, the controller reviewed 10/10 attempts for this frame.
+Saw: all eight new images were rejected. They changed the turn, stance or foot placement, proportions, and silhouette; some also failed to look photorealistic. None was accepted, and there is no agreed set. The eight rejected generated images were copied to ignored `build/task230/rejected/`; originals remain in the generated-images folder. No game files were changed.
+Next: blocked. No more frames or image requests until a setup can preserve the source pose, feet, proportions, silhouette, and realism.
+Check: controller visual review of all eight new images. Copy verification: eight files in `build/task230/rejected/`; directory is ignored by Git. Generation timings and image-size/alignment metrics were not measured. No accepted frame, comparison sheet, or GIF exists.
