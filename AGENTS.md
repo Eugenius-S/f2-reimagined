@@ -78,6 +78,11 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
     time, cropped or scaled down; every image stays in the thread.
 - Evidence in `runs/` is a few JPEG sheets or crops of at most 1 MB each
   (CI refuses more); raw captures stay in `game/shots/`.
+- After two consecutive failed background attempts at the same required
+  capture, stop repeating that capture. If the code and automated checks are
+  complete and only owner-visible evidence remains, close the task and move
+  the exact capture request to the matching owner fly-through task. Otherwise
+  leave the task `todo` and name the missing code or fixture in its Log.
 - A task that changed what the game, a tool or a folder looks like ends with
   at most 4 outcome screenshots attached in the chat when the task is done
   (and committed under its `runs/NNN-slug/` folder), so the owner sees the
