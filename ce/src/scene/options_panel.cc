@@ -18,6 +18,8 @@
 #include "../draw.h"
 #include "../debug.h"
 #include "../game.h"
+#include "../interface.h"
+#include "../interface_bar_style.h"
 #include "../input.h"
 #include "../kb.h"
 #include "../mouse.h"
@@ -289,6 +291,26 @@ bool OptionsPanel::initialize(int windowId, unsigned char* surface, const unsign
     }
     model_->configureChoice("screen.resolution_mode", resolutionChoices);
     model_->setValue("screen.resolution_mode", selectedResolution);
+    const bool originalBarAvailable = interfaceBarStyleImage(false, gInterfaceBarWidth, nullptr, nullptr) != nullptr;
+    const bool rpBarAvailable = interfaceBarStyleRpAvailable(gInterfaceBarWidth);
+    if (originalBarAvailable && rpBarAvailable) {
+        model_->configureChoice("ui.hud_bar_style", { { 0, "Original" }, { 1, "RP" } });
+    } else if (rpBarAvailable) {
+        model_->configureChoice("ui.hud_bar_style", { { 1, "RP" } });
+        model_->configureLabel("ui.hud_bar_style", localized("HUD bar style (RP only)"),
+            localized("Original bar art is unavailable at this width. RP is active."));
+        model_->setValue("ui.hud_bar_style", 1);
+    } else {
+        model_->configureChoice("ui.hud_bar_style", { { 0, "Original" } });
+        if (originalBarAvailable) {
+            model_->configureLabel("ui.hud_bar_style", localized("HUD bar style (needs rpu_russian.dat)"),
+                localized("RP bar art is unavailable. Install the Russian RP archive."));
+        } else {
+            model_->configureLabel("ui.hud_bar_style", localized("HUD bar style unavailable at this width"),
+                localized("Install the original interface bar art for this width to switch styles."));
+        }
+        if (settings.ui.hud_bar_style == 1) model_->setValue("ui.hud_bar_style", 0);
+    }
     updateScaleRange();
     rows_ = optionsPanelRows(model_->edits(), "3d");
     sliderTrackOffset_ = sliderTextCenterOffset(windowId_);
@@ -689,7 +711,8 @@ void OptionsPanel::showPanelForSnapshot(bool bottom)
 
 void OptionsPanel::showDropdownForSnapshot(const std::string& settingId)
 {
-    const std::string id = settingId == "mode" ? "screen.windowed" : "screen.resolution_mode";
+    const std::string id = settingId == "mode" ? "screen.windowed"
+        : settingId == "hud_bar_style" ? "ui.hud_bar_style" : "screen.resolution_mode";
     dropdownRow_ = findRowBySettingId(id);
     if (dropdownRow_ < 0) return;
     const int targetRowTop = std::max(0, screenHeight_ / 3 - rowHeight(dropdownRow_) / 2);
@@ -1357,12 +1380,14 @@ void OptionsPanel::handleWheel()
 bool OptionsPanel::commit()
 {
     if (model_ == nullptr) return true;
+    const bool barStyleChanged = model_->isDirty("ui.hud_bar_style");
     std::string error;
     if (!model_->commit(&error)) {
         showError(error);
         return false;
     }
     error_.clear();
+    if (barStyleChanged) interfaceBarStyleRefresh();
     return true;
 }
 

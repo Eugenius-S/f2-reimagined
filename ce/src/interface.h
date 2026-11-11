@@ -55,6 +55,7 @@ void interfaceBarEnable();
 void interfaceBarDisable();
 bool interfaceBarEnabled();
 void interfaceBarRefresh();
+void interfaceBarStyleRefresh();
 void interfaceRenderHitPoints(bool animate);
 void interfaceRenderArmorClass(bool animate);
 void interfaceRenderActionPoints(int actionPointsLeft, int bonusActionPoints);

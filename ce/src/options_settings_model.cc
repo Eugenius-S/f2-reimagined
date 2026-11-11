@@ -33,6 +33,17 @@ bool OptionsSettingsModel::configureChoice(const std::string& id, const std::vec
     return true;
 }
 
+bool OptionsSettingsModel::configureLabel(const std::string& id, const std::string& label, const std::string& description)
+{
+    auto descriptor = std::find_if(descriptors_.begin(), descriptors_.end(), [&id](const SettingDescriptor& value) {
+        return value.id == id;
+    });
+    if (descriptor == descriptors_.end()) return false;
+    descriptor->fallbackLabel = label;
+    descriptor->fallbackDescription = description;
+    return true;
+}
+
 bool OptionsSettingsModel::configureNumericRange(const std::string& id, const SettingNumericRange& range)
 {
     auto descriptor = std::find_if(descriptors_.begin(), descriptors_.end(), [&id](const SettingDescriptor& value) {

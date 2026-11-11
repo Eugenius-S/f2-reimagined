@@ -24,6 +24,7 @@
 #include "geometry.h"
 #include "input.h"
 #include "inventory.h"
+#include "interface_bar_style.h"
 #include "item.h"
 #include "kb.h"
 #include "memory.h"
@@ -409,16 +410,18 @@ int interfaceInit()
     }
 
     // Blit interface bar FRM into static window buffer.
-    if (gInterfaceBarIsCustom) {
-        blitBufferToBuffer(customInterfaceBarGetBackgroundImageData(), gInterfaceBarWidth, INTERFACE_BAR_HEIGHT - 1, gInterfaceBarWidth, gInterfaceWindowBuffer, gInterfaceBarWidth);
-    } else {
-        FrmImage backgroundFrmImage;
-        if (!backgroundFrmImage.lock(InterfaceFrameId::MainInterface)) {
-            return intface_fatal_error(-1);
-        }
+    if (!interfaceBarStyleCopyBackground(gInterfaceWindowBuffer, gInterfaceBarWidth)) {
+        if (gInterfaceBarIsCustom) {
+            blitBufferToBuffer(customInterfaceBarGetBackgroundImageData(), gInterfaceBarWidth, INTERFACE_BAR_HEIGHT - 1, gInterfaceBarWidth, gInterfaceWindowBuffer, gInterfaceBarWidth);
+        } else {
+            FrmImage backgroundFrmImage;
+            if (!backgroundFrmImage.lock(InterfaceFrameId::MainInterface)) {
+                return intface_fatal_error(-1);
+            }
 
-        blitBufferToBuffer(backgroundFrmImage.getData(), gInterfaceBarWidth, INTERFACE_BAR_HEIGHT - 1, gInterfaceBarWidth, gInterfaceWindowBuffer, gInterfaceBarWidth);
-        backgroundFrmImage.unlock();
+            blitBufferToBuffer(backgroundFrmImage.getData(), gInterfaceBarWidth, INTERFACE_BAR_HEIGHT - 1, gInterfaceBarWidth, gInterfaceWindowBuffer, gInterfaceBarWidth);
+            backgroundFrmImage.unlock();
+        }
     }
 
     extendedApBarInitToWindow();
@@ -933,6 +936,12 @@ void interfaceBarRefresh()
         windowRefresh(gInterfaceBarWindow);
     }
     indicatorBarRefresh();
+}
+
+void interfaceBarStyleRefresh()
+{
+    if (gInterfaceBarWindow == -1 || gInterfaceWindowBuffer == nullptr) return;
+    if (interfaceBarStyleCopyBackground(gInterfaceWindowBuffer, gInterfaceBarWidth, gInterfaceBarEndButtonsIsVisible)) interfaceBarRefresh();
 }
 
 static int counterAnimationBaseDelayMs()
@@ -2175,7 +2184,11 @@ static void interfaceRestoreAlternateAmmoMeterBackground(int x)
 {
     unsigned char* src = nullptr;
     FrmImage backgroundFrmImage;
-    if (gInterfaceBarIsCustom) {
+    int sourcePitch = gInterfaceBarWidth;
+    if (const unsigned char* styleImage = interfaceBarStyleCurrentImage(gInterfaceBarWidth, nullptr, nullptr)) {
+        src = const_cast<unsigned char*>(styleImage);
+        sourcePitch = gInterfaceBarWidth;
+    } else if (gInterfaceBarIsCustom) {
         src = customInterfaceBarGetBackgroundImageData();
     } else {
         if (!backgroundFrmImage.lock(InterfaceFrameId::MainInterface)) {
@@ -2185,7 +2198,7 @@ static void interfaceRestoreAlternateAmmoMeterBackground(int x)
     }
 
     int height = kAmmoBarMaxRatio + 2;
-    blitBufferToBuffer(src + gInterfaceBarWidth * kAmmoAlternateMeterTopBorder + x,
+    blitBufferToBuffer(src + sourcePitch * kAmmoAlternateMeterTopBorder + x,
         kAmmoAlternateMeterWidth,
         height,
         gInterfaceBarWidth,
@@ -2938,6 +2951,7 @@ static void customInterfaceBarInit()
         gInterfaceBarWidth = 640;
         gInterfaceBarIsCustom = false;
     }
+    interfaceBarStyleNormalizeSelection(gInterfaceBarWidth);
 }
 
 static void customInterfaceBarExit()

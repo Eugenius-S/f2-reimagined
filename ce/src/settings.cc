@@ -354,6 +354,16 @@ void initSettingsRegistry(bool isMapper)
     SETTING(in_game_menu_help);
     SETTING(main_menu_overlay_subscreens);
     SETTING(iface_bar_mode);
+    SETTING_P(hud_bar_style, clamp(0, 1));
+    SettingDescriptor& hudBarStyleDescriptor = settingDescriptors.back();
+    hudBarStyleDescriptor.valueType = SettingValueType::Choice;
+    hudBarStyleDescriptor.category = SettingCategory::Interface;
+    hudBarStyleDescriptor.applyPolicy = SettingApplyPolicy::OnClose;
+    hudBarStyleDescriptor.subsection = "Display";
+    hudBarStyleDescriptor.fallbackLabel = "HUD bar style";
+    hudBarStyleDescriptor.fallbackDescription = "Choose the original interface bar or the Restoration Project belt bar.";
+    hudBarStyleDescriptor.choices = { { 0, "Original" }, { 1, "RP" } };
+    settingsRegistry.back().descriptor = hudBarStyleDescriptor;
     SETTING(perks_progress_bar);
     SETTING_P(iface_bar_width, clamp(640, 4320));
     SETTING_P(iface_bar_side_art, clamp(0, 999));

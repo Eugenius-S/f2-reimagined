@@ -145,6 +145,10 @@ set(FALLOUT_ENGINE_SOURCES
     "src/input.cc"
     "src/input.h"
     "src/interface.cc"
+    "src/interface_bar_style.cc"
+    "src/interface_bar_style.h"
+    "src/interface_bar_style_decode.cc"
+    "src/interface_bar_style_decode.h"
     "src/interface.h"
     "src/interpreter_extra.cc"
     "src/interpreter_extra.h"
@@ -448,6 +452,13 @@ if(BUILD_TESTING)
     )
     target_include_directories(fps_counter_tests PRIVATE "src")
     add_test(NAME fps_counter_tests COMMAND fps_counter_tests)
+
+    add_executable(interface_bar_style_tests
+        "src/interface_bar_style_decode.cc"
+        "tests/interface_bar_style/interface_bar_style_test.cc"
+    )
+    target_include_directories(interface_bar_style_tests PRIVATE "src")
+    add_test(NAME interface_bar_style_tests COMMAND interface_bar_style_tests)
 
     add_executable(launcher_progress_tests
         "tests/launcher_progress/launcher_progress_test.cc"

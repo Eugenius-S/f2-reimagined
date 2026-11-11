@@ -50,6 +50,16 @@ using Translation = std::pair<const char*, std::string>;
 const std::vector<Translation>& catalog()
 {
     static const std::vector<Translation> strings = {
+        { "HUD bar style", cp1251(u8"Стиль нижней панели") },
+        { "Choose the original interface bar or the Restoration Project belt bar.", cp1251(u8"Выберите исходную панель или панель Restoration Project с ремнём.") },
+        { "Original", cp1251(u8"Исходная") },
+        { "RP", cp1251(u8"RP") },
+        { "HUD bar style (needs rpu_russian.dat)", cp1251(u8"Панель: нужен rpu_russian.dat") },
+        { "RP bar art is unavailable. Install the Russian RP archive.", cp1251(u8"Арт панели RP недоступен. Установите русский архив RP.") },
+        { "HUD bar style unavailable at this width", cp1251(u8"Панель недоступна при этой ширине") },
+        { "Install the original interface bar art for this width to switch styles.", cp1251(u8"Для смены стиля установите исходную панель этой ширины.") },
+        { "HUD bar style (RP only)", cp1251(u8"Панель: доступен только RP") },
+        { "Original bar art is unavailable at this width. RP is active.", cp1251(u8"Исходная панель этой ширины недоступна. Сейчас выбрана RP.") },
         { "fly camera landed", cp1251(u8"полёт завершён") },
         { "fly camera landed: the 3D scene is not shown", cp1251(u8"полёт завершён: 3D-сцена не показана") },
         { "Enable 3D scene", cp1251(u8"Включить 3D-сцену") },

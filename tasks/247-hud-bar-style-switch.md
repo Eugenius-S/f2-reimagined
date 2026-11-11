@@ -2,7 +2,7 @@
 id: 247
 title: The options menu switches the bottom HUD bar between Original and RP (the belt)
 milestone: M1
-status: doing
+status: blocked
 owner: gpt
 suggested: any
 priority: high
@@ -56,3 +56,9 @@ Check: Read-only scan of `master.dat` and `mods/rpu.dat` with `tools/scene_expor
 Done: Found the installed RP interface bar art in `mods/rpu_russian.dat`, member `art/intrface/iface.frm`. It is 640x99, one frame, 63,434 bytes, and differs from `master.dat`'s `art/intrface/iface.frm`. `mods/rpu.dat` itself still has no `iface.frm`. No implementation or game files were changed.
 Next: Implement the selector using the installed RP member and verify it in classic and 3D modes.
 Check: Read-only scan of every `.dat` in the installed RP `mods/` directory using the repository's DAT2 and FRM readers; checked the loose `data/art/intrface/` location (absent), `mods/mods_order.txt` (the Russian archive follows `rpu.dat`), and `ddraw.ini` interface keys (`ActionPointsBar`, `ExpandBarter`, and other interface options; no bar-art path key). Compared decoded dimensions and SHA-256 for the base and RP `iface.frm` members. Rendered the RP FRM with the installed game palette to an ignored `build/` preview and visually confirmed it is the complete bottom interface bar with belt slots. Build, ctest, regression, and runtime checks were not run.
+
+### 2026-11-12 gpt
+Done: Added the Original/RP setting to the 3D options panel and config. Style art loads directly from `master.dat`, `mods/f2_res.dat`, and `mods/rpu_russian.dat`, so mod archive order does not decide which style is displayed. The loader accepts any configured interface width when matching Original and RP FRMs exist; the installed archives provide 640x99 and 800x99 pairs. If Original art is missing but RP art exists, the active value is RP-only. If RP art is missing, the menu explains that `rpu_russian.dat` is needed. If neither source exists at the configured width, the menu hides the RP choice and reports the missing style art. Added FRM decoding and availability fallback tests. Updated the dev snapshot input hook to open the requested dropdown for scripted UI checks.
+Blocked: The game was not shown with the exact 3D HUD panel in two safe capture attempts. A scripted attempt to choose RP and save through the options panel did not update `ui.hud_bar_style`; after fixing the script to open the requested dropdown, one further attempt still saved `0`. Selection and restart persistence through the UI therefore remain unverified. Keep PR #416 as draft for owner review.
+Next: An interactive check must choose RP in the options menu, save, restart, and show the panel in the 3D HUD. Then recheck persistence and update this task to done/reviewed only after that proof.
+Check: Release build completed with `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release`; `ctest --test-dir build --output-on-failure` passed 28/28 on the final code. `powershell -NoProfile -ExecutionPolicy Bypass -File tools/regression.ps1` captured all 154 spots; `py -3 tools/regression/check.py --run runs/regression/20261111-233705-389-54392` exited 0, with all spots passing within tolerance (0-2 changed pixels). That pixel regression ran before the later localization and available-source selection fixes, so it does not verify the final binary. Visually inspected classic Original and RP 800px captures, EN and RU options captures, the EN no-RP explanation, the RU RP-only state without `f2_res.dat`, and archive FRM previews. The 1024/4320 decoder cases are synthetic; no matching wide art was present in the installed archives. UI selection/persistence and exact 3D HUD framing were not verified.

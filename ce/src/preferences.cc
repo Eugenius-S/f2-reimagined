@@ -1342,8 +1342,13 @@ int doPreferences(bool animated)
     int rc = -1;
     if (devtools::scriptedInputActive() && gOptionsPanel != nullptr) {
         devtools::scriptedInputBegin();
-        gOptionsPanel->showDropdownForSnapshot("resolution");
-        gOptionsPanel->handleKey(KEY_ESCAPE);
+        const char* requestedDropdown = devtools::preferencesSnapshotDropdown();
+        if (requestedDropdown[0] != '\0') {
+            gOptionsPanel->showDropdownForSnapshot(requestedDropdown);
+        } else {
+            gOptionsPanel->showDropdownForSnapshot("resolution");
+            gOptionsPanel->handleKey(KEY_ESCAPE);
+        }
         gOptionsPanel->draw();
         gOptionsPanel->refresh();
     }

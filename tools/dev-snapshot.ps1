@@ -99,7 +99,7 @@ param(
     # Extra [3d] keys for this run's isolated config copy, "key=value" each
     # (for example enabled=0). The fixed test config keeps its defaults.
     [string[]]$Set3d,
-    [ValidateSet('resolution', 'mode')]
+    [ValidateSet('resolution', 'mode', 'hud_bar_style')]
     [string]$PreferencesDropdown,
     [switch]$DevPanel,
     [ValidateSet('Top', 'Bottom')]
@@ -981,20 +981,32 @@ if ($DevInput -or $SceneInput) {
         throw "Scripted input did not complete with exactly $DevInputShots snapshots."
     }
     if ($DevInput -and $Preferences -and $ConfiguredDisplay) {
-        # The options-panel resolution script must have saved both a new
-        # resolution and a new scale into the isolated config.
-        $afterWidth = Get-TestConfigValue $configPath 'screen' 'resolution_x'
-        $afterHeight = Get-TestConfigValue $configPath 'screen' 'resolution_y'
-        $afterScale = Get-TestConfigValue $configPath 'screen' 'scale_factor'
-        if (($afterWidth -eq $initialDisplayWidth -and $afterHeight -eq $initialDisplayHeight) -or $afterScale -eq $initialDisplayScale) {
-            throw 'Scripted input did not save both a different resolution and scale.'
+        if ($PreferencesDropdown -eq 'hud_bar_style') {
+            $afterHudBarStyle = Get-TestConfigValue $configPath 'ui' 'hud_bar_style'
+            if ($afterHudBarStyle -ne '1') {
+                throw "Scripted input did not save RP HUD bar style (saved value: $afterHudBarStyle)."
+            }
+            [ordered]@{
+                coordinate_space = 'logical'; snapshots = $snapshots.Count
+                initial_hud_bar_style = '0'; saved_hud_bar_style = $afterHudBarStyle
+                config_sha256 = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+            } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $OutputDirectory 'input-result.json')
+        } else {
+            # The options-panel resolution script must have saved both a new
+            # resolution and a new scale into the isolated config.
+            $afterWidth = Get-TestConfigValue $configPath 'screen' 'resolution_x'
+            $afterHeight = Get-TestConfigValue $configPath 'screen' 'resolution_y'
+            $afterScale = Get-TestConfigValue $configPath 'screen' 'scale_factor'
+            if (($afterWidth -eq $initialDisplayWidth -and $afterHeight -eq $initialDisplayHeight) -or $afterScale -eq $initialDisplayScale) {
+                throw 'Scripted input did not save both a different resolution and scale.'
+            }
+            [ordered]@{
+                coordinate_space = 'logical'; snapshots = $snapshots.Count
+                initial = @{ resolution_x = $initialDisplayWidth; resolution_y = $initialDisplayHeight; scale_factor = $initialDisplayScale }
+                saved = @{ resolution_x = $afterWidth; resolution_y = $afterHeight; scale_factor = $afterScale }
+                config_sha256 = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+            } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $OutputDirectory 'input-result.json')
         }
-        [ordered]@{
-            coordinate_space = 'logical'; snapshots = $snapshots.Count
-            initial = @{ resolution_x = $initialDisplayWidth; resolution_y = $initialDisplayHeight; scale_factor = $initialDisplayScale }
-            saved = @{ resolution_x = $afterWidth; resolution_y = $afterHeight; scale_factor = $afterScale }
-            config_sha256 = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
-        } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $OutputDirectory 'input-result.json')
     }
 }
 if ($watchdogExpired) { throw "Live check watchdog: $watchdogReason. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')" }

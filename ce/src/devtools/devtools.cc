@@ -1199,10 +1199,10 @@ bool parseOption(const char* arg)
     constexpr char preferencesDropdownPrefix[] = "--dev-preferences-dropdown=";
     if (strncmp(arg, preferencesDropdownPrefix, sizeof(preferencesDropdownPrefix) - 1) == 0) {
         const char* value = arg + sizeof(preferencesDropdownPrefix) - 1;
-        if (strcmp(value, "resolution") == 0 || strcmp(value, "mode") == 0) {
+        if (strcmp(value, "resolution") == 0 || strcmp(value, "mode") == 0 || strcmp(value, "hud_bar_style") == 0) {
             gPreferencesSnapshotDropdown = value;
         } else {
-            fprintf(stderr, "devtools: invalid preferences dropdown (expected resolution or mode)\n");
+            fprintf(stderr, "devtools: invalid preferences dropdown (expected resolution, mode, or hud_bar_style)\n");
         }
         return true;
     }
