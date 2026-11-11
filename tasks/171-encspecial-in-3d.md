@@ -2,7 +2,7 @@
 id: 171
 title: The special encounters and the rest in 3D, every map stands and looks clean
 milestone: M1
-status: todo
+status: done
 owner: glm
 suggested: glm
 priority: normal
@@ -10,7 +10,7 @@ tier: 3
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -71,3 +71,58 @@ The interface, menus and text, the sky, new 3D models from scratch, maps of
 other areas (each has its own task).
 
 ## Log
+
+- 2026-11-05, glm. Group `encspecial` = rndwhale rndtinwd rndbhead
+  rndshutl rnduvilg rndbridg rndcafe rndholy1 rndholy2 rndforvr rndtoxic
+  rndparih rndexcow rndbess encdet encdock encfite encgd encpres encrctr
+  enctrp cowbomb cardesrt (23 maps, 28 scene elevations); 0 export errors
+  or warnings. ctest exporter suite 132/132.
+- Find 1, fixed here: encfite e1/e2 refused to export ("invalid
+  tiles.cells list") - they are void boxes, every square is the nothing
+  tile (the raw grid000 value 1) and the atlas holds no cell; the
+  renderer rejected tileCount 0 and the view policy asked for drawn
+  floor. The rule, general for every map: a tile-less elevation exports
+  with an empty atlas and keeps 3D on - the renderer fills the void as
+  the sea rule continues the maps' own grid000 squares (the near-black
+  plane on land), and the void is the ground (the game's own walkability
+  decides where the hero steps); a drawn square over an empty atlas is
+  still a broken scene. The sea fill's 6000-square cap now covers the
+  whole grid, else a wholly void elevation would fill only part-way.
+  The game's own enter script never lands on encfite e1/e2 in a dev run
+  (it picks the fight room on e0), so the elevations are proven by the
+  encode/decode round trip and the renderer path, not by a capture.
+- Find 2, harness-side: cowbomb cannot be captured - the map's own
+  script teleports to artemple at enter, the dev travel cannot stay on
+  it, so the map has no tour or regression spot and its scene sits
+  exported in the cache. The tour's check caught it as "shot at
+  ARTEMPLE.MAP".
+- Spots from the spawn tiles, four re-aimed at the objects' dense rows
+  (rndwhale 17705, rndshutl 17899, rndbridg 19298, rndbess 13085 - the
+  spawn-centre view showed bare dirt): 26 fly tour spots, 25 regression
+  spots. Probe tour 0 of 25 changed; the visual sweep of all 25 sheets
+  found no exporter or renderer defect. Observations, not defects:
+  rndbess e1 is a whole-map void box (9993 grid000 squares, 7 drawn),
+  so its fly view is the rule's near-black plane; the tan border strips
+  (rndtinwd, rnduvilg) and the dark dithered tree canopies are the
+  maps' own art. Walk probes: every group's base snapshot enters at the
+  spawn with the 3D scene on (scene-gl in all sidecars), 25/25.
+- Hour sweep 8/12/18 on all 25 elevations, 75 captures: no
+  hour-dependent defect, all scene-gl.
+- Regression: full suite 154 spots (129 old + 25 new), 154/154 pass, 0
+  changed pixels - the already-done maps stay pixel for pixel, the new
+  references captured clean. No defects to move to 189-192 or 173; the
+  area plays in 3D. Evidence: runs/171-encspecial-in-3d/ (25 probe
+  sheets, the encfite e0 2D mural).
+- Tooling finds: (a) object tiles use the 200-wide hex row numbering
+  (row = tile // 200, up to ~20200) - filtering or clustering them by
+  the floor grid's 100-wide indexing silently drops half the map; (b) a
+  serial-rule slip of mine: a sheets-regeneration tour ran while the
+  full regression was re-exporting the same cache - stopped it before
+  any damage (the shots it would have reused were taken before the
+  regression started, and the sheets were rebuilt after it finished).
+
+### 2026-11-12 gpt review
+
+Reviewed merged PR #312 (commit 7b87b5b). Its diff adds all 23 named maps to `encspecial`, supports tile-less elevations, and adds 26 tour spots and 25 regression references. Historical CI passed exporter, runs-size, all scene jobs and windows-game. `gh pr checks 312` confirmed the recorded checks are green. The task Log records clean export for 23 maps / 28 elevations, 25/25 base walk probes, 154/154 pixel regression, and the 75-capture `--dev-hour` sweep. I visually inspected representative saved sheets `rndwhale-e0.jpg`, `encfite-e0.jpg` and `rndbess-e1.jpg`, plus the encfite e0 2D mural; this was a sample, not every sheet. The turn sheets show the named encounter geometry and match before/after. `rndbess-e1` is a black void view as the Log describes. The mural is a 2D view of encfite e0.
+
+Coverage gaps: the committed sheets are turn views, not time-of-day captures. Task 170's Log confirms background `--dev-hour` leaves ambient at its default, so the 171 hour sweep does not prove real play-time dimming. Task 262 covers city, cave and mountain encounters only. encfite e1/e2 have only the tile-less encode/decode and renderer-path proof: the enter script sends the test run to e0. cowbomb has no live spot because its enter script moves the run to artemple. Task 206 checked encfite e0 map-entry stability, task 124 only recorded old encfite e1/e2 exporter failures and explicitly did not retest them, and task 173 does not provide a route to hold either missing map view. No defect is claimed. Follow-up: task 263 covers the live encspecial lighting evidence and these three missing map/elevation entries.

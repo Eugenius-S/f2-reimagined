@@ -49,7 +49,9 @@
 #include "window_manager_private.h"
 #include "word_wrap.h"
 #include "devtools/devtools.h"
+#include "devtools/owner_shot.h"
 #include "scene/scene_view.h"
+#include "scene_renderer/perf.h"
 #include "worldmap.h"
 
 namespace fallout {
@@ -300,6 +302,7 @@ static void mainParseCommandLineArguments(int argc, char** argv)
         if (devtools::parseOption(argv[arg])) {
             continue;
         }
+        owner_shot::parseOption(argv[arg]);
         if (strncmp(argv[arg], devLoadGamePrefix, devLoadGamePrefixLength) == 0) {
             int slot;
             if (mainTryParseDevLoadGameSlot(argv[arg] + devLoadGamePrefixLength, &slot)) {
@@ -469,16 +472,45 @@ static void mainLoop()
     while (_game_user_wants_to_quit == GAME_QUIT_REQUEST_NONE) {
         sharedFpsLimiter.mark();
 
+        // 157: where the frame's CPU goes. A plain SDL-ticks breakdown of the
+        // main loop's own spans; the render keeps its GL timers.
+        static double inputMs = 0.0;
+        static double worldMs = 0.0;
+        static double presentMs = 0.0;
+        static double frameMs = 0.0;
+        static int loopFrames = 0;
+        static Uint64 windowStart = 0;
+        const Uint64 loopStart = SDL_GetPerformanceCounter();
+
         int keyCode = inputGetInput();
 
         // SFALL: MainLoopHook.
         sfall_gl_scr_process_main();
 
-        gameHandleKey(keyCode, false);
+        const Uint64 inputEnd = SDL_GetPerformanceCounter();
+        scene_renderer::perfCpuMark("input");
 
+        gameHandleKey(keyCode, false);
+        scene_renderer::perfCpuMark("key");
+
+        // The owner's region mark holds the frame (183): no scripts, no map
+        // transitions, no camera updates - present and take input only.
+        if (owner_shot::markMode()) {
+            renderFpsCounter();
+            renderPresent();
+            sharedFpsLimiter.throttle();
+            continue;
+        }
+
+        // 172: the loop's stages in the load chain, so the gap between the
+        // scene's first draw and the first Full present reads as its owner.
+        scene_renderer::perfLoadMark("loop_input");
         scriptsHandleRequests();
+        scene_renderer::perfLoadMark("loop_scripts");
+        scene_renderer::perfCpuMark("scripts");
 
         mapHandleTransition();
+        scene_renderer::perfLoadMark("loop_transition");
 
         // Sprite-lighting mod: dev-panel pending elevation corrections are
         // applied here - after a completed mapHandleTransition, in the main
@@ -488,6 +520,8 @@ static void mainLoop()
         if (devtools::sceneStartupReady()) {
             scene::syncSettings(devtools::suppressInitialSceneEnable());
         }
+        scene_renderer::perfLoadMark("loop_sync");
+        scene_renderer::perfCpuMark("loop");
 
         if (_main_game_paused != 0) {
             _main_game_paused = 0;
@@ -499,9 +533,32 @@ static void mainLoop()
             _game_user_wants_to_quit = GAME_QUIT_REQUEST_MAIN_MENU;
         }
 
+        const Uint64 worldEnd = SDL_GetPerformanceCounter();
+
         renderFpsCounter();
         renderPresent();
-        sharedFpsLimiter.throttle();
+        // 157: the game view paces to the player's [3d] fps_limit; 0 runs the
+        // loop at whatever the render costs. The world itself advances by
+        // real time, so a faster picture does not speed the game up.
+        sharedFpsLimiter.throttle(settings.scene3d.fps_limit);
+        scene_renderer::perfLoadMark("loop_present");
+
+        const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+        inputMs += static_cast<double>(inputEnd - loopStart) * toMs;
+        worldMs += static_cast<double>(worldEnd - inputEnd) * toMs;
+        const Uint64 now = SDL_GetPerformanceCounter();
+        presentMs += static_cast<double>(now - worldEnd) * toMs;
+        frameMs += static_cast<double>(now - loopStart) * toMs;
+        if (windowStart == 0) windowStart = now;
+        loopFrames++;
+        if (static_cast<double>(now - windowStart) / SDL_GetPerformanceFrequency() >= 2.0) {
+            printf("perf loop input=%.2f world=%.2f present=%.2f frame=%.2f frames=%d\n",
+                inputMs / loopFrames, worldMs / loopFrames, presentMs / loopFrames, frameMs / loopFrames, loopFrames);
+            fflush(stdout);
+            inputMs = worldMs = presentMs = frameMs = 0.0;
+            loopFrames = 0;
+            windowStart = now;
+        }
     }
 
     scriptsDisable();

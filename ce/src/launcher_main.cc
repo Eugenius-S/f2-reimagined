@@ -29,22 +29,40 @@
 #include <string>
 #include <vector>
 
+#include "launcher_routes.h"
+#include "launcher_rp.h"
+#include "launcher_ru.h"
+#include "launcher_uninstall.h"
+
 namespace fs = std::filesystem;
 
 namespace {
 
+constexpr const char* kDefaultRepo = "Eugenius-S/f2-reimagined";
 constexpr const char* kZipAsset = "fallout2-ce-3d-win64.zip";
 constexpr const char* kDefaultUpdateBase =
     "https://github.com/Eugenius-S/f2-reimagined/releases/download/latest";
 constexpr const char* kDefaultReleaseInfoUrl =
     "https://api.github.com/repos/Eugenius-S/f2-reimagined/releases/tags/latest";
-constexpr const char* kRpuLatestApiUrl =
-    "https://api.github.com/repos/BGforgeNet/Fallout2_Restoration_Project/releases/latest";
+// The web page answers 302 to .../releases/tag/<tag>; unlike api.github.com it has no 60 requests/hour limit.
+constexpr const char* kRpuRepo = "BGforgeNet/Fallout2_Restoration_Project";
+constexpr const char* kRpuLatestUrl =
+    "https://github.com/BGforgeNet/Fallout2_Restoration_Project/releases/latest";
 constexpr const char* kGameExe = "fallout2-ce.exe";
 constexpr const char* kCfg = "fallout2.cfg";
 constexpr const char* kVersionTxt = "version.txt";
 constexpr const char* kExporterExe = "scene-exporter.exe";
-constexpr const char* kDefaultMaps = "klamath";
+// The launcher as the player sees it in the game folder; the release zip carries it under kZipLauncher.
+constexpr const char* kRootLauncher = "Fallout 2 Reimagined.exe";
+constexpr const char* kZipLauncher = "fallout2-ce-3d-launcher.exe";
+constexpr const char* kDefaultMaps = "all";
+// The project mirror (task 235): the CI branch `dist`.  Since task 238 it also holds
+// rpu_russian.dat and rpu-version.txt.  --mirror-url overrides it (tests).
+std::string g_mirrorBase = std::string("https://raw.githubusercontent.com/") + kDefaultRepo + "/dist/";
+// --ui-language ru: the user-facing log lines are printed in Russian (launcher_ru.h).
+bool g_ru = false;
+// --rp-zip-url: the Restoration Project zip from elsewhere instead of its GitHub release (tests).
+std::string g_rpZipUrl;
 
 struct Options {
     std::string gameRoot;
@@ -56,12 +74,20 @@ struct Options {
     bool checkRelease = false;
     bool rollback = false;
     bool installRussian = false;
+    bool removeRussian = false;
+    bool installRp = false;
+    bool uninstall = false;
     std::vector<std::string> gameArgs;
 };
 
+const char* tr(const char* english)
+{
+    return g_ru ? launcher_ru::translate(english) : english;
+}
+
 void log(const char* text)
 {
-    std::printf("%s\n", text);
+    std::printf("%s\n", tr(text));
     std::fflush(stdout);
 }
 
@@ -70,14 +96,20 @@ void logf(const char* format, ...)
     char buffer[1024];
     va_list args;
     va_start(args, format);
-    std::vsnprintf(buffer, sizeof(buffer), format, args);
+    std::vsnprintf(buffer, sizeof(buffer), tr(format), args);
     va_end(args);
-    log(buffer);
+    std::printf("%s\n", buffer);
+    std::fflush(stdout);
 }
 
-[[noreturn]] void die(const std::string& message)
+[[noreturn]] void die(const char* format, ...)
 {
-    logf("ERROR: %s", message.c_str());
+    char buffer[1024];
+    va_list args;
+    va_start(args, format);
+    std::vsnprintf(buffer, sizeof(buffer), tr(format), args);
+    va_end(args);
+    logf("ERROR: %s", buffer);
     std::exit(1);
 }
 
@@ -236,7 +268,8 @@ DWORD proxyFor(const Url& url)
 }
 
 // GET one url; the failure reason lands in errorText when set.
-bool httpGet(const std::string& urlString, std::string* body, const char** errorText)
+bool httpGet(const std::string& urlString, std::string* body, const char** errorText,
+    const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS)
 {
     Url url;
     if (!crackUrlWide(utf8ToWide(urlString), &url)) {
@@ -263,7 +296,7 @@ bool httpGet(const std::string& urlString, std::string* body, const char** error
     if (!ok) {
         *errorText = "cannot open request";
     } else {
-        ok = WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+        ok = WinHttpSendRequest(request, headers, headers == WINHTTP_NO_ADDITIONAL_HEADERS ? 0 : static_cast<DWORD>(-1L), WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
         if (!ok) *errorText = "send failed";
     }
     if (ok) {
@@ -295,7 +328,60 @@ bool httpGet(const std::string& urlString, std::string* body, const char** error
     return ok;
 }
 
-bool httpDownload(const std::string& urlString, const fs::path& destination, const char** errorText)
+// GET one url without following redirects and return the Location header of the answer.
+bool httpRedirectLocation(const std::string& urlString, std::string* location, const char** errorText)
+{
+    Url url;
+    if (!crackUrlWide(utf8ToWide(urlString), &url)) {
+        *errorText = "cannot parse url";
+        return false;
+    }
+    *errorText = nullptr;
+    HINTERNET session = WinHttpOpen(L"fallout2-ce-3d-launcher", proxyFor(url),
+        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (session == nullptr) {
+        *errorText = "WinHttpOpen failed";
+        return false;
+    }
+    WinHttpSetTimeouts(session, 10000, 15000, 30000, 300000);
+    HINTERNET connect = WinHttpConnect(session, url.host.c_str(), url.port, 0);
+    if (connect == nullptr) {
+        *errorText = "cannot connect";
+        WinHttpCloseHandle(session);
+        return false;
+    }
+    HINTERNET request = WinHttpOpenRequest(connect, L"GET", url.path.c_str(), nullptr, WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES, url.https ? WINHTTP_FLAG_SECURE : 0);
+    bool ok = request != nullptr;
+    if (!ok) {
+        *errorText = "cannot open request";
+    } else {
+        DWORD disable = WINHTTP_DISABLE_REDIRECTS;
+        WinHttpSetOption(request, WINHTTP_OPTION_DISABLE_FEATURE, &disable, sizeof(disable));
+        ok = WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+        if (!ok) *errorText = "send failed";
+    }
+    if (ok) {
+        ok = WinHttpReceiveResponse(request, nullptr);
+        if (!ok) *errorText = "receive failed";
+    }
+    if (ok) {
+        wchar_t buffer[2048] = {};
+        DWORD size = sizeof(buffer) - sizeof(wchar_t);
+        ok = WinHttpQueryHeaders(request, WINHTTP_QUERY_LOCATION, WINHTTP_HEADER_NAME_BY_INDEX,
+                 buffer, &size, WINHTTP_NO_HEADER_INDEX)
+            != FALSE;
+        if (ok) *location = wideToUtf8(buffer);
+        else *errorText = "no redirect from the release page";
+    }
+    if (request != nullptr) WinHttpCloseHandle(request);
+    if (connect != nullptr) WinHttpCloseHandle(connect);
+    WinHttpCloseHandle(session);
+    return ok;
+}
+
+bool httpDownload(const std::string& urlString, const fs::path& destination, const char** errorText,
+    const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS)
 {
     Url url;
     if (!crackUrlWide(utf8ToWide(urlString), &url)) {
@@ -320,7 +406,7 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
         if (!ok) *errorText = "cannot open request";
     }
     if (ok) {
-        ok = WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+        ok = WinHttpSendRequest(request, headers, headers == WINHTTP_NO_ADDITIONAL_HEADERS ? 0 : static_cast<DWORD>(-1L), WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
         if (!ok) *errorText = "send failed";
     }
     if (ok) {
@@ -344,6 +430,12 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
     if (ok) {
         DWORD available = 0;
         size_t total = 0;
+        DWORD contentLength = 0;
+        DWORD lengthSize = sizeof(contentLength);
+        if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+                WINHTTP_HEADER_NAME_BY_INDEX, &contentLength, &lengthSize, WINHTTP_NO_HEADER_INDEX)) {
+            contentLength = 0;
+        }
         while (WinHttpQueryDataAvailable(request, &available) && available > 0) {
             std::vector<char> chunk(available);
             DWORD read = 0;
@@ -351,7 +443,8 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
             out.write(chunk.data(), read);
             total += read;
             if (total / (1024 * 1024) != (total - read) / (1024 * 1024)) {
-                logf("  ... %zu MB", total / (1024 * 1024));
+                if (contentLength > 0) logf("  ... %zu / %lu MB", total / (1024 * 1024), static_cast<unsigned long>(contentLength / (1024 * 1024)));
+                else logf("  ... %zu MB", total / (1024 * 1024));
             }
         }
         out.close();
@@ -362,6 +455,61 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
     if (request != nullptr) WinHttpCloseHandle(request);
     if (connect != nullptr) WinHttpCloseHandle(connect);
     WinHttpCloseHandle(session);
+    return ok;
+}
+
+std::string joinUrl(const std::string& base, const char* name);
+
+// --- download routes (task 235) -------------------------------------------
+// Through some VPNs github.com/.../releases/download answers 504 while the API
+// and raw.githubusercontent.com work, so every file tries three routes in turn.
+
+// Where one asset of a repo's release can be had.  Only the official release
+// has the mirror (the CI branch `dist`); a custom --update-url gets its one url.
+std::vector<launcher_routes::Route> releaseRoutes(const std::string& base, const char* file)
+{
+    std::vector<launcher_routes::Route> routes = { { "github.com", joinUrl(base, file), "" } };
+    if (base == kDefaultUpdateBase) {
+        std::string repo = kDefaultRepo;
+        routes.push_back({ "api", "https://api.github.com/repos/" + repo + "/releases/tags/latest", file });
+        routes.push_back({ "mirror", g_mirrorBase + file, "" });
+    }
+    return routes;
+}
+
+// Fetch into body (text) or into dest (a file); the console names the route that worked.
+bool fetchRoutes(const std::vector<launcher_routes::Route>& routes, std::string* body, const fs::path* dest,
+    std::string* error)
+{
+    std::string worked;
+    bool ok = launcher_routes::tryRoutes(routes, [&](const launcher_routes::Route& route, std::string* why) {
+        std::string url = route.url;
+        const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS;
+        const char* e = nullptr;
+        if (!route.apiAsset.empty()) {
+            std::string json;
+            if (!httpGet(url, &json, &e)) {
+                *why = std::string(e != nullptr ? e : "network error") + " (release info)";
+                logf("  route %s failed: %s", route.label.c_str(), why->c_str());
+                return false;
+            }
+            url = launcher_routes::assetApiUrl(json, route.apiAsset);
+            if (url.empty()) {
+                *why = "the asset is not in the release";
+                logf("  route %s failed: %s", route.label.c_str(), why->c_str());
+                return false;
+            }
+            headers = L"Accept: application/octet-stream";
+        }
+        if (body != nullptr) body->clear();
+        bool got = body != nullptr ? httpGet(url, body, &e, headers) : httpDownload(url, *dest, &e, headers);
+        if (!got) {
+            *why = e != nullptr ? e : "network error";
+            logf("  route %s failed: %s", route.label.c_str(), why->c_str());
+        }
+        return got;
+    }, &worked, error);
+    if (ok) logf("  route that worked: %s", worked.c_str());
     return ok;
 }
 
@@ -481,13 +629,22 @@ std::string findGameRoot(bool allowPicker)
 // Starts the process and waits for it; false only when it never started.
 // The exit code lands in exitCode: the game may leave by any door, the
 // launcher still reports its own state afterwards.
-bool runTool(const std::wstring& command, const std::wstring& workingDirectory, DWORD* exitCode = nullptr)
+// passOutput: the tool writes to this process's stdout/stderr, so the GUI's log pipe sees it.
+// Never for the game: it would keep the pipe open for as long as it runs.
+bool runTool(const std::wstring& command, const std::wstring& workingDirectory, DWORD* exitCode = nullptr,
+    bool passOutput = false)
 {
     STARTUPINFOW startup = {};
     startup.cb = sizeof(startup);
+    if (passOutput) {
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+        startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+        startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+    }
     PROCESS_INFORMATION process = {};
     std::wstring mutableCommand = command;
-    BOOL created = CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, FALSE, 0, nullptr,
+    BOOL created = CreateProcessW(nullptr, mutableCommand.data(), nullptr, nullptr, passOutput ? TRUE : FALSE, 0, nullptr,
         workingDirectory.c_str(), &startup, &process);
     if (!created) return false;
     CloseHandle(process.hThread);
@@ -530,13 +687,49 @@ bool copyIfPresent(const fs::path& stage, const char* name, const fs::path& dest
         logf("  %s: copy failed (%s)", name, error.message().c_str());
         return false;
     }
-    logf("  %s: %s", name, note);
+    logf("  %s: %s", name, tr(note));
     return true;
+}
+
+// A running exe cannot be overwritten but can be renamed: the old copy moves aside
+// (deleted on the next run) and the new one takes its name.
+bool copyLauncher(const fs::path& source, const fs::path& target)
+{
+    std::error_code error;
+    fs::path aside = target;
+    aside += ".old";
+    fs::remove(aside, error);
+    bool moved = false;
+    if (fs::exists(target, error)) {
+        fs::rename(target, aside, error);
+        moved = !error;
+    }
+    fs::copy_file(source, target, fs::copy_options::overwrite_existing, error);
+    if (error && moved) {
+        std::error_code ignored;
+        fs::rename(aside, target, ignored);
+    }
+    return !error;
+}
+
+// The wide menu, death and loading art ships as folders next to the exe.
+void copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& destination)
+{
+    fs::path source = stage / name;
+    if (!fs::is_directory(source)) {
+        logf("  %s: not in the package, skipped", name);
+        return;
+    }
+    std::error_code error;
+    fs::create_directories(destination / name, error);
+    fs::copy(source, destination / name,
+        fs::copy_options::recursive | fs::copy_options::overwrite_existing, error);
+    logf("  %s: %s", name, error ? error.message().c_str() : "installed");
 }
 
 const std::vector<std::string>& buildFiles()
 {
-    static const std::vector<std::string> names = {kGameExe, "ce.dat", kExporterExe, kVersionTxt};
+    static const std::vector<std::string> names = {kGameExe, "ce.dat", kExporterExe, kVersionTxt, kRootLauncher};
     return names;
 }
 
@@ -617,6 +810,13 @@ bool rollbackInstalledBuild(const fs::path& root)
     for (const std::string& name : buildFiles()) {
         fs::path source = selected / name;
         if (!fs::is_regular_file(source, error)) continue;
+        if (name == kRootLauncher) {
+            if (!copyLauncher(source, root / name)) {
+                logf("rollback failed for %s", name.c_str());
+                return false;
+            }
+            continue;
+        }
         fs::copy_file(source, root / name, fs::copy_options::overwrite_existing, error);
         if (error) {
             logf("rollback failed for %s: %s", name.c_str(), error.message().c_str());
@@ -636,25 +836,9 @@ bool setLanguage(const fs::path& root, const char* language)
         return false;
     }
     std::string input((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    std::string output;
-    bool inSystem = false;
+    in.close();
     bool found = false;
-    size_t begin = 0;
-    while (begin < input.size()) {
-        size_t end = input.find('\n', begin);
-        if (end == std::string::npos) end = input.size(); else end++;
-        std::string line = input.substr(begin, end - begin);
-        std::string content = line;
-        while (!content.empty() && (content.back() == '\r' || content.back() == '\n')) content.pop_back();
-        if (!content.empty() && content[0] == '[') inSystem = content == "[system]";
-        if (inSystem && content.rfind("language=", 0) == 0) {
-            std::string ending = line.substr(content.size());
-            line = std::string("language=") + language + ending;
-            found = true;
-        }
-        output += line;
-        begin = end;
-    }
+    std::string output = launcher_uninstall::withLanguage(input, language, &found);
     if (!found) {
         log("cannot set the game language: [system].language was not found");
         return false;
@@ -688,6 +872,7 @@ bool enableRussianMod(const fs::path& root)
         std::string line;
         bool inserted = false;
         while (std::getline(lines, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back(); // CRLF files must not gain an empty line
             output += line + "\r\n";
             std::string normalized = trim(line);
             std::transform(normalized.begin(), normalized.end(), normalized.begin(),
@@ -708,70 +893,346 @@ bool enableRussianMod(const fs::path& root)
     return setLanguage(root, "russian");
 }
 
+// The official RPU release tag from github.com (the 302 page, then the api); empty when neither answers.
+std::string rpuTagFromGithub()
+{
+    const char* networkError = nullptr;
+    std::string location;
+    std::string tag;
+    if (httpRedirectLocation(kRpuLatestUrl, &location, &networkError)) {
+        const std::string marker = "/releases/tag/";
+        size_t at = location.find(marker);
+        if (at != std::string::npos) tag = trim(location.substr(at + marker.size()));
+    } else {
+        logf("  RPU release page failed: %s", networkError != nullptr ? networkError : "network error");
+    }
+    if (tag.empty()) {
+        std::string json;
+        if (httpGet(std::string("https://api.github.com/repos/") + kRpuRepo + "/releases/latest", &json, &networkError)) {
+            tag = jsonStringValue(json, "tag_name");
+        }
+    }
+    return tag;
+}
+
+// rpu_russian.dat from RPU's own zip (github.com, then the api) into dat; false when any step fails.
+bool rpuDatFromGithub(const std::string& tag, const fs::path& work, const fs::path& dat)
+{
+    std::string filename = "rpu_" + tag + "_translations.zip";
+    std::vector<launcher_routes::Route> rpuRoutes = {
+        { "github.com", std::string("https://github.com/") + kRpuRepo + "/releases/download/" + tag + "/" + filename, "" },
+        { "api", std::string("https://api.github.com/repos/") + kRpuRepo + "/releases/tags/" + tag, filename },
+    };
+    fs::path zip = work / filename;
+    logf("downloading the official Russian translation from RPU %s", tag.c_str());
+    std::string routeError;
+    if (!fetchRoutes(rpuRoutes, nullptr, &zip, &routeError)) return false;
+    std::error_code error;
+    fs::create_directories(work / "stage", error);
+    if (!unpackZip(zip, work / "stage")) {
+        log("the Russian translation archive could not be unpacked");
+        return false;
+    }
+    for (fs::recursive_directory_iterator it(work / "stage", error), end; !error && it != end; it.increment(error)) {
+        if (it->is_regular_file() && it->path().filename() == "rpu_russian.dat") {
+            fs::copy_file(it->path(), dat, fs::copy_options::overwrite_existing, error);
+            return !error;
+        }
+    }
+    log("the official translation archive does not contain rpu_russian.dat");
+    return false;
+}
+
 bool installRussianTranslation(const fs::path& root)
 {
     fs::path translation = root / "mods" / "rpu_russian.dat";
     if (!fs::exists(translation)) {
-        const char* networkError = nullptr;
-        std::string release;
-        if (!httpGet(kRpuLatestApiUrl, &release, &networkError)) {
-            logf("cannot reach the official RPU release (%s)",
-                networkError != nullptr ? networkError : "network error");
-            return false;
-        }
-        std::string tag = jsonStringValue(release, "tag_name");
-        if (tag.empty()) {
-            log("the official RPU release did not provide a version tag");
-            return false;
-        }
-        std::string filename = "rpu_" + tag + "_translations.zip";
-        std::string url = "https://github.com/BGforgeNet/Fallout2_Restoration_Project/releases/download/"
-            + tag + "/" + filename;
         char tempPath[MAX_PATH] = {};
         GetTempPathA(MAX_PATH, tempPath);
         fs::path work = fs::path(tempPath) / ("f2ce3d-russian-" + std::to_string(GetCurrentProcessId()));
         std::error_code error;
         fs::remove_all(work, error);
-        fs::create_directories(work / "stage", error);
+        fs::create_directories(work, error);
         if (error) {
             logf("cannot create translation staging folder: %s", error.message().c_str());
             return false;
         }
-        fs::path zip = work / filename;
-        logf("downloading the official Russian translation from RPU %s", tag.c_str());
-        if (!httpDownload(url, zip, &networkError) || !unpackZip(zip, work / "stage")) {
-            logf("the Russian translation download failed (%s)",
-                networkError != nullptr ? networkError : "unpack failed");
-            fs::remove_all(work, error);
-            return false;
+        fs::path dat = work / "rpu_russian.dat";
+        // Route 1 (task 238): the project mirror, which CI fills with the same file and its tag;
+        // 6 MB instead of RPU's 134 MB translations zip, and it works through VPNs that block
+        // github.com.  Route 2: RPU's own release on github.com.
+        std::string mirrorTag;
+        std::string mirrorError;
+        fetchRoutes({ { "mirror", g_mirrorBase + "rpu-version.txt", "" } }, &mirrorTag, nullptr, &mirrorError);
+        mirrorTag = trim(mirrorTag);
+        bool got = fetchRoutes({ { "mirror", g_mirrorBase + "rpu_russian.dat", "" } }, nullptr, &dat, &mirrorError);
+        std::string source = mirrorTag.empty() ? "?" : mirrorTag;
+        if (got && !mirrorTag.empty()) logf("  the mirror's RPU version: %s", mirrorTag.c_str());
+        if (!got) {
+            std::string tag = rpuTagFromGithub();
+            if (!tag.empty()) got = rpuDatFromGithub(tag, work, dat);
+            source = "RPU";
+            if (!got && tag.empty()) log("cannot read the official RPU release version on GitHub");
+            if (!got) logf("the Russian translation could not be downloaded: GitHub and the project mirror both failed (%s)", mirrorError.c_str());
         }
-        fs::path source;
-        for (fs::recursive_directory_iterator it(work / "stage", error), end; !error && it != end; it.increment(error)) {
-            if (it->is_regular_file() && it->path().filename() == "rpu_russian.dat") {
-                source = it->path();
-                break;
-            }
+        bool copied = false;
+        if (got) {
+            fs::create_directories(translation.parent_path(), error);
+            fs::copy_file(dat, translation, fs::copy_options::overwrite_existing, error);
+            copied = !error;
+            if (!copied) log("failed to install the Russian translation file");
         }
-        if (source.empty()) {
-            log("the official translation archive does not contain rpu_russian.dat");
-            fs::remove_all(work, error);
-            return false;
-        }
-        fs::create_directories(translation.parent_path(), error);
-        fs::copy_file(source, translation, fs::copy_options::overwrite_existing, error);
-        bool copySucceeded = !error;
         fs::remove_all(work, error);
-        if (!copySucceeded) {
-            log("failed to install the Russian translation file");
-            return false;
-        }
-        log("  installed mods/rpu_russian.dat from the official RPU release");
+        if (!copied) return false;
+        if (source == "RPU") log("  installed mods/rpu_russian.dat from the official RPU release");
+        else logf("  installed mods/rpu_russian.dat from the project mirror (RPU %s)", source.c_str());
     } else {
         log("  kept the existing mods/rpu_russian.dat");
     }
     if (!enableRussianMod(root)) return false;
     log("  game language set to Russian; mods/mods_order.txt updated");
     return true;
+}
+
+// --- the Restoration Project (task 186) -------------------------------------
+
+bool rpOnDisk(const fs::path& root)
+{
+    std::error_code error;
+    return fs::exists(root / "mods" / "rpu.dat", error);
+}
+
+// One game-folder file into backup/rpu under the same relative path.
+bool moveToRpBackup(const fs::path& root, const fs::path& relative)
+{
+    std::error_code error;
+    fs::path target = root / launcher_rp::kBackupFolder / relative;
+    fs::create_directories(target.parent_path(), error);
+    fs::rename(root / relative, target, error);
+    if (error) logf("  cannot move %s aside (%s)", wideToUtf8(relative.generic_wstring()).c_str(), error.message().c_str());
+    return !error;
+}
+
+// RPU from its own GitHub release at the player's request (never a copy of ours), put in
+// place the way its manual package's rpu-install.bat does; every file it moves or replaces
+// is kept in backup/rpu.
+bool installRestorationProject(const fs::path& root)
+{
+    if (rpOnDisk(root)) {
+        log("  kept the installed Restoration Project (mods/rpu.dat)");
+        return true;
+    }
+    // A test zip (--rp-zip-url) needs no GitHub lookup.
+    std::string tag = g_rpZipUrl.empty() ? rpuTagFromGithub() : std::string("test");
+    if (tag.empty()) {
+        log("cannot read the official RPU release version on GitHub");
+        return false;
+    }
+    char tempPath[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempPath);
+    fs::path work = fs::path(tempPath) / ("f2ce3d-rp-" + std::to_string(GetCurrentProcessId()));
+    std::error_code error;
+    fs::remove_all(work, error);
+    fs::create_directories(work / "stage", error);
+    if (error) {
+        logf("cannot create the Restoration Project staging folder: %s", error.message().c_str());
+        return false;
+    }
+    std::string filename = "rpu_" + tag + ".zip";
+    std::vector<launcher_routes::Route> routes = {
+        { "github.com", std::string("https://github.com/") + kRpuRepo + "/releases/download/" + tag + "/" + filename, "" },
+        { "api", std::string("https://api.github.com/repos/") + kRpuRepo + "/releases/tags/" + tag, filename },
+    };
+    fs::path zip = work / filename;
+    logf("downloading the Restoration Project %s from its official release (about 900 MB)", tag.c_str());
+    std::string routeError;
+    if (!g_rpZipUrl.empty()) routes = { { "test", g_rpZipUrl, "" } };
+    if (!fetchRoutes(routes, nullptr, &zip, &routeError)) {
+        logf("the Restoration Project could not be downloaded (%s)", routeError.c_str());
+        fs::remove_all(work, error);
+        return false;
+    }
+    log("unpacking");
+    fs::path stage = work / "stage";
+    bool unpacked = unpackZip(zip, stage);
+    fs::remove(zip, error);
+    if (!unpacked || !fs::exists(stage / "mods" / "rpu.dat")) {
+        log("the Restoration Project package could not be unpacked or has no mods/rpu.dat; nothing was changed");
+        fs::remove_all(work, error);
+        return false;
+    }
+
+    log("installing the Restoration Project into the game folder:");
+    bool ok = true;
+    // As rpu-install.bat: the old patch archives and the loose vanilla data go aside.
+    std::vector<fs::path> aside;
+    for (fs::directory_iterator it(root, error), end; !error && it != end; it.increment(error)) {
+        if (it->is_regular_file() && launcher_rp::movedAside(wideToUtf8(it->path().filename().wstring()))) {
+            aside.push_back(it->path().filename());
+        }
+    }
+    error.clear();
+    for (fs::recursive_directory_iterator it(root / "data", error), end; !error && it != end; it.increment(error)) {
+        if (!it->is_regular_file()) continue;
+        fs::path relative = fs::relative(it->path(), root / "data");
+        if (!launcher_rp::keptInData(wideToUtf8(relative.generic_wstring()))) aside.push_back(fs::path("data") / relative);
+    }
+    error.clear(); // a game without data/ is fine
+    for (const fs::path& relative : aside) {
+        if (!moveToRpBackup(root, relative)) ok = false;
+    }
+    // The package over the game folder; a file it replaces is kept first.
+    // mods/rpu.dat goes last: it marks RP as installed, so a copy cut short is tried again next time.
+    std::vector<std::pair<fs::path, std::string>> files;
+    for (fs::recursive_directory_iterator it(stage, error), end; !error && it != end; it.increment(error)) {
+        if (!it->is_regular_file()) continue;
+        std::string target = launcher_rp::targetOf(wideToUtf8(fs::relative(it->path(), stage).generic_wstring()));
+        if (!target.empty()) files.push_back({ it->path(), target });
+    }
+    std::stable_partition(files.begin(), files.end(),
+        [](const auto& file) { return launcher_uninstall::lowered(file.second) != "mods/rpu.dat"; });
+    int installed = 0;
+    for (const auto& [source, target] : files) {
+        if (!ok || error) break;
+        fs::path destination = root / utf8ToWide(target);
+        fs::path kept = root / launcher_rp::kBackupFolder / utf8ToWide(target);
+        std::error_code copyError;
+        if (fs::exists(destination, copyError) && !fs::exists(kept, copyError)) {
+            fs::create_directories(kept.parent_path(), copyError);
+            fs::copy_file(destination, kept, copyError);
+        }
+        if (!copyError) {
+            fs::create_directories(destination.parent_path(), copyError);
+            fs::copy_file(source, destination, fs::copy_options::overwrite_existing, copyError);
+        }
+        if (copyError) {
+            logf("  %s: copy failed (%s)", target.c_str(), copyError.message().c_str());
+            ok = false;
+        } else {
+            installed++;
+        }
+    }
+    if (error) {
+        logf("  cannot read the Restoration Project package (%s)", error.message().c_str());
+        ok = false;
+    }
+    fs::remove_all(work, error);
+    if (ok) logf("  installed %d files of RPU %s; what they replaced is in backup/rpu", installed, tag.c_str());
+    return ok;
+}
+
+// --- removing the mod (task 234) -------------------------------------------
+
+std::string readWholeFile(const fs::path& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return in ? std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()) : std::string();
+}
+
+// Takes the translation out: its file, its line in mods_order.txt, and the game language back to English.
+bool removeRussianTranslation(const fs::path& root)
+{
+    std::error_code error;
+    fs::path translation = root / "mods" / "rpu_russian.dat";
+    bool ok = true;
+    if (fs::exists(translation, error)) {
+        fs::remove(translation, error);
+        if (error) {
+            log("cannot remove mods/rpu_russian.dat; is the game running? Close it and try again");
+            ok = false;
+        } else {
+            log("  removed mods/rpu_russian.dat");
+        }
+    }
+    fs::path orderPath = root / "mods" / "mods_order.txt";
+    if (fs::exists(orderPath, error)) {
+        bool removed = false;
+        std::string order = launcher_uninstall::removeLine(readWholeFile(orderPath), "rpu_russian.dat", &removed);
+        if (removed) {
+            if (launcher_uninstall::hasContent(order)) {
+                std::ofstream out(orderPath, std::ios::binary | std::ios::trunc);
+                out.write(order.data(), static_cast<std::streamsize>(order.size()));
+                if (!out) {
+                    log("cannot update mods/mods_order.txt");
+                    ok = false;
+                }
+            } else {
+                fs::remove(orderPath, error); // the mod made the list: nothing else is in it
+            }
+            log("  mods/mods_order.txt: the translation line removed");
+        }
+    }
+    fs::remove(root / "mods", error); // only when empty
+    if (launcher_uninstall::languageOf(readWholeFile(root / kCfg)) == "russian") {
+        if (setLanguage(root, "english")) log("  game language set back to English");
+        else ok = false;
+    }
+    return ok;
+}
+
+// Gives the game back as it was before the mod.  Saves (data/), the original game files
+// and fallout2.cfg are never touched.  The folder f2reimagined-backups only holds older
+// mod builds, so it goes with the mod.
+bool uninstallMod(const fs::path& root)
+{
+    bool ok = true;
+    std::error_code error;
+    log("removing the mod from the game folder:");
+    for (const std::string& name : launcher_uninstall::installedFiles()) {
+        if (!fs::exists(root / name, error)) continue;
+        fs::remove(root / name, error);
+        if (error) {
+            logf("  cannot remove %s (%s); is the game running? Close it and try again", name.c_str(), error.message().c_str());
+            ok = false;
+        } else {
+            logf("  removed %s", name.c_str());
+        }
+    }
+    for (const std::string& name : launcher_uninstall::installedFolders()) {
+        if (!fs::exists(root / name, error)) continue;
+        fs::remove_all(root / name, error);
+        if (error) {
+            logf("  cannot remove the folder %s (%s)", name.c_str(), error.message().c_str());
+            ok = false;
+        } else {
+            logf("  removed the folder %s", name.c_str());
+        }
+    }
+    if (!removeRussianTranslation(root)) ok = false;
+
+    // The launcher itself, last: if it is the running program, it moves aside and a helper deletes it after we close.
+    fs::path launcher = root / kRootLauncher;
+    if (fs::exists(launcher, error)) {
+        fs::remove(launcher, error);
+        if (!error) {
+            logf("  removed %s", kRootLauncher);
+        } else {
+            fs::path aside = launcher;
+            aside += ".old";
+            fs::remove(aside, error);
+            fs::rename(launcher, aside, error);
+            if (error) {
+                logf("  cannot remove %s (%s)", kRootLauncher, error.message().c_str());
+                ok = false;
+            } else {
+                // cmd repeats the delete until the running copy is closed; it stops by itself at the latest after ten minutes.
+                std::wstring command = L"cmd.exe /c \"for /l %i in (1,1,600) do @(del /f /q \"" + aside.wstring()
+                    + L"\" 2>nul & if not exist \"" + aside.wstring() + L"\" exit & ping -n 2 127.0.0.1 >nul)\"";
+                STARTUPINFOW startup = {};
+                startup.cb = sizeof(startup);
+                PROCESS_INFORMATION process = {};
+                if (CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW | DETACHED_PROCESS,
+                        nullptr, root.c_str(), &startup, &process)) {
+                    CloseHandle(process.hThread);
+                    CloseHandle(process.hProcess);
+                }
+                logf("  %s: removed (the last file goes when this window closes)", kRootLauncher);
+            }
+        }
+    }
+    log(ok ? "the mod is removed; your saves and the original Fallout 2 files were not touched"
+           : "the mod is only partly removed; see the lines above");
+    return ok;
 }
 
 // --- command line --------------------------------------------------------
@@ -837,17 +1298,20 @@ std::string shortNotes(const std::string& body)
 }
 
 bool fetchReleaseInfo(const std::string& updateBase, const std::string& releaseInfoUrl,
-    std::string* version, std::string* notes)
+    std::string* version, std::string* notes, std::string* routeError)
 {
     const char* error = nullptr;
     std::string versionBody;
-    if (!httpGet(joinUrl(updateBase, kVersionTxt), &versionBody, &error)) return false;
+    if (!fetchRoutes(releaseRoutes(updateBase, kVersionTxt), &versionBody, nullptr, routeError)) return false;
     *version = trim(versionBody);
     notes->clear();
     if (!releaseInfoUrl.empty()) {
         std::string response;
         if (httpGet(releaseInfoUrl, &response, &error)) {
             *notes = shortNotes(jsonStringValue(response, "body"));
+        } else {
+            logf("release notes are unavailable (GitHub API rate limit or network: %s)",
+                error != nullptr ? error : "network error");
         }
     }
     return !version->empty();
@@ -867,14 +1331,20 @@ Options parseOptions(int argc, char** argv)
             log("fallout2-ce-3d-launcher: installs Fallout 2: Reimagined onto a clean Fallout 2 and keeps");
             log("it updated from the rolling `latest` GitHub release, then starts the game.");
             log("");
-            log("  --game-root <dir>   the Fallout 2 folder (default: registry lookup, then a picker)");
+            log("  --game-root <dir>   the Fallout 2 folder (default: this launcher's own folder when it is a game root, else registry lookup, then a picker)");
             log("  --update-url <url>  where version.txt and the zip live (default: the latest release)");
             log("  --release-info-url <url>  release API for the version notes");
-            log("  --maps <list>       maps the exporter covers, comma separated (default: klamath)");
-            log("  --force-export      rebuild the 3D scene data even if it looks current");
+            log("  --maps <list>       maps the exporter covers, comma separated (default: all, every map)");
+            log("  --force-export      rebuild all the 3D scene data even if it is current");
             log("  --no-start          do everything except starting the game");
             log("  --rollback          restore the most recent backed-up game build");
             log("  --russian           install the official RPU Russian text translation");
+            log("  --remove-russian    remove the Russian translation and set the game language back to English");
+            log("  --restoration-project  install the Restoration Project from its official release and build its 3D scenes");
+            log("  --ui-language <ru|en>  the language of the log lines (default: en)");
+            log("  --mirror-url <url>  the mirror folder for the release files and the Russian translation (tests)");
+            log("  --rp-zip-url <url>  the Restoration Project zip from this url instead of its release (tests)");
+            log("  --uninstall         remove the mod and give back the game as it was (saves and original files stay)");
             log("  --check-release     print the latest version and release notes");
             log("  -- <args>           arguments handed over to the game");
             std::exit(0);
@@ -894,10 +1364,23 @@ Options parseOptions(int argc, char** argv)
             options.rollback = true;
         } else if (arg == "--russian") {
             options.installRussian = true;
+        } else if (arg == "--remove-russian") {
+            options.removeRussian = true;
+        } else if (arg == "--restoration-project") {
+            options.installRp = true;
+        } else if (arg == "--rp-zip-url" && i + 1 < argc) {
+            g_rpZipUrl = argv[++i];
+        } else if (arg == "--ui-language" && i + 1 < argc) {
+            g_ru = std::string(argv[++i]) == "ru";
+        } else if (arg == "--mirror-url" && i + 1 < argc) {
+            g_mirrorBase = argv[++i];
+            if (g_mirrorBase.back() != '/') g_mirrorBase += '/';
+        } else if (arg == "--uninstall") {
+            options.uninstall = true;
         } else if (arg == "--check-release") {
             options.checkRelease = true;
         } else {
-            die("unknown option: " + arg + " (see --help)");
+            die("unknown option: %s (see --help)", arg.c_str());
         }
     }
     return options;
@@ -917,6 +1400,17 @@ std::vector<std::string> splitMaps(const std::string& maps)
 
 } // namespace
 
+// The folder of this exe when it is a game root (the launcher installed there), else empty.
+std::string ownGameRoot()
+{
+    wchar_t path[MAX_PATH] = {};
+    if (GetModuleFileNameW(nullptr, path, MAX_PATH) == 0) return std::string();
+    fs::path folder = fs::path(path).parent_path();
+    std::error_code error;
+    if (!looksLikeFallout2(folder) || !fs::exists(folder / kVersionTxt, error)) return std::string();
+    return wideToUtf8(folder.wstring());
+}
+
 std::string findGameRootForUi()
 {
     return findGameRoot(false);
@@ -932,8 +1426,10 @@ int runConsole(Options options)
     if (options.checkRelease) {
         std::string version;
         std::string notes;
-        if (!fetchReleaseInfo(options.updateBase, options.releaseInfoUrl, &version, &notes)) {
-            log("release check failed");
+        std::string routeError;
+        if (!fetchReleaseInfo(options.updateBase, options.releaseInfoUrl, &version, &notes, &routeError)) {
+            logf("RELEASE_ERROR:%s", routeError.c_str());
+            log("release check failed: GitHub does not answer");
             return 1;
         }
         logf("RELEASE_VERSION:%s", version.c_str());
@@ -946,13 +1442,27 @@ int runConsole(Options options)
     if (!options.gameRoot.empty()) {
         root = fs::path(utf8ToWide(options.gameRoot));
         logf("game root (from --game-root): %s", options.gameRoot.c_str());
-        if (!looksLikeFallout2(root)) die("master.dat and critter.dat are not in --game-root");
+        if (!looksLikeFallout2(root)) die("this is not a Fallout 2 folder: master.dat and critter.dat are not there");
     } else {
-        std::string found = findGameRoot(true);
-        if (found.empty()) die("no Fallout 2 folder given");
+        std::string found = ownGameRoot();
+        if (!found.empty()) logf("game root (the folder of this launcher): %s", found.c_str());
+        else found = findGameRoot(true);
+        if (found.empty()) die("no Fallout 2 folder was chosen");
         root = found;
     }
 
+    {
+        std::error_code ignored;
+        fs::path old = root / kRootLauncher;
+        old += ".old";
+        fs::remove(old, ignored);
+    }
+
+    if (options.uninstall) return uninstallMod(root) ? 0 : 1;
+    if (options.removeRussian) {
+        log("removing the Russian translation:");
+        return removeRussianTranslation(root) ? 0 : 1;
+    }
     if (options.rollback) return rollbackInstalledBuild(root) ? 0 : 1;
 
     bool installedGamePresent = fs::exists(root / kGameExe);
@@ -972,12 +1482,10 @@ int runConsole(Options options)
 
     // --- what does the release hold? ---
     std::string remoteVersion;
-    const char* networkError = nullptr;
-    std::string versionUrl = joinUrl(options.updateBase, kVersionTxt);
-    if (!httpGet(versionUrl, &remoteVersion, &networkError)) {
+    std::string routeError;
+    if (!fetchRoutes(releaseRoutes(options.updateBase, kVersionTxt), &remoteVersion, nullptr, &routeError)) {
         remoteVersion.clear();
-        logf("cannot reach the release (%s: %s)", versionUrl.c_str(),
-            networkError != nullptr ? networkError : "network error");
+        logf("GitHub does not answer (%s)", routeError.c_str());
     } else {
         remoteVersion = trim(remoteVersion);
         logf("release build: %s", remoteVersion.c_str());
@@ -985,17 +1493,19 @@ int runConsole(Options options)
 
     if (remoteVersion.empty()) {
         if (installedVersion.empty() && !installedGamePresent) {
-            die("first install needs the network: the release is unreachable");
+            die("GitHub does not answer, and the first install needs the internet. Try again later or use another network");
         }
-        log("offline: starting the installed game as it is");
+        log("GitHub does not answer: the installed game is used as it is");
     }
 
     bool freshInstall = !installedGamePresent;
     bool updated = false;
-    if (!remoteVersion.empty() && remoteVersion != installedVersion) {
+    // An older launcher installed the build without the wide art folders: pull once more for them.
+    bool wideArtMissing = !fs::exists(root / "user-assets/fullscreen-20261028/wallpapers-selected/hires/menu");
+    if (!remoteVersion.empty() && (remoteVersion != installedVersion || wideArtMissing)) {
         // --- download and unpack ---
-        logf("%s: %s -> %s", installedVersion.empty() ? "installing" : "updating",
-            installedVersion.empty() ? "none" : installedVersion.c_str(), remoteVersion.c_str());
+        if (installedVersion.empty()) logf("installing: none -> %s", remoteVersion.c_str());
+        else logf("updating: %s -> %s", installedVersion.c_str(), remoteVersion.c_str());
         char tempPath[MAX_PATH] = {};
         GetTempPathA(MAX_PATH, tempPath);
         fs::path work = fs::path(tempPath) / ("f2ce3d-" + std::to_string(GetCurrentProcessId()));
@@ -1006,27 +1516,26 @@ int runConsole(Options options)
         fs::path stage = work / "stage";
         fs::create_directories(stage, error);
 
-        const char* downloadError = nullptr;
-        std::string zipUrl = joinUrl(options.updateBase, kZipAsset);
-        logf("downloading %s", zipUrl.c_str());
-        if (!httpDownload(zipUrl, zip, &downloadError)) {
+        std::string downloadError;
+        logf("downloading %s", kZipAsset);
+        if (!fetchRoutes(releaseRoutes(options.updateBase, kZipAsset), nullptr, &zip, &downloadError)) {
             fs::remove_all(work, error);
-            die(std::string("download failed: ") + (downloadError != nullptr ? downloadError : "network error"));
+            die("GitHub does not answer, download failed (%s)", downloadError.c_str());
         }
         log("unpacking");
         if (!unpackZip(zip, stage)) {
             fs::remove_all(work, error);
-            die("unpack failed");
+            die("the downloaded file could not be unpacked; try the install again");
         }
         if (!fs::exists(stage / kGameExe)) {
             fs::remove_all(work, error);
-            die("the package does not hold the game exe");
+            die("the downloaded package is damaged (the game is not in it); try the install again");
         }
 
         if (installedGamePresent && !backupInstalledBuild(root,
             installedVersion.empty() ? std::string("manual") : installedVersion)) {
             fs::remove_all(work, error);
-            die("cannot back up the installed build before updating");
+            die("could not save the current build before updating; nothing was changed");
         }
 
         // --- into the game folder; the player's things stay theirs ---
@@ -1034,6 +1543,16 @@ int runConsole(Options options)
         copyIfPresent(stage, kGameExe, root, true, "installed");
         copyIfPresent(stage, "ce.dat", root, true, "installed");
         copyIfPresent(stage, kExporterExe, root, true, "installed");
+        if (!fs::exists(stage / kZipLauncher)) {
+            logf("  %s: not in the package, skipped", kRootLauncher);
+        } else if (copyLauncher(stage / kZipLauncher, root / kRootLauncher)) {
+            logf("  %s: installed", kRootLauncher);
+        } else {
+            logf("  %s: copy failed", kRootLauncher);
+        }
+        copyTreeIfPresent(stage, "user-assets", root);
+        copyTreeIfPresent(stage, "data/art/splash", root);
+        copyTreeIfPresent(stage, "data/art/russian/splash", root);
         if (fs::exists(root / kCfg)) {
             log("  fallout2.cfg: kept (the player's file is never overwritten)");
         } else {
@@ -1051,8 +1570,19 @@ int runConsole(Options options)
         logf("the installed build matches the release: nothing to pull");
     }
 
+    // --- the Restoration Project, before the scenes: its maps and art go into them ---
+    bool rpInstalledNow = false;
+    if (options.installRp && !rpOnDisk(root)) {
+        if (!installRestorationProject(root)) {
+            log("the Restoration Project could not be installed (see the lines above)");
+            return 1;
+        }
+        rpInstalledNow = true;
+    }
+
     // --- 3D scene data, always made on this machine from this game ---
-    std::vector<std::string> maps = splitMaps(options.maps);
+    // RP's own maps are the exporter's "rp" group, outside "all".
+    std::vector<std::string> maps = splitMaps(options.maps == kDefaultMaps && rpOnDisk(root) ? "all,rp" : options.maps);
     std::string mapList;
     for (size_t i = 0; i < maps.size(); i++) {
         if (i != 0) mapList += ",";
@@ -1060,11 +1590,11 @@ int runConsole(Options options)
     }
     fs::path exporter = root / kExporterExe;
     if (!fs::exists(exporter)) {
-        log("scene-exporter.exe is missing; the game will start in 2D");
+        log("scene-exporter.exe is missing; the game will start without 3D");
     } else {
-        bool needExport = options.forceExport || freshInstall || updated;
+        bool needExport = options.forceExport || freshInstall || updated || rpInstalledNow;
         if (!needExport) {
-            // The exporter owns the map groups: "klamath" is its name, only
+            // The exporter owns the map groups: "all" is its name, only
             // it knows which scene directories that covers.  Exit 0 = every
             // base scene exists, anything else = make them.
             std::string command = "\"" + exporter.string() + "\" --game-root \"" + root.string()
@@ -1076,17 +1606,22 @@ int runConsole(Options options)
         if (needExport) {
             std::string command = "\"" + exporter.string() + "\" --game-root \"" + root.string()
                 + "\" --maps " + mapList;
+            if (options.forceExport) command += " --force";
             logf("making the 3D scene data for: %s", mapList.c_str());
-            if (!runTool(utf8ToWide(command), root.wstring())) {
-                log("the exporter failed; the game will start in 2D");
+            if (freshInstall) log("  the first install builds every map: about 20 minutes; later updates take seconds");
+            if (!runTool(utf8ToWide(command), root.wstring(), nullptr, true)) {
+                log("the 3D data could not be built; the game will start without 3D");
             }
         } else {
             log("the 3D scene data is current");
         }
     }
+    if (!installedVersion.empty()) logf("the game folder holds build %s", installedVersion.c_str());
 
     if (options.installRussian && !installRussianTranslation(root)) {
-        die("the Russian translation could not be installed");
+        // Exit 2: the game itself is installed, only the translation will be tried again.
+        log("the Russian translation could not be installed (see the lines above)");
+        return 2;
     }
 
     if (options.noStart) {
@@ -1104,7 +1639,7 @@ int runConsole(Options options)
 
     // --- start the game ---
     fs::path game = root / kGameExe;
-    if (!fs::exists(game)) die("the game exe is not installed");
+    if (!fs::exists(game)) die("the game is not installed yet; press Install first");
     std::string command = "\"" + game.string() + "\"";
     for (const std::string& argument : options.gameArgs) {
         command += " ";

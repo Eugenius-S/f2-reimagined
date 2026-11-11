@@ -3,6 +3,7 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <mutex>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -62,6 +63,11 @@ unsigned gGpuFrames = 0;
 double gCpuSum = 0.0;
 std::vector<double> gWindow; // frame intervals this window, ms
 std::vector<double> gRun; // every frame interval, ms
+std::string gFrameRows; // this window's frames for devperf.frames.csv
+std::string gCpuMarks; // this frame's CPU spans
+Uint64 gCpuMarkLast = 0;
+Uint64 gLoadStart = 0;
+std::vector<const char*> gLoadMarks; // names marked since the chain's start
 
 double seconds(Uint64 ticks)
 {
@@ -95,6 +101,10 @@ void applyToggle(const Toggle& toggle)
 
 void writeLog(const std::string& line)
 {
+    // The warm thread pool marks art reads concurrently (172): one append at
+    // a time.
+    static std::mutex logMutex;
+    std::lock_guard<std::mutex> guard(logMutex);
     if (FILE* log = std::fopen((dev_output::outputDirectory("logs") / "devperf.log").string().c_str(), "a")) {
         std::fputs(line.c_str(), log);
         std::fclose(log);
@@ -187,6 +197,11 @@ void flushWindow(double elapsed)
     }
     line += "\n";
     writeLog(line);
+    if (FILE* rows = std::fopen((dev_output::outputDirectory("logs") / "devperf.frames.csv").string().c_str(), "a")) {
+        std::fputs(gFrameRows.c_str(), rows);
+        std::fclose(rows);
+    }
+    gFrameRows.clear();
     gWindow.clear();
     gSpans.clear();
     gGpuSum = 0.0;
@@ -241,9 +256,22 @@ void perfMark(const char* name)
     glQueryCounter(slot.queries[slot.marks], kTimestamp);
 }
 
+void perfCpuMark(const char* name)
+{
+    if (!perfEnabled()) return;
+    const Uint64 now = SDL_GetPerformanceCounter();
+    if (gCpuMarkLast != 0) {
+        char part[64];
+        std::snprintf(part, sizeof part, " %s=%.2f", name, seconds(now - gCpuMarkLast) * 1000.0);
+        gCpuMarks += part;
+    }
+    gCpuMarkLast = now;
+}
+
 void perfEnd()
 {
     if (!gInFrame) return;
+    perfCpuMark("swap");
     gInFrame = false;
     const Uint64 now = SDL_GetPerformanceCounter();
     gCpuSum += seconds(now - gFrameStart) * 1000.0;
@@ -251,6 +279,20 @@ void perfEnd()
         const double interval = seconds(now - gLastEnd) * 1000.0;
         gWindow.push_back(interval);
         gRun.push_back(interval);
+        // One row per frame: the interval, the time outside the draw (game
+        // loop, scene refresh) and the draw submit plus swap, so a spike
+        // reads as its side.
+        char row[96];
+        std::snprintf(row, sizeof row, "%.3f,%.3f,%.3f,%.3f\n", seconds(now - gRunStart), interval,
+            seconds(gFrameStart - gLastEnd) * 1000.0, seconds(now - gFrameStart) * 1000.0);
+        gFrameRows += row;
+        std::vector<double> sorted = gWindow;
+        std::nth_element(sorted.begin(), sorted.begin() + sorted.size() / 2, sorted.end());
+        static const double slowFactor = SDL_getenv("F2CE_PERF_SLOW") != nullptr ? std::atof(SDL_getenv("F2CE_PERF_SLOW")) : 2.0;
+        if (gWindow.size() >= 10 && interval > slowFactor * sorted[sorted.size() / 2]) {
+            writeLog("perf slow t=" + std::to_string(seconds(now - gRunStart)) + " ms=" + std::to_string(interval)
+                + gCpuMarks + "\n");
+        }
         if (!gToggleNote.empty()) {
             // The frame a toggle landed in: its length is the stall.
             char line[160];
@@ -259,6 +301,7 @@ void perfEnd()
             gToggleNote.clear();
         }
     }
+    gCpuMarks.clear();
     gLastEnd = now;
     collect(gSlots[(gCurrent + 1) % kRing]);
     const double sinceWindow = seconds(now - gWindowStart);
@@ -287,6 +330,101 @@ PerfScope::~PerfScope()
     if (started_ == 0) return;
     char line[160];
     std::snprintf(line, sizeof line, "perf load %s ms=%.2f\n", what_, seconds(SDL_GetPerformanceCounter() - started_) * 1000.0);
+    writeLog(line);
+}
+
+PerfSum::PerfSum(const char* what)
+    : what_(what)
+{
+}
+
+PerfSum::~PerfSum()
+{
+    if (count_ == 0) return;
+    char line[160];
+    std::snprintf(line, sizeof line, "perf load %s ms=%.2f n=%d\n", what_, seconds(total_) * 1000.0, count_);
+    writeLog(line);
+}
+
+void PerfSum::start()
+{
+    started_ = perfEnabled() ? SDL_GetPerformanceCounter() : 0;
+}
+
+void PerfSum::stop()
+{
+    if (started_ == 0) return;
+    total_ += SDL_GetPerformanceCounter() - started_;
+    started_ = 0;
+    count_++;
+}
+
+void perfLoadStart(const char* what)
+{
+    if (!perfEnabled()) return;
+    gLoadStart = SDL_GetPerformanceCounter();
+    gLoadMarks.clear();
+    char line[128];
+    std::snprintf(line, sizeof line, "perf load chain %s begin\n", what);
+    writeLog(line);
+}
+
+void perfLoadMark(const char* what)
+{
+    if (!perfEnabled() || gLoadStart == 0) return;
+    for (const char* marked : gLoadMarks) {
+        if (std::strcmp(marked, what) == 0) return;
+    }
+    gLoadMarks.push_back(what);
+    char line[160];
+    std::snprintf(line, sizeof line, "perf load %s ms=%.2f since chain start\n", what,
+        seconds(SDL_GetPerformanceCounter() - gLoadStart) * 1000.0);
+    writeLog(line);
+}
+
+// The owner shot reads the recent frame rate whatever F2CE_PERF says (183):
+// a plain ring of the last intervals, ticked once per presented frame and
+// read on the main thread only, so no lock.
+constexpr int kFrameRing = 300;
+double gFrameRing[kFrameRing] = {};
+int gFrameRingCount = 0;
+int gFrameRingAt = 0;
+Uint64 gFrameTickLast = 0;
+
+void perfFrameTick()
+{
+    const Uint64 now = SDL_GetPerformanceCounter();
+    if (gFrameTickLast != 0) {
+        gFrameRing[gFrameRingAt] = seconds(now - gFrameTickLast) * 1000.0;
+        gFrameRingAt = (gFrameRingAt + 1) % kFrameRing;
+        if (gFrameRingCount < kFrameRing) gFrameRingCount++;
+    }
+    gFrameTickLast = now;
+}
+
+bool perfFrameStats(double* fps, double* averageMs, double* low1Ms){
+    if (gFrameRingCount < 2) return false;
+    std::vector<double> frames;
+    frames.reserve(gFrameRingCount);
+    double sum = 0.0;
+    for (int i = 0; i < gFrameRingCount; i++) {
+        const double ms = gFrameRing[(gFrameRingAt + kFrameRing - 1 - i) % kFrameRing];
+        frames.push_back(ms);
+        sum += ms;
+    }
+    std::sort(frames.begin(), frames.end(), [](double a, double b) { return a > b; });
+    const size_t count = std::max<size_t>(1, frames.size() / 100);
+    double slowest = 0.0;
+    for (size_t i = 0; i < count; i++) slowest += frames[i];
+    *fps = static_cast<double>(frames.size()) * 1000.0 / sum;
+    *averageMs = sum / static_cast<double>(frames.size());
+    *low1Ms = slowest / static_cast<double>(count);
+    return true;
+}
+
+void perfLog(const char* line)
+{
+    if (!perfEnabled()) return;
     writeLog(line);
 }
 

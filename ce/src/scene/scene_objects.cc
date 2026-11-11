@@ -13,6 +13,7 @@
 #include "../game_mouse.h"
 #include "../map.h"
 #include "../object.h"
+#include "../proto.h"
 #include "clean_edges_boundary_mask.h"
 #include "effect_emission.h"
 #include "muzzle_flash.h"
@@ -23,6 +24,7 @@
 #include "../scene_renderer/static_scene.h"
 #include "scene_settings.h"
 #include "../settings.h"
+#include "../scene_renderer/perf.h"
 #include "../svga.h"
 #include "../tile.h"
 
@@ -207,13 +209,16 @@ bool updateHeroFromGame()
     if (gDude->rotation < ROTATION_FIRST || gDude->rotation >= ROTATION_COUNT) {
         return unavailable("player rotation is invalid");
     }
+    const Uint64 heroStart = SDL_GetPerformanceCounter();
 
     const ShownArt shown = shownArt(gDude, (gDude->flags & OBJECT_FLAT) != OBJECT_NONE);
+    const Uint64 shownDone = SDL_GetPerformanceCounter();
     FrmImage image;
     const FrmId frmId(shown.fid);
     if (!image.lock(frmId, gDude->frame, static_cast<Rotation>(shown.rotation))) {
         return unavailable("current player FRM frame could not be locked");
     }
+    const Uint64 lockedDone = SDL_GetPerformanceCounter();
     const int width = image.getWidth();
     const int height = image.getHeight();
     if (width <= 0 || height <= 0 || width > 2048 || height > 2048
@@ -246,8 +251,20 @@ bool updateHeroFromGame()
     };
     frame.stack = gHeroStack;
     frame.pickId = gHeroPickId;
+    const Uint64 decodedDone = SDL_GetPerformanceCounter();
     std::string error;
     if (!scene_renderer::updateStaticHero(frame, &error)) return unavailable(error.c_str());
+    const Uint64 builtDone = SDL_GetPerformanceCounter();
+    static int reports = 0;
+    if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
+        const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+        printf("perf hero shown=%.2f lock=%.2f decode=%.2f build=%.2f\n",
+            static_cast<double>(shownDone - heroStart) * toMs,
+            static_cast<double>(lockedDone - shownDone) * toMs,
+            static_cast<double>(decodedDone - lockedDone) * toMs,
+            static_cast<double>(builtDone - decodedDone) * toMs);
+        fflush(stdout);
+    }
     gHeroUnavailableLogged = false;
     return true;
 }
@@ -259,6 +276,32 @@ struct ObjectCardPass {
     int lastTile; // tile of the previous standing sprite, for the per-hex count
     int onTile; // standing sprites painted on lastTile so far
 };
+
+// 241: the art set a scenery piece belongs to: its file name without the
+// trailing number and extension (TEMPLE01..temple08: "temple"), interned
+// per fid; 0 when the name ends in no number. A composite sprite's pieces
+// share it, and the renderer shades touching pieces of one set as one.
+int sceneryArtSet(int fid, const char* path)
+{
+    static std::map<int, int> byFid;
+    static std::map<std::string, int> byStem;
+    const auto found = byFid.find(fid);
+    if (found != byFid.end()) return found->second;
+    std::string stem = path != nullptr ? path : "";
+    const size_t slash = stem.find_last_of("\\/");
+    if (slash != std::string::npos) stem.erase(0, slash + 1);
+    const size_t dot = stem.find_last_of('.');
+    if (dot != std::string::npos) stem.erase(dot);
+    const size_t named = stem.find_last_not_of("0123456789");
+    int set = 0;
+    if (named != std::string::npos && named + 1 < stem.size()) {
+        stem.erase(named + 1);
+        std::transform(stem.begin(), stem.end(), stem.begin(), [](unsigned char c) { return static_cast<char>(tolower(c)); });
+        set = byStem.emplace(stem, static_cast<int>(byStem.size()) + 1).first->second;
+    }
+    byFid.emplace(fid, set);
+    return set;
+}
 
 // How many standing sprites the game paints on this object's hex before it
 // (the walk is in the game's own painting order).
@@ -281,15 +324,25 @@ void addObjectCard(Object* object, void* context)
         return;
     }
     const FrmId objectFid(object);
-    if (scene::isCleanEdgesBoundaryMask(scene::cleanEdges(), scene_renderer::staticMapClip().enabled,
-            objectFid.objectType() == OBJ_TYPE_SCENERY, objectFid.filePath())) {
-        return;
+    if (objectFid.objectType() == OBJ_TYPE_SCENERY && scene::cleanEdges() && scene_renderer::staticMapClip().enabled) {
+        // The art name depends on the fid alone: build its path once per fid,
+        // not once per object per frame.
+        static std::map<int, bool> boundaryMask;
+        auto found = boundaryMask.find(object->fid);
+        if (found == boundaryMask.end()) {
+            found = boundaryMask.emplace(object->fid,
+                scene::isCleanEdgesBoundaryMask(true, true, true, objectFid.filePath())).first;
+        }
+        if (found->second) return;
     }
     const int pickId = static_cast<int>(gPickObjects.size());
     gPickObjects.push_back({ object, object->tile });
     // walls.bin draws it: its card is only picked, and the game's count of
     // sprites on its hex does not include it.
-    const bool pickOnly = scene_renderer::staticObjectBaked(object->tile, object->fid);
+    // Keep exit grids pickable so movement still finds the live transition,
+    // but do not draw their translucent boundary markers into the 3D map.
+    const bool pickOnly = scene_renderer::staticObjectBaked(object->tile, object->fid)
+        || isExitGridProtoId(ProtoId(object->pid));
     const EffectEmission emission = effectEmission(object->fid); // calibrated material tag, independent of local light
     if (pickOnly && emission.sign) scene_renderer::markStaticWallEmissive(object->tile, object->fid);
     // The game shows the hero through walls and scenery he stands behind.
@@ -325,8 +378,27 @@ void addObjectCard(Object* object, void* context)
         if (handle != nullptr) artUnlock(handle);
         if (frames > 1 && object->frame == frames - 1) return;
     }
-    const bool flat = (object->flags & OBJECT_FLAT) != OBJECT_NONE
+    // 157: an object whose cheap state is unchanged reuses the card built
+    // before - the art locks, the decodes and the projection rebuild only
+    // ran for the things that moved, turned or changed frame.
+    const bool flatNow = (object->flags & OBJECT_FLAT) != OBJECT_NONE
         || scene_renderer::staticObjectFlat(object->tile, object->fid);
+    const scene_renderer::StaticObjectSnapshot snapshot = {
+        static_cast<unsigned int>(object->fid), object->frame, object->rotation,
+        object->tile, object->x, object->y, object->pid,
+        static_cast<unsigned int>(object->flags), stack, seeThrough, flatNow,
+        scene_renderer::staticFlyCameraActive(), scene_renderer::staticShownRotation(0),
+        settings.scene3d.shadows, settings.scene3d.sprite_sides,
+        scene_renderer::staticMapClip().enabled,
+    };
+    // Read once: an environment lookup for each of thousands of objects cost
+    // milliseconds a frame.
+    static const bool noCards = SDL_getenv("F2CE_NO_CARDS") != nullptr;
+    if (!noCards && scene_renderer::staticObjectCardFresh(object, snapshot)) {
+        scene_renderer::appendStaticObjectCard(object, pickId);
+        return;
+    }
+    const bool flat = flatNow;
     const bool flyFlat = scene_renderer::staticFlyCameraActive()
         && scene_renderer::staticObjectFlyFlat(object->tile, object->fid);
     const ShownArt shown = shownArt(object, flat || flyFlat || pickOnly);
@@ -397,6 +469,7 @@ void addObjectCard(Object* object, void* context)
     frame.pickOnly = pickOnly;
     frame.seeThrough = seeThrough;
     frame.noBlock = (object->flags & OBJECT_NO_BLOCK) != OBJECT_NONE;
+    if (objectFid.objectType() == OBJ_TYPE_SCENERY) frame.artSet = sceneryArtSet(object->fid, objectFid.filePath());
     // The engine's translucent kinds and their tints (_obj_render_object).
     Color tint = COLOR_WHITE;
     bool translucent = true;
@@ -429,7 +502,7 @@ void addObjectCard(Object* object, void* context)
         frame.tint[2] = (rgb & 0x1F) / 31.0f;
     }
     std::string error;
-    if (!scene_renderer::addStaticObject(frame, &error)) pass.skipped++;
+    if (!scene_renderer::addStaticObjectCached(object, snapshot, frame, &error)) pass.skipped++;
 }
 
 struct PickFilter {
@@ -466,14 +539,26 @@ bool objectArtOffsetForInspection(Object* object,int* x,int* y)
 
 bool updateObjectsFromGame()
 {
+    const Uint64 start = SDL_GetPerformanceCounter();
     scene_renderer::beginStaticObjects();
     scene_renderer::beginStaticWallSeeThrough();
     gPickObjects.clear();
     gHeroPickId = -1;
     ObjectCardPass pass = { directDrawGetPalette(), {}, 0, -1, 0 };
     if (pass.palette != nullptr) objectForEachAtElevation(gElevation, addObjectCard, &pass);
+    const Uint64 walked = SDL_GetPerformanceCounter();
+    scene_renderer::perfCpuMark("r_walk");
     scene_renderer::endStaticObjects();
     scene_renderer::endStaticWallSeeThrough();
+    const Uint64 ended = SDL_GetPerformanceCounter();
+    scene_renderer::perfCpuMark("r_upload");
+    static int reports = 0;
+    if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
+        const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
+        printf("perf objwalk walk=%.2f upload=%.2f\n",
+            static_cast<double>(walked - start) * toMs, static_cast<double>(ended - walked) * toMs);
+        fflush(stdout);
+    }
     gObjectCardsSkipped = pass.skipped;
     return updateHeroFromGame();
 }

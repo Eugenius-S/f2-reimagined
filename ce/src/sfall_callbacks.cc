@@ -11,6 +11,7 @@
 #include "script_sound.h"
 #include "sfall_filesystem.h"
 #include "sfall_object_name.h"
+#include "sfall_perks.h"
 #include "sfall_script_hooks.h"
 #include "stat.h"
 #include "worldmap.h"
@@ -46,6 +47,7 @@ void sfallOnGameReset()
     gameDialogResetPartyMemberCcMsgIds();
     reactionResetThresholds();
     scriptSoundReset();
+    sfallFakePerksReset();
     sfallFileSystemReset();
     sfallObjectNameReset();
     statResetUnspentApBonuses();

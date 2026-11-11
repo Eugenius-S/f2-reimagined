@@ -52,6 +52,8 @@ int gEggHeight = 0;
 int gEggLeft = 0;
 int gEggTop = 0;
 bool gEggShown = false;
+// The egg's rect in GL window pixels as bindEgg last set it (x, y, w, h).
+int gEggScissor[4] = {};
 
 // The broken top of a wall (task 129, find 6), under the fly camera. The roof
 // edge tiles that carry it are told by their art (roof_fringe.py), which
@@ -351,12 +353,32 @@ bool bindEgg(int viewportX, int viewportY, int viewportWidth, int viewportHeight
     glActiveTexture(kTexture0 + 1);
     glBindTexture(kTexture2D, gEggTexture);
     glUniform1i(gSceneEggMaskLocation, 1);
-    glUniform4f(gSceneEggRectLocation, anchorX - zx * 0.5f, anchorY - (zy - 1.0f), zx, zy);
+    const float left = anchorX - zx * 0.5f;
+    const float top = anchorY - (zy - 1.0f);
+    glUniform4f(gSceneEggRectLocation, left, top, zx, zy);
+    // The same rect in window pixels, the inverse of eggShare's mapping (GL y
+    // runs up), one pixel wider on each side for the rounding.
+    const double sx = static_cast<double>(viewportWidth) / gLogicalWidth;
+    const double sy = static_cast<double>(viewportHeight) / gLogicalHeight;
+    const int x0 = viewportX + static_cast<int>(std::floor(left * sx)) - 1;
+    const int x1 = viewportX + static_cast<int>(std::ceil((left + zx) * sx)) + 1;
+    const int y0 = viewportY + static_cast<int>(std::floor((gLogicalHeight - top - zy) * sy)) - 1;
+    const int y1 = viewportY + static_cast<int>(std::ceil((gLogicalHeight - top) * sy)) + 1;
+    gEggScissor[0] = x0;
+    gEggScissor[1] = y0;
+    gEggScissor[2] = std::max(0, x1 - x0);
+    gEggScissor[3] = std::max(0, y1 - y0);
     glUniform4f(gSceneViewportLocation, static_cast<float>(viewportX), static_cast<float>(viewportY),
         static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
     glUniform2f(gSceneLogicalLocation, static_cast<float>(gLogicalWidth), static_cast<float>(gLogicalHeight));
     glActiveTexture(kTexture0);
     return true;
+}
+
+void scissorToEgg()
+{
+    glEnable(kScissorTest);
+    glScissor(gEggScissor[0], gEggScissor[1], gEggScissor[2], gEggScissor[3]);
 }
 
 } // namespace internal

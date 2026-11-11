@@ -32,6 +32,14 @@ struct PreparedSharpTextFrame {
     double prepareMilliseconds = 0.0;
     bool drawn = false;
     bool active = false;
+    // 219: true on a frame whose picture is byte-for-byte the one the cached
+    // GL layers were built from - the draw path skips the rebuild and the
+    // uploads and redraws the textures.
+    bool cached = false;
+    // 219: the captured runs and their visibility masks, as the cached
+    // layers were built from - the cycling-colors patch reuses them.
+    std::vector<scene::TextRecord> records;
+    std::vector<scene::TextVisibilityMask> masks;
 };
 
 bool renderSharpText(const std::vector<scene::TextRecord>& records,

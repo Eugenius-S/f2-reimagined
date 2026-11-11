@@ -1,0 +1,14 @@
+# 239 repro round 2: gmove drives the game's own cursor.
+# Logical game coords at scale 2 (the window is 1920x1080, logical 960x540).
+wait 30
+gmove 480 270
+wait 10
+snap
+snap
+gmove 480 3
+wait 15
+snap
+snap
+gmove 480 270
+wait 10
+snap

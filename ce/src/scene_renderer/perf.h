@@ -18,6 +18,10 @@ bool perfEnabled();
 void perfBegin();
 void perfMark(const char* name);
 void perfEnd();
+// A CPU split of the frame (157): each mark ends the span since the previous
+// one. A frame slower than twice the window's median logs its spans as one
+// "perf slow" line, so a hitch reads as the stage that ate it.
+void perfCpuMark(const char* name);
 // F2CE_PERF_HOLD=N: true until N seconds after the first measured frame, so a
 // one-shot test run keeps drawing long enough to measure.
 bool perfHolding();
@@ -34,6 +38,43 @@ private:
     const char* what_;
     unsigned long long started_;
 };
+
+// A span the load repeats (per object, per page): each stop() adds into the
+// total, and going out of scope writes one line, so a section reads as its
+// total and count without the per-span write cost (172's per-object scopes
+// added ~1.1 s by writing 12k lines).
+class PerfSum {
+public:
+    explicit PerfSum(const char* what);
+    ~PerfSum();
+    PerfSum(const PerfSum&) = delete;
+    PerfSum& operator=(const PerfSum&) = delete;
+    void start();
+    void stop();
+
+private:
+    const char* what_;
+    unsigned long long total_ = 0;
+    int count_ = 0;
+    unsigned long long started_ = 0;
+};
+
+// A load chain's wall-clock marks (a map change, task 172): perfLoadStart
+// begins the chain and each perfLoadMark logs the wall time since the chain's
+// start, once per name per chain, so one map change reads as one table:
+// map_load, scene_loaded, first_frame. Off with the profiler.
+void perfLoadStart(const char* what);
+void perfLoadMark(const char* what);
+
+// One tick per presented frame, always on (the owner shot, 183): the ring of
+// the last frame intervals, whatever F2CE_PERF says. Main thread only.
+void perfFrameTick();
+// The recent frames over that ring: the frame rate, the mean frame time and
+// the mean of the slowest 1% (the 1% low). False until two frames passed.
+bool perfFrameStats(double* fps, double* averageMs, double* low1Ms);
+// One line into devperf.log (the profiler's file), so an in-game event lands
+// in the same timeline as the frame windows around it.
+void perfLog(const char* line);
 
 } // namespace scene_renderer
 } // namespace fallout

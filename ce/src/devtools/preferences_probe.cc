@@ -9,6 +9,8 @@
 #include <fstream>
 #include <sstream>
 
+#include "../game_mouse.h"
+#include "../dinput.h"
 #include "../input.h"
 #include "../kb.h"
 #include "../mouse.h"
@@ -22,13 +24,13 @@ namespace fallout {
 namespace devtools {
 
 namespace {
-constexpr Uint32 kScriptMouse = 0x154154u;
 std::ifstream gInputScript;
 bool gInputSceneMode = false; // --dev-scene-input: pumped from the main loop, no options screen
 bool gInputActive = false;
 bool gInputSeen = false;
 bool gInputStarted = false;
 bool gInputSnapshot = false;
+bool gInputExternal = false; // the mark-drag bench drives the mouse without a script
 int gInputX = 0, gInputY = 0, gInputWait = 0;
 int gInputStep = 0;
 Uint32 gInputWaitUntil = 0; // a waitms deadline, in SDL ticks
@@ -86,6 +88,21 @@ void scriptedInputPump()
             return;
         }
         if (action == "snap") { gInputSnapshot = true; printf("DEV_INPUT snap\n"); fflush(stdout); return; }
+        if (action == "hold" || action == "release") {
+            // Half a key press: hold pushes only the down event, release only
+            // the up, so a script can press a chord like Ctrl+F10.
+            int scancode;
+            if (!(input >> scancode) || scancode <= 0 || scancode >= SDL_NUM_SCANCODES) { fprintf(stderr, "DEV_INPUT FAIL: invalid key\n"); gInputActive = false; return; }
+            SDL_Event event = {};
+            event.type = action == "hold" ? SDL_KEYDOWN : SDL_KEYUP;
+            event.key.keysym.scancode = static_cast<SDL_Scancode>(scancode);
+            event.key.state = action == "hold" ? SDL_PRESSED : SDL_RELEASED;
+            event.key.repeat = 0;
+            if (SDL_PushEvent(&event) != 1) fprintf(stderr, "DEV_INPUT FAIL: %s\n", SDL_GetError());
+            else printf("DEV_INPUT pushed key %d %s\n", scancode, action.c_str());
+            fflush(stdout);
+            return;
+        }
         if (action == "key") {
             // One press: a down and an up pushed in the same batch, so a held
             // key's repeat never fires. The value is an SDL_SCANCODE_* number.
@@ -107,6 +124,21 @@ void scriptedInputPump()
             return;
         }
         SDL_Event event = {};
+        if (action == "gmove") {
+            // The game's own cursor: the SDL-level "move" only reaches event
+            // readers, while the cursor sprite and the game logic follow the
+            // game's mouse state (the combat fixture drives it the same way).
+            // The hover event follows, so the game picks the action cursor and
+            // the scroll zones off its own hover path.
+            int x, y;
+            if (!(input >> x >> y)) { fprintf(stderr, "DEV_INPUT FAIL: invalid coordinates\n"); gInputActive = false; return; }
+            _mouse_set_position(x, y);
+            _mouse_simulate_input(0, 0, 0);
+            _gmouse_handle_event(x, y, 0);
+            printf("DEV_INPUT gmove %d %d\n", x, y);
+            fflush(stdout);
+            return;
+        }
         if (action == "wheel") {
             event.type = SDL_MOUSEWHEEL;
             if (!(input >> event.wheel.y)) { fprintf(stderr, "DEV_INPUT FAIL: invalid wheel\n"); gInputActive = false; return; }
@@ -129,7 +161,7 @@ void scriptedInputPump()
 
 void scriptedInputObserveEvent(const SDL_Event& event)
 {
-    if (!gInputActive) return;
+    if (!gInputActive && !gInputExternal) return;
     if (event.type == SDL_MOUSEMOTION && event.motion.which == kScriptMouse) {
         gInputSeen = true; gInputX = event.motion.x; gInputY = event.motion.y;
         printf("DEV_INPUT motion %d %d\n", gInputX, gInputY); fflush(stdout);
@@ -142,9 +174,14 @@ void scriptedInputObserveEvent(const SDL_Event& event)
 
 bool scriptedInputMouse(int* x, int* y, unsigned char* left, unsigned char* right)
 {
-    if (!gInputActive || !gInputSeen) return false;
+    if ((!gInputActive && !gInputExternal) || !gInputSeen) return false;
     *x = gInputX; *y = gInputY; *left = gInputLeft; *right = gInputRight;
     return true;
+}
+
+void scriptedInputSetExternalMouse(bool enable)
+{
+    gInputExternal = enable;
 }
 
 namespace {
@@ -158,6 +195,8 @@ enum class ProbeMode {
     Escape,
     Defaults,
     Verify,
+    CursorSpeed,
+    Toggle3d,
 };
 
 enum class DragProbe {
@@ -183,6 +222,8 @@ int gMouseTargetY = 0;
 int gWheelScrollBefore = 0;
 int gScrollBeforeDrag = 0;
 int gZoomRow = -1;
+int gCursorSpeedRow = -1;
+std::string gCursorSpeedBefore;
 std::string gZoomBefore;
 int gLegacyDifficultyBefore = -1;
 int gStagedLegacyDifficulty = -1;
@@ -197,6 +238,91 @@ bool gFooterOverrideLogged = false;
 bool gFooterLoopLogged = false;
 std::string gEnabledBefore;
 std::chrono::steady_clock::time_point gDeadline;
+bool gCursorMotionProbeActive = false;
+int gCursorMotionProbeX = 0;
+int gCursorMotionProbeY = 0;
+
+bool verifyCursorSpeedMotion(double committedSensitivity)
+{
+    const bool exclusiveFullscreen = screenIsExclusiveFullscreen();
+    const bool relative = mouseDeviceUsesRelativeMode();
+    printf("PREFERENCES_PROBE injected_cursor_motion display exclusive_fullscreen=%d relative_mode=%d mouse_lock=%d\n",
+        exclusiveFullscreen ? 1 : 0, relative ? 1 : 0, settings.screen.mouse_lock ? 1 : 0);
+    fflush(stdout);
+    if (settings.screen.windowed == WindowMode::Fullscreen && !exclusiveFullscreen) {
+        printf("PREFERENCES_PROBE FAIL: background test did not enter configured exclusive fullscreen\n");
+        fflush(stdout);
+        return false;
+    }
+    if (relative != (exclusiveFullscreen || settings.screen.mouse_lock)) {
+        printf("PREFERENCES_PROBE FAIL: background probe did not activate the input mode required by the current display\n");
+        fflush(stdout);
+        return false;
+    }
+    gCursorMotionProbeActive = true;
+
+    int firstDelta = 0;
+    int secondDelta = 0;
+    if (relative) {
+        _mouse_set_position(320, 240);
+        mouseSetSensitivity(1.0);
+        gCursorMotionProbeX = 10;
+        gCursorMotionProbeY = 0;
+        _mouse_info();
+        int beforeX = 0, beforeY = 0;
+        mouseGetPosition(&beforeX, &beforeY);
+        gCursorMotionProbeX = 10;
+        gCursorMotionProbeY = 0;
+        _mouse_info();
+        int afterX = 0, afterY = 0;
+        mouseGetPosition(&afterX, &afterY);
+        firstDelta = afterX - beforeX;
+
+        mouseSetSensitivity(2.5);
+        gCursorMotionProbeX = 10;
+        gCursorMotionProbeY = 0;
+        _mouse_info();
+        beforeX = afterX;
+        mouseGetPosition(&afterX, &afterY);
+        secondDelta = afterX - beforeX;
+    } else {
+        mouseResetAbsoluteSensitivityTracking();
+        mouseSetSensitivity(1.0);
+        gCursorMotionProbeX = 100;
+        gCursorMotionProbeY = 100;
+        _mouse_info();
+        gCursorMotionProbeX = 110;
+        gCursorMotionProbeY = 100;
+        _mouse_info();
+        int beforeX = 0, beforeY = 0;
+        mouseGetPosition(&beforeX, &beforeY);
+        firstDelta = beforeX - 100;
+
+        mouseSetSensitivity(2.5);
+        gCursorMotionProbeX = 120;
+        gCursorMotionProbeY = 100;
+        _mouse_info();
+        int afterX = 0, afterY = 0;
+        mouseGetPosition(&afterX, &afterY);
+        secondDelta = afterX - beforeX;
+    }
+
+    gCursorMotionProbeActive = false;
+    mouseSetSensitivity(committedSensitivity);
+    mouseResetAbsoluteSensitivityTracking();
+
+    if (firstDelta != 10 || secondDelta != 25) {
+        printf("PREFERENCES_PROBE FAIL: injected cursor scaling mismatch mode=%s sensitivity=1.0 delta=%d sensitivity=2.5 delta=%d\n",
+            relative ? "relative" : "absolute", firstDelta, secondDelta);
+        fflush(stdout);
+        return false;
+    }
+
+    printf("PREFERENCES_PROBE PASS injected_cursor_motion mode=%s sensitivity=1.0 delta=%d sensitivity=2.5 delta=%d\n",
+        relative ? "relative" : "absolute", firstDelta, secondDelta);
+    fflush(stdout);
+    return true;
+}
 
 void failProbe(const char* reason)
 {
@@ -269,8 +395,10 @@ bool parsePreferencesProbeOption(const char* arg)
     else if (strcmp(mode, "escape") == 0) gMode = ProbeMode::Escape;
     else if (strcmp(mode, "defaults") == 0) gMode = ProbeMode::Defaults;
     else if (strcmp(mode, "verify") == 0) gMode = ProbeMode::Verify;
+    else if (strcmp(mode, "cursor-speed") == 0) gMode = ProbeMode::CursorSpeed;
+    else if (strcmp(mode, "toggle3d") == 0) gMode = ProbeMode::Toggle3d;
     else {
-        printf("PREFERENCES_PROBE FAIL: expected save, save-key, cancel, cancel-key, escape, defaults, or verify\n");
+        printf("PREFERENCES_PROBE FAIL: expected save, save-key, cancel, cancel-key, escape, defaults, verify, or cursor-speed\n");
         gMode = ProbeMode::Cancel;
         gFailed = true;
     }
@@ -290,6 +418,11 @@ bool preferencesProbeRequested()
     return gMode != ProbeMode::None;
 }
 
+bool preferencesProbeWantsPostFrame()
+{
+    return gMode == ProbeMode::Toggle3d;
+}
+
 bool preferencesProbeActive()
 {
     return gMode != ProbeMode::None && !gFinished;
@@ -307,6 +440,14 @@ bool preferencesProbeUsesSimulatedMouse()
 
 bool preferencesProbeOverrideMouse(int* x, int* y, unsigned char* leftButton, unsigned char* rightButton)
 {
+    if (gCursorMotionProbeActive
+        && x != nullptr && y != nullptr && leftButton != nullptr && rightButton != nullptr) {
+        *x = gCursorMotionProbeX;
+        *y = gCursorMotionProbeY;
+        *leftButton = 0;
+        *rightButton = 0;
+        return true;
+    }
     if (!preferencesProbeActive() || !gWaitingForFooter || gFooterInputPhase == 0
         || x == nullptr || y == nullptr || leftButton == nullptr || rightButton == nullptr) {
         return false;
@@ -363,6 +504,21 @@ void preferencesProbeComplete(bool success, scene::OptionsPanel* panel, int stag
         printf("PREFERENCES_PROBE PASS readback zoom=%s enabled=%s combat_difficulty=%d\n",
             panel->settingValueForProbe("3d.zoom").c_str(), panel->settingValueForProbe("3d.enabled").c_str(),
             static_cast<int>(settings.preferences.combat_difficulty));
+    } else if (gMode == ProbeMode::CursorSpeed) {
+        const std::string committed = panel->settingValueForProbe("preferences.mouse_sensitivity");
+        const double expected = std::strtod(committed.c_str(), nullptr);
+        if (committed == gCursorSpeedBefore
+            || std::abs(settings.preferences.mouse_sensitivity - expected) > 0.00001
+            || std::abs(mouseGetSensitivity() - expected) > 0.00001) {
+            failProbe("Done did not apply the cursor speed to settings and mouse input");
+            return;
+        }
+        if (!verifyCursorSpeedMotion(expected)) {
+            failProbe("cursor movement did not scale with cursor speed in the current display mode");
+            return;
+        }
+        printf("PREFERENCES_PROBE PASS cursor_speed before=%s committed=%s runtime=%.6f\n",
+            gCursorSpeedBefore.c_str(), committed.c_str(), mouseGetSensitivity());
     } else if (gMode == ProbeMode::Save || gMode == ProbeMode::SaveKeyboard) {
         const std::string committedZoom = panel->settingValueForProbe("3d.zoom");
         if (committedZoom == gZoomBefore || panel->settingValueForProbe("3d.enabled") == gEnabledBefore
@@ -375,6 +531,15 @@ void preferencesProbeComplete(bool success, scene::OptionsPanel* panel, int stag
         printf("PREFERENCES_PROBE PASS committed zoom=%s enabled=%s combat_difficulty=%d\n",
             panel->settingValueForProbe("3d.zoom").c_str(), panel->settingValueForProbe("3d.enabled").c_str(),
             gStagedLegacyDifficulty);
+    } else if (gMode == ProbeMode::Toggle3d) {
+        const std::string committedEnabled = panel->settingValueForProbe("3d.enabled");
+        if (committedEnabled == gEnabledBefore
+            || settings.scene3d.enabled != (committedEnabled == "true")) {
+            failProbe("Done did not commit the 3D toggle");
+            return;
+        }
+        printf("PREFERENCES_PROBE PASS toggle3d enabled %s -> %s\n",
+            gEnabledBefore.c_str(), committedEnabled.c_str());
     } else {
         failProbe("unexpected preferences probe completion mode");
         return;
@@ -433,7 +598,7 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
         }
         if (eventCode == -1 || eventCode == -2) return -1;
         bool expected = eventCode == gExpectedFooterEvent;
-        if ((gMode == ProbeMode::Save || gMode == ProbeMode::SaveKeyboard) && eventCode == KEY_RETURN) expected = true;
+        if ((gMode == ProbeMode::Save || gMode == ProbeMode::SaveKeyboard || gMode == ProbeMode::CursorSpeed || gMode == ProbeMode::Toggle3d) && eventCode == KEY_RETURN) expected = true;
         if ((gMode == ProbeMode::Cancel || gMode == ProbeMode::CancelKeyboard) && eventCode == KEY_ESCAPE) expected = true;
         if (!expected) {
             printf("PREFERENCES_PROBE ignored input=%d while waiting for footer=%d\n", eventCode, gExpectedFooterEvent);
@@ -470,6 +635,8 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
         }
         gZoomBefore = panel->settingValueForProbe("3d.zoom");
         gEnabledBefore = panel->settingValueForProbe("3d.enabled");
+        gCursorSpeedRow = panel->findRowBySettingId("preferences.mouse_sensitivity");
+        gCursorSpeedBefore = panel->settingValueForProbe("preferences.mouse_sensitivity");
         gLegacyDifficultyBefore = static_cast<int>(settings.preferences.combat_difficulty);
         gStagedLegacyDifficulty = gLegacyDifficultyBefore;
         if (Window* window = windowGetWindow(windowId)) {
@@ -485,13 +652,93 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
             gAwaitingCompletion = true;
             return KEY_ESCAPE;
         }
+        if (gMode == ProbeMode::CursorSpeed) {
+            if (gCursorSpeedRow < 0 || gCursorSpeedBefore.empty()) {
+                failProbe("cursor speed slider was not found in the production options panel");
+                return KEY_ESCAPE;
+            }
+            const SettingDescriptor* descriptor = nullptr;
+            for (const auto& item : settingsGetDescriptors()) {
+                if (item.id == "preferences.mouse_sensitivity") { descriptor = &item; break; }
+            }
+            if (descriptor == nullptr || !descriptor->numericRange.has_value()) {
+                failProbe("cursor speed setting does not have a numeric slider range");
+                return KEY_ESCAPE;
+            }
+            Window* window = windowGetWindow(windowId);
+            const double minimum = descriptor->numericRange->minimum;
+            const double maximum = descriptor->numericRange->maximum;
+            // Begin at the center of the track, matching the production zoom
+            // probe. This avoids depending on the cursor's persisted position.
+            panel->selectRowForProbe("preferences.mouse_sensitivity");
+            const double startRatio = 0.5;
+            const double current = std::strtod(gCursorSpeedBefore.c_str(), nullptr);
+            const double currentRatio = std::clamp((current - minimum) / (maximum - minimum), 0.0, 1.0);
+            const double targetRatio = currentRatio < 0.5 ? 1.0 : 0.0;
+            const int trackWindowY = panel->sliderTrackY(gCursorSpeedRow) - panel->scroll();
+            if (trackWindowY < 0 || trackWindowY >= window->height) {
+                failProbe("cursor speed slider is outside the viewport after row selection");
+                return KEY_ESCAPE;
+            }
+            const int y = mouseYForWindow(window, trackWindowY);
+            gMouseTargetX = mouseXForWindow(window, pageOffsetX(window) + panel->sliderTrackTargetX(startRatio));
+            gMouseDragTargetX = mouseXForWindow(window, pageOffsetX(window) + panel->sliderTrackTargetX(targetRatio));
+            gMouseTargetY = y;
+            setMouseAt(gMouseTargetX, y, MOUSE_STATE_LEFT_BUTTON_DOWN);
+            gDrag = DragProbe::Slider;
+            gPumpStep = 0;
+            gPumpCount = 0;
+            printf("PREFERENCES_PROBE cursor speed slider armed row=%d before=%s\n", gCursorSpeedRow, gCursorSpeedBefore.c_str());
+            return 600 + gCursorSpeedRow;
+        }
+        if (gMode == ProbeMode::Toggle3d) {
+            // The display rows moved the General group's first slot to the
+            // scale row: select the toggle's row explicitly (211).
+            panel->selectRowForProbe("3d.enabled");
+        }
         return KEY_SPACE;
     case 2:
+        if (gMode == ProbeMode::CursorSpeed) {
+            const std::string staged = panel->settingValueForProbe("preferences.mouse_sensitivity");
+            if (staged == gCursorSpeedBefore) {
+                failProbe("cursor speed slider did not stage a new value");
+                return KEY_ESCAPE;
+            }
+            printf("PREFERENCES_PROBE PASS cursor_speed staged %s -> %s\n", gCursorSpeedBefore.c_str(), staged.c_str());
+            panel->setScroll(panel->maxScroll());
+            gWaitingForFooter = true;
+            gExpectedFooterEvent = 504;
+            SDL_Event key = {};
+            key.type = SDL_KEYDOWN;
+            key.key.state = SDL_PRESSED;
+            key.key.keysym.scancode = SDL_SCANCODE_RETURN;
+            key.key.keysym.sym = SDLK_RETURN;
+            if (SDL_PushEvent(&key) != 1) {
+                failProbe("could not queue Return to commit cursor speed");
+                return KEY_ESCAPE;
+            }
+            printf("PREFERENCES_PROBE queued isolated Enter through SDL input after cursor speed change\n");
+            return -1;
+        }
         if (panel->settingValueForProbe("3d.enabled") == gEnabledBefore) {
             failProbe("Space did not change the selected 3D toggle");
             return KEY_ESCAPE;
         }
         printf("PREFERENCES_PROBE PASS keyboard toggle %s -> %s\n", gEnabledBefore.c_str(), panel->settingValueForProbe("3d.enabled").c_str());
+        if (gMode == ProbeMode::Toggle3d) {
+            // The 211 toggle path: commit with Done so the game's syncSettings
+            // acts on the new value the moment the panel closes.
+            gWaitingForFooter = true;
+            gExpectedFooterEvent = 504;
+            SDL_Event key = {};
+            key.type = SDL_KEYDOWN;
+            key.key.state = SDL_PRESSED;
+            key.key.keysym.scancode = SDL_SCANCODE_RETURN;
+            key.key.keysym.sym = SDLK_RETURN;
+            SDL_PushEvent(&key);
+            printf("PREFERENCES_PROBE queued isolated Enter through SDL input\n");
+            return -1;
+        }
         return KEY_END;
     case 3:
         if (panel->scroll() != panel->maxScroll()) {

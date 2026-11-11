@@ -91,6 +91,25 @@ to the window the same way 480 × 400 related to 640 × 480.
   now the GL presentation of vanilla; light: off until P2).
 
 Hotkeys: Alt+D: the panel, F9: a snapshot (works with the panel open too).
+Without --dev-tools F9 is the owner's feedback shot instead (task 183): the
+frame as presented with a JSON sidecar, docs/owner-shots.md.
+
+## The teleport and the walkable landing (task 183 steps 3-4)
+
+The dev panel's TP button (and the T key while the panel is open) travels to
+the selected map and elevation; the filter's digits name the destination hex
+when they parse as one, otherwise the safe pick decides. The same engine
+runs without the dev tools: a `dev-teleport.txt` file next to the exe, one
+line `map.elev` or `map.elev.hex`, is consumed about twice a second and the
+hero jumps - this is how an agent moves the hero in the owner's running
+game on the owner's word. A request held by combat/dialog/movie keeps the
+file for the next polls. The 3D view comes back after the jump.
+
+The landing never sits in a rock pocket: the floor change's pick (and the
+teleport's safe pick) requires that the hero can walk from the tile - a
+path to the map's entrance, to a few hexes around it, or on floors without
+their entrance a path to a free neighbor. The named hex stands as the owner
+named it.
 
 ## The fly camera
 
@@ -368,3 +387,16 @@ map every frame, `F2CE_SHADOW_NO_SKIP=1` runs the full tap loop everywhere.
   glow, clouds, lights, sun) at the given second of the run; the frame it lands
   in is logged as `perf toggle ... frame_ms=`.
 - Measured results of the task: `runs/155-performance/results.md`.
+- Task 157: every frame goes to `logs/devperf.frames.csv` (time, interval, the
+  gap before the frame, the frame's CPU time, all in ms). A frame slower than
+  twice its window's median logs a `perf slow` line with the CPU split of the
+  frame (input, key, scripts, loop, sync, sharp, r_camera, r_walk, r_upload,
+  r_roofs, r_lights, r_sun, pre_draw, draw, glow, overlay, swap; ms each).
+  `F2CE_PERF_SLOW=F` sets the factor; `0` logs every frame. More spans go in
+  with `scene_renderer::perfCpuMark("name")`.
+- `F2CE_NO_CULL=1` draws every object card, also the ones wholly off the view
+  (the before side of task 157's culling).
+- A run under `dev-snapshot.ps1` has its stdout redirected to a file the script
+  polls; a flush there can stall about 30 ms, so a ~32 ms frame that comes
+  with a stdout print (the watchdog state, `perf loop` and the like) is the
+  harness, not the game. A player's game has no such redirection.

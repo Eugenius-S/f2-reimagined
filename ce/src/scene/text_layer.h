@@ -44,6 +44,7 @@ struct FloatingTextOutlineLayout {
 
 FloatingTextOutlineLayout floatingTextOutlineLayout(int legacyWidth, int legacyHeight,
     int lineHeight, int lines, bool hasOutline, bool modernOutline);
+int sharpTextLinePitch(int lineHeight, bool sharpTextEnabled);
 
 struct TextPixels {
     const unsigned char* data = nullptr;
@@ -201,6 +202,7 @@ public:
 
     // Drop every record for a dead buffer generation.
     void eraseBuffer(TextBufferId buffer);
+    void eraseTextRuns(TextBufferId buffer, const std::string& prefix);
     void eraseOwner(int window, TextBufferId generation);
 
     // Validate actual legacy glyph pixels against the live buffer and return

@@ -558,7 +558,8 @@ void OptionsPanel::buildRowLayout()
         const size_t separator = id.rfind('.');
         const std::string key = separator == std::string::npos ? id : id.substr(separator + 1);
         int group = 3;
-        if (key == "enabled" || key == "clean_edges" || key == "sharp_text" || key == "scale_factor") group = 0;
+        if (key == "enabled" || key == "clean_edges" || key == "sharp_text" || key == "scale_factor"
+            || key == "mouse_sensitivity") group = 0;
         else if (key == "resolution_mode" || key == "windowed") group = 0;
         else if (key == "sun" || key == "shadows" || key == "cloud_shadows" || key == "shadow_pixel_size" || key == "shadow_density"
             || key == "sun_swing" || key == "lights" || key == "glow" || key == "glow_strength") group = 1;
@@ -612,6 +613,14 @@ std::string OptionsPanel::settingValueForProbe(const std::string& id) const
     if (const auto* real = std::get_if<double>(&value)) return std::to_string(*real);
     if (const auto* text = std::get_if<std::string>(&value)) return *text;
     return {};
+}
+
+void OptionsPanel::selectRowForProbe(const std::string& id)
+{
+    const int index = findRowBySettingId(id);
+    if (index < 0) return;
+    selectedRow_ = index;
+    setScroll(std::clamp(rowTop(index) + rowHeight(index) / 2 - screenHeight_ / 2, 0, maxScroll()));
 }
 int OptionsPanel::scroll() const { return scroll_; }
 int OptionsPanel::maxScroll() const { return std::max(0, contentHeight_ - screenHeight_); }

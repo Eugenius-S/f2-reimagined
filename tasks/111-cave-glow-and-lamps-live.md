@@ -2,15 +2,15 @@
 id: 111
 title: The slime pools glow and the lamps light the walls in the live caves
 milestone: M1
-status: todo
-owner: any
+status: done
+owner: gpt
 suggested: any
 priority: low
 tier: 4
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -66,3 +66,88 @@ turns the glow and the lights off, then fix that cause, not the look.
 New glow kinds, the glow's look, light strength.
 
 ## Log
+
+### 2026-11-01 glm: the glow and the lights verify in the owner's conditions; the live capture tool hangs
+
+Done: the reproduction sweep, no code change.
+
+- The still fixture in the owner's own mod-cache (klatoxcv e1, view 22924,
+  the 073 slime spot) shows the slime pools glowing and the pool light
+  spilling on the floor and the barrels: runs/111-cave-glow-and-lamps-live/
+  (cave-still-glow.jpg). The same frame with the sun shadows forced on
+  (-Shadows) is identical: the cave is indoor and the shadow pass honours
+  it, so the owner's shadow settings are not the cause.
+- The settings check: glow defaults true, lights true; the owner's
+  glow_strength 1.0 only weakens the halo (the 073 ladder shows a visible
+  glow at 0.5). His other custom keys (sun_swing, shadow_density,
+  shadow_pixel_size, sharp_text) do not touch the cave lighting.
+- The palette cycle cannot remove the glow: the emission classification is
+  by sprite index (the marked texels 252-254), the cycle only recolours
+  the entries; the live object textures rebuild from the live palette and
+  keep their indices.
+- The lights are the game's own per-tile light state read live each frame;
+  nothing in the still fixture freezes them.
+- The live (non-still) capture is blocked by a tool defect: a plain run,
+  -NoPreview, -WalkProbe and -ScrollStep all time out after "startup
+  target accepted" with no snapshot. In the live path the snapshot trigger
+  (devtools.cc scenePresented, the gSnapshotOncePending branch) is never
+  reached: with the walk preview the flow stays in the startup preview
+  block, and the scroll/walk probes' stage guards return before it. The
+  still path has its own trigger inside the startup block and works. This
+  is gpt's PR #156 blocker, now localized. Recorded as a tool task, not
+  part of this fix.
+
+owner: were the caves seen in the 3D view? The 2D view (Ctrl+F10 toggles
+the 3D off) has no glow and no point lights by design, and the runtime
+toggle survives map changes in a session. If it was the 3D view: the
+save from that moment would settle it in one still run
+(dev-snapshot.ps1 -Slot N -Still -CyclePalette -SceneCache
+game/mod-cache/scene).
+
+Next: the owner's answer or save; the live-capture tool defect as its
+own task.
+Check: the cave-still-glow.jpg pair in runs/111-cave-glow-and-lamps-live/.
+
+### 2026-11-04 gpt: the old owner screenshots were 2D; fresh out-of-combat live captures still hang
+
+Done: the owner's 2026-11-01 answer resolves the question above: those shots were the original 2D view because the hero was in combat. I started a fresh KLATOXCV elevation 1 scene with gameState=0, combat=0, dialog=0, using the latest available watchdog build and the main checkout's scene cache.
+
+- Attempt 1, run 3a7e4a55e93b: LiveFrame with Glow, CyclePalette, SkipScriptBlocking, 20-second step timeout. The startup preview began but no live snapshot arrived. The watchdog stopped the test game; no image was produced. The wrapper then hit a file-lock error while appending diagnostics to process.stdout.log.
+- Attempt 2, run 357981da968b: same setup with NoPreview. The live snapshot still did not arrive after startup accepted the map; the watchdog stopped the test game with no image. The wrapper hit the same stdout file-lock error.
+
+The watchdog records are in runs/111-cave-glow-and-lamps-live/attempt-1.txt and attempt-2.txt. These two out-of-combat attempts did not prove whether the live glow and point lights work. No further runtime attempt is made on this path until the live snapshot trigger and wrapper log sharing are fixed.
+
+Next: fix the live capture path in the devtools task, then repeat this exact out-of-combat KLATOXCV check and compare the pool glow and wall lighting.
+Check: the two watchdog records above; neither contains a screenshot.
+
+### 2026-11-06 glm
+Claimed per the owner's order (all known 3D-ification flaws found by
+glm and gpt go first). Plan: read the owner's ini [3d] against the
+snapshot fixture's, then a live-run probe with the owner shot tooling
+(183) on klatoxcv: the slime pool's glow state, the point light's
+presence, the palette cycle in a running game. The candidate causes
+are in the Context above.
+
+- 2026-11-08 glm: the 11-01/11-04 live-capture logs from PR #189 merged into this Log; out-of-combat captures still hang, no code change.
+- 2026-11-10 claude: back to todo: no open PR and no work since the last log line; the card leaves «В работе».
+
+- 2026-11-11 task 248 audit: do not close on the still captures. The owner confirmed the old shots were 2D, and the remaining live-game glow and point-light state is still undiagnosed. Missing: a live diagnostic that records the active 3D/glow/light settings and captures KLATOXCV out of combat.
+
+### 2026-10-29 gpt: earlier live reproduction also timed out
+
+- Read-only owner settings recorded resolution 2310x1298, scale 2, zoom 1.28, glow on, glow_strength 1.0, and lights on. The test process used the main checkout's scene cache and the owner executable; the owner game was not stopped or restarted.
+- Two non-still captures for KLATOXCV e1, view tile 22924, ended with `No snapshot within 90 s.` No JSON or image was produced. Both logs reported `startup target ... accepted=1 blocking=0`; stderr reported OpenGL 4.1.0 on GeForce RTX 5070. This did not establish why glow or lights looked different in the owner's live game.
+- At that time, `ctest` passed 15/15 and `tools/regression.ps1 -Spot klatoxcv-e1` reported 0 changed pixels. Its still baseline had `glow.enabled=false`, so it was not live glow/light evidence.
+- No source or game files changed. Cause and live before/after remained outstanding.
+### 2026-11-11 gpt: live and still KLATOXCV match out of combat
+
+Done: diagnostic only, no source changes. Captures: `runs/111-cave-glow-and-lamps-live/live-klatoxcv-e1-tile-22924.json` and `still-klatoxcv-e1-tile-22924.json`. Source frames and process logs remain under ignored `build/task111/`.
+
+- Both runs use KLATOXCV e1, view tile 22924, 2310x1298, scale 2, zoom 0.976562, main checkout scene cache, and the clean Release executable from `c9288ed6`; both report `scene_3d_enabled=true`, `in_combat=false`, `light="enabled"`, and `glow.enabled=true` with strength 1.0. The still and live settings match.
+- Read-only owner `[3d]` settings include `enabled=1`, `lights=1`, `glow=1`, `glow_strength=1.0`, `zoom=0.976562`, `shadows=1`, `shadow_pixel_size=3`, and `sharp_text=1`. The isolated fixture was given matching values for these fields. `shadow_density` and `sun_swing` are absent from the fixture, and the capture JSON does not report them; the cave JSON reports sun strength 0. These fields do not explain the visible pool glow in this indoor scene.
+- Visual inspection of both raw frames shows bright green pools and local green light on nearby floor and wall, with no visible live-versus-still difference. The JSON records only global light state, not per-tile point-light intensity or per-object glow. The local spill is therefore a visual finding from the frames, not a per-light JSON measurement.
+- The current out-of-combat 3D reproduction works. The owner's 2026-11-01 confirmation says the earlier combat shots were 2D, which is the best-supported explanation for the report. The exact 2026-10-28 session state was not captured, so attributing those particular shots to 2D remains unproven.
+
+Check: `tools/dev-snapshot.ps1` with `-LiveFrame -OwnerShot` and with `-Still`, both for the same map/elevation/tile and matching settings. No renderer code changed; ctest and pixel regression were not run.
+
+Next: No source fix is indicated. If attribution of the exact 2026-10-28 report is needed, repeat the live capture from that owner save or session if available.

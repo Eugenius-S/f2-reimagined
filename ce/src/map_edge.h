@@ -61,6 +61,9 @@ void mapEdgeFree();
 // Returns true if EDG data was successfully loaded for the current map.
 bool mapEdgeIsLoaded();
 
+// Changes on every load and free, so caches built from the edge data can tell it was replaced.
+unsigned mapEdgeSerial();
+
 // Mapper-editing mode: when enabled, loaded EDG data is not enforced so edges can be edited.
 // The game leaves this off; the mapper turns it off only while play-testing.
 void mapEdgeSetMapperMode(bool enabled);

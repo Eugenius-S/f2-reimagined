@@ -83,6 +83,11 @@ bool capture(TextLayer& layer, TextBufferId id, bool orphan,
 int main()
 {
     int failures = 0;
+    failures += !check(fallout::scene::sharpTextLinePitch(9, true) == 12
+            && fallout::scene::sharpTextLinePitch(10, true) == 13
+            && fallout::scene::sharpTextLinePitch(9, false) == 9
+            && fallout::scene::sharpTextLinePitch(0, true) == 0,
+        "sharp text spaces lines by at least 130 percent and leaves the classic pitch unchanged");
     const auto barkLayout = fallout::scene::floatingTextOutlineLayout(120, 22, 9, 2, true, true);
     const auto plainLayout = fallout::scene::floatingTextOutlineLayout(120, 22, 9, 2, true, false);
     const auto barkClip = barkLayout.clipBounds(100, 50, { 100, 50, 8, 8 });
@@ -93,8 +98,8 @@ int main()
             && barkRefreshBounds.width == 124 && barkRefreshBounds.height == 30
             && shiftedBarkRefreshBounds.x == 105 && shiftedBarkRefreshBounds.y == 45
             && shiftedBarkRefreshBounds.width == 124 && shiftedBarkRefreshBounds.height == 30
-            && barkLayout.linePitch == 10 && barkLayout.sharpLineOffset(1) == 3
-            && barkLayout.lineStartOffset(1) == static_cast<std::size_t>(13 * 124 + 2)
+            && barkLayout.linePitch == 12 && barkLayout.sharpLineOffset(1) == 3
+            && barkLayout.lineStartOffset(1) == static_cast<std::size_t>(15 * 124 + 2)
             && barkLayout.sourceOffset(barkClip, 100, 50) == static_cast<std::size_t>(2 * 124 + 2)
             && plainLayout.bufferWidth == 120 && plainLayout.bufferHeight == 22
             && plainLayout.lineStartOffset(1) == static_cast<std::size_t>(11 * 120),
@@ -768,6 +773,29 @@ int main()
         capture(layer, 11, false, before, b, 1, 1, { 0, 0, 1, 1 }, "B");
         failures += !check(layer.size() == 1 && layer.records()[0].buffer == 11,
             "record cap evicts the oldest record");
+    }
+
+    // 237: a cursor save-under and restore moves a text run out and back in
+    // pieces. The pieces rejoin their run: the record count stays at one.
+    {
+        TextLayer layer;
+        std::vector<unsigned char> before(16, 10);
+        std::vector<unsigned char> screen = before;
+        screen[2] = 20;
+        screen[3] = 21;
+        capture(layer, 1, false, before, screen, 8, 2, { 2, 0, 2, 1 }, "AB");
+        for (int pass = 0; pass < 3; pass++) {
+            const TextRect piece = { 2 + pass % 2, 0, 1 + (pass + 1) % 2, 2 };
+            std::vector<unsigned char> save(8, 77);
+            const auto saved = blit(screen, 8, 2, save, 4, 2, piece, 0, 0, false, 0);
+            layer.copy(1, 2, false, piece, 0, 0, false, 0, view(screen, 8, 2, 8), view(save, 4, 2, 4), view(saved, 4, 2, 4));
+            const TextRect whole = { 0, 0, piece.width, 2 };
+            const auto back = blit(saved, 4, 2, screen, 8, 2, whole, piece.x, 0, false, 0);
+            layer.copy(2, 1, false, whole, piece.x, 0, false, 0, view(saved, 4, 2, 4), view(screen, 8, 2, 8), view(back, 8, 2, 8));
+        }
+        const auto onScreen = std::count_if(layer.records().begin(), layer.records().end(),
+            [](const TextRecord& record) { return record.buffer == 1; });
+        failures += !check(onScreen == 1, "restored pieces rejoin the run instead of piling up records");
     }
 
     if (failures == 0) std::printf("text_layer_tests: all passed\n");
