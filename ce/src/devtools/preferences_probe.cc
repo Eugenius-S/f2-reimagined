@@ -500,7 +500,7 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
         }
         if (eventCode == -1 || eventCode == -2) return -1;
         bool expected = eventCode == gExpectedFooterEvent;
-        if ((gMode == ProbeMode::Save || gMode == ProbeMode::SaveKeyboard || gMode == ProbeMode::Toggle3d) && eventCode == KEY_RETURN) expected = true;
+        if ((gMode == ProbeMode::Save || gMode == ProbeMode::SaveKeyboard || gMode == ProbeMode::CursorSpeed || gMode == ProbeMode::Toggle3d) && eventCode == KEY_RETURN) expected = true;
         if ((gMode == ProbeMode::Cancel || gMode == ProbeMode::CancelKeyboard) && eventCode == KEY_ESCAPE) expected = true;
         if (!expected) {
             printf("PREFERENCES_PROBE ignored input=%d while waiting for footer=%d\n", eventCode, gExpectedFooterEvent);
@@ -572,11 +572,17 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
             const double maximum = descriptor->numericRange->maximum;
             // Begin at the center of the track, matching the production zoom
             // probe. This avoids depending on the cursor's persisted position.
+            panel->selectRowForProbe("preferences.mouse_sensitivity");
             const double startRatio = 0.5;
             const double current = std::strtod(gCursorSpeedBefore.c_str(), nullptr);
             const double currentRatio = std::clamp((current - minimum) / (maximum - minimum), 0.0, 1.0);
             const double targetRatio = currentRatio < 0.5 ? 1.0 : 0.0;
-            const int y = mouseYForWindow(window, panel->sliderTrackY(gCursorSpeedRow) - panel->scroll());
+            const int trackWindowY = panel->sliderTrackY(gCursorSpeedRow) - panel->scroll();
+            if (trackWindowY < 0 || trackWindowY >= window->height) {
+                failProbe("cursor speed slider is outside the viewport after row selection");
+                return KEY_ESCAPE;
+            }
+            const int y = mouseYForWindow(window, trackWindowY);
             gMouseTargetX = mouseXForWindow(window, pageOffsetX(window) + panel->sliderTrackTargetX(startRatio));
             gMouseDragTargetX = mouseXForWindow(window, pageOffsetX(window) + panel->sliderTrackTargetX(targetRatio));
             gMouseTargetY = y;
@@ -604,8 +610,16 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
             panel->setScroll(panel->maxScroll());
             gWaitingForFooter = true;
             gExpectedFooterEvent = 504;
-            scheduleFooterMouse(504);
-            printf("PREFERENCES_PROBE queued isolated mouse click for Done after cursor speed change\n");
+            SDL_Event key = {};
+            key.type = SDL_KEYDOWN;
+            key.key.state = SDL_PRESSED;
+            key.key.keysym.scancode = SDL_SCANCODE_RETURN;
+            key.key.keysym.sym = SDLK_RETURN;
+            if (SDL_PushEvent(&key) != 1) {
+                failProbe("could not queue Return to commit cursor speed");
+                return KEY_ESCAPE;
+            }
+            printf("PREFERENCES_PROBE queued isolated Enter through SDL input after cursor speed change\n");
             return -1;
         }
         if (panel->settingValueForProbe("3d.enabled") == gEnabledBefore) {

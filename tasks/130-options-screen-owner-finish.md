@@ -58,3 +58,8 @@ Check: `tools/dev-snapshot.ps1 -PreferencesProbe cursor-speed`; both attempts re
 
 - 2026-11-08 glm: the cursor speed slider landed as PR #292 (model-level tests green; the production probe twice failed to stage a value, so the end-to-end drag acceptance stays open).
 - 2026-11-10 claude: back to todo: no open PR and no work since the last log line; the card leaves «В работе».
+
+### 2026-11-11 gpt
+Done: Fixed the cursor-speed probe to scroll the row into the viewport before injecting the drag. The probe now guards the slider position against the window bounds. The first diagnostic capture showed row 3 at y=776 in a 540-pixel viewport, so the simulated pointer missed the control. After scrolling was fixed, the value staged from 1.000000 to 2.500000; the injected Done click was then scaled by the new sensitivity and missed, so the probe now commits through Return. The final production-path run passed, verified runtime sensitivity 2.500000, and saved `mouse_sensitivity=2.500000` in the isolated config. Evidence is in `runs/130-options-screen-owner-finish/cursor-speed-diagnostic/`, `cursor-speed-fixed/`, and `cursor-speed-final/`.
+Next: Finish the pixel regression, then verify cursor movement in windowed and fullscreen display modes. Do not mark the task done until both are evidenced.
+Check: `tools/dev-snapshot.ps1 -PreferencesProbe cursor-speed -CaptureConsole -OutputDirectory runs/130-options-screen-owner-finish/cursor-speed-final -TimeoutSeconds 120` PASS; `ctest --test-dir build --output-on-failure` PASS, 27/27. `tools/regression.ps1` is still capturing its 154 spots; last checked 59 directories, 58 captures, 0 errors. Runtime cursor movement in windowed and fullscreen is not yet verified.
