@@ -131,3 +131,44 @@ branch API reports `78483130`. No new transition capture was made. The PR
 remains draft because acceptance is incomplete.
 
 - 2026-11-08 glm: the transition instrumentation and exit-grid probe landed as PR #221 (conflicts with the combat fixture resolved by keeping both). First-arrival evidence covers KLAMALL to KLADWTWN only; KLAGRAZ exit probes failed twice.
+
+### 2026-11-12 glm: the KLAGRAZ blocker is dead on fresh main; two exits fixed; two route families still need their driver
+
+Done: the 2026-11-04 blocker (the KLAGRAZ exit probe's click "not
+pickable") does not survive the fixes below; the same probe now walks the
+whole route on fresh main. Fixes, one rule each:
+- ce/src/devtools/devtools.cc: the exit probe clicks the hex the ground
+  pick names, not the tile anchor: the anchor round-trips to a neighbouring
+  hex (the KLAGRAZ exit picked row+1), so the probe scans a small ring of
+  offsets until tileUnderMouse names the exit's hex.
+- ce/src/scene_renderer/picking.cc: the ground pick accepts any hex the
+  map draws ground on (the clean-edges clip trims the drawn edge zones,
+  and the exit grids live in them; a player has to be able to click an
+  exit). The clip keeps governing the picture; only the pick widened.
+
+The Klamath exit routes, background run, fresh main 8c310a9be plus these
+fixes (each row: the probe's own log line, devprobe.log in the named run
+folder):
+
+| Transition | Result | Evidence |
+| --- | --- | --- |
+| KLAGRAZ/e0 exit 22161 -> KLADWTWN/e0 19850 | passed, 30 frames | build/probe-147d-klagraz/ |
+| KLADWTWN/e0 exit 26347 -> KLAMALL/e0 29089 | passed, 29 frames | build/probe-147-kladwtwn-klamall/ |
+| -Tour kladwtwn->klamall->klagraz->kladwtwn (the last stop through a save) | every arrival in 3D, the right map, the camera on the hero | runs/147-map-transitions-keep-3d/tour-arrivals-kladwtwn-klamall-klagraz.jpg |
+| KLADWTWN/e0 -> KLACANYN | probe timeout at KLADWTWN (the hero walked away from the exit; the outside-probe stage) | build/probe-147-kladwtwn-klacanyn/ |
+| KLAMALL/e0 exit 29282 -> KLADWTWN | probe defect: after the probe's teleport the mall's map script removes the kladwtwn-facing exit grids (192 grids left, none with map=9 at stage 501); the probe needs to WALK onto the exit tile like a player instead of clicking it | build/probe-147m-klamall/ |
+| KLARATCV e0/e1/e2 -> KLATOXCV | no klatoxcv-facing exit grid on any elevation: the stairs are a ladder/script route, not an exit grid; the probe needs an elevation-change driver | build/probe-147-klaratcv-e0,e1,e2/ |
+
+Checks: ctest 27/27; tools/regression unit tests OK;
+tools/check_public_content.py clean; tools/perf-check.ps1 red as on main
+(the known bars): avg 59.5/55.0/53.8/58.4 fps, load 1694/2312/1583/867 ms,
+against the verified reference's avg 56.6/55.8/54.0/56.4 and load
+1939/2153/1607/989: within the band. The pixel regression on the 193A
+merge ran with 150 points 0 changed pixels; the pick change does not
+render.
+
+Not done yet: the remaining matrix rows (the klacanyn route's walk stage,
+the mall route's walk-based probe, the stairs' driver, the world map
+out/in, save on another map) and the arrival-crop table for every row.
+Next: teach the probe to walk onto the exit tile (the player's mechanic),
+which also covers the mall; a stairs/ladder driver; then the full table.

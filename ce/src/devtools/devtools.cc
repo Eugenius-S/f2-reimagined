@@ -3309,17 +3309,62 @@ void runPickProbe()
         }
         double pixel[2], x = 0.0, y = 0.0;
         bool projected = exitGrid != nullptr;
+        if (exitGrid == nullptr) {
+            int grids = 0;
+            for (Object* object = objectFindFirstAtElevation(gElevation); object != nullptr;
+                 object = objectFindNextAtElevation()) {
+                if (!isExitGridProtoId(ProtoId(object->pid))) continue;
+                grids++;
+                note("exit probe: grid seen tile=%d map=%d destElev=%d\n",
+                    object->tile, static_cast<int>(object->data.misc.map), static_cast<int>(object->data.misc.elevation));
+            }
+            note("exit probe: stage 501 found no exit grid object at tile=%d map=%d elevation=%d grids=%d\n",
+                gExitProbeSourceTile, gExitProbeMap, static_cast<int>(gElevation), grids);
+        }
+        // The point must sit inside the exit's hex on the scene's picture:
+        // the anchor alone round-trips to a neighbour (147, the KLAGRAZ
+        // exit), so a small scan takes the first offset the ground pick
+        // names the exit's hex with.
+        const bool gExitProbeScanDiag = std::getenv("F2CE_EXIT_PROBE_DIAG") != nullptr;
+        static const int kHexScan[][2] = {
+            {16, 8}, {0, 0}, {16, 0}, {16, 16}, {0, 8}, {32, 8},
+            {16, -8}, {-16, 8}, {16, 24}, {24, 4}, {8, 4}, {24, 12},
+        };
         if (projected) {
             scene_renderer::gameViewTilePixel(gExitProbeSourceTile, pixel);
-            projected = scene_renderer::staticScreenFromGamePixel(pixel[0], pixel[1], &x, &y);
+            for (const auto& offset : kHexScan) {
+                double sx = 0.0;
+                double sy = 0.0;
+                if (!scene_renderer::staticScreenFromGamePixel(pixel[0] + offset[0], pixel[1] + offset[1], &sx, &sy)) {
+                    note("exit probe scan: offset=(%d,%d) projection failed\n", offset[0], offset[1]);
+                    continue;
+                }
+                const int cx = static_cast<int>(sx);
+                const int cy = static_cast<int>(sy);
+                const int pickedTile = tileUnderMouse(cx, cy);
+                if (windowGetAtPoint(cx, cy) != gIsoWindow) {
+                    note("exit probe scan: offset=(%d,%d) point=(%d,%d) not the iso window\n", offset[0], offset[1], cx, cy);
+                    continue;
+                }
+                if (pickedTile != gExitProbeSourceTile) {
+                    note("exit probe scan: offset=(%d,%d) point=(%d,%d) tile=%d\n", offset[0], offset[1], cx, cy, pickedTile);
+                    continue;
+                }
+                x = sx;
+                y = sy;
+                break;
+            }
+            projected = x > 0 && y > 0;
         }
         const int mx = projected ? static_cast<int>(x) : -1;
         const int my = projected ? static_cast<int>(y) : -1;
         const bool picked = projected && windowGetAtPoint(mx, my) == gIsoWindow
             && tileUnderMouse(mx, my) == gExitProbeSourceTile;
         if (!picked) {
-            note("exit probe failed: grid not pickable source=%s exit=%d projected=%d at (%d,%d)\n",
-                gExitProbeSource, gExitProbeSourceTile, projected ? 1 : 0, mx, my);
+            note("exit probe failed: grid not pickable source=%s exit=%d projected=%d at (%d,%d) isoWindow=%d pickedTile=%d\n",
+                gExitProbeSource, gExitProbeSourceTile, projected ? 1 : 0, mx, my,
+                windowGetAtPoint(mx, my) == gIsoWindow ? 1 : 0,
+                tileUnderMouse(mx, my));
             finishPickProbe();
         } else {
             gameMouseSetMode(GAME_MOUSE_MODE_MOVE);
