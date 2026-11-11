@@ -100,11 +100,13 @@ Per the queue in `runs/glm-night-2026-11-12.md`, top to bottom.
 - **148 (README turn and combat): not taken** (the budget went to the
   higher-tier items above).
 
-Rule 1 after the last code merge (193A, main 8c310a9be): performed in
-full. Release rebuilt from fresh origin/main, ctest 27/27, the off-screen
-dev-snapshot launch check OK, perf-check red as known on main (avg
-58.0/54.5/53.7/58.9 fps, load 1650/2363/1574/888 ms for kladwtwn, newr1,
-vctyctyd, klatoxcv e2; the 1% lows under 60 in background runs as
-always), `f2r-verified/fallout2-ce.exe` carries 8c310a9be with its line
-in `version.txt`, and `gh workflow run verify.yml -f commit=8c310a9be`
-was dispatched (run 43090584388, queued at the time of writing).
+Rule 1 after the last code merge: performed in full, twice. After 193A
+(main 8c310a9be) and again after the night's PR wave merged (443, 444,
+445, 446, 447; main b3820c487): Release rebuilt from fresh origin/main,
+ctest 27/27, the off-screen dev-snapshot launch check OK, perf-check red
+as known on main (the final pass: avg 59.2/54.8/60.4/59.1 fps, load
+1787/2303/1597/833 ms for kladwtwn, newr1, vctyctyd, klatoxcv e2; the 1%
+lows under 60 in background runs as always),
+`f2r-verified/fallout2-ce.exe` carries b3820c487 with its line in
+`version.txt`, and `gh workflow run verify.yml -f commit=b3820c487` was
+dispatched (run 43103224810).
