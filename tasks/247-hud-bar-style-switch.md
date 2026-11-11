@@ -5,7 +5,7 @@ milestone: M1
 status: blocked
 owner: gpt
 suggested: any
-priority: medium
+priority: high
 tier: 2
 claude-only: no
 user-check: no
@@ -45,3 +45,4 @@ kept in the config.
 Done: No implementation was made. The existing `ui.iface_bar_mode` key is a screen geometry toggle: `svga.cc` uses it for the visible height, `game_mouse.cc` uses it for the click region, and `interface.cc` uses it to suppress side panels. The bar background is selected during `interfaceInit` in `ce/src/interface.cc`, where the vanilla `FrmImage` is blitted or the custom width art is loaded. The requested RP art selection and the missing-RP availability explanation therefore require changes outside the authorized files. The 3D options panel currently exposes only `3d` settings, so adding a UI setting there also does not cover the classic options menu within the allowed boundary.
 Next: Re-scope the task to authorize the interface art-loading path and the classic preferences path, then implement, test, and capture both bar choices.
 Check: Inspected `ce/src/settings.cc`, `ce/src/settings.h`, `ce/src/scene/options_panel.cc`, `ce/src/interface.cc`, `ce/src/svga.cc`, and `ce/src/game_mouse.cc`. No build, ctest, regression, screenshot, persistence, or RP-presence checks were run because no implementation was possible within the file boundary.
+
