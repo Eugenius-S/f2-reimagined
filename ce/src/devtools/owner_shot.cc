@@ -66,9 +66,10 @@ constexpr int kMaxRegionTiles = 256;
 constexpr int kMaxRegionObjects = 128;
 constexpr int kMaxRegionHexProbe = 20000;
 
-// The PNG and sidecar encode threads: a fresh shot joins the previous one
-// and the exit joins the last, so quitting right after F12 cannot cut a
-// file mid-write.
+// The PNG and sidecar encode threads: the exit joins the last one, so
+// quitting right after F12 cannot cut a file mid-write. A fresh shot hands
+// the previous thread to a holder thread; joining it here would stall the
+// frame for a whole PNG encode (the marked shot starts two in a row).
 std::thread gEncodeThread;
 struct EncodeThreadJoiner {
     ~EncodeThreadJoiner() {
@@ -78,8 +79,10 @@ struct EncodeThreadJoiner {
 EncodeThreadJoiner gEncodeThreadJoiner;
 
 void launchEncodeThread(std::thread&& next) {
-    if (gEncodeThread.joinable()) gEncodeThread.join();
-    gEncodeThread = std::move(next);
+    gEncodeThread = std::thread([prev = std::move(gEncodeThread), next = std::move(next)]() mutable {
+        if (prev.joinable()) prev.join();
+        next.join();
+    });
 }
 #ifdef _WIN32
 constexpr char kPathSeparator = '\\';
