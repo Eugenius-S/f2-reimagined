@@ -2,8 +2,8 @@
 id: 207
 title: The owner gets an exclusive-fullscreen feel from the borderless setup
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: owner
 priority: medium
 tier: 2
@@ -58,3 +58,5 @@ picks be the mode the game shows, with a fast minimize.
   slow-minimize guidance live in task 208. Exclusive fullscreen at a
   non-native resolution remains the known slow-minimize case if the report
   comes back.
+
+- 2026-11-12 gpt: current main maps Fullscreen to SDL_WINDOW_FULLSCREEN, Borderless to SDL_WINDOW_FULLSCREEN_DESKTOP, and Window to a decorated resizable-size window; task 208 fixed the separate DWM edge and confirmed the live window style. Background runs cannot measure minimize latency. Exact owner check moved to task 176: reproduce the reported steps on the same game copy, record the selected mode and live window style, then compare minimize time with another borderless game. No code change indicated by available evidence.
