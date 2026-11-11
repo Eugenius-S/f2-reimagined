@@ -2,7 +2,7 @@
 id: 224
 title: Geometry second pass: re-walk the 3D-live maps hunting and fixing flaws
 milestone: M1
-status: todo
+status: doing
 owner: glm
 suggested: glm
 priority: normal
