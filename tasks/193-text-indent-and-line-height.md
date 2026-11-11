@@ -182,3 +182,37 @@ the merged branch.
   Next: shift the block right and level the wrapped lines at the text edge
   in renderSharpText (a renderer change), then the EN and RU message window
   snapshots at x1/x2.
+
+### 2026-11-12 glm: the message window's left edge is straight; part A continues
+
+Done: the message log's sharp rows share one left edge and no letter is
+clipped, in English and in Russian. Two halves:
+- ce/src/display_monitor.cc: the monitor's per-row one-pixel stair (the
+  vanilla depth illusion, buf++) now applies only with the sharp text pass
+  off. With the sharp pass on the monitor draws every row at the same x, so
+  the captured ink sits where the sharp glyphs land. The pixel view keeps
+  the vanilla stair (the acceptance's pixel-for-pixel rule).
+- ce/src/scene_renderer/text_draw.cc: the old per-row -row correction (it
+  assumed the stair in the captured x) is gone; the captured x is already
+  the straight edge. A wrapped continuation row (no bullet) now starts at
+  the block's text column, one bullet advance right of the bullet column,
+  so every text line of a block shares one edge (the owner's 2026-11-08
+  find). The bullet keeps its ink on the pen (151).
+- ce/tests/embedded_fonts/embedded_fonts_test.cc: the HUD log case now pins
+  the flush contract (both rows at the same x from flush captures) and adds
+  a wrapped-continuation case (the ink at the text column).
+
+Measured (the run's own screenshots, the log's leftmost green ink, physical
+px at 1920x1080): before 206/208/210/219 (the stair; the fourth row's
+bullet clipped off the window edge), after 206/206/206/206 in English and
+206/206/206/206 in Russian. Evidence: the before/after sheets in
+runs/193-text-indent-and-line-height/ (message-window-en-before-after.jpg,
+message-window-ru-before-after.jpg). ctest 27/27 with the updated
+embedded_fonts case. The pixel regression runs with the sharp pass off, so
+its points show the legacy view and must stay 0 changed pixels (run logged
+below). Not done yet in part A: the dialogue answer options' hanging indent
+(the same renderer) and the line-pitch check against the dialogue.
+
+Note: the log fixture's date row shows two bullets because the fixture
+feeds the captured date line (which already carries the bullet) back as a
+new message; the real log never does that. Fixture artifact, recorded here.
