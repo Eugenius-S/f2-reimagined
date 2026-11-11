@@ -9,7 +9,7 @@ priority: normal
 claude-only: no
 user-check: yes
 depends-on: [124]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -105,3 +105,24 @@ the owner may want to judge: a shelf's opposite slot could be a variant
 rather than a true rear (122's turning gate rejected shelves for that);
 the coverage gate cannot tell a rear from a variant - the pairs would
 show it, this shelf's pair did not frame it.
+
+### 2026-11-12 gpt review
+Done: reviewed original PR #180 (folded stack for tasks 120-125; source PR
+#176 is task 122) and its historical CI. All required checks passed on both
+PRs; publish-latest was skipped. Inspected the committed Den pairs
+car16648-turn0-pair.png, car16648-turn120-pair.png and
+car16648-turn240-pair.png: turn 0 is the unchanged control, while the rear
+quarters show the CAR4b solid's far face using the distinct rear drawing
+instead of the mirrored near view. The committed tour-changed.jpg is a Klamath
+whole-scene sheet, not evidence for cola or shelf framing. This task's Log
+already records both framing failures and the shelf opposite-slot ambiguity.
+Follow-up 259 exists for rotation exceptions and controls, but does not test
+the shelf opposite slot as a solid back texture; the back-texture ambiguity
+remains an owner-check. No separate follow-up was needed because task 259
+covers the missing rotation evidence and the texture ambiguity is explicitly
+recorded for owner review.
+Next: owner-check remains yes; judge whether shelf opposite-slot content is a
+rear drawing or a variant when reviewing these solids.
+Check: `gh pr checks 176`, `gh pr checks 180`, visual inspection of the three
+Den pairs and the Klamath tour sheet. No code or runtime tests run in this
+review.
