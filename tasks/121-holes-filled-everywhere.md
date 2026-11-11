@@ -9,7 +9,7 @@ priority: normal
 claude-only: no
 user-check: yes
 depends-on: [115]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -92,3 +92,9 @@ the stands this fills; both wait on 119).
 
 ### 2026-11-01 claude landing
 The references were retaken on landing (tools/regression.ps1 -Update on the folded 121-125 branch, after 120 squashed into main). Against main's references the same spots changed as listed in the review: entrance 776 px, corrals 449, residents 219, klamall-e0 1681, north-rooms 684, klatoxcv-e0 736, central-doors 200, map-edge 92, klaratcv e0/e1/e2 122/436/277, klatoxcv e1/e2 24/275; klacanyn-e0, klatrap-e0 0, klagraz-e0 16 (under the threshold). After the update the regression is 16/16 at 0 changed pixels.
+
+### 2026-11-12 gpt review
+Reviewed source PR #175 and folded landing PR #180, including the full 121 code diff, the 16 regression reference changes, the six before | after pairs, review crops and fly-tour sheet. The visible pairs show filled pinholes and thin slits; the earlier Claude review also caught and fixed fence-rail gaps being smeared, limiting the fill band to 4 texels. PR #180 CI passed, including windows-game, exporter and scene checks. No new concrete code defect found in the available evidence.
+
+Owner-check remains open: the landing Log says references were retaken "after the owner's pass", but I found no linked owner captures, review note or other evidence establishing that the owner inspected these fill changes before retake. Tasks 175-182 cover the owner's per-city fly-through and do not specifically document acceptance of task 121's fills. Kept `user-check: yes`; follow-up task 257 records this evidence gap for the owner's visual pass. This review can inspect saved pairs but cannot establish the missing owner view.
+Check: `gh pr checks 180` (all required checks passed); reviewed `gh pr diff 175` and `gh pr diff 180`, `runs/121-holes-filled-everywhere/*`.
