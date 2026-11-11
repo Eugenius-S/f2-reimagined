@@ -2,8 +2,8 @@
 id: 147
 title: Map exits, elevations and the world map come back in 3D
 milestone: M1
-status: blocked
-owner: gpt
+status: doing
+owner: glm
 suggested: gpt
 priority: high
 tier: 2
