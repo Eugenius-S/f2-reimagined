@@ -1,31 +1,34 @@
 import hashlib
+import re
 import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-from tour import powershell_args
+from tour import ROOT, powershell_args
 
 
 @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is required")
 class PowerShellArgsTests(unittest.TestCase):
-    def test_snapshot_script_hashes_when_module_autoloading_starts_disabled(self):
+    def test_snapshot_hashing_works_when_module_autoloading_is_disabled(self):
+        snapshot_source = (ROOT / "tools" / "dev-snapshot.ps1").read_text(encoding="utf-8-sig")
+        self.assertNotIn("Get-FileHash", snapshot_source)
+        helper = re.search(
+            r"(?ms)^function Get-Sha256FileHash\b.*?^}\s*$", snapshot_source)
+        self.assertIsNotNone(helper, "dev-snapshot SHA256 helper was not found")
         with tempfile.TemporaryDirectory() as directory:
             sample = Path(directory) / "sample.txt"
             sample.write_text("tour", encoding="utf-8")
-            snapshot = Path(directory) / "dev-snapshot.ps1"
-            snapshot.write_text(
-                "$ErrorActionPreference = 'Stop'; "
-                f"(Get-FileHash -LiteralPath '{sample}' -Algorithm SHA256).Hash",
-                encoding="utf-8")
-            command = f"& '{snapshot}'"
+            quote = lambda path: "'" + str(path).replace("'", "''") + "'"
+            command = helper.group(0) + "; Get-Sha256FileHash " + quote(sample)
             disable_autoloading = "$PSModuleAutoLoadingPreference = 'None'; "
 
             baseline = subprocess.run(
                 ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-                 disable_autoloading + command], capture_output=True, text=True, errors="replace")
-            fixed = subprocess.run(powershell_args(command, before_prelude=disable_autoloading),
+                 disable_autoloading + "Get-FileHash -LiteralPath " + quote(sample)],
+                capture_output=True, text=True, errors="replace")
+            fixed = subprocess.run(powershell_args(disable_autoloading + command),
                                    capture_output=True, text=True, errors="replace")
 
         self.assertNotEqual(baseline.returncode, 0, "baseline unexpectedly resolved Get-FileHash")
