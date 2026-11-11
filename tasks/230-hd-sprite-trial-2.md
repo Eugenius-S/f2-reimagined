@@ -2,7 +2,7 @@
 id: 230
 title: A second HD sprite trial, realistic, every frame generated on its own
 milestone: M2
-status: todo
+status: blocked
 owner: gpt
 suggested: gpt
 priority: low
@@ -73,3 +73,9 @@ Putting any of it into the game; other characters; the full animation set.
 ## Log
 
 - 2026-11-08 claude: cut at the owner's request.
+
+### 2026-11-11 gpt
+Tried: two individual image-generation requests for `stand-dir0`, each with its original frame as the reference and the prepared realistic-material prompt. The controller stopped the trial after these two failures.
+Saw: attempt 1 turned the character around and spread the legs widely. Attempt 2 changed the foot positions and the silhouette proportions. Neither met the pose and shape constraints.
+Next: blocked after two failed attempts. No other frames were generated or accepted. Resumption needs a generation setup that preserves the reference pose, foot placement, silhouette, and frame proportions.
+Check: controller visual review reported both failures. Controller wait times were about 10 s for attempt 1 and 19 s for attempt 2; these are approximate waits, not exact generation timings.
