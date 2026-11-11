@@ -58,3 +58,5 @@ Acceptance coverage: KLARATCV and KLATOXCV have matched 1920x1080 scale-2 before
 Regression limits: the six changed 3D cave views are expected lighting differences, so the 3D suite is not pixel-identical. The updated references include KLATOXCV e1, whose old reference already differed from clean task 098 baseline by 492,039 pixels. Classic mode is correctly reported as unchanged: 16/16 exact, scene_view=off. CTest 18/18 and regression Python tests 12/12 pass per the committed evidence. Full regression is 15/16 because KLAGRAZ e0 retains the same 132-pixel baseline deviation. I did not rerun these historical captures or test the shader on another GPU.
 
 Decision: reviewed yes. The shader fix is supported by the before/after evidence and the Classic control. The normal-settings Klamath visibility gap is recorded as a separate follow-up, not treated as a demonstrated defect in this PR.
+
+- Owner review pending.
