@@ -78,3 +78,7 @@ solid's edge; 0 on main); klacanyn-e0 kept (0 changed). A full run after
 that: 16/16 with 0 changed pixels. The game's own 2D view is untouched: `-Classic` shots of the
 case on main and on this branch differ by 0 pixels. Fly tour against main:
 0 of 43 spots changed (`changed.jpg`).
+### 2026-11-12 gpt review
+Reviewed merged PR #121 and its complete diff. Visually inspected `front.jpg`: before, the shelf occludes the hero; after, he is drawn in front, matching the original game. `behind.jpg` shows the hero remains occluded behind the shelf. `regression.jpg` contains before/after/original crops for two retaken references; `changed.jpg` states that 0 of 43 fly-tour spots changed. The 14 historical CI checks all passed. The code changes consistently compute each solid face depth from its carried plane at the fragment pixel, while zero-normal live cards keep raster depth; attached rest cards use their solid board plane. The task and original PR Log claim the front ordering also works with a 45-degree camera turn, but no turned-view capture or other independent verification for that claim is included in the PR evidence. Local CTest, exporter tests, and pixel regression were not rerun because this checkout has no game files. Review accepted based on the inspected evidence and historical checks, with the turned-view claim unverified.
+Next: none.
+Check: `gh pr view 121`, `gh pr diff 121`, `gh pr checks 121`; visually inspected `runs/067-card-order-cabinet/front.jpg`, `behind.jpg`, `regression.jpg`, `changed.jpg`.
