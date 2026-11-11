@@ -109,3 +109,4 @@ Next: resume when the owner's spot can be matched from a sidecar or a reliable c
 Check: prior Release build, CTest, exporter tests and regression-tool tests passed as recorded above. No new runtime attempt was made; the branch only rebases the existing evidence and blocker log.
 
 - 2026-11-08 glm: notes merged as PR #208; still blocked on the owner's exact view (no camera or time sidecar).
+- 2026-11-12 task 248 audit: missing evidence to determine whether a shader fix is needed: the owner's exact camera/time or a sidecar, followed by matched cloud-on/cloud-off captures at that view.

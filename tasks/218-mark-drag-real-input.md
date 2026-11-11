@@ -10,7 +10,7 @@ tier: 0
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 Owner report 2026-11-07 (their Ctrl+F12 shots 20261107-1747*: both JSONs

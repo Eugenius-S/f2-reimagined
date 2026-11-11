@@ -215,6 +215,17 @@ param(
     [ValidateRange(1.0, 3.0)]
     [double]$Scale = 2.0
 )
+
+function Get-Sha256FileHash([string]$Path) {
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        return [System.BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
+    } finally {
+        $stream.Dispose()
+        $algorithm.Dispose()
+    }
+}
 $ErrorActionPreference = 'Stop'
 if ($DevInput -and (-not $Preferences -or -not $ConfiguredDisplay -or -not $ReuseTestConfig -or -not $OutputDirectory -or -not $CaptureConsole)) {
     throw '-DevInput requires -Preferences, -ConfiguredDisplay, -ReuseTestConfig, -OutputDirectory and -CaptureConsole.'
@@ -505,7 +516,7 @@ if ($Set3d) {
     }
     [System.IO.File]::WriteAllLines($configPath, $configLines, [System.Text.UTF8Encoding]::new($false))
 }
-$configHashBefore = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+$configHashBefore = Get-Sha256FileHash $configPath
 $initialZoom = Get-TestConfigValue $configPath '3d' 'zoom'
 $initialEnabled = Get-TestConfigValue $configPath '3d' 'enabled'
 $initialDifficulty = Get-TestConfigValue $configPath 'preferences' 'combat_difficulty'
@@ -521,7 +532,7 @@ if ($logicalWidth -lt 640 -or $logicalHeight -lt 480) {
     throw 'The requested scale must leave at least a 640x480 logical framebuffer.'
 }
 if (-not (Test-Path -LiteralPath $exe) -or
-    (Get-FileHash -LiteralPath $built).Hash -ne (Get-FileHash -LiteralPath $exe).Hash) {
+    (Get-Sha256FileHash $built) -ne (Get-Sha256FileHash $exe)) {
     Copy-Item $built $exe -Force
 }
 # The game reads sfall's ddraw.ini next to its exe: a scratch install's own
@@ -993,7 +1004,7 @@ if ($DevInput -or $SceneInput) {
             coordinate_space = 'logical'; snapshots = $snapshots.Count
             initial = @{ resolution_x = $initialDisplayWidth; resolution_y = $initialDisplayHeight; scale_factor = $initialDisplayScale }
             saved = @{ resolution_x = $afterWidth; resolution_y = $afterHeight; scale_factor = $afterScale }
-            config_sha256 = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+            config_sha256 = Get-Sha256FileHash $configPath
         } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $OutputDirectory 'input-result.json')
     }
 }
@@ -1036,7 +1047,7 @@ if ($PreferencesProbe) {
         throw 'Preferences probe did not report a successful production-path assertion.'
     }
     if (-not $probeHarnessStoppedProcess) { throw 'Preferences probe did not stop through the isolated helper harness.' }
-    $configHashAfter = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+    $configHashAfter = Get-Sha256FileHash $configPath
     $zoomAfter = Get-TestConfigValue $configPath '3d' 'zoom'
     $enabledAfter = Get-TestConfigValue $configPath '3d' 'enabled'
     $difficultyAfter = Get-TestConfigValue $configPath 'preferences' 'combat_difficulty'
@@ -1097,7 +1108,7 @@ if ($PreferencesProbe) {
             combat_difficulty = $difficultyAfter
             mouse_sensitivity = $mouseSensitivityAfter
         }
-        executable_sha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+        executable_sha256 = Get-Sha256FileHash $exe
         completion = [ordered]@{
             method = 'C++ finish marker observed before deadline; isolated helper stopped by harness'
             marker_observed_before_deadline = $probeCompletedBeforeDeadline

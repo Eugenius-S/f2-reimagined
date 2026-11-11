@@ -33,6 +33,9 @@ function Resolve-LockState {
         [long]$Now,
         [int]$StaleDays
     )
+    # A draft PR is a lock for a live task, but it does not revive a task
+    # that has been explicitly stopped as blocked.
+    if ($Status -eq 'blocked') { return 'blocked' }
     if ($null -ne $PrNumber) { return 'live' }
     $fresh = ($null -ne $BranchTime) -and (($Now - [long]$BranchTime) -le $StaleDays * 86400)
     if ($fresh) { return 'live' }
@@ -52,7 +55,9 @@ if ($SelfTest) {
         # a branch silent for longer than the stale window does not lock
         @{ Id = '145'; Status = 'doing'; BranchTime = $now - 4 * 86400; PrNumber = $null; Want = 'stale' },
         # a doing task with no branch and no PR is stale too
-        @{ Id = '207'; Status = 'doing'; BranchTime = $null; PrNumber = $null; Want = 'stale' }
+        @{ Id = '207'; Status = 'doing'; BranchTime = $null; PrNumber = $null; Want = 'stale' },
+        # A blocked task stays unavailable even when its draft PR is open.
+        @{ Id = '248'; Status = 'blocked'; BranchTime = $null; PrNumber = 414; Want = 'blocked' }
     )
     $failed = $false
     foreach ($c in $cases) {
@@ -62,9 +67,13 @@ if ($SelfTest) {
             Write-Output ("selftest: FAIL id={0} want={1} got={2}" -f $c.Id, $c.Want, $got)
             $failed = $true
         }
+        if ($c.Id -eq '248' -and $c.PrNumber -eq 414 -and $got -in 'todo', 'doing', 'stale') {
+            Write-Output 'selftest: FAIL blocked task with an open draft PR became selectable'
+            $failed = $true
+        }
     }
     if ($failed) { exit 1 }
-    Write-Output 'selftest: ok (4 cases)'
+    Write-Output ("selftest: ok ({0} cases)" -f $cases.Count)
     exit 0
 }
 

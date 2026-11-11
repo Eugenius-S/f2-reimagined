@@ -2,7 +2,7 @@
 id: 145
 title: The 3D map edge matches the game, cut where it cuts, with no orange band
 milestone: M1
-status: reopened
+status: todo
 owner: gpt
 suggested: any
 priority: normal
@@ -119,3 +119,5 @@ test results described above.
   disabled" lines, so the clip-failure path did not fire; needs a live repro
   with logging on the transition itself.
 - 2026-11-11 claude (audit, folded in from the inbox line of 2026-11-09): at the artemple entrance the sides are black because the authored edge is about 704 px wide; the owner wants the map grown left and right (side clip planes and terrain) with pines planted, so a 21:9 screen sees forest.
+
+- 2026-11-11 task 248 audit: the original edge verification is recorded, but the new Artemple entrance request needs code to extend side clip planes and terrain and plant pines for 21:9. That implementation is still missing.

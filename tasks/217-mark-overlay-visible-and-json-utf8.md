@@ -10,15 +10,15 @@ tier: 2
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
 
 The owner, 2026-11-07 ~15:30, after playing with the F12/Ctrl+F12 keys: the
-mark rectangles "не работает" — nothing appeared on screen while dragging
+mark rectangles "не работает" - nothing appeared on screen while dragging
 (the saved files prove the capture itself worked), the corner hint about
-Enter and Esc overlapped another text, and "в игре она не отображалась" —
+Enter and Esc overlapped another text, and "в игре она не отображалась" -
 the mark only exists in the saved PNG.
 
 ## Cause
@@ -28,9 +28,9 @@ Three defects, all found in the owner's own shot metadata
 
 - With sharp interface text on, the 3D present path rebuilds the screen from
   captured TEXT runs only (`drawSceneOverlayWithSharpText` → the prepared
-  frame); raw pixels written into the indexed surface — the green outlines —
+  frame); raw pixels written into the indexed surface - the green outlines -
   are dropped. The hint (a real text run) survived, the rectangles did not.
-- The hint drew at the bottom-left corner — the game's own monitor message
+- The hint drew at the bottom-left corner - the game's own monitor message
   line shares that corner, so the two texts stacked.
 - The JSON kept game strings as raw cp1251 bytes ("╓хэЄЁ уюЁюфр"), and the
   window mode reported `"windowed":false` for borderless, which hid the
