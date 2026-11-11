@@ -2,8 +2,8 @@
 id: 149
 title: Combat outlines, the hex cursor and floating text follow the 3D turn and zoom
 milestone: M1
-status: blocked
-owner: gpt
+status: doing
+owner: glm
 suggested: any
 priority: normal
 tier: 3
