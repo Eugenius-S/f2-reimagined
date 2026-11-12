@@ -449,9 +449,15 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
             }
         }
         out.close();
-        ok = total > 0;
-        if (!ok) *errorText = "empty download";
-        else logf("  downloaded %zu bytes", total);
+        ok = launcher_routes::downloadComplete(total, contentLength);
+        if (ok) {
+            logf("  downloaded %zu bytes", total);
+        } else {
+            *errorText = total == 0 ? "empty download" : "the download was cut short";
+            // A stump left in place would be taken for the whole file by the next run.
+            std::error_code ignored;
+            fs::remove(destination, ignored);
+        }
     }
     if (request != nullptr) WinHttpCloseHandle(request);
     if (connect != nullptr) WinHttpCloseHandle(connect);

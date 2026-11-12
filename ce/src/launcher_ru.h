@@ -60,6 +60,8 @@ inline constexpr Entry kTable[] = {
     { "installed (default)", "установлен (по умолчанию)" },
     { "  fallout2.cfg: kept (the player's file is never overwritten)", "  fallout2.cfg: оставлен (файл игрока никогда не перезаписывается)" },
     { "the installed build matches the release: nothing to pull", "установленная сборка совпадает с релизом: качать нечего" },
+    { "  older backup %s: %s", "  старая резервная копия %s: %s" },
+    { "  %s: removed (the launcher is %s now)", "  %s: удалён (теперь лаунчер называется %s)" },
     { "backed up build %s to f2reimagined-backups", "сборка %s сохранена в f2reimagined-backups" },
     { "scene-exporter.exe is missing; the game will start without 3D", "scene-exporter.exe не найден; игра запустится без 3D" },
     { "  the first install builds every map: about 20 minutes; later updates take seconds",
