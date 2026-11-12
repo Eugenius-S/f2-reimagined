@@ -24,36 +24,43 @@ class GallerySpotsTest(unittest.TestCase):
         roof[10 * gallery_spots.GRID + 10] = 1
         roof[10 * gallery_spots.GRID + 11] = 1
         roof[11 * gallery_spots.GRID + 11] = 1
-        roof[11 * gallery_spots.GRID + 12] = 1  # diagonal only
+        roof[20 * gallery_spots.GRID + 20] = 1
+        roof[21 * gallery_spots.GRID + 21] = 1  # diagonal only
         roof[5 * gallery_spots.GRID + 99] = 1
         roof[6 * gallery_spots.GRID] = 1  # adjacent in memory, opposite map edges
 
         patches = gallery_spots.roof_patches(roof)
 
-        self.assertEqual([1, 1, 4], sorted(map(len, patches)))
+        self.assertEqual(
+            [[599], [600], [1010, 1011, 1111], [2020], [2121]],
+            sorted(sorted(patch) for patch in patches),
+        )
 
     def test_spots_choose_large_roof_centres_and_limit_selections(self):
         roof = []
         for row in range(0, 70, 10):
             for col in range(0, 70, 10):
                 roof.extend(row * gallery_spots.GRID + col + offset for offset in (0, 1, 2, 3, 4, 5))
-        # Also include a five-square roof, which must not qualify as a building.
-        roof.extend((80 * gallery_spots.GRID + offset for offset in range(5)))
-
         selected = gallery_spots.spots(scene(roof_indices=roof))
 
         self.assertEqual(gallery_spots.MAX_VIEWS, len(selected))
         self.assertEqual(
-            [gallery_spots.square_to_tile(row * gallery_spots.GRID + col + 3)
-             for row, col in ((0, 0), (0, 10), (0, 20), (0, 30), (0, 40), (0, 50))],
+            [207, 227, 247, 267, 287, 307],
             selected,
         )
+
+    def test_spots_accept_six_square_roof_and_reject_five_square_roof(self):
+        five_square_roof = [80 * gallery_spots.GRID + offset for offset in range(5)]
+        self.assertEqual([], gallery_spots.spots(scene(roof_indices=five_square_roof)))
+
+        six_square_roof = [90 * gallery_spots.GRID + offset for offset in range(6)]
+        self.assertEqual([36207], gallery_spots.spots(scene(roof_indices=six_square_roof)))
 
     def test_floor_grid_selects_expected_centres(self):
         floor = (12 * gallery_spots.GRID + 14, 12 * gallery_spots.GRID + 34,
                  32 * gallery_spots.GRID + 14, 32 * gallery_spots.GRID + 34)
         self.assertEqual(
-            [gallery_spots.square_to_tile(index) for index in floor],
+            [5029, 5069, 13029, 13069],
             gallery_spots.spots(scene(floor_indices=floor)),
         )
 
