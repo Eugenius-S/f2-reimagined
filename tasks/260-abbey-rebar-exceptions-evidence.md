@@ -2,8 +2,8 @@
 id: 260
 title: Verify every Abbey burnt rebar placement stands in flight
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: gpt
 priority: low
 tier: 4
