@@ -2,8 +2,8 @@
 id: 259
 title: Verify scenery rotation exceptions and true sides in flight
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: gpt
 priority: normal
 tier: 3
