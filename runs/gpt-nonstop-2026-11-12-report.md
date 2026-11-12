@@ -15,7 +15,7 @@ Verified build: `f2r-verified/version.txt` last line at report time names commit
 - Task 230, PR #418: high effort; image generation ran up to 10 attempts, blocked. Checked: compared generated frames for pose and foot placement; these changed across attempts. Not checked: a frame matching the source pose, feet, silhouette, and proportions. Blocker: no acceptable source-matched frame was produced within the attempt limit.
 - Task 257, PR #452: medium effort (raised from low), merged. Checked: matched Release `dev-snapshot` captures for KLATRAP and KLATOXCV at `ambient=65536`; comparison reported 0 changed pixels. Not checked: other maps and ambient settings.
 - Task 264, PR #453: low effort, merged. Checked: documentation is UTF-8 and the documented Python example ran successfully. Not checked: runtime behavior beyond the example.
-- Task 255, PR #454: medium effort (raised from low), merged. Checked: Release and background capture pairs at 0/45 degrees, pixel comparison with no regression, and green CI. Not checked: other camera angles and maps.
+- Task 255, PR #454: medium effort (raised from low), merged. Checked: visually compared frames at 0/45 degrees with the original reference; pixel regression not run. Not checked: other camera angles and maps.
 
 Verified build: `f2r-verified/version.txt` last line at report time:
 `b3820c487b5f3c0222032fa656e6060598faafe3 2026-11-12 Release ctest 27/27 devshot OK; perf-check red as on main: avg 59.2/54.8/60.4/59.1 fps, load 1787/2303/1597/833 ms (kladwtwn, newr1, vctyctyd, klatoxcv e2); 1% low under 60 in background runs`
