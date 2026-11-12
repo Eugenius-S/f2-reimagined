@@ -6,7 +6,29 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tour import ROOT, powershell_args
+from tour import ROOT, check_views, powershell_args
+
+
+class TourViewTests(unittest.TestCase):
+    def test_rejects_identical_images_for_different_turns(self):
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            image = Image.new("RGB", (8, 8), (20, 40, 60))
+            image.save(folder / "000-start.png")
+            image.save(folder / "001-turn-0.png")
+            image.save(folder / "002-turn-90.png")
+            for name, turn in (("001-turn-0.png", 0), ("002-turn-90.png", 90)):
+                (folder / f"{name}.json").write_text(
+                    '{"image": "' + name + '", "map": "klamath", "elevation": 0, '
+                    '"view_tile": 123, "scene_3d_enabled": true, "scene_view": "full", '
+                    '"renderer": "scene-gl", "turn": ' + str(turn) + '}',
+                    encoding="utf-8",
+                )
+
+            with self.assertRaisesRegex(SystemExit, "every turn is the same picture"):
+                check_views(folder, "klamath", 0, [{"tile": 123}], [0, 90])
 
 
 @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is required")
