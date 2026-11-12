@@ -173,5 +173,13 @@
   },
   "montage": "abbey-e0-tile9309-comparison.jpg",
   "montage_sha256": "12e1fb63a517b76e9e3e0b7cb04e010138978ac2bae52e96ead07a191c6bceb6",
-  "montage_bytes": 323726
+  "montage_bytes": 323726,
+  "visual_review": {
+    "status": "unverified",
+    "claim": "The existing comparison frames do not prove the orientation of this exact FID relative to a wall or floor.",
+    "detail": "Original Solo 4 frames cannot show wall or roof geometry. At requested turns 180 and 270 the target rebar is not visible; at turns 0 and 90 no visible WDBEAM04 instance is uniquely tied to tile 9309 / serial 109 / FID 0x02000508. No orientation is confirmed.",
+    "solo_effect": "Capture setup uses solo_radius_hexes=4; dev-snapshot documents that Solo excludes walls and roofs.",
+    "no_solo_diagnostic": "abbey-e0-full-scene-diagnostic.jpg",
+    "no_solo_result": "Walls and roof geometry return, but clutter and occlusion still prevent exact sprite identification."
+  }
 }

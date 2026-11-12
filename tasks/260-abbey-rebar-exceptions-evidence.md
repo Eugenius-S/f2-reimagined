@@ -2,7 +2,7 @@
 id: 260
 title: Verify every Abbey burnt rebar placement stands in flight
 milestone: M1
-status: done
+status: blocked
 owner: gpt
 suggested: gpt
 priority: low
@@ -10,7 +10,7 @@ tier: 4
 claude-only: no
 user-check: no
 depends-on: [123]
-reviewed: yes
+reviewed: no
 ---
 
 ## Goal
@@ -38,22 +38,30 @@ New art, engine changes, unrelated ruin fixes, and rechecking placements already
 
 ### 2026-11-12 gpt
 
-Done: identified Abbey e0 tiles 9309 (WDBEAM04.FRM, object 948, baked SKIP),
-11703 (WDBEAM01.FRM, object 896, accepted fitted card) and 11709
-(WDBEAM01.FRM, object 890, accepted fitted card). Four close fly views at
-turns 0, 90, 180 and 270 have matched before | after sheets and JSON sidecars
-under `runs/260-abbey-rebar-exceptions-evidence/`. A game-view reference is
-included for each. All three treatments match before and after task 123; the
-rebar stands with the vertical ruin structures in the inspected views, with
-no piece lying across a roof or floor. No fix task indicated.
-Next: owner can review the three committed comparison sheets.
-Check: background captures via `tools/dev-snapshot.ps1` on the pre-123 cache
-from `002b6971d^` and the current cache; every sidecar reports Abbey e0,
-requested view tile, full `scene-gl`, and the same executable SHA-256.
-Capture note: CE snapshot `camera` reports the base static pose; each task 260
-comparison JSON records the requested fly turn beside the source snapshot
-sidecars.
+Blocked: map data identifies Abbey e0 tile 9309 / serial 109 / object 948 /
+WDBEAM04.FRM (baked SKIP), tile 11709 / serial 514 / object 890 /
+WDBEAM01.FRM (accepted fit), and tile 11703 / serial 506 / object 896 /
+WDBEAM01.FRM (accepted fit). This data mapping does not identify the exact
+sprite in the rendered frames. The original comparison captures use Solo 4;
+`tools/dev-snapshot.ps1` documents that Solo removes walls and roofs, so those
+frames cannot establish each rebar's relation to wall and floor. At tile
+9309, turns 180 and 270 show ground and a barrel but no target rebar; turns 0
+and 90 do not identify the target FID. At tiles 11709 and 11703, all four
+turns show multiple similar objects and do not identify the target FID.
+One full-scene, no-Solo diagnostic pass restores wall and roof geometry but
+still leaves the target sprites ambiguous among clutter and occlusion. The
+diagnostic frames and source metadata are in
+`runs/260-abbey-rebar-exceptions-evidence/abbey-e0-full-scene-diagnostic.jpg`
+and `.json`. No placement orientation is confirmed, no geometry defect is
+established, and no fix task is justified from these images.
+Next: obtain a capture that selects or marks each target by map serial/FID
+while retaining wall and floor geometry; then repeat matched before/after
+views at all required turns.
+Check: visually inspected the original comparison sheets and the full-scene
+diagnostic; the no-Solo pass used the background test instance, build
+`5b576c093`, and isolated `build/task260-before-cache`. No matched no-Solo
+after capture or owner game-view evidence was produced.
 
 ### 2026-11-12 gpt review
 
-Follow-up created after reviewing task 123: the saved pairs cover joined rebar but not the three Abbey exceptions reported in its Log. Their actual orientation is unverified; this task makes no claim that they fail.
+Follow-up created after reviewing task 123: the saved pairs cover joined rebar but not the three Abbey exceptions reported in its Log. Their actual orientation remains unverified; this task makes no claim that they fail.

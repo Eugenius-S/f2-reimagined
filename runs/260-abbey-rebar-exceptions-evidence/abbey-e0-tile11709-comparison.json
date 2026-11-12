@@ -157,5 +157,13 @@
   },
   "montage": "abbey-e0-tile11709-comparison.jpg",
   "montage_sha256": "a27dfefdbdf170df5b0a530156b5119040ccda272bd5de015e37ac244f2a1988",
-  "montage_bytes": 448390
+  "montage_bytes": 448390,
+  "visual_review": {
+    "status": "unverified",
+    "claim": "The existing comparison frames do not prove the orientation of this exact FID relative to a wall or floor.",
+    "detail": "Original Solo 4 frames omit wall and roof geometry. All four views contain several similar rebar and adjacent props; none uniquely ties a visible sprite to tile 11709 / serial 514 / FID 0x02000505. No orientation is confirmed.",
+    "solo_effect": "Capture setup uses solo_radius_hexes=4; dev-snapshot documents that Solo excludes walls and roofs.",
+    "no_solo_diagnostic": "abbey-e0-full-scene-diagnostic.jpg",
+    "no_solo_result": "Walls and roof geometry return, but clutter and occlusion still prevent exact sprite identification."
+  }
 }
