@@ -33,9 +33,9 @@ class GalleryPairsCliTests(unittest.TestCase):
                     json.dumps(sidecar), encoding="utf-8"
                 )
 
-            snapshot(flat, "flat.png", "ARROYO.MAP", "00ab", (240, 20, 20))
-            snapshot(scene, "scene.png", "arroyo.map", "00ab", (20, 30, 240))
-            snapshot(flat, "solo.png", "ARROYO.MAP", "00cd", (20, 240, 20))
+            snapshot(flat, "flat.png", "ARROYO.MAP", 1234, (240, 20, 20))
+            snapshot(scene, "scene.png", "arroyo.map", 1234, (20, 30, 240))
+            snapshot(flat, "solo.png", "ARROYO.MAP", 5678, (20, 240, 20))
 
             result = subprocess.run(
                 [sys.executable, str(SCRIPT), str(flat), str(scene), str(output)],
@@ -45,12 +45,12 @@ class GalleryPairsCliTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.splitlines(), ["arroyo-e2-00ab.jpg"])
+            self.assertEqual(result.stdout.splitlines(), ["arroyo-e2-1234.jpg"])
             self.assertEqual(
-                result.stderr.splitlines(), ["only in one tour: ('arroyo', 2, '00cd')"]
+                result.stderr.splitlines(), ["only in one tour: ('arroyo', 2, 5678)"]
             )
             files = list(output.iterdir())
-            self.assertEqual([path.name for path in files], ["arroyo-e2-00ab.jpg"])
+            self.assertEqual([path.name for path in files], ["arroyo-e2-1234.jpg"])
             with Image.open(files[0]) as pair:
                 self.assertEqual(pair.format, "JPEG")
                 self.assertEqual(pair.size, (8, 3))
