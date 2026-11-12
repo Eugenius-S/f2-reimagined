@@ -16,8 +16,10 @@ class ShadowSeamsTests(unittest.TestCase):
         ignored[15:25, 20:25] = True
         factor[18:22, 17:20] = 0.0
 
+        unmasked = measure(factor, np.zeros_like(ignored), card, area=12, edge=4)
         found = measure(factor, ignored, card, area=12, edge=4)
 
+        self.assertEqual(int(unmasked["holes"].sum()), 12)
         self.assertEqual(int(found["holes"].sum()), 0)
 
 
