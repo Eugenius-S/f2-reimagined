@@ -451,6 +451,8 @@ bool renderSharpText(const std::vector<scene::TextRecord>& records,
             const double condense = monospaced ? cellCondense : proportionalCondense;
             const GlyphBitmap* glyph = getGlyph(codepoints[index], static_cast<float>(fontScaleX * condense),
                 static_cast<float>(fontScaleY), bold);
+            // A full glyph cache returns nullptr; the caller falls back to the pixel text.
+            if (glyph == nullptr) return false;
             if (logBulletLead && index == 0) {
                 positioned.push_back({ glyph, anchorX - glyph->xoff });
                 cursorX = static_cast<double>(run.characterX[1]);
