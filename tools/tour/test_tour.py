@@ -1,4 +1,5 @@
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -47,6 +48,40 @@ class TourViewTests(unittest.TestCase):
 
             with self.assertRaisesRegex(SystemExit, "every turn is the same picture"):
                 check_views(folder, "klamath", 0, [{"tile": 123}], [0, 90])
+
+
+class TourSidecarTests(unittest.TestCase):
+    def test_rejects_scene_shot_from_the_wrong_view_tile(self):
+        from PIL import Image
+        from tour import check_views
+
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            spot = {"tile": 12000}
+            Image.new("RGB", (2, 2), (0, 0, 0)).save(folder / "00-start.png")
+            for index, tile in enumerate((12000, 12001)):
+                image_name = f"{index + 1:02d}-shot.png"
+                Image.new("RGB", (2, 2), (index * 50, 0, 0)).save(folder / image_name)
+                metadata = {
+                    "image": image_name,
+                    "map": "klamath",
+                    "elevation": 0,
+                    "view_tile": tile,
+                    "scene_3d_enabled": True,
+                    "scene_view": "full",
+                    "renderer": "scene-gl",
+                }
+                (folder / f"{index + 1:02d}-shot.json").write_text(json.dumps(metadata), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as error:
+                check_views(folder, "klamath", 0, [spot], [0, 1])
+            self.assertIn("tile 12000 turn +1: shot at klamath e0 tile 12001", str(error.exception))
+
+            metadata_path = folder / "02-shot.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata["view_tile"] = 12000
+            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+            check_views(folder, "klamath", 0, [spot], [0, 1])
 
 
 @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is required")
