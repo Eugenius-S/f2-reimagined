@@ -2,7 +2,7 @@
 id: 261
 title: Verify plain-fit cola and shelf back textures
 milestone: M1
-status: doing
+status: blocked
 owner: gpt
 suggested: gpt
 priority: normal
@@ -63,3 +63,24 @@ maintenance, not task 262.
 Next: capture readable matched views and determine whether each opposite slot
 is truly the object's rear art.
 Check: not run; evidence task.
+
+### 2026-11-12 gpt
+Done: identified the plain-fit shelf solid as `shelf002.frm` (`Boxes and
+Sacks`), `broken1.map` elevation 0, tile 9678, record index 436, map object
+ID 535, FID `0x02000940`, near rotation 2. Captured opposite fly quarters in
+`runs/261-plain-fit-cola-shelf-back-views-evidence/`. Original DAT art confirms
+slot 5 is `UNUSED ART`; slots 1-4 are partial shelf variants. The exported
+solid has no separate back source, so this is not a verified rear drawing.
+Next: blocked on readable cola-machine evidence. The first attempt at
+`denbus2` elevation 0 tile 22887 (`FlyTurn=180`, distance 5) showed the target
+behind a wall. The second attempt at the same target (`HeroTile=22887`, solo
+radius 5, `FlyTurn=180`, distance 4) removed the wall but placed the test hero
+in front of the machine. Per the two-attempt limit, no further cola capture
+was attempted.
+Check: `powershell -NoProfile -ExecutionPolicy Bypass -File
+tools/configure-build.ps1 Release` completed (794/794); `tools/dev-snapshot.ps1`
+captured the shelf at turns 0 and 180; `py -3 tools/scene_export/export.py`
+exported the Den and `broken1`; `py -3 tools/shapes/inventory.py` identified
+the shelf as `box+back`. No tests run; no code or game files changed. The
+cola pair, clear far-face view, and a no-see-through confirmation are not
+verified. Draft PR #460 remains open.
