@@ -1,0 +1,158 @@
+{
+  "image": "cactus-denbus2-tile15488-turn0.jpg",
+  "view": "static-wall-plus-hero-preview",
+  "map": "DENBUS2.MAP",
+  "elevation": 0,
+  "still_snapshot": true,
+  "combat_fixture": {
+    "phase": "none",
+    "in_combat": false,
+    "player_turn": true,
+    "scene_availability": "available"
+  },
+  "snapshot_run": "8c4d6f4a045447ceae26e18cf568a63e",
+  "view_tile": 15488,
+  "preview_requested": true,
+  "scene_3d_enabled": true,
+  "scene_view": "full",
+  "sharp_text": {
+    "setting": false,
+    "active": false,
+    "drawn": false,
+    "runs": 0,
+    "glyphs": 0,
+    "restored_pixels": 0,
+    "prepare_ms": 0.0
+  },
+  "map_clip": {
+    "enabled": true,
+    "setting_enabled": true,
+    "variant": "authored",
+    "source": "authored",
+    "world_bounds": [
+      -41.541667,
+      -42.5625,
+      35.458333,
+      33.4375
+    ],
+    "planes": [
+      [
+        0.4472136,
+        0.8944272,
+        38.9821167
+      ],
+      [
+        -0.8320503,
+        0.5547002,
+        21.9106579
+      ],
+      [
+        -0.4472136,
+        -0.8944272,
+        28.0999203
+      ],
+      [
+        0.8320503,
+        -0.5547002,
+        21.9106579
+      ]
+    ]
+  },
+  "camera": "fixed eye=(43.14466,46.23085,62.71700), target=(-6.04167,0.00000,-11.06250), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+  "camera_turn": 0.0,
+  "wall_triangles": 23938,
+  "wall_pages": 5,
+  "hero": {
+    "tile": 28098,
+    "fid": 16777278,
+    "frame": 0,
+    "rotation": 5,
+    "world_anchor": [
+      -1.041666667,
+      20.4375
+    ]
+  },
+  "egg": {
+    "shown": false,
+    "wall_rows_marked": 84,
+    "wall_rows_any": true
+  },
+  "objects": {
+    "drawn": 4076,
+    "skipped": 0
+  },
+  "preview_availability": "available",
+  "renderer": "scene-gl",
+  "light": "enabled",
+  "effect_emission": true,
+  "glow": {
+    "enabled": false,
+    "strength": 2.0
+  },
+  "weapon_effect": null,
+  "muzzle": null,
+  "sun": {
+    "setting": true,
+    "daylight": true,
+    "game_time": 302400,
+    "ambient": 65536,
+    "up": true,
+    "moon": false,
+    "height": 66.0,
+    "azimuth": -26.565,
+    "direction": [
+      0.3638,
+      0.91355,
+      -0.1819
+    ],
+    "color": [
+      1.0,
+      0.96,
+      0.88
+    ],
+    "strength": 1.0
+  },
+  "resolution": "1280x720",
+  "logical_resolution": "1280x720",
+  "scale": 1,
+  "scale_factor": 1.0,
+  "windowed": true,
+  "drawable": "1280x720",
+  "sdl_window": {
+    "flags": 73734,
+    "window_position": "-20000,-20000",
+    "window_size": "1280x720",
+    "drawable_size": "1280x720",
+    "fullscreen": false,
+    "fullscreen_desktop": false,
+    "borderless": false
+  },
+  "ce_commit": "3cde6966",
+  "tools_commit": "-",
+  "exe_sha256": "057f6a6a0b7f3fe5ff8468b6779cf27eea9f302d364abc13b7603251b3ebce4c",
+  "taken": "20261112-092903",
+  "capture_status": "NOT_VERIFIED",
+  "source_capture_json": "build/probe259-2/devshot-20261112-092903-000.json",
+  "repository_head": "cc24b8ea886f4d6d8ba0cd9ddbdbae6ddb7207b5",
+  "target_object": {
+    "pid": "0x02000041",
+    "name": "Cactus",
+    "art_fid": "0x02000032",
+    "art": "cac2000.frm",
+    "map_object_id": 592,
+    "tile": 15488,
+    "elevation": 0,
+    "placement_rotation": 0,
+    "frame": 0,
+    "six_variant_art": true
+  },
+  "camera_quarter_degrees": 0,
+  "settings": {
+    "scene3d_enabled": true,
+    "sprite_sides": true,
+    "camera_rotation": false,
+    "camera_rotation_unlimited": false,
+    "source": "tools/test-config/fallout2.cfg plus 3cde6966 settings defaults"
+  },
+  "visual_note": "The object is partly occluded at turn 180; this pair is exploratory and does not verify the rotation exception."
+}
