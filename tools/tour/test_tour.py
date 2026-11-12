@@ -10,6 +10,24 @@ from tour import ROOT, check_views, powershell_args
 
 
 class TourViewTests(unittest.TestCase):
+    def test_accepts_different_images_for_valid_3d_turns(self):
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            Image.new("RGB", (8, 8), (20, 40, 60)).save(folder / "000-start.png")
+            Image.new("RGB", (8, 8), (20, 40, 60)).save(folder / "001-turn-0.png")
+            Image.new("RGB", (8, 8), (220, 180, 140)).save(folder / "002-turn-90.png")
+            for name, turn in (("001-turn-0.png", 0), ("002-turn-90.png", 90)):
+                (folder / f"{name}.json").write_text(
+                    '{"image": "' + name + '", "map": "klamath", "elevation": 0, '
+                    '"view_tile": 123, "scene_3d_enabled": true, "scene_view": "full", '
+                    '"renderer": "scene-gl", "turn": ' + str(turn) + '}',
+                    encoding="utf-8",
+                )
+
+            check_views(folder, "klamath", 0, [{"tile": 123}], [0, 90])
+
     def test_rejects_identical_images_for_different_turns(self):
         from PIL import Image
 
