@@ -2,7 +2,7 @@
 id: 257
 title: Show a normally visible Klamath point light beside its cutout wall pixels
 milestone: M1
-status: todo
+status: doing
 owner: gpt
 suggested: gpt
 priority: low
