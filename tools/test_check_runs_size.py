@@ -1,4 +1,4 @@
-import subprocess
+import subprocess\nimport sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -37,7 +37,7 @@ class CheckRunsSizeTests(unittest.TestCase):
             git('commit', '-qm', 'add files to check')
 
             result = subprocess.run(
-                ['py', '-3', str(CHECKER), 'base'], cwd=repo,
+                [sys.executable, str(CHECKER), 'base'], cwd=repo,
                 capture_output=True, text=True,
             )
 
@@ -49,5 +49,7 @@ class CheckRunsSizeTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
 
 
