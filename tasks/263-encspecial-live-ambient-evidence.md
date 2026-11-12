@@ -2,7 +2,7 @@
 id: 263
 title: Verify live ambient lighting and missing entries for special encounters
 milestone: M1
-status: doing
+status: blocked
 owner: gpt
 suggested: gpt
 priority: normal
@@ -77,3 +77,8 @@ Renderer or exporter changes, map-specific fixes, and claims that background
   three missing map/elevation entries.
 
 - 2026-11-13 claude (review of gpt's run): on landing, commit the comparison JPEGs and one table of map, elevation, hour and changed-pixel count; leave the raw devshot JSON sidecars out of `runs/` (the draft carries 16-18 thousand lines of them).
+### 2026-11-12 gpt
+Done: Captured matched live ClockLadder views for all 25 existing `encsp-*` spots at 22:00, 02:00, 06:00 and 09:00. All 100 sidecars match map, elevation, tile, camera, renderer and display settings. Added compact sheets and original 2D framebuffer samples for rndwhale e0 and encfite e0 under `runs/263-encspecial-live-ambient-evidence/`. No renderer, exporter or map data changed.
+Next: Owner follow-up is needed for live entry evidence at encfite e1/e2 and cowbomb; background attempts reached e0 or artemple/cardesrt. See `route-attempts.md` for the two distinct attempts per target.
+Check: `configure-build.ps1 Release`; `export.py --maps encspecial` reported 23 maps / 28 scenes; sidecar audit verified all 25 sets and every JPEG is under 1 MB. Each original sidecar records the derived `clock_ladder` hour, ticks and ambient for its captured game state.
+Not checked: Matched timed original 2D day/night views. Task 262 records that the supported ClockLadder and SceneInput methods cannot run in Classic view; representative static 2D captures are included. No 3D-only defect is claimed.

@@ -1,0 +1,99 @@
+{
+  "image": "scr00000.png",
+  "view": "vanilla-framebuffer",
+  "map": "RNDWHALE.MAP",
+  "elevation": 0,
+  "still_snapshot": false,
+  "combat_fixture": {
+    "phase": "none",
+    "in_combat": false,
+    "player_turn": true,
+    "enemy_turn": false,
+    "scene_availability": "not-requested"
+  },
+  "snapshot_run": "bb94b0e29985406895b742a666dc5de7",
+  "view_tile": 17705,
+  "preview_requested": false,
+  "scene_3d_enabled": true,
+  "scene_view": "off",
+  "sharp_text": {
+    "setting": false,
+    "active": false,
+    "drawn": false,
+    "runs": 0,
+    "glyphs": 0,
+    "restored_pixels": 0,
+    "prepare_ms": 0.0
+  },
+  "map_clip": {
+    "enabled": false,
+    "setting_enabled": true,
+    "variant": "authored",
+    "source": "disabled"
+  },
+  "camera": "center tile 17705",
+  "camera_turn": 0.0,
+  "wall_triangles": 0,
+  "wall_pages": 0,
+  "hero": null,
+  "egg": {
+    "shown": false,
+    "wall_rows_marked": 0,
+    "wall_rows_any": false
+  },
+  "objects": {
+    "drawn": 0,
+    "skipped": 0
+  },
+  "preview_availability": "not-requested",
+  "renderer": "scene-gl",
+  "light": "enabled",
+  "effect_emission": true,
+  "glow": {
+    "enabled": false,
+    "strength": 2.0
+  },
+  "weapon_effect": null,
+  "muzzle": null,
+  "sun": {
+    "setting": true,
+    "daylight": false,
+    "game_time": 302402,
+    "ambient": 65536,
+    "up": false,
+    "moon": false,
+    "height": 66.0,
+    "azimuth": -26.565,
+    "direction": [
+      0.36379,
+      0.91355,
+      -0.1819
+    ],
+    "color": [
+      1.0,
+      0.96,
+      0.88
+    ],
+    "strength": 0.0
+  },
+  "resolution": "1920x1080",
+  "logical_resolution": "960x540",
+  "scale": 2,
+  "scale_factor": 2.0,
+  "windowed": true,
+  "drawable": "1920x1080",
+  "sdl_window": {
+    "flags": 73734,
+    "window_position": "-20000,-20000",
+    "window_size": "1920x1080",
+    "drawable_size": "1920x1080",
+    "fullscreen": false,
+    "fullscreen_desktop": false,
+    "borderless": false
+  },
+  "ce_commit": "ef20df55a",
+  "tools_commit": "-",
+  "exe_sha256": "58dc5c0ac3dc1d5cf522eb813196c23e9dbc6f5f696312e2d989a2187695526b",
+  "taken": "20261112-111422",
+  "evidence_jpeg": "rndwhale-e0.jpg"
+}

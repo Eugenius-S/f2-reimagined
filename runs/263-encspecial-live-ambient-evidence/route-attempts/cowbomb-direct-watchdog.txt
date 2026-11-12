@@ -1,0 +1,6 @@
+﻿WATCHDOG STOP reason=step timeout after 30 s without progress
+last_step=devtools: startup target cowbomb e0 accepted=0 blocking=0
+last_game_state=DEV_WATCHDOG state map=ARTEMPLE.MAP elevation=0 tile=17488 combat=0 dialog=0 movie=0 view=0 tour_step=-1 walk_stage=0
+game_state=captured=1 game_state=0 game_mode=0x0 map=ARTEMPLE.MAP elevation=0 tile=17488 combat=0 dialog=0 movie=0 view=0 tour_step=-1 walk_stage=0 scripted_input=0 snapshot_status=snapshot: devshot-20261112-111812.json
+
+screenshot=engine capture image missing
