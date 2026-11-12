@@ -1,0 +1,169 @@
+{
+  "task": 260,
+  "map": "abbey",
+  "elevation": 0,
+  "placement": {
+    "tile": 11709,
+    "serial": 514,
+    "object_id": 890,
+    "art": "WDBEAM01.FRM",
+    "fid": 33555717,
+    "treatment": "accepted fit"
+  },
+  "art_id": {
+    "pid": "0x020004FA",
+    "object_id": 890,
+    "map_serial": 514,
+    "fid": "0x02000505"
+  },
+  "treatment_before": null,
+  "treatment_after": null,
+  "treatment_interpretation": "mode 0 is baked SKIP; no baked entry for this exact tile and FID means the fitted sprite card remains live",
+  "capture_setup": {
+    "build_commit": "5b576c093",
+    "executable_sha256": "17b3f7ec443ed0699ac7fcbe951a3fbc9039f8ec0d9b31f9a4000b6580d9721f",
+    "resolution": "1920x1080",
+    "scene_setting": "enabled",
+    "renderer": "scene-gl",
+    "close_distance": 5,
+    "solo_radius_hexes": 4,
+    "turns_degrees": [
+      0,
+      90,
+      180,
+      270
+    ]
+  },
+  "cache_identity": {
+    "before_source_commit": "002b6971d^ (pre-task-123)",
+    "before_fingerprint_sha256": "1ed895f9367d145f534738520d5548b0d734e6126822039227004d093fd7ab5f",
+    "after_source_commit": "origin/main at ca1a7fc10",
+    "after_fingerprint_sha256": "f20248dd5e696f0ddcbb5c9f7bea0cfccb8bec771a5bfc69ff7ccb191eabdda1"
+  },
+  "views": [
+    {
+      "requested_camera_turn_degrees": 0,
+      "view_tile": 11709,
+      "close_distance": 5,
+      "solo_radius_hexes": 4,
+      "before": {
+        "image": "devhero-20261112-094831-000.png",
+        "sidecar": "devshot-20261112-094831-000.json",
+        "image_sha256": "84fb025ce125fc3d3f6011a301cb8e20cb4f4745aa15157e2fb8553c2d5da79e",
+        "sidecar_sha256": "38f1ce790e755b990fbc9b3b21f706b168a9f45685d111c2bc1d962e68d112dd",
+        "hero_rotation": 0,
+        "scene_view": "full",
+        "renderer": "scene-gl",
+        "exe_sha256": "17b3f7ec443ed0699ac7fcbe951a3fbc9039f8ec0d9b31f9a4000b6580d9721f"
+      },
+      "after": {
+        "image": "devhero-20261112-095102-000.png",
+        "sidecar": "devshot-20261112-095102-000.json",
+        "image_sha256": "04c544367e7fb59f72efc843d9f7d0a1175b7897d54f3d1a814cd07175a3563d",
+        "sidecar_sha256": "925e739090c187503ffe8b0d01c3d501fa6dbaa6f2ba63eed5400cae90673ff5",
+        "hero_rotation": 0,
+        "scene_view": "full",
+        "renderer": "scene-gl",
+        "exe_sha256": "17b3f7ec443ed0699ac7fcbe951a3fbc9039f8ec0d9b31f9a4000b6580d9721f"
+      }
+    },
+    {
+      "requested_camera_turn_degrees": 90,
+      "view_tile": 11709,
+      "close_distance": 5,
+      "solo_radius_hexes": 4,
+      "before": {
+        "image": "devhero-20261112-094833-000.png",
+        "sidecar": "devshot-20261112-094833-000.json",
+        "image_sha256": "21648d450c6f4cb0109cc1064a7e908122a949ef34b72f665308abcc1be93861",
+        "sidecar_sha256": "00e2008ae2b26dd3253f16d1e5ebe32cd3ac28aabaee30cfa8fb6a51f89c4df8",
+        "hero_rotation": 2,
+        "scene_view": "full",
+        "renderer": "scene-gl",
+        "exe_sha256": "17b3f7ec443ed0699ac7fcbe951a3fbc9039f8ec0d9b31f9a4000b6580d9721f"
+      },
+      "after": {
+        "image": "devhero-20261112-095104-000.png",
+        "sidecar": "devshot-20261112-095104-000.json",
+        "image_sha256": "759e3ddb5205bac091bf5111d47169897a4bfe96397730f13ea9f70b6ccc3d4d",
+        "sidecar_sha256": "4060d5e8ce6385273b6bd1510ee171c8ab9dc471bcb45cf591669d23dd4a1129",
+        "hero_rotation": 2,
+        "scene_view": "full",
+        "renderer": "scene-gl",
+        "exe_sha256": "17b3f7ec443ed0699ac7fcbe951a3fbc9039f8ec0d9b31f9a4000b6580d9721f"
+      }
+    },
+    {
+      "requested_camera_turn_degrees": 180,
+      "view_tile": 11709,
+      "close_distance": 5,
+      "solo_radius_hexes": 4,
+      "before": {
+        "image": "devhero-20261112-094834-000.png",
+        "sidecar": "devshot-20261112-094834-000.json",
+        "image_sha256": "a99b2539ddfe2eb8ea05a43fda8f6b5c83f56f0571d584ea65c12f7095efedc4",
+        "sidecar_sha256": "915ce6b994c300c2b3cd5902c1778fc6ca8e90a234f005e3a0f0962227a419d5",
+        "hero_rotation": 3,
+        "scene_view": "full",
+        "renderer": "scene-gl",
+        "exe_sha256": "17b3f7ec443ed0699ac7fcbe951a3fbc9039f8ec0d9b31f9a4000b6580d9721f"
+      },
+      "after": {
+        "image": "devhero-20261112-095105-000.png",
+        "sidecar": "devshot-20261112-095105-000.json",
+        "image_sha256": "386fbfa4e71597081d0df521d61ada480f1a8e4964f182211617bbd923e29ba7",
+        "sidecar_sha256": "b5c0bf284eb24a804415ed87ace9b15b85976b15c40fa7abcf5937a208db7e5b",
+        "hero_rotation": 3,
+        "scene_view": "full",
+        "renderer": "scene-gl",
+        "exe_sha256": "17b3f7ec443ed0699ac7fcbe951a3fbc9039f8ec0d9b31f9a4000b6580d9721f"
+      }
+    },
+    {
+      "requested_camera_turn_degrees": 270,
+      "view_tile": 11709,
+      "close_distance": 5,
+      "solo_radius_hexes": 4,
+      "before": {
+        "image": "devhero-20261112-094836-000.png",
+        "sidecar": "devshot-20261112-094836-000.json",
+        "image_sha256": "583765ba536a686afb3e70ed92d3fb1c4d68e968ceca8989f3fb9c1fc1de8691",
+        "sidecar_sha256": "c24ce0c7aa7388022e079cec5e19b09c4f180949f6f026eea73aeceb3a32b815",
+        "hero_rotation": 5,
+        "scene_view": "full",
+        "renderer": "scene-gl",
+        "exe_sha256": "17b3f7ec443ed0699ac7fcbe951a3fbc9039f8ec0d9b31f9a4000b6580d9721f"
+      },
+      "after": {
+        "image": "devhero-20261112-095107-000.png",
+        "sidecar": "devshot-20261112-095107-000.json",
+        "image_sha256": "37b389596d419b0fa7bba32ba771285693188d2c46968bc52ed5877cf5e69a17",
+        "sidecar_sha256": "dfa0659ad75e1ef2f73a51a033a7c9cc7d08b89503c60740f55d6665ebd47a94",
+        "hero_rotation": 5,
+        "scene_view": "full",
+        "renderer": "scene-gl",
+        "exe_sha256": "17b3f7ec443ed0699ac7fcbe951a3fbc9039f8ec0d9b31f9a4000b6580d9721f"
+      }
+    }
+  ],
+  "game_view_reference": {
+    "image": "scr00003.png",
+    "sidecar": "devshot-20261112-095221-002.json",
+    "image_sha256": "09f5e55760915cac8b2f4815d620a48627ccf5c937ea9ff3047fd3b6bbdd4e97",
+    "sidecar_sha256": "b8e91717e8a283ed4d1a626036108a6991a5dbce4a9882e0daa3e13c62f11126",
+    "view_tile": 11709,
+    "renderer": "scene-gl",
+    "resolution": "1920x1080"
+  },
+  "montage": "abbey-e0-tile11709-comparison.jpg",
+  "montage_sha256": "a27dfefdbdf170df5b0a530156b5119040ccda272bd5de015e37ac244f2a1988",
+  "montage_bytes": 448390,
+  "visual_review": {
+    "status": "unverified",
+    "claim": "The existing comparison frames do not prove the orientation of this exact FID relative to a wall or floor.",
+    "detail": "Original Solo 4 frames omit wall and roof geometry. All four views contain several similar rebar and adjacent props; none uniquely ties a visible sprite to tile 11709 / serial 514 / FID 0x02000505. No orientation is confirmed.",
+    "solo_effect": "Capture setup uses solo_radius_hexes=4; dev-snapshot documents that Solo excludes walls and roofs.",
+    "no_solo_diagnostic": "abbey-e0-full-scene-diagnostic.jpg",
+    "no_solo_result": "Walls and roof geometry return, but clutter and occlusion still prevent exact sprite identification."
+  }
+}
