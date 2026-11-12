@@ -1,0 +1,629 @@
+{
+  "evidence_image": "cave2-e1.jpg",
+  "map": "CAVE2.MAP",
+  "elevation": 1,
+  "capture_method": "tools/dev-snapshot.ps1 -ClockLadder",
+  "clock_progression": {
+    "session": "background test game; no --dev-hour or --dev-ambient arguments",
+    "start": "the ClockLadder fixture sets in-game time to 22:00 once",
+    "advance": "it invokes the normal Ctrl+T devtools handler 11 times; each step updates gameTime and runs scriptsExecMapUpdateProc",
+    "observed_hours": [
+      "22:00",
+      "02:00",
+      "06:00",
+      "09:00"
+    ],
+    "log": [
+      "CLOCK_LADDER stage=0 ticks=3384000 hour=2200 ambient=28426 daylight=0 sun=0.000000",
+      "CLOCK_LADDER stage=1 ticks=3528000 hour=200 ambient=28426 daylight=0 sun=0.000000",
+      "CLOCK_LADDER stage=2 ticks=3672000 hour=600 ambient=28426 daylight=0 sun=0.000000",
+      "CLOCK_LADDER stage=3 ticks=3780000 hour=900 ambient=28426 daylight=0 sun=0.000000",
+      "CLOCK_LADDER PASS"
+    ]
+  },
+  "matched_conditions": {
+    "map": "CAVE2.MAP",
+    "elevation": 1,
+    "view_tile": 21103,
+    "camera": "fixed eye=(50.64466,46.23085,76.46700), target=(1.45833,0.00000,2.68750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+    "camera_turn": 0.0,
+    "renderer": "scene-gl",
+    "resolution": "1920x1080",
+    "logical_resolution": "960x540",
+    "scale": 2,
+    "scale_factor": 2.0,
+    "scene_view": "full",
+    "scene_3d_enabled": true
+  },
+  "pixel_comparison": {
+    "crop": "upper 880 pixels, excluding the game HUD region",
+    "night_22_vs_day_09_changed_pixel_fraction": 0.0,
+    "mean_absolute_rgb_delta": 0.0
+  },
+  "captures": [
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "CAVE2.MAP",
+      "elevation": 1,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "aef75c5ff8924ae18a8d5070602dbfca",
+      "view_tile": 21103,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -36.541667,
+          -22.0625,
+          32.958333,
+          38.6875
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            16.621439
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            18.0277557
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            29.8887749
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            30.2311611
+          ]
+        ]
+      },
+      "camera": "fixed eye=(50.64466,46.23085,76.46700), target=(1.45833,0.00000,2.68750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 4993,
+      "wall_pages": 5,
+      "hero": {
+        "tile": 21103,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          1.458333333,
+          2.6875
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          416,
+          148,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 271,
+        "wall_rows_any": true
+      },
+      "objects": {
+        "drawn": 1124,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": false,
+        "game_time": 3384000,
+        "ambient": 28426,
+        "up": false,
+        "moon": false,
+        "height": 50.0,
+        "azimuth": 153.435,
+        "direction": [
+          -0.57493,
+          0.76604,
+          0.28746
+        ],
+        "color": [
+          1.0,
+          0.96,
+          0.88
+        ],
+        "strength": 0.0
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-104118",
+      "panel": 0,
+      "raw_image_file": "build/262/live/cave2-e1/devhero-20261112-104118-000.png",
+      "raw_image_sha256": "cbafe66bbd4cee8e00226216be285ce40cc158df549a630f0093e86af5e339ba",
+      "image": "cave2-e1.jpg",
+      "phase": "night"
+    },
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "CAVE2.MAP",
+      "elevation": 1,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "aef75c5ff8924ae18a8d5070602dbfca",
+      "view_tile": 21103,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -36.541667,
+          -22.0625,
+          32.958333,
+          38.6875
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            16.621439
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            18.0277557
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            29.8887749
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            30.2311611
+          ]
+        ]
+      },
+      "camera": "fixed eye=(50.64466,46.23085,76.46700), target=(1.45833,0.00000,2.68750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 4993,
+      "wall_pages": 5,
+      "hero": {
+        "tile": 21103,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          1.458333333,
+          2.6875
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          416,
+          148,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 271,
+        "wall_rows_any": true
+      },
+      "objects": {
+        "drawn": 1124,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": false,
+        "game_time": 3528000,
+        "ambient": 28426,
+        "up": false,
+        "moon": false,
+        "height": 50.0,
+        "azimuth": -26.565,
+        "direction": [
+          0.57493,
+          0.76604,
+          -0.28746
+        ],
+        "color": [
+          1.0,
+          0.96,
+          0.88
+        ],
+        "strength": 0.0
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-104119",
+      "panel": 1,
+      "raw_image_file": "build/262/live/cave2-e1/devhero-20261112-104119-000.png",
+      "raw_image_sha256": "cbafe66bbd4cee8e00226216be285ce40cc158df549a630f0093e86af5e339ba",
+      "image": "cave2-e1.jpg",
+      "phase": "night"
+    },
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "CAVE2.MAP",
+      "elevation": 1,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "aef75c5ff8924ae18a8d5070602dbfca",
+      "view_tile": 21103,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -36.541667,
+          -22.0625,
+          32.958333,
+          38.6875
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            16.621439
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            18.0277557
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            29.8887749
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            30.2311611
+          ]
+        ]
+      },
+      "camera": "fixed eye=(50.64466,46.23085,76.46700), target=(1.45833,0.00000,2.68750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 4993,
+      "wall_pages": 5,
+      "hero": {
+        "tile": 21103,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          1.458333333,
+          2.6875
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          416,
+          148,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 271,
+        "wall_rows_any": true
+      },
+      "objects": {
+        "drawn": 1124,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": false,
+        "game_time": 3672000,
+        "ambient": 28426,
+        "up": false,
+        "moon": false,
+        "height": 50.0,
+        "azimuth": -26.565,
+        "direction": [
+          0.57493,
+          0.76604,
+          -0.28746
+        ],
+        "color": [
+          1.0,
+          0.96,
+          0.88
+        ],
+        "strength": 0.0
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-104119",
+      "panel": 2,
+      "raw_image_file": "build/262/live/cave2-e1/devhero-20261112-104119-001.png",
+      "raw_image_sha256": "cbafe66bbd4cee8e00226216be285ce40cc158df549a630f0093e86af5e339ba",
+      "image": "cave2-e1.jpg",
+      "phase": "dawn"
+    },
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "CAVE2.MAP",
+      "elevation": 1,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "aef75c5ff8924ae18a8d5070602dbfca",
+      "view_tile": 21103,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -36.541667,
+          -22.0625,
+          32.958333,
+          38.6875
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            16.621439
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            18.0277557
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            29.8887749
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            30.2311611
+          ]
+        ]
+      },
+      "camera": "fixed eye=(50.64466,46.23085,76.46700), target=(1.45833,0.00000,2.68750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 4993,
+      "wall_pages": 5,
+      "hero": {
+        "tile": 21103,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          1.458333333,
+          2.6875
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          416,
+          148,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 271,
+        "wall_rows_any": true
+      },
+      "objects": {
+        "drawn": 1124,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": false,
+        "game_time": 3780000,
+        "ambient": 28426,
+        "up": false,
+        "moon": false,
+        "height": 70.0,
+        "azimuth": -26.565,
+        "direction": [
+          0.30591,
+          0.93969,
+          -0.15296
+        ],
+        "color": [
+          1.0,
+          0.96,
+          0.88
+        ],
+        "strength": 0.0
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-104120",
+      "panel": 3,
+      "raw_image_file": "build/262/live/cave2-e1/devhero-20261112-104120-000.png",
+      "raw_image_sha256": "cbafe66bbd4cee8e00226216be285ce40cc158df549a630f0093e86af5e339ba",
+      "image": "cave2-e1.jpg",
+      "phase": "day"
+    }
+  ]
+}

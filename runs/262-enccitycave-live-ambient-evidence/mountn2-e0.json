@@ -1,0 +1,629 @@
+{
+  "evidence_image": "mountn2-e0.jpg",
+  "map": "MOUNTN2.MAP",
+  "elevation": 0,
+  "capture_method": "tools/dev-snapshot.ps1 -ClockLadder",
+  "clock_progression": {
+    "session": "background test game; no --dev-hour or --dev-ambient arguments",
+    "start": "the ClockLadder fixture sets in-game time to 22:00 once",
+    "advance": "it invokes the normal Ctrl+T devtools handler 11 times; each step updates gameTime and runs scriptsExecMapUpdateProc",
+    "observed_hours": [
+      "22:00",
+      "02:00",
+      "06:00",
+      "09:00"
+    ],
+    "log": [
+      "CLOCK_LADDER stage=0 ticks=3384000 hour=2200 ambient=28426 daylight=0 sun=0.000000",
+      "CLOCK_LADDER stage=1 ticks=3528000 hour=200 ambient=28426 daylight=0 sun=0.000000",
+      "CLOCK_LADDER stage=2 ticks=3672000 hour=600 ambient=65536 daylight=0 sun=0.000000",
+      "CLOCK_LADDER stage=3 ticks=3780000 hour=900 ambient=65536 daylight=0 sun=0.000000",
+      "CLOCK_LADDER PASS"
+    ]
+  },
+  "matched_conditions": {
+    "map": "MOUNTN2.MAP",
+    "elevation": 0,
+    "view_tile": 18488,
+    "camera": "fixed eye=(43.14466,46.23085,70.21700), target=(-6.04167,0.00000,-3.56250), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+    "camera_turn": 0.0,
+    "renderer": "scene-gl",
+    "resolution": "1920x1080",
+    "logical_resolution": "960x540",
+    "scale": 2,
+    "scale_factor": 2.0,
+    "scene_view": "full",
+    "scene_3d_enabled": true
+  },
+  "pixel_comparison": {
+    "crop": "upper 880 pixels, excluding the game HUD region",
+    "night_22_vs_day_09_changed_pixel_fraction": 0.997614,
+    "mean_absolute_rgb_delta": 48.366
+  },
+  "captures": [
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "MOUNTN2.MAP",
+      "elevation": 0,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "2e1b659d1d1142f88ae16de41e4295b7",
+      "view_tile": 18488,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -21.041667,
+          -18.3125,
+          13.458333,
+          12.9375
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            16.621439
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            9.7072535
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            8.4225225
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            13.0354548
+          ]
+        ]
+      },
+      "camera": "fixed eye=(43.14466,46.23085,70.21700), target=(-6.04167,0.00000,-3.56250), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 134,
+      "wall_pages": 2,
+      "hero": {
+        "tile": 18688,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          -6.041666667,
+          -3.0625
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          432,
+          160,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 0,
+        "wall_rows_any": false
+      },
+      "objects": {
+        "drawn": 649,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": false,
+        "game_time": 3384000,
+        "ambient": 28426,
+        "up": false,
+        "moon": false,
+        "height": 50.0,
+        "azimuth": 153.435,
+        "direction": [
+          -0.57493,
+          0.76604,
+          0.28746
+        ],
+        "color": [
+          1.0,
+          0.96,
+          0.88
+        ],
+        "strength": 0.0
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-104326",
+      "panel": 0,
+      "raw_image_file": "build/262/live/mountn2-e0/devhero-20261112-104326-000.png",
+      "raw_image_sha256": "b815393c5e8d22188dc0cd1880b622557d1a1e72ee7e1147079e9aab7f5a53fa",
+      "image": "mountn2-e0.jpg",
+      "phase": "night"
+    },
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "MOUNTN2.MAP",
+      "elevation": 0,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "2e1b659d1d1142f88ae16de41e4295b7",
+      "view_tile": 18488,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -21.041667,
+          -18.3125,
+          13.458333,
+          12.9375
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            16.621439
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            9.7072535
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            8.4225225
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            13.0354548
+          ]
+        ]
+      },
+      "camera": "fixed eye=(43.14466,46.23085,70.21700), target=(-6.04167,0.00000,-3.56250), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 134,
+      "wall_pages": 2,
+      "hero": {
+        "tile": 18688,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          -6.041666667,
+          -3.0625
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          432,
+          160,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 0,
+        "wall_rows_any": false
+      },
+      "objects": {
+        "drawn": 649,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": false,
+        "game_time": 3528000,
+        "ambient": 28426,
+        "up": false,
+        "moon": false,
+        "height": 50.0,
+        "azimuth": -26.565,
+        "direction": [
+          0.57493,
+          0.76604,
+          -0.28746
+        ],
+        "color": [
+          1.0,
+          0.96,
+          0.88
+        ],
+        "strength": 0.0
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-104326",
+      "panel": 1,
+      "raw_image_file": "build/262/live/mountn2-e0/devhero-20261112-104326-001.png",
+      "raw_image_sha256": "b815393c5e8d22188dc0cd1880b622557d1a1e72ee7e1147079e9aab7f5a53fa",
+      "image": "mountn2-e0.jpg",
+      "phase": "night"
+    },
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "MOUNTN2.MAP",
+      "elevation": 0,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "2e1b659d1d1142f88ae16de41e4295b7",
+      "view_tile": 18488,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -21.041667,
+          -18.3125,
+          13.458333,
+          12.9375
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            16.621439
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            9.7072535
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            8.4225225
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            13.0354548
+          ]
+        ]
+      },
+      "camera": "fixed eye=(43.14466,46.23085,70.21700), target=(-6.04167,0.00000,-3.56250), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 134,
+      "wall_pages": 2,
+      "hero": {
+        "tile": 18688,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          -6.041666667,
+          -3.0625
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          432,
+          160,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 0,
+        "wall_rows_any": false
+      },
+      "objects": {
+        "drawn": 649,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": false,
+        "game_time": 3672000,
+        "ambient": 65536,
+        "up": false,
+        "moon": false,
+        "height": 50.0,
+        "azimuth": -26.565,
+        "direction": [
+          0.57493,
+          0.76604,
+          -0.28746
+        ],
+        "color": [
+          1.0,
+          0.96,
+          0.88
+        ],
+        "strength": 0.0
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-104327",
+      "panel": 2,
+      "raw_image_file": "build/262/live/mountn2-e0/devhero-20261112-104327-000.png",
+      "raw_image_sha256": "044eea5ec39d497eb6fe18997c01d24263508e7bb97e6fce008a3997680efe1e",
+      "image": "mountn2-e0.jpg",
+      "phase": "dawn"
+    },
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "MOUNTN2.MAP",
+      "elevation": 0,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "2e1b659d1d1142f88ae16de41e4295b7",
+      "view_tile": 18488,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -21.041667,
+          -18.3125,
+          13.458333,
+          12.9375
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            16.621439
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            9.7072535
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            8.4225225
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            13.0354548
+          ]
+        ]
+      },
+      "camera": "fixed eye=(43.14466,46.23085,70.21700), target=(-6.04167,0.00000,-3.56250), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 134,
+      "wall_pages": 2,
+      "hero": {
+        "tile": 18688,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          -6.041666667,
+          -3.0625
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          432,
+          160,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 0,
+        "wall_rows_any": false
+      },
+      "objects": {
+        "drawn": 649,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": false,
+        "game_time": 3780000,
+        "ambient": 65536,
+        "up": false,
+        "moon": false,
+        "height": 70.0,
+        "azimuth": -26.565,
+        "direction": [
+          0.30591,
+          0.93969,
+          -0.15296
+        ],
+        "color": [
+          1.0,
+          0.96,
+          0.88
+        ],
+        "strength": 0.0
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-104327",
+      "panel": 3,
+      "raw_image_file": "build/262/live/mountn2-e0/devhero-20261112-104327-001.png",
+      "raw_image_sha256": "044eea5ec39d497eb6fe18997c01d24263508e7bb97e6fce008a3997680efe1e",
+      "image": "mountn2-e0.jpg",
+      "phase": "day"
+    }
+  ]
+}

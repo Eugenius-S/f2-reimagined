@@ -1,0 +1,629 @@
+{
+  "evidence_image": "city4-e0.jpg",
+  "map": "CITY4.MAP",
+  "elevation": 0,
+  "capture_method": "tools/dev-snapshot.ps1 -ClockLadder",
+  "clock_progression": {
+    "session": "background test game; no --dev-hour or --dev-ambient arguments",
+    "start": "the ClockLadder fixture sets in-game time to 22:00 once",
+    "advance": "it invokes the normal Ctrl+T devtools handler 11 times; each step updates gameTime and runs scriptsExecMapUpdateProc",
+    "observed_hours": [
+      "22:00",
+      "02:00",
+      "06:00",
+      "09:00"
+    ],
+    "log": [
+      "CLOCK_LADDER stage=0 ticks=3384000 hour=2200 ambient=28426 daylight=1 sun=0.300000",
+      "CLOCK_LADDER stage=1 ticks=3528000 hour=200 ambient=28426 daylight=1 sun=0.300000",
+      "CLOCK_LADDER stage=2 ticks=3672000 hour=600 ambient=65536 daylight=1 sun=0.000000",
+      "CLOCK_LADDER stage=3 ticks=3780000 hour=900 ambient=65536 daylight=1 sun=1.000000",
+      "CLOCK_LADDER PASS"
+    ]
+  },
+  "matched_conditions": {
+    "map": "CITY4.MAP",
+    "elevation": 0,
+    "view_tile": 25693,
+    "camera": "fixed eye=(45.64466,46.23085,87.96700), target=(-3.54167,0.00000,14.18750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+    "camera_turn": 0.0,
+    "renderer": "scene-gl",
+    "resolution": "1920x1080",
+    "logical_resolution": "960x540",
+    "scale": 2,
+    "scale_factor": 2.0,
+    "scene_view": "full",
+    "scene_3d_enabled": true
+  },
+  "pixel_comparison": {
+    "crop": "upper 880 pixels, excluding the game HUD region",
+    "night_22_vs_day_09_changed_pixel_fraction": 0.991035,
+    "mean_absolute_rgb_delta": 43.009
+  },
+  "captures": [
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "CITY4.MAP",
+      "elevation": 0,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "7632005ecd7c4e6a98662f1658c8eec0",
+      "view_tile": 25693,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -33.041667,
+          -34.3125,
+          36.958333,
+          32.1875
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            28.2489929
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            23.5747585
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            28.0999203
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            19.1371574
+          ]
+        ]
+      },
+      "camera": "fixed eye=(45.64466,46.23085,87.96700), target=(-3.54167,0.00000,14.18750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 12592,
+      "wall_pages": 4,
+      "hero": {
+        "tile": 25892,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          -4.041666667,
+          14.9375
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          465,
+          160,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 171,
+        "wall_rows_any": true
+      },
+      "objects": {
+        "drawn": 2055,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": true,
+        "game_time": 3384000,
+        "ambient": 28426,
+        "up": true,
+        "moon": true,
+        "height": 65.0,
+        "azimuth": -26.565,
+        "direction": [
+          0.378,
+          0.90631,
+          -0.189
+        ],
+        "color": [
+          0.72,
+          0.82,
+          1.0
+        ],
+        "strength": 0.3
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-103919",
+      "panel": 0,
+      "raw_image_file": "build/262/live/city4-e0/devhero-20261112-103919-000.png",
+      "raw_image_sha256": "65711273012439716052148d506cbf996b24f9830476474ebed6738fd3dedac9",
+      "image": "city4-e0.jpg",
+      "phase": "night"
+    },
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "CITY4.MAP",
+      "elevation": 0,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "7632005ecd7c4e6a98662f1658c8eec0",
+      "view_tile": 25693,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -33.041667,
+          -34.3125,
+          36.958333,
+          32.1875
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            28.2489929
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            23.5747585
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            28.0999203
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            19.1371574
+          ]
+        ]
+      },
+      "camera": "fixed eye=(45.64466,46.23085,87.96700), target=(-3.54167,0.00000,14.18750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 12592,
+      "wall_pages": 4,
+      "hero": {
+        "tile": 25892,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          -4.041666667,
+          14.9375
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          465,
+          160,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 171,
+        "wall_rows_any": true
+      },
+      "objects": {
+        "drawn": 2055,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": true,
+        "game_time": 3528000,
+        "ambient": 28426,
+        "up": true,
+        "moon": true,
+        "height": 65.0,
+        "azimuth": -26.565,
+        "direction": [
+          0.378,
+          0.90631,
+          -0.189
+        ],
+        "color": [
+          0.72,
+          0.82,
+          1.0
+        ],
+        "strength": 0.3
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-103920",
+      "panel": 1,
+      "raw_image_file": "build/262/live/city4-e0/devhero-20261112-103920-000.png",
+      "raw_image_sha256": "65711273012439716052148d506cbf996b24f9830476474ebed6738fd3dedac9",
+      "image": "city4-e0.jpg",
+      "phase": "night"
+    },
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "CITY4.MAP",
+      "elevation": 0,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "7632005ecd7c4e6a98662f1658c8eec0",
+      "view_tile": 25693,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -33.041667,
+          -34.3125,
+          36.958333,
+          32.1875
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            28.2489929
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            23.5747585
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            28.0999203
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            19.1371574
+          ]
+        ]
+      },
+      "camera": "fixed eye=(45.64466,46.23085,87.96700), target=(-3.54167,0.00000,14.18750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 12592,
+      "wall_pages": 4,
+      "hero": {
+        "tile": 25892,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          -4.041666667,
+          14.9375
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          465,
+          160,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 171,
+        "wall_rows_any": true
+      },
+      "objects": {
+        "drawn": 2055,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": true,
+        "game_time": 3672000,
+        "ambient": 65536,
+        "up": false,
+        "moon": false,
+        "height": 50.0,
+        "azimuth": -26.565,
+        "direction": [
+          0.57493,
+          0.76604,
+          -0.28746
+        ],
+        "color": [
+          1.0,
+          0.96,
+          0.88
+        ],
+        "strength": 0.0
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-103920",
+      "panel": 2,
+      "raw_image_file": "build/262/live/city4-e0/devhero-20261112-103920-001.png",
+      "raw_image_sha256": "1b4e095d40b24f59c837764b7ca3ce34b7a941e6d89780b054ec293d2990759a",
+      "image": "city4-e0.jpg",
+      "phase": "dawn"
+    },
+    {
+      "view": "static-wall-plus-hero-preview",
+      "map": "CITY4.MAP",
+      "elevation": 0,
+      "still_snapshot": true,
+      "combat_fixture": {
+        "phase": "none",
+        "in_combat": false,
+        "player_turn": true,
+        "enemy_turn": false,
+        "scene_availability": "available"
+      },
+      "snapshot_run": "7632005ecd7c4e6a98662f1658c8eec0",
+      "view_tile": 25693,
+      "preview_requested": true,
+      "scene_3d_enabled": true,
+      "scene_view": "full",
+      "sharp_text": {
+        "setting": false,
+        "active": false,
+        "drawn": false,
+        "runs": 0,
+        "glyphs": 0,
+        "restored_pixels": 0,
+        "prepare_ms": 0.0
+      },
+      "map_clip": {
+        "enabled": true,
+        "setting_enabled": true,
+        "variant": "authored",
+        "source": "authored",
+        "world_bounds": [
+          -33.041667,
+          -34.3125,
+          36.958333,
+          32.1875
+        ],
+        "planes": [
+          [
+            0.4472136,
+            0.8944272,
+            28.2489929
+          ],
+          [
+            -0.8320503,
+            0.5547002,
+            23.5747585
+          ],
+          [
+            -0.4472136,
+            -0.8944272,
+            28.0999203
+          ],
+          [
+            0.8320503,
+            -0.5547002,
+            19.1371574
+          ]
+        ]
+      },
+      "camera": "fixed eye=(45.64466,46.23085,87.96700), target=(-3.54167,0.00000,14.18750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "camera_turn": 0.0,
+      "wall_triangles": 12592,
+      "wall_pages": 4,
+      "hero": {
+        "tile": 25892,
+        "fid": 16777278,
+        "frame": 0,
+        "rotation": 0,
+        "world_anchor": [
+          -4.041666667,
+          14.9375
+        ]
+      },
+      "egg": {
+        "shown": true,
+        "rect": [
+          465,
+          160,
+          129,
+          98
+        ],
+        "zoom": 1.0,
+        "wall_rows_marked": 171,
+        "wall_rows_any": true
+      },
+      "objects": {
+        "drawn": 2055,
+        "skipped": 0
+      },
+      "preview_availability": "available",
+      "renderer": "scene-gl",
+      "light": "enabled",
+      "effect_emission": true,
+      "glow": {
+        "enabled": false,
+        "strength": 2.0
+      },
+      "weapon_effect": null,
+      "muzzle": null,
+      "sun": {
+        "setting": true,
+        "daylight": true,
+        "game_time": 3780000,
+        "ambient": 65536,
+        "up": true,
+        "moon": false,
+        "height": 70.0,
+        "azimuth": -26.565,
+        "direction": [
+          0.30591,
+          0.93969,
+          -0.15296
+        ],
+        "color": [
+          1.0,
+          0.96,
+          0.88
+        ],
+        "strength": 1.0
+      },
+      "resolution": "1920x1080",
+      "logical_resolution": "960x540",
+      "scale": 2,
+      "scale_factor": 2.0,
+      "windowed": true,
+      "drawable": "1920x1080",
+      "sdl_window": {
+        "flags": 73734,
+        "window_position": "-20000,-20000",
+        "window_size": "1920x1080",
+        "drawable_size": "1920x1080",
+        "fullscreen": false,
+        "fullscreen_desktop": false,
+        "borderless": false
+      },
+      "ce_commit": "b3a4402bc",
+      "tools_commit": "-",
+      "exe_sha256": "477e22560a76b017d96985b2ffed9d85bdbeb8aed821636de828685155091bdc",
+      "taken": "20261112-103921",
+      "panel": 3,
+      "raw_image_file": "build/262/live/city4-e0/devhero-20261112-103921-000.png",
+      "raw_image_sha256": "1b4e095d40b24f59c837764b7ca3ce34b7a941e6d89780b054ec293d2990759a",
+      "image": "city4-e0.jpg",
+      "phase": "day"
+    }
+  ]
+}
