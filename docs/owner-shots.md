@@ -38,9 +38,19 @@ A batch of these shots with the owner's notes becomes tasks.
 | `render` | every [3d] render setting plus the renderer in use |
 | `build` | the build commit, the game version, the wall-clock stamp |
 
-String fields that come from the game's data (`map`, `city`, `cursor.name`)
-keep the game's own encoding: cp1251 on a Russian install. Read them as
-game data, not as JSON-escaped Unicode.
+Current owner-shot JSON is UTF-8. The game converts string fields from its
+Russian CP1251 data to UTF-8 before writing JSON, so standard JSON readers
+decode `map`, `city`, and object names such as `cursor.name` as ordinary
+Unicode strings. Do not decode current sidecars as CP1251.
+
+The sidecars committed with task 183 predate the UTF-8 fix in PR #334. Treat
+those files as legacy CP1251 examples; their Russian strings are not evidence
+of the current output encoding. A small current-format example is in
+`docs/examples/owner-shot-utf8.json`. Read and check its Russian fields with:
+
+```powershell
+py -3 -c "import json; d=json.load(open('docs/examples/owner-shot-utf8.json', encoding='utf-8')); assert (d['map'], d['city'], d['cursor']['name']) == ('Центр города', 'Кламат', 'Кирпичная стена'); print('OK: current UTF-8 Russian strings decoded')"
+```
 
 The shot never stalls the frame noticeably: the game reads the frame back
 and builds the JSON on the frame that took it (a few milliseconds, logged as

@@ -31,5 +31,6 @@ frames before the capture). vctyctyd leaves the full view right after the
 load (the city's game state takes over), so it ran with no delay and the
 capture sits at the first ready present.
 
-The JSON string fields keep the game's own encoding (cp1251 on this Russian
-install): "map": "Центр города", "city": "Кламат".
+Legacy pre-#334 sidecar example: these JSON string fields retain the game's
+CP1251 encoding on this Russian install: "map": "Центр города", "city":
+"Кламат". Current owner-shot sidecars are UTF-8; see docs/owner-shots.md.
