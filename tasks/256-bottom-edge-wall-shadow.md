@@ -2,7 +2,7 @@
 id: 256
 title: The bottom-edge wall shadow has no notched termination
 milestone: M1
-status: doing
+status: blocked
 owner: gpt
 suggested: any
 priority: normal
@@ -38,3 +38,11 @@ Camera bottom-stop behavior (104/108), corner post card splitting (107/189), new
 ## Log
 
 - 2026-11-12 gpt review of 096: The saved evidence records a notched building-shadow edge by the vine wall at tile 28096, hour 8. 096 and main are pixel-identical there except for the separate pen fence corner post. Exact wall/object ownership and the affected pixels were not marked, so reproduction and pinning are required before any fix.
+
+
+### 2026-11-12 gpt: 3D reproduction blocked after two capture attempts
+
+Done: opened draft PR #455 and captured the classic view for KLAMALL.MAP, elevation 0, view tile 28096, hour 8, zoom 1.0. The two required 3D attempts are invalid for pixel diagnosis: both show a large white ground with no rendered ground-shadow edge at the marked spot. The second command used -NoPreview, but its sidecar still reports preview_requested: true and its image repeats the same white-ground result. The comparison sheet is 
+uns/256-bottom-edge-wall-shadow/blocked-capture-result.jpg; raw images and sidecars are retained locally under uild/task256-bottom-edge-wall-shadow-captures/. The owner shot and prior matched sheet still show the reported flaw, but these captures do not establish whether current main reproduces it or identify exact pixels, wall, or caster. No code was changed.
+Next: repeat the matched 3D capture only after the background capture path produces the terrain and shadow at this view, then identify exact pixels and scene objects before deciding on a cause-based fix.
+Check: powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release completed. py -3 tools/scene_export/export.py --game-root 'E:\Projects\fallout2-ce-3d\game' --map klamall --elevation 0 --cache-root build/scene-cache completed. The two 3D commands were powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev-snapshot.ps1 -Map klamall -Elevation 0 -ViewTile 28096 -Hour 8 -Zoom 1 -Still -Shadows -OutputDirectory runs/256-bottom-edge-wall-shadow and the same with -NoPreview. Classic capture used the same parameters with -Classic. CTest and regression were not run because no code was changed and the required 3D diagnosis is blocked.
