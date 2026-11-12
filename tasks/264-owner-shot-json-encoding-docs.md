@@ -2,8 +2,8 @@
 id: 264
 title: Owner shot docs describe current JSON encoding
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: any
 priority: normal
 tier: 1
