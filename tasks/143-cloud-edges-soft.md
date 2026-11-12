@@ -2,8 +2,8 @@
 id: 143
 title: Cloud shadow edges stay soft on the ground
 milestone: M1
-status: blocked
-owner: any
+status: doing
+owner: gpt
 suggested: any
 priority: normal
 tier: 3
