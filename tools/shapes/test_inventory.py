@@ -25,8 +25,8 @@ class TodaysShapesTests(unittest.TestCase):
             "hidden": [1],
             "props": [
                 prop(2),
-                prop(3, wall_v=1.15),       # exactly at the cutoff stays a box
-                prop(4, wall_v=1.16),       # a higher far edge forms a back
+                prop(3, top=0.0, wall_u=0.0, wall_v=0.15),  # exact cutoff stays a box
+                prop(4, top=0.0, wall_u=0.0, wall_v=0.16),  # above cutoff forms a back
                 prop(5, kind=1),            # round solids are drums
                 prop(6, seen=2),            # game-camera duplicate is ignored
             ],
