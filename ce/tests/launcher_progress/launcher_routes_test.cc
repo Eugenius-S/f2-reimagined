@@ -53,6 +53,9 @@ int main()
     check(assetApiUrl(json, "b.zip") == "https://api.example/assets/2", "asset url by name");
     check(assetApiUrl(json, "c.zip").empty(), "missing asset gives nothing");
 
+    check(downloadComplete(10, 10) && downloadComplete(10, 0), "the whole length, or no length named");
+    check(!downloadComplete(9, 10) && !downloadComplete(0, 0) && !downloadComplete(0, 10), "a cut-short or empty download fails");
+
     std::printf("launcher_routes_tests: ok\n");
     return 0;
 }
