@@ -13,20 +13,23 @@ from eval import thing_pixels
 
 
 class ThingPixelsTests(unittest.TestCase):
-    def test_counts_pixels_at_or_above_channel_threshold(self):
+    def test_counts_pixels_once_using_the_strongest_rgb_channel(self):
         with tempfile.TemporaryDirectory() as temp:
             thing_path = Path(temp) / "thing.png"
             empty_path = Path(temp) / "empty.png"
-            empty = Image.new("RGB", (4, 1), (40, 40, 40))
+            empty = Image.new("RGB", (6, 1), (40, 40, 40))
             thing = empty.copy()
             draw = ImageDraw.Draw(thing)
             draw.point((0, 0), fill=(48, 40, 40))  # exactly at channel threshold
             draw.point((1, 0), fill=(49, 40, 40))  # above channel threshold
             draw.point((2, 0), fill=(47, 40, 40))  # below channel threshold
+            draw.point((3, 0), fill=(40, 48, 40))  # green channel only
+            draw.point((4, 0), fill=(40, 40, 50))  # blue channel only
+            draw.point((5, 0), fill=(49, 50, 52))  # multiple channels, still one pixel
             thing.save(thing_path)
             empty.save(empty_path)
 
-            self.assertEqual(thing_pixels(thing_path, empty_path), 2)
+            self.assertEqual(thing_pixels(thing_path, empty_path), 5)
 
     def test_rejects_shots_with_different_dimensions(self):
         with tempfile.TemporaryDirectory() as temp:
