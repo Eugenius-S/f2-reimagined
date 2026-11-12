@@ -2,8 +2,8 @@
 id: 256
 title: The bottom-edge wall shadow has no notched termination
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: any
 priority: normal
 tier: 3
