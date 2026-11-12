@@ -2,7 +2,7 @@
 
 ## Capture method
 
-Built `Release` with `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release`. Exported 23 `encspecial` maps / 28 scenes from `E:\Projects\fallout2-ce-3d\game` into this worktree's isolated `build/scene-cache`.
+Built `Release` with `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release`. Exported 23 `encspecial` maps / 28 scenes from the main checkout's game folder into this worktree's isolated `build/scene-cache`.
 
 Captured the exact 25 `encsp-*` regression spots from `tools/regression/spots.json`. Each ClockLadder run used `tools/dev-snapshot.ps1 -Map <map> -Elevation <elevation> -ViewTile <tile> -ClockLadder -SceneCache build/scene-cache` and recorded four in-game time stages: 22:00, 02:00, 06:00 and 09:00. The ladder advances the real game clock through Ctrl+T. No `--dev-hour` or `--dev-ambient` was used. Every original JSON sidecar is retained next to its map sheet and records its `clock_ladder` hour, ticks and ambient. It points to the composite with `evidence_sheet` and `evidence_panel`. A [CSV index](capture-index.csv) lists all 100 samples. Raw PNG captures were removed after making the JPEG sheets.
 
