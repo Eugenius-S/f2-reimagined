@@ -1,0 +1,184 @@
+{
+  "evidence_role": "rear-fly-quarter",
+  "fly_turn_degrees": 180,
+  "source_snapshot": "devhero-20261112-102450-000.png",
+  "image": "shelf002-broken1-e0-tile9678-turn180.jpg",
+  "source_snapshot_metadata": {
+    "image": "devhero-20261112-102450-000.png",
+    "view": "static-wall-plus-hero-preview",
+    "map": "BROKEN1.MAP",
+    "elevation": 0,
+    "still_snapshot": true,
+    "combat_fixture": {
+      "phase": "none",
+      "in_combat": false,
+      "player_turn": true,
+      "enemy_turn": false,
+      "scene_availability": "available"
+    },
+    "snapshot_run": "98f89a30d450477499058e66c2b4d690",
+    "view_tile": 9678,
+    "preview_requested": true,
+    "scene_3d_enabled": true,
+    "scene_view": "full",
+    "sharp_text": {
+      "setting": false,
+      "active": false,
+      "drawn": false,
+      "runs": 0,
+      "glyphs": 0,
+      "restored_pixels": 0,
+      "prepare_ms": 0.0
+    },
+    "map_clip": {
+      "enabled": true,
+      "setting_enabled": true,
+      "variant": "authored",
+      "source": "authored",
+      "world_bounds": [
+        -41.541667,
+        -42.3125,
+        48.958333,
+        42.4375
+      ],
+      "planes": [
+        [
+          0.4472136,
+          0.8944272,
+          33.6155548
+        ],
+        [
+          -0.8320503,
+          0.5547002,
+          31.3405609
+        ],
+        [
+          -0.4472136,
+          -0.8944272,
+          37.0441933
+        ],
+        [
+          0.8320503,
+          -0.5547002,
+          25.2388592
+        ]
+      ]
+    },
+    "camera": "fixed eye=(38.14466,46.23085,48.21700), target=(-11.04167,0.00000,-25.56250), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+    "camera_turn": 0.0,
+    "wall_triangles": 49426,
+    "wall_pages": 9,
+    "hero": {
+      "tile": 17947,
+      "fid": 16777278,
+      "frame": 0,
+      "rotation": 3,
+      "world_anchor": [
+        23.458333333,
+        -5.3125
+      ]
+    },
+    "egg": {
+      "shown": false,
+      "wall_rows_marked": 485,
+      "wall_rows_any": true
+    },
+    "objects": {
+      "drawn": 70,
+      "skipped": 0
+    },
+    "preview_availability": "available",
+    "renderer": "scene-gl",
+    "light": "enabled",
+    "effect_emission": true,
+    "glow": {
+      "enabled": false,
+      "strength": 2.0
+    },
+    "weapon_effect": null,
+    "muzzle": null,
+    "sun": {
+      "setting": true,
+      "daylight": true,
+      "game_time": 302400,
+      "ambient": 65536,
+      "up": true,
+      "moon": false,
+      "height": 66.0,
+      "azimuth": -26.565,
+      "direction": [
+        0.3638,
+        0.91355,
+        -0.1819
+      ],
+      "color": [
+        1.0,
+        0.96,
+        0.88
+      ],
+      "strength": 1.0
+    },
+    "resolution": "1920x1080",
+    "logical_resolution": "960x540",
+    "scale": 2,
+    "scale_factor": 2.0,
+    "windowed": true,
+    "drawable": "1920x1080",
+    "sdl_window": {
+      "flags": 73734,
+      "window_position": "-20000,-20000",
+      "window_size": "1920x1080",
+      "drawable_size": "1920x1080",
+      "fullscreen": false,
+      "fullscreen_desktop": false,
+      "borderless": false
+    },
+    "ce_commit": "41420bb75",
+    "tools_commit": "-",
+    "exe_sha256": "53e32615ed9a0cb86afc1f8d0be741b95886d0ba5c053750c567b48f087bbe1d",
+    "taken": "20261112-102450"
+  },
+  "object": {
+    "name": "Boxes and Sacks",
+    "art_file": "shelf002.frm",
+    "art_fid": "0x02000940",
+    "map": "broken1.map",
+    "elevation": 0,
+    "tile": 9678,
+    "object_record_index": 436,
+    "map_object_id": 535,
+    "near_rotation": 2,
+    "opposite_slot": 5,
+    "scene_shape": "box+back"
+  },
+  "source_art_assessment": {
+    "slot_0": "intact shelf with boxes",
+    "slots_1_to_4": "partial/damage-state shelf variants, not rear drawings",
+    "slot_5": "UNUSED ART placeholder",
+    "source_for_solid_back": "no separate back source emitted; opposite slot 5 is rejected",
+    "conclusion": "opposite slot is not a rear drawing; do not describe it as rear art",
+    "texel_coverage_by_slot": {
+      "0": 0.679,
+      "1": 0.135,
+      "2": 0.15,
+      "3": 0.161,
+      "4": 0.295,
+      "5": 1.0
+    }
+  },
+  "capture_settings": {
+    "scene_3d_enabled": true,
+    "still_snapshot": true,
+    "solo_radius_hexes": 5,
+    "fly_pitch_degrees": 30,
+    "fly_distance": 4,
+    "zoom": 2,
+    "resolution": "1920x1080",
+    "hero_tile": "default test fixture tile 17947",
+    "f2ce_no_egg": true
+  },
+  "build_commit": "41420bb75",
+  "scene_cache_fingerprint": "77444857cae8d234110922b90030559b31bd75e880804c7c33c4dc5059857d28",
+  "art_source_sha256": "b965de349223b374fd2cd3fc118605eec08552dbfcf094e5e3ff7033f08c23ff",
+  "runtime_result": "The solid is visible in both opposite fly quarters. Its far face has no separately selected opposite-slot art because slot 5 is the placeholder; these captures do not establish a rear drawing or a no-see-through claim for one."
+}
