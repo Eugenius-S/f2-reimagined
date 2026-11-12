@@ -2,8 +2,8 @@
 id: 255
 title: Verify cabinet ordering with the camera turned
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: gpt
 priority: normal
 tier: 3
