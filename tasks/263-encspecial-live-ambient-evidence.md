@@ -2,8 +2,8 @@
 id: 263
 title: Verify live ambient lighting and missing entries for special encounters
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: gpt
 priority: normal
 tier: 3
