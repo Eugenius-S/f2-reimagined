@@ -55,6 +55,7 @@ void gameDialogEndBarter();
 bool gameDialogIsBarterWindowExpanded();
 int gameDialogGetWindow();
 int gameDialogGetBackgroundWindow();
+int gameDialogGetOptionWindow();
 int gameDialogGetOptionCount();
 int gameDialogGetOptionLayout(int index, GameDialogOptionLayout* layout);
 void gameDialogSetPartyMemberCcMsgIds(const ProtoId& protoId, int startMsgId, int endMsgId);

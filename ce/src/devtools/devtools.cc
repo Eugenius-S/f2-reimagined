@@ -3602,6 +3602,16 @@ void vanillaPresented()
                 if (ownerCount < 2) ownerIds[ownerCount++] = window.id;
             }
         }
+        if (gDialogCursorCheckRequested) {
+            const int optionWindowId = gameDialogGetOptionWindow();
+            for (int index = 0; optionWindowId >= 0 && index < windowCount; index++) {
+                TextWindowSnapshot window;
+                if (!textCaptureGetWindowSnapshot(index, &window, nullptr) || window.id != optionWindowId) continue;
+                replyOwnerId = window.id;
+                replyOwnerY = window.y;
+                break;
+            }
+        }
         // A full-screen backdrop can present while the dialogue is still
         // being built. Old world text is not a completed dialogue fixture.
         if (ownerCount >= 2 && gameDialogGetOptionCount() > 0) {
@@ -3741,6 +3751,25 @@ void vanillaPresented()
                     for (const scene::TextRecord& record : screenRecords) {
                         if (record.ownerWindow == replyOwnerId && record.run.text == gDialogCursorCheckRecord.run.text) {
                             sameReplyRun = true;
+                            break;
+                        }
+                    }
+                    if (!sameReplyRun) {
+                        for (int index = 0; index < windowCount; index++) {
+                            TextWindowSnapshot window;
+                            if (!textCaptureGetWindowSnapshot(index, &window, nullptr)
+                                || window.id != replyOwnerId || window.pixels == nullptr) continue;
+                            const scene::TextBufferId ownerBuffer = textCaptureBufferId(window.pixels);
+                            const std::vector<scene::TextRecord> ownerRecords = ownerBuffer != 0
+                                ? scene::textCaptureSharpRecords(ownerBuffer)
+                                : std::vector<scene::TextRecord>();
+                            for (const scene::TextRecord& record : ownerRecords) {
+                                if (record.ownerWindow == replyOwnerId
+                                    && record.run.text == gDialogCursorCheckRecord.run.text) {
+                                    sameReplyRun = true;
+                                    break;
+                                }
+                            }
                             break;
                         }
                     }
@@ -3889,6 +3918,7 @@ void vanillaPresented()
                 const scene::TextRecord* replyRecord = nullptr;
                 int screenOwnerRecords = 0;
                 for (const scene::TextRecord& record : screenRecords) {
+                    if (gDialogCursorCheckRequested) break;
                     if (record.ownerWindow == replyOwnerId) screenOwnerRecords++;
                     if (record.ownerWindow == replyOwnerId && !record.run.text.empty() && !record.coverage.empty()) {
                         replyRecord = &record;
@@ -3904,18 +3934,47 @@ void vanillaPresented()
                         const std::vector<scene::TextRecord> ownerRecords = ownerBuffer != 0
                             ? scene::textCaptureSharpRecords(ownerBuffer)
                             : std::vector<scene::TextRecord>();
+                        GameDialogOptionLayout optionLayout = {};
+                        const int preferredOption = std::min(5, gameDialogGetOptionCount() - 1);
+                        if (!gameDialogGetOptionLayout(preferredOption, &optionLayout)) {
+                            failCursorCheck("target-dialog-option-layout-unavailable");
+                            return;
+                        }
                         for (const scene::TextRecord& record : ownerRecords) {
-                            printf("DIALOG_CURSOR_CHECK OWNER_RUN window=%d screen=%dx%d owner=%dx%d offset=%d,%d bounds=%d,%d,%d,%d coverage=%zu text=%s\\n",
-                                replyOwnerId, gSdlSurface->w, gSdlSurface->h, window.width, window.height,
-                                record.ownerOffsetX, record.ownerOffsetY, record.bounds.x, record.bounds.y,
-                                record.bounds.width, record.bounds.height, record.coverage.size(), record.run.text.c_str());
+                            if (record.ownerWindow != replyOwnerId
+                                || record.bounds.y >= optionLayout.textBottom
+                                || record.bounds.y + record.bounds.height <= optionLayout.textTop) continue;
+                            gDialogCursorCheckRecord = record;
+                            gDialogCursorCheckRecord.run.x += window.x;
+                            gDialogCursorCheckRecord.run.y += window.y;
+                            gDialogCursorCheckRecord.bounds.x += window.x;
+                            gDialogCursorCheckRecord.bounds.y += window.y;
+                            for (scene::TextPixelCoverage& coverage : gDialogCursorCheckRecord.coverage) {
+                                coverage.x += window.x;
+                                coverage.y += window.y;
+                            }
+                            for (scene::TextPixelRecord& pixel : gDialogCursorCheckRecord.pixels) {
+                                pixel.x += window.x;
+                                pixel.y += window.y;
+                            }
+                            for (scene::TextOwnerWitness& witness : gDialogCursorCheckRecord.ownerWitnesses) {
+                                witness.x += window.x;
+                                witness.y += window.y;
+                            }
+                            replyRecord = &gDialogCursorCheckRecord;
+                            printf("DIALOG_CURSOR_CHECK OPTION index=%d text=%s window=%d row_top=%d row_bottom=%d owner=%d,%d\n",
+                                preferredOption, record.run.text.c_str(), replyOwnerId,
+                                optionLayout.textTop, optionLayout.textBottom, window.x, window.y);
+                            break;
                         }
                         break;
                     }
+                }
+                if (replyRecord == nullptr) {
                     printf("DIALOG_CURSOR_CHECK SCREEN_RECORDS buffer=%llu total=%zu owner_matches=%d\\n",
                         static_cast<unsigned long long>(screenBuffer), screenRecords.size(), screenOwnerRecords);
                     fflush(stdout);
-                    failCursorCheck("reply-run-not-present-on-screen");
+                    failCursorCheck("target-dialog-option-text-not-captured");
                     return;
                 }
 
