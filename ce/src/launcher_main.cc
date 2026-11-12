@@ -27,6 +27,7 @@
 #include <iterator>
 #include <sstream>
 #include <string>
+#include <chrono>
 #include <vector>
 
 #include "launcher_routes.h"
@@ -733,7 +734,7 @@ const std::vector<std::string>& buildFiles()
     return names;
 }
 
-bool backupInstalledBuild(const fs::path& root, const std::string& version)
+bool backupInstalledBuild(const fs::path& root, const std::string& version, std::string* folderName)
 {
     std::string backupVersion = version.empty() ? "manual" : version;
     for (char& ch : backupVersion) {
@@ -741,6 +742,7 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version)
     }
     if (backupVersion.size() > 100) backupVersion.resize(100);
     fs::path backup = root / "f2reimagined-backups" / backupVersion;
+    *folderName = backupVersion;
     std::error_code error;
     fs::create_directories(backup, error);
     if (error) {
@@ -769,6 +771,32 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version)
     }
     logf("backed up build %s to f2reimagined-backups", version.c_str());
     return true;
+}
+
+// What an older build of ours leaves in the game folder and the new one does not need:
+// every backup but the newest (rollback only ever takes that one), the launcher under
+// its zip name from a hand-unpacked release, and work folders of runs that were cut short.
+void cleanOlderBuildLeftovers(const fs::path& root, const std::string& keptBackup)
+{
+    std::error_code error;
+    for (const fs::path& gone : launcher_uninstall::staleBackups(root / "f2reimagined-backups", keptBackup)) {
+        fs::remove_all(gone, error);
+        logf("  older backup %s: %s", gone.filename().string().c_str(), error ? error.message().c_str() : "removed");
+    }
+    // Fails quietly while it is the running program; the next start takes it.
+    if (fs::remove(root / kZipLauncher, error)) logf("  %s: removed (the launcher is %s now)", kZipLauncher, kRootLauncher);
+
+    char tempPath[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempPath);
+    std::string own = std::to_string(GetCurrentProcessId());
+    auto dayAgo = fs::file_time_type::clock::now() - std::chrono::hours(24);
+    for (fs::directory_iterator it(tempPath, error), end; !error && it != end; it.increment(error)) {
+        std::string name = it->path().filename().string();
+        if (name.rfind("f2ce3d-", 0) != 0 || name.substr(name.rfind('-') + 1) == own) continue;
+        std::error_code ignored;
+        if (!it->is_directory(ignored) || fs::last_write_time(it->path(), ignored) > dayAgo) continue;
+        fs::remove_all(it->path(), ignored);
+    }
 }
 
 bool rollbackInstalledBuild(const fs::path& root)
@@ -1198,6 +1226,7 @@ bool uninstallMod(const fs::path& root)
             logf("  removed the folder %s", name.c_str());
         }
     }
+    fs::remove(root / "user-assets", error); // only when nothing of the player's is left in it
     if (!removeRussianTranslation(root)) ok = false;
 
     // The launcher itself, last: if it is the running program, it moves aside and a helper deletes it after we close.
@@ -1501,7 +1530,9 @@ int runConsole(Options options)
     bool freshInstall = !installedGamePresent;
     bool updated = false;
     // An older launcher installed the build without the wide art folders: pull once more for them.
-    bool wideArtMissing = !fs::exists(root / "user-assets/fullscreen-20261028/wallpapers-selected/hires/menu");
+    // The picture itself, not its folder: an install over an older build left the folders empty.
+    std::error_code artError;
+    bool wideArtMissing = fs::file_size(root / launcher_uninstall::kWideMenuArt, artError) == 0 || artError;
     if (!remoteVersion.empty() && (remoteVersion != installedVersion || wideArtMissing)) {
         // --- download and unpack ---
         if (installedVersion.empty()) logf("installing: none -> %s", remoteVersion.c_str());
@@ -1532,8 +1563,9 @@ int runConsole(Options options)
             die("the downloaded package is damaged (the game is not in it); try the install again");
         }
 
+        std::string keptBackup;
         if (installedGamePresent && !backupInstalledBuild(root,
-            installedVersion.empty() ? std::string("manual") : installedVersion)) {
+            installedVersion.empty() ? std::string("manual") : installedVersion, &keptBackup)) {
             fs::remove_all(work, error);
             die("could not save the current build before updating; nothing was changed");
         }
@@ -1564,6 +1596,7 @@ int runConsole(Options options)
         }
         logf("  version.txt: %s", remoteVersion.c_str());
         fs::remove_all(work, error);
+        cleanOlderBuildLeftovers(root, keptBackup);
         updated = true;
         installedVersion = remoteVersion;
     } else if (!remoteVersion.empty()) {
