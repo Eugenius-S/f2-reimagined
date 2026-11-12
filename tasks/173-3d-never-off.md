@@ -2,7 +2,7 @@
 id: 173
 title: 3D never turns off on a local map; what cannot be built stands on a plane
 milestone: M1
-status: todo
+status: doing
 owner: any
 suggested: any
 priority: high
@@ -165,3 +165,5 @@ evidence captures change nothing).
 Not done yet (the rest of the acceptance): the scripted walks through a
 map of each finished area with the log check, and the unsupported-object
 billboard/plane list.
+- 2026-11-12 glm (bookkeeping): status doing: the four window frames are
+  merged (#445); the scripted area walks and the billboard list remain.

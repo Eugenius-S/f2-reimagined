@@ -40,7 +40,7 @@ Per the queue in `runs/glm-night-2026-11-12.md`, top to bottom.
 
 - **140 (dialogue letters cut): skipped** - gpt's PR #424 is open.
 
-- **149 (combat outlines follow turn and zoom): PR #443, draft, blocked on
+- **149 (combat outlines follow turn and zoom): PR #443, merged, blocked on
   the turn half.** The zoom half is proven: the outline hugs the shown
   sprite at zoom 0.5/1/2 (the fixture's targeting frames in
   `runs/149-combat-overlays-follow-view/`). The turn half: two attempts -
@@ -52,7 +52,7 @@ Per the queue in `runs/glm-night-2026-11-12.md`, top to bottom.
   staticScreenFromWorld fly path versus the mvp the cards draw with) are
   in the task Log. Not verified: turn +/-30 outline on the sprite.
 
-- **147 (map exits and floors): PR #444, draft, the matrix walk started.**
+- **147 (map exits and floors): PR #444, merged, the matrix walk started.**
   The KLAGRAZ blocker (2026-11-04) is dead: the probe now clicks the hex
   the ground pick names (the bare anchor round-tripped to a neighbour) and
   the ground pick accepts any hex the map draws ground on (the exits live
@@ -67,7 +67,7 @@ Per the queue in `runs/glm-night-2026-11-12.md`, top to bottom.
   reference band. Not verified: the full matrix (the mall walk-based
   probe, the stairs driver, the world map out/in, save on another map).
 
-- **173 (3D under windows): PR #445, draft, evidence only.** The owner's
+- **173 (3D under windows): PR #445, merged, evidence only.** The owner's
   2026-11-10 rule holds on main: the inventory and the Pip-Boy draw over
   the live 3D (frames in `runs/173-3d-never-off/`), the full-screen
   options menu sits on the black backdrop per 193 part B's spec, the
@@ -84,7 +84,7 @@ Per the queue in `runs/glm-night-2026-11-12.md`, top to bottom.
   renderer research task; the night went to the higher-tier items first
   and then to the second pass (148 done, 143 attempted).
 
-- **224 (geometry second pass): PR #446, draft, the finds worked off.**
+- **224 (geometry second pass): PR #446, merged, the finds worked off.**
   F1 (kladwtwn's black edge wedge) verified FIXED on main by 202's
   quadrant fill (the fresh frame at the same view tile). F2 (denbus2 e1)
   re-diagnosed: not a 3D defect - the map's own e1 data is 9917/10000
@@ -102,8 +102,13 @@ Per the queue in `runs/glm-night-2026-11-12.md`, top to bottom.
   quantization suspicion stays the first suspect once a controlled
   clouds-off/on pair exists.
 
-- **148 (README turn and combat): not taken** (the budget went to the
-  higher-tier items above).
+- **148 (README turn and combat): PR #449, merged.** Both READMEs carry the
+  camera turn bullet (`[` and `]`, 10-degree steps up to 30, the four-step
+  sheet from 144) and a new 3D combat bullet with 146's kladwtwn capture
+  (docs/images/camera-turn-steps.jpg 191 KB, combat-3d.jpg 243 KB); the
+  stale "During combat and dialogue the game shows the original view" line
+  replaced. check_runs_size passes, check_public_content clean. Not
+  verified: a reader's look (user-check: yes).
 
 Rule 1 after the last code merge: performed in full, twice. After 193A
 (main 8c310a9be) and again after the night's PR wave merged (443, 444,

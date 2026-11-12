@@ -2,7 +2,7 @@
 id: 143
 title: Cloud shadow edges stay soft on the ground
 milestone: M1
-status: todo
+status: blocked
 owner: any
 suggested: any
 priority: normal
@@ -125,3 +125,6 @@ a controlled pair (the same camera and moment with clouds off and on) and
 the shader's 5-bit quantization suspicion (138's cloudLoss5 on dark
 ground) stays the first suspect to confirm once the pair exists. Task
 stays open; nothing changed.
+- 2026-11-12 glm (bookkeeping): status blocked: three hour frames did not
+  reproduce the edge (#450); the hunt waits for a controlled clouds-off
+  and clouds-on pair at one camera and moment.

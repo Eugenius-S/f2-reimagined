@@ -2,7 +2,7 @@
 id: 193
 title: The UI batch, text flush left with room, full-screen screens on a fading backdrop, wide art
 milestone: M1
-status: todo
+status: doing
 owner: any
 suggested: any
 priority: high
@@ -216,3 +216,6 @@ below). Not done yet in part A: the dialogue answer options' hanging indent
 Note: the log fixture's date row shows two bullets because the fixture
 feeds the captured date line (which already carries the bullet) back as a
 new message; the real log never does that. Fixture artifact, recorded here.
+- 2026-11-12 glm (bookkeeping): status doing: the log edge half is merged
+  (#410); part A's dialogue answers' hanging indent and parts B and C
+  remain.
