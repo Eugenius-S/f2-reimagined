@@ -201,6 +201,7 @@ jobs:
       - run: python -m unittest discover -s tools/scene_export -p 'test*.py' -v
       - run: python -m unittest discover -s tools -p 'test_crop_box.py' -v
       - run: python -m unittest discover -s tools -p 'test_check_png_pixel.py' -v
+      - run: python -m unittest discover -s tools -p 'test_patch_pixel.py' -v
       - run: python -m unittest discover -s tools/regression -p 'test*.py' -v
       - run: python -m unittest discover -s tools -p 'test_image_diff.py' -v
       - run: python -m unittest discover -s tools -p 'test_check_public_content.py' -v
