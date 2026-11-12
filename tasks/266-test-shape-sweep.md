@@ -41,3 +41,4 @@ Runtime or sweep implementation changes.
   cover sorting, elevations, errors, and closure of game and output resources.
   Checks: `py -3 -m unittest discover -s tools/shapes -p 'test*.py' -v`,
   `py -3 tools/check_public_content.py origin/main`, and `git diff --check`.
+  Draft PR: #484.
