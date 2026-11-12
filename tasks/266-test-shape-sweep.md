@@ -10,7 +10,7 @@ tier: 3
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -42,3 +42,9 @@ Runtime or sweep implementation changes.
   Checks: `py -3 -m unittest discover -s tools/shapes -p 'test*.py' -v`,
   `py -3 tools/check_public_content.py origin/main`, and `git diff --check`.
   Draft PR: #484.
+
+- 2026-11-13, gpt: review found the fake builder did not prove the sweep called
+  either build method. The test now asserts `build_tiles()` then
+  `build_objects()` for every successful map elevation. Checks: the same shapes
+  discovery (11 tests), public-content check, and `git diff --check` pass.
+  Draft follow-up PR: pending.

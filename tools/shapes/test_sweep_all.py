@@ -14,9 +14,12 @@ class SweepAllTests(unittest.TestCase):
         game_files = unittest.mock.Mock()
         game_files.glob.return_value = ["maps/ZED.MAP", "maps/alpha.map"]
         builds = []
+        build_calls = []
 
         class Builder:
             def __init__(self, _game_files, map_name, elevation):
+                self.map_name = map_name
+                self.elevation = elevation
                 builds.append((map_name, elevation))
                 if (map_name, elevation) == ("alpha", 1):
                     raise ValueError("bad elevation")
@@ -26,10 +29,10 @@ class SweepAllTests(unittest.TestCase):
                 self.rests = [3]
 
             def build_tiles(self):
-                pass
+                build_calls.append(("tiles", self.map_name, self.elevation))
 
             def build_objects(self):
-                pass
+                build_calls.append(("objects", self.map_name, self.elevation))
 
         output = io.StringIO()
         with patch.object(sweep_all, "ReadOnlyGameFiles", return_value=game_files), \
@@ -41,6 +44,15 @@ class SweepAllTests(unittest.TestCase):
         self.assertEqual(
             builds,
             [(name, elevation) for name in ("alpha", "zed") for elevation in (0, 1, 2)],
+        )
+        successful_builds = [("alpha", 0), ("alpha", 2), ("zed", 0), ("zed", 1)]
+        self.assertEqual(
+            build_calls,
+            [
+                (method, map_name, elevation)
+                for map_name, elevation in successful_builds
+                for method in ("tiles", "objects")
+            ],
         )
         self.assertIn("2 map files seen", output.getvalue())
         self.assertIn("alpha e0: OK props=2 rests=1", output.getvalue())
