@@ -795,7 +795,6 @@ static void renderPresentBody()
                 if (static_cast<double>(refreshEnd - windowStart) / SDL_GetPerformanceFrequency() >= 2.0) {
                     printf("perf present sync=%.2f sharp=%.2f refresh=%.2f frames=%d\n",
                         syncMs / presentFrames, sharpMs / presentFrames, refreshMs / presentFrames, presentFrames);
-                    fflush(stdout);
                     syncMs = sharpMs = refreshMs = 0.0;
                     presentFrames = 0;
                     windowStart = refreshEnd;

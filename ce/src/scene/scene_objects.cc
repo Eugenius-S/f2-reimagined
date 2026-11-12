@@ -263,7 +263,6 @@ bool updateHeroFromGame()
             static_cast<double>(lockedDone - shownDone) * toMs,
             static_cast<double>(decodedDone - lockedDone) * toMs,
             static_cast<double>(builtDone - decodedDone) * toMs);
-        fflush(stdout);
     }
     gHeroUnavailableLogged = false;
     return true;
@@ -557,7 +556,6 @@ bool updateObjectsFromGame()
         const double toMs = 1000.0 / static_cast<double>(SDL_GetPerformanceFrequency());
         printf("perf objwalk walk=%.2f upload=%.2f\n",
             static_cast<double>(walked - start) * toMs, static_cast<double>(ended - walked) * toMs);
-        fflush(stdout);
     }
     gObjectCardsSkipped = pass.skipped;
     return updateHeroFromGame();
