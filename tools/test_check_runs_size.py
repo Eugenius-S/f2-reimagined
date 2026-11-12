@@ -32,10 +32,23 @@ class CheckRunsSizeTests(unittest.TestCase):
             git('branch', 'base')
 
             (repo / 'runs' / 'within-limit.txt').write_bytes(b'x' * LIMIT)
-            (repo / 'runs' / 'over-limit.txt').write_bytes(b'x' * (LIMIT + 1))
             (repo / 'outside.txt').write_bytes(b'x' * (LIMIT + 10))
-            git('add', 'runs/within-limit.txt', 'runs/over-limit.txt', 'outside.txt')
+            git('add', 'runs/within-limit.txt', 'outside.txt')
             git('commit', '-qm', 'add files to check')
+
+            allowed_result = subprocess.run(
+                [sys.executable, str(CHECKER), 'base'], cwd=repo,
+                capture_output=True, text=True,
+            )
+
+            self.assertEqual(
+                allowed_result.returncode, 0,
+                allowed_result.stdout + allowed_result.stderr,
+            )
+
+            (repo / 'runs' / 'over-limit.txt').write_bytes(b'x' * (LIMIT + 1))
+            git('add', 'runs/over-limit.txt')
+            git('commit', '-qm', 'add oversized runs file')
 
             result = subprocess.run(
                 [sys.executable, str(CHECKER), 'base'], cwd=repo,
@@ -50,8 +63,4 @@ class CheckRunsSizeTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
-
-
-
 
