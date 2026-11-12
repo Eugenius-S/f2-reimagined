@@ -554,7 +554,6 @@ static void mainLoop()
         if (static_cast<double>(now - windowStart) / SDL_GetPerformanceFrequency() >= 2.0) {
             printf("perf loop input=%.2f world=%.2f present=%.2f frame=%.2f frames=%d\n",
                 inputMs / loopFrames, worldMs / loopFrames, presentMs / loopFrames, frameMs / loopFrames, loopFrames);
-            fflush(stdout);
             inputMs = worldMs = presentMs = frameMs = 0.0;
             loopFrames = 0;
             windowStart = now;

@@ -4557,6 +4557,12 @@ const char* activeRendererName()
 
 bool takeSnapshot()
 {
+    // 157: the capture (a draw, a readback, a PNG) is the test game's own work;
+    // on newr1 it put 400 ms into the load time before the first frame.
+    struct LoadClockPause {
+        Uint64 start = SDL_GetPerformanceCounter();
+        ~LoadClockPause() { scene_renderer::perfLoadSkip(SDL_GetPerformanceCounter() - start); }
+    } loadClockPause;
     namespace fs = std::filesystem;
     const bool previewRequested = scene::activeView() != scene::View::Off;
     const bool preview = !gForceLiveSnapshot && scene_renderer::isActive() && scene::shouldPresent();
