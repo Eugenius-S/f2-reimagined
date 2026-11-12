@@ -1,10 +1,13 @@
 """Contract tests for the whole-map shape check and weighted score."""
 
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'eval'))
 
 import klamath
 
@@ -71,3 +74,5 @@ class KlamathEvaluationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
