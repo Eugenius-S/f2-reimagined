@@ -47,4 +47,4 @@ Runtime or sweep implementation changes.
   either build method. The test now asserts `build_tiles()` then
   `build_objects()` for every successful map elevation. Checks: the same shapes
   discovery (11 tests), public-content check, and `git diff --check` pass.
-  Draft follow-up PR: pending.
+  Draft follow-up PR: #495.
