@@ -2,7 +2,7 @@
 id: 255
 title: Verify cabinet ordering with the camera turned
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: gpt
 priority: normal
@@ -10,7 +10,7 @@ tier: 3
 claude-only: no
 user-check: yes
 depends-on: [067]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -41,4 +41,4 @@ Check: PR #121 evidence contains the unturned `front.jpg`; its Log claims the 45
 ### 2026-11-12 gpt
 Done: captured the Klamath cabinet scene at 0 and 45 degrees in the background test instance. The hero remains visibly in front of the shelf at both angles. `runs/255-cabinet-order-turned/comparison.jpg` compares the cabinet and hero; `angle-0.jpg` and `angle-45.jpg` retain the full frames, all below 1 MB. `captures.json` records the run IDs, scene cache fingerprint, executable hash, and source paths.
 Next: wait for CI, then merge this evidence-only PR.
-Check: Release build via `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release`; cache export via `py -3 tools/scene_export/export.py --game-root E:\Projects\fallout2-ce-3d\game --maps klamall --cache-root build/scene-cache`; background snapshots via `tools/dev-snapshot.ps1` at `-Map klamall -Elevation 0 -HeroTile 13086 -ViewTile 13086 -Still -TurnDegrees 0` and `45`. Both reported `KLAMALL.MAP`, elevation 0, hero tile 13086, 1920x1080 at scale 2, scene view full, and executable SHA-256 `77b61d272e8ca93c5fcce093990570f98001e25800d48c1205613d65c0f4aa7f` from build commit `14feea02a`. Visually inspected the contact sheet and compared the 0-degree order with `runs/067-card-order-cabinet/front.jpg`. No rendering code was changed. Tests and pixel regression were not run for this evidence-only task.
+Check: Release build via `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release`; cache export via `py -3 tools/scene_export/export.py --game-root <main-checkout>/game --maps klamall --cache-root build/scene-cache`; background snapshots via `tools/dev-snapshot.ps1` at `-Map klamall -Elevation 0 -HeroTile 13086 -ViewTile 13086 -Still -TurnDegrees 0` and `45`. Both reported `KLAMALL.MAP`, elevation 0, hero tile 13086, 1920x1080 at scale 2, scene view full, and executable SHA-256 `77b61d272e8ca93c5fcce093990570f98001e25800d48c1205613d65c0f4aa7f` from build commit `14feea02a`. Visually inspected the contact sheet and compared the 0-degree order with `runs/067-card-order-cabinet/front.jpg`. No rendering code was changed. Tests and pixel regression were not run for this evidence-only task.
