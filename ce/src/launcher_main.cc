@@ -1564,7 +1564,8 @@ int runConsole(Options options)
         }
 
         std::string keptBackup;
-        if (installedGamePresent && !backupInstalledBuild(root,
+        // A refill of the wide art at the same version is no update: the older build stays the one to roll back to.
+        if (installedGamePresent && remoteVersion != installedVersion && !backupInstalledBuild(root,
             installedVersion.empty() ? std::string("manual") : installedVersion, &keptBackup)) {
             fs::remove_all(work, error);
             die("could not save the current build before updating; nothing was changed");
