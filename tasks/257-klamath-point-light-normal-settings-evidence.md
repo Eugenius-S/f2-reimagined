@@ -2,7 +2,7 @@
 id: 257
 title: Show a normally visible Klamath point light beside its cutout wall pixels
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: gpt
 priority: low
@@ -10,7 +10,7 @@ tier: 1
 claude-only: no
 user-check: no
 depends-on: [099]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -48,3 +48,8 @@ Shader behavior, point-light colors or strength, ambient-setting changes.
 
 - 2026-11-12 gpt review of task 099: created because the existing Klamath
   barrel pair needs ambient override 16384 and shows only 4 changed pixels.
+
+### 2026-11-12 gpt
+Done: captured matched historical/fixed shader pairs for the KLATRAP barrel and KLATOXCV slime at ambient 65536 (1.0). Both pairs have zero decoded RGBA pixel differences; metadata and full-frame sheets are in `runs/257-klamath-point-light-normal-settings-evidence/`. Visually confirmed the red-topped barrel in KLATRAP and toxic green slime plus cutout walls in KLATOXCV; scene light is enabled. No changed-pixel crop exists because the target comparisons are identical. The natural KLATOXCV ambient 28426 comparison changed 200 pixels and is documented separately, not counted as the 1.0 result.
+Next: reviewer may inspect the draft PR; no merge performed.
+Check: `tools/configure-build.ps1 Release`; paired `tools/dev-snapshot.ps1` captures; Python decoded-RGBA comparison reported 0 changed pixels for both ambient 65536 pairs.
