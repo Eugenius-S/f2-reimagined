@@ -22,7 +22,7 @@ class CheckRunsSizeTests(unittest.TestCase):
 
             git('init', '-q', '-b', 'main')
             git('config', 'user.name', 'Test')
-            git('config', 'user.email', 'test@example.com')
+            git('config', 'user.email', 'test.invalid')
             (repo / 'runs').mkdir()
             (repo / 'runs' / 'baseline.txt').write_bytes(b'baseline')
             (repo / 'outside.txt').write_bytes(b'baseline')
@@ -49,4 +49,5 @@ class CheckRunsSizeTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
 
