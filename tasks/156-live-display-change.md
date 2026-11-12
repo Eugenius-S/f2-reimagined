@@ -2,8 +2,8 @@
 id: 156
 title: Resolution, window mode and scale change on the fly, without a restart
 milestone: M1
-status: todo
-owner: any
+status: blocked
+owner: gpt
 suggested: any
 priority: high
 tier: 2
@@ -76,6 +76,13 @@ Speed of the game in general (157).
 ## Log
 
 - 2026-11-02 Cut from the owner's request; 154 asked for a restart.
+
+### 2026-11-12 gpt: reinitialization path blocked
+
+Done: confirmed that the proposed options-screen reinitialization has no safe engine path on `origin/main` (`ccbd361c`). `directDrawInit` can recreate the indexed SDL surface and preserve its palette, but it does not update the window-manager root or map buffers. `windowClose` exits the manager, destroys the SDL window and closes the database; `windowInit` uses the fixed 640x480 profile and `windowManagerInit` rejects a second initialization while active. `isoExit` frees tile/object/interface state and map variables, while `isoInit` rebuilds these and `mapInit` calls `mapNewMap`, discarding the loaded map. Thus calling the available init/exit functions cannot preserve the current play state. This avoids repeating PR #227's unvalidated table exchange.
+
+Next: add a dedicated, testable runtime screen/window reinitialization path that preserves map state; then resume task 156's scale and resolution integration. No display behavior changed in this PR.
+Check: read-only source audit of `ce/src/svga.cc`, `ce/src/window.cc`, `ce/src/window_manager.cc`, `ce/src/game.cc`, and `ce/src/map.cc`. No build or runtime check was needed because no code changed. PR #425 remains draft; task 156 is blocked and acceptance is not met.
 
 - 2026-11-08 glm: PR #227 closed by task 221: #329 already applies the window mode live; the rest (live resolution and scale, task 209) is a 2356-line transaction blocked in its own runtime validation (two consecutive failures at refresh stages) and cannot land unvalidated. The branch's implementation-path and blocker notes are preserved in this Log.
 
