@@ -17,16 +17,16 @@ class PatchPixelTests(unittest.TestCase):
             image = Image.new("RGB", (3, 3))
             image.putdata(
                 [
-                    (0, 1, 2), (3, 4, 5), (6, 7, 8),
-                    (9, 10, 11), (12, 13, 14), (15, 16, 17),
-                    (18, 19, 20), (21, 22, 23), (24, 25, 26),
+                    (1, 2, 3), (4, 5, 6), (7, 8, 9),
+                    (10, 11, 12), (80, 90, 100), (14, 15, 16),
+                    (17, 18, 19), (20, 21, 22), (23, 24, 25),
                 ]
             )
             image.save(image_path)
 
             cases = [
-                ([image_path, 1, 1, 1], "uneven.png @(1,1) r1: rgb(12, 13, 14)"),
-                ([image_path, 1, 1, 0], "uneven.png @(1,1) r0: rgb(12, 13, 14)"),
+                ([image_path, 1, 1, 1], "uneven.png @(1,1) r1: rgb(19, 21, 23)"),
+                ([image_path, 1, 1, 0], "uneven.png @(1,1) r0: rgb(80, 90, 100)"),
             ]
             for arguments, expected_output in cases:
                 with self.subTest(radius=arguments[-1]):
