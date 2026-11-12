@@ -166,7 +166,6 @@ bool gWalkProbeCenterChanged = false;
 bool gSkipScriptBlocking = false;
 bool gDialogSkipReported = false;
 bool gMovieSkipReported = false;
-int gWatchdogStateFrames = 0;
 bool gWatchdogEnabled = false;
 bool gClockLadder = false;
 int gClockLadderStage = -1;
@@ -2301,8 +2300,11 @@ void update()
             gMovieSkipReported = false;
         }
     }
-    if (++gWatchdogStateFrames >= 60) {
-        gWatchdogStateFrames = 0;
+    // By the clock, not by frames: the flush costs a frame when the log's disk is
+    // slow (32 ms measured), and every 60th frame of a fast run was 1% of them (157).
+    static Uint32 lastStateTicks = 0;
+    if (SDL_GetTicks() - lastStateTicks >= 2000) {
+        lastStateTicks = SDL_GetTicks();
         printf("DEV_WATCHDOG state map=%s elevation=%d tile=%d combat=%d dialog=%d movie=%d view=%d tour_step=%d walk_stage=%d\n",
             gMapHeader.name, static_cast<int>(gElevation), gDude != nullptr ? gDude->tile : -1,
             isInCombat() ? 1 : 0, _inDialog != 0 ? 1 : 0, _moviePlaying() != 0 ? 1 : 0,
