@@ -1,0 +1,74 @@
+{
+  "status": "blocked_no_owner_edge_reproduction_or_effective_toggle_sidecar",
+  "owner_frame": "runs/inbox/2026-11-01-cloud-hard-edge.png",
+  "captures": [
+    {
+      "label": "verified-08-cloud-only",
+      "requested_toggle": "-CloudShadows",
+      "sidecar": "verified-08-cloud-only\\devshot-20261112-124006-000.json",
+      "image": "verified-08-cloud-only.jpg",
+      "bytes": 754120,
+      "game_time": 288000,
+      "view_tile": 24678,
+      "camera": "fixed eye=(38.14466,46.23085,85.71700), target=(-11.04167,0.00000,11.93750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "resolution": "1920x1080",
+      "scale": 2,
+      "exe_sha256": "3b2f2e994fd8b15d904cc8728fed9bc0e33a340c07342859d32dd9dfee7e218f",
+      "devshot_renderer": "scene-gl"
+    },
+    {
+      "label": "verified-08-sun-only",
+      "requested_toggle": "-SunShadows",
+      "sidecar": "verified-08-sun-only\\devshot-20261112-124018-000.json",
+      "image": "verified-08-sun-only.jpg",
+      "bytes": 588830,
+      "game_time": 288000,
+      "view_tile": 24678,
+      "camera": "fixed eye=(38.14466,46.23085,85.71700), target=(-11.04167,0.00000,11.93750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "resolution": "1920x1080",
+      "scale": 2,
+      "exe_sha256": "3b2f2e994fd8b15d904cc8728fed9bc0e33a340c07342859d32dd9dfee7e218f",
+      "devshot_renderer": "scene-gl"
+    },
+    {
+      "label": "verified-08-combined",
+      "requested_toggle": "-Shadows",
+      "sidecar": "verified-08-combined\\devshot-20261112-124030-000.json",
+      "image": "verified-08-combined.jpg",
+      "bytes": 589942,
+      "game_time": 288000,
+      "view_tile": 24678,
+      "camera": "fixed eye=(38.14466,46.23085,85.71700), target=(-11.04167,0.00000,11.93750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+      "resolution": "1920x1080",
+      "scale": 2,
+      "exe_sha256": "3b2f2e994fd8b15d904cc8728fed9bc0e33a340c07342859d32dd9dfee7e218f",
+      "devshot_renderer": "scene-gl"
+    },
+    {
+      "comparison": [
+        "verified-08-cloud-only",
+        "verified-08-sun-only"
+      ],
+      "changed_pixels": 1369843,
+      "mean_abs_rgb": 86.76623006687242
+    },
+    {
+      "comparison": [
+        "verified-08-cloud-only",
+        "verified-08-combined"
+      ],
+      "changed_pixels": 1346531,
+      "mean_abs_rgb": 86.5240708590535
+    },
+    {
+      "comparison": [
+        "verified-08-sun-only",
+        "verified-08-combined"
+      ],
+      "changed_pixels": 249006,
+      "mean_abs_rgb": 0.8070534336419753
+    }
+  ],
+  "runtime_toggle_evidence": "Requested flags appear in the exact dev-snapshot invocations; process logs and devshot sidecars omit effective scene3d shadow settings. The second pass requested -OwnerShot, but no owner-shot metadata or scene3d flags were emitted. Do not treat captures as proven toggle-matched evidence.",
+  "phase": "no -CloudPhase override; cloud phase derives from frozen game_time=288000 in ce/src/scene_renderer/shadow.cc; sidecars confirm identical game time."
+}
