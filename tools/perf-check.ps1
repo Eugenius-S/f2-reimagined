@@ -15,16 +15,23 @@
 param(
     [double]$MinFps = 60,
     [double]$MaxLoadMs = 2000,
+    # Seconds the game stays on the measured map after its snapshot: the sample.
+    [int]$HoldSeconds = 10,
     [switch]$SelfTest
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 
 # frame_log.csv rows ("frame,ms,load") to the play-only numbers (250: load
-# rows are loading-screen presents and stay out of the frame rate).
+# rows are loading-screen presents and stay out of the frame rate). 157: only
+# the measured map counts. A run starts in the menu and on the start map, and
+# those rows were most of the sample; so the play rows before the last load
+# row are dropped, and so is the first second after it (the 3D scene is made
+# on the first frames; the load time column covers that).
 function Read-FrameLogSummary([string[]]$lines) {
     $play = @()
     $load = 0
+    $settleMs = 0.0
     foreach ($line in $lines) {
         if ($line -match '^frame,') { continue }
         $parts = $line -split ','
@@ -32,7 +39,9 @@ function Read-FrameLogSummary([string[]]$lines) {
         $ms = 0.0
         if (-not [double]::TryParse($parts[1], [Globalization.NumberStyles]::Float,
                 [Globalization.CultureInfo]::InvariantCulture, [ref]$ms)) { continue }
-        if ($parts[2].Trim() -eq '1') { $load++ } else { $play += $ms }
+        if ($parts[2].Trim() -eq '1') { $load++; $play = @(); $settleMs = 0.0 }
+        elseif ($load -gt 0 -and $settleMs -lt 1000.0) { $settleMs += $ms }
+        else { $play += $ms }
     }
     $result = @{ Play = $play.Count; Load = $load; AvgFps = 0.0; OneLowFps = 0.0; WorstMs = 0.0 }
     if ($play.Count -eq 0) { return $result }
@@ -67,7 +76,11 @@ if ($SelfTest) {
         '2,16.500,0',
         '3,100.000,0',
         '4,33.000,1',
-        '5,2.000,1'
+        '5,2.000,1',
+        '6,900.000,0',
+        '7,150.000,0',
+        '8,10.000,0',
+        '9,40.000,0'
     )
     $s = Read-FrameLogSummary $sampleCsv
     $failed = $false
@@ -77,12 +90,15 @@ if ($SelfTest) {
             $script:failed = $true
         }
     }
-    # Row 0 (a fresh interval, 0 ms) is a play row too.
-    Assert-Equal 'play' $s.Play 4
+    # Rows 0-3 are before the last load row; 6 and 7 fill its first second.
+    Assert-Equal 'play' $s.Play 2
     Assert-Equal 'load' $s.Load 2
-    Assert-Equal 'avgFps' $s.AvgFps (4 * 1000.0 / 133.0)
-    Assert-Equal 'oneLowFps' $s.OneLowFps 10.0
-    Assert-Equal 'worstMs' $s.WorstMs 100.0
+    Assert-Equal 'avgFps' $s.AvgFps (2 * 1000.0 / 50.0)
+    Assert-Equal 'oneLowFps' $s.OneLowFps 25.0
+    Assert-Equal 'worstMs' $s.WorstMs 40.0
+    # A log with no load row (the log was switched on in play) counts whole.
+    $s = Read-FrameLogSummary @('frame,ms,load', '0,0.000,0', '1,20.000,0')
+    Assert-Equal 'play without a load row' $s.Play 2
     $sampleLog = @(
         'perf load chain map_change begin',
         'perf load map_tiles ms=12.00 since chain start',
@@ -123,7 +139,7 @@ foreach ($m in $maps) {
     $env:F2CE_PERF = '1'
     $measuredOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'dev-snapshot.ps1') `
         -Map $m.map -Elevation $m.elevation -Set3d 'frame_log=1' -CaptureConsole -KeepRunFolder `
-        -OutputDirectory (Join-Path $outDir 'measured') -TimeoutSeconds 240
+        -OutputDirectory (Join-Path $outDir 'measured') -TimeoutSeconds 240 -HoldSeconds $HoldSeconds
     $env:F2CE_PERF = $null
     $runFolderLine = @($measuredOutput) | Where-Object { $_ -like 'RUN FOLDER: *' } | Select-Object -Last 1
     $csv = $null
