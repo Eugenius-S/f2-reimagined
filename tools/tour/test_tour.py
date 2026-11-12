@@ -7,7 +7,31 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tour import ROOT, check_views, powershell_args
+from tour import ROOT, check_views, powershell_args, side_kind
+
+
+class SideKindTests(unittest.TestCase):
+    def test_accepts_checkout_and_scene_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkout = root / "checkout"
+            (checkout / "build").mkdir(parents=True)
+            (checkout / "build" / "fallout2-ce.exe").touch()
+            (checkout / "tools").mkdir()
+            (checkout / "tools" / "dev-snapshot.ps1").touch()
+
+            cache = root / "cache"
+            scene = cache / "klamath" / "0"
+            scene.mkdir(parents=True)
+            (scene / "scene.json").touch()
+
+            self.assertEqual(side_kind(str(checkout)), ("checkout", checkout.resolve()))
+            self.assertEqual(side_kind(str(cache)), ("cache", cache.resolve()))
+
+    def test_rejects_directory_that_is_neither_checkout_nor_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(SystemExit, "neither a built checkout nor a scene cache"):
+                side_kind(directory)
 
 
 class TourViewTests(unittest.TestCase):
