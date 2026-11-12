@@ -3579,8 +3579,16 @@ void scenePresented(const scene::RefreshResult& refreshed)
 void classicClockLadderFrame()
 {
     if (!gClockLadder || !gClassic || gDude == nullptr || gMapHeader.name[0] == '\0'
-        || inBlockingGameState()) {
+        || !sceneStartupReady() || inBlockingGameState()) {
         return;
+    }
+    if (gStartupMap[0] != '\0') {
+        char currentMap[64];
+        stripMapExtension(gMapHeader.name, currentMap, sizeof(currentMap));
+        if (compat_stricmp(currentMap, gStartupMap) != 0
+            || static_cast<int>(gElevation) != gStartupElevation) {
+            return;
+        }
     }
 
     if (gClockLadderStage < 0) {
@@ -3617,7 +3625,7 @@ void classicClockLadderFrame()
 void vanillaPresented()
 {
     observeTransitionFrame("2d");
-    classicClockLadderFrame();
+    if (gClockLadder && gClassic) classicClockLadderFrame();
     if (gDialogCursorCheckCursorMoveInProgress) return;
     if (gCombatFixtureRequested && gCombatFixtureIsClassic) runCombatFixtureFrame();
     uiFixtureVanillaPresented();
@@ -4241,7 +4249,7 @@ bool handleKey(int key)
     // the panel is open (063), and the fly camera below would eat the key.
     // The step keeps the minute and advances the calendar across midnight.
     // The status line shows the current hour even when it is dark.
-    if ((key == KEY_CTRL_T || key == KEY_ALT_T) && (scene::enabled() || gClassic)) {
+    if ((key == KEY_CTRL_T || key == KEY_ALT_T) && (scene::enabled() || (gClassic && gClockLadder))) {
         const unsigned int ticks = gameTimeGetTime();
         gameTimeSetTime(scene::stepClockHour(ticks, key == KEY_CTRL_T ? 1 : -1));
         // Time jumps bypass the periodic map-update script that sets ambient
