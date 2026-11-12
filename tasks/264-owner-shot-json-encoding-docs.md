@@ -2,15 +2,15 @@
 id: 264
 title: Owner shot docs describe current JSON encoding
 milestone: M1
-status: todo
-owner: any
+status: done
+owner: gpt
 suggested: any
 priority: normal
 tier: 1
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -43,3 +43,7 @@ Changing runtime encoding or the screenshot image format.
 
 - 2026-11-12, gpt: created from review of task 183. Current source converts
   game strings to UTF-8; the guide's CP1251 instruction is stale.
+- 2026-11-12, gpt: Updated the guide to describe current UTF-8 decoding,
+  labeled task 183's pre-#334 CP1251 example as legacy, and added a small
+  UTF-8 JSON example with a documented Python read/assert command. The
+  command passed. Runtime behavior was not changed or tested.
