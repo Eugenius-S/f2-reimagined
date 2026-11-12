@@ -2,7 +2,7 @@
 id: 224
 title: Geometry second pass: re-walk the 3D-live maps hunting and fixing flaws
 milestone: M1
-status: todo
+status: doing
 owner: glm
 suggested: glm
 priority: normal
@@ -69,3 +69,26 @@ maps entering 3D (187), view-persistence (173, the owner's draft).
   sweep coverage waits on it. Non-finds and the one low-confidence
   leftover (artemple e0 right-edge boulders) in the README.
   The full ~420 MB shot set stays on the machine, not committed.
+
+### 2026-11-12 glm: F1 verified fixed; F2 re-diagnosed, not a 3D defect
+
+- F1 kladwtwn e0 black map-edge wedge: FIXED on main. Fresh frame at the
+  same view tile 24678 (build/probe-224-f1/, the copy in
+  runs/224-geometry-second-pass/f1-kladwtwn-e0-now.jpg): the road and
+  sidewalk continue to the map edge; the wedge is gone. The fix is 202's
+  quadrant fill (merged #320), after this find was registered.
+- F2 denbus2 e1: NOT a 3D defect. The map's own data at e1: 9917 of 10000
+  floor squares are tile 1 (the retail void paint, undrawn in vanilla
+  too), 66 drawn squares (the dirt strip), 0 objects on the elevation
+  (the map's three object lists: 4091 objects all on elevation 0). The
+  fresh classic 2D frame at e1 (build/probe-224-f2-2d/) renders the same
+  content the 3D renders: the dirt strip, the void, and the level-0
+  scenery sprites that poke into the view from the north. The old find's
+  2D png over-described the content ("the whole level"): what it shows is
+  the level-0 scenery's sprites and the void. The one real residual: at
+  elevation 1 the vanilla 2D draws the tall walls of elevation 0 that
+  reach into the view, and the 3D's upper-elevation scene does not
+  include them - recorded as the next exporter rule (upper elevations
+  include the lower one's tall walls), evidence pair
+  runs/224-geometry-second-pass/f2-denbus2-e1-2d-vs-3d-now.jpg.
+- F3 newr2 e0 Shark Club marquee: still open, untouched this pass.

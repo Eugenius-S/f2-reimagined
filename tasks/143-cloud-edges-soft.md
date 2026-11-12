@@ -2,7 +2,7 @@
 id: 143
 title: Cloud shadow edges stay soft on the ground
 milestone: M1
-status: todo
+status: blocked
 owner: any
 suggested: any
 priority: normal
@@ -110,3 +110,21 @@ Check: prior Release build, CTest, exporter tests and regression-tool tests pass
 
 - 2026-11-08 glm: notes merged as PR #208; still blocked on the owner's exact view (no camera or time sidecar).
 - 2026-11-12 task 248 audit: missing evidence to determine whether a shader fix is needed: the owner's exact camera/time or a sidecar, followed by matched cloud-on/cloud-off captures at that view.
+
+### 2026-11-12 glm: the edge did not reproduce in three hour frames; the hunt needs a controlled pair
+
+Attempted on fresh main b3820c487: the owner's spot (kladwtwn e0, view
+tile 24678, the downtown road) captured at hours 8, 12 and 17 with clouds
+on (build/probe-143-h8,h12,h17/). The road region shows dimming that
+moves between the hours, but no hard curved line stands out in the crops,
+and a sharp-step measurement of the road region is inconclusive: the
+road's own curb and art edges dominate (sharpest step 170 in every frame,
+the same as the owner crop's 143-style edge). The clouds drift, so a
+single frame cannot pin the cover's edge; the acceptance's evidence needs
+a controlled pair (the same camera and moment with clouds off and on) and
+the shader's 5-bit quantization suspicion (138's cloudLoss5 on dark
+ground) stays the first suspect to confirm once the pair exists. Task
+stays open; nothing changed.
+- 2026-11-12 glm (bookkeeping): status blocked: three hour frames did not
+  reproduce the edge (#450); the hunt waits for a controlled clouds-off
+  and clouds-on pair at one camera and moment.

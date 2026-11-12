@@ -1,0 +1,23 @@
+﻿{
+    "mode":  "cursor-speed",
+    "config_sha256_before":  "19BE438ED503CAD31D7CBC1C0E343D58953939CA317DAA9E1B894497D21B0BDF",
+    "config_sha256_after":  "6AE3DA217D373C3A5676B341CD18C74BB2997CCF08AE56A6544D4A1FBA0852CB",
+    "initial":  {
+                    "zoom":  "1.000000",
+                    "enabled":  "1",
+                    "combat_difficulty":  "1",
+                    "mouse_sensitivity":  "1.000000"
+                },
+    "final":  {
+                  "zoom":  "1.000000",
+                  "enabled":  "1",
+                  "combat_difficulty":  "1",
+                  "mouse_sensitivity":  "2.500000"
+              },
+    "executable_sha256":  "F6E0FBF22F7DB992D260F082BD669B7B5B52367348DC7581ACA749B03A8BBEB0",
+    "completion":  {
+                       "method":  "C++ finish marker observed before deadline; isolated helper stopped by harness",
+                       "marker_observed_before_deadline":  true,
+                       "harness_stopped_process":  true
+                   }
+}

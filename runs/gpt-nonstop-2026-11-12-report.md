@@ -1,0 +1,32 @@
+## 2026-11-12 GPT progress block (five tasks)
+
+- Task 145, PR #421: high effort, blocked. Checked: local Release build and `ctest` (27/27), plus the settings toggle check. Not checked: cell-by-cell behavior; Artemple has no floor cache. Blocker: missing Artemple floor cache prevents the required map proof.
+- Task 140, PR #424: medium, raised to high, blocked. Checked: Release build and `ctest` (27/27); three dialogue-answer probe attempts. Not checked: English and Russian answer frames. Blocker: none of the three attempts produced a valid cursor position.
+- Task 156, PR #425: high effort, blocked. Checked: source audit. Not checked: live display-change behavior. Blocker: normal reinitialization resets the map, and no runtime proof is available.
+- Task 207, PR #426: medium effort, merged. Checked: Release build, `ctest` (27/27), and a background `dev-snapshot` window. Not checked: live Borderless behavior and minimize/restore. Those owner-visible checks moved to owner task 176.
+- Task 247, PR #416: medium search effort, then high implementation effort, blocked. Checked: Release build and `ctest` (28/28); final classic Original/RP frames were captured and visually differ. Regression (154/154) was run before the latest UI/fallback changes, not on the final binary. Not checked: UI selection and persistence, and exact 3D HUD appearance. Blocker: UI selection/persistence and the exact 3D HUD appearance remain unverified.
+
+Additional context, excluded from the five-task count: tour tool PR #423 merged; task 229 PR #417 and task 230 PR #418 remain blocked after 10 generations each.
+
+Verified build: `f2r-verified/version.txt` last line at report time names commit `3cde6966664b5934d644915901ac8c8f65756f00`; `perf-check` FPS 56.6/55.8/54.0/56.4 and map loads 1939/2153/1607/989 ms (kladwtwn, newr1, vctyctyd, klatoxcv e2).
+## 2026-11-12 GPT progress block (five tasks)
+
+- Task 229, PR #417: medium effort; controller ran image generation for 10 attempts total, blocked. Checked: compared generated tanker references across attempts; tanker forms changed between outputs. Not checked: an accepted view matching the in-game silhouette, proportions, and major-detail count. Blocker: no stable tanker form matched the reference within 10 attempts.
+- Task 230, PR #418: high effort; image generation ran up to 10 attempts, blocked. Checked: compared generated frames for pose and foot placement; these changed across attempts. Not checked: a frame matching the source pose, feet, silhouette, and proportions. Blocker: no acceptable source-matched frame was produced within the attempt limit.
+- Task 257, PR #452: medium effort (raised from low), merged. Checked: matched Release `dev-snapshot` captures for KLATRAP and KLATOXCV at `ambient=65536`; comparison reported 0 changed pixels. Not checked: other maps and ambient settings.
+- Task 264, PR #453: low effort, merged. Checked: documentation is UTF-8 and the documented Python example ran successfully. Not checked: runtime behavior beyond the example.
+- Task 255, PR #454: medium effort (raised from low), merged. Checked: visually compared frames at 0/45 degrees with the original reference; pixel regression not run. Not checked: other camera angles and maps.
+
+Verified build: `f2r-verified/version.txt` last line at report time:
+`b3820c487b5f3c0222032fa656e6060598faafe3 2026-11-12 Release ctest 27/27 devshot OK; perf-check red as on main: avg 59.2/54.8/60.4/59.1 fps, load 1787/2303/1597/833 ms (kladwtwn, newr1, vctyctyd, klatoxcv e2); 1% low under 60 in background runs`
+
+## 2026-11-12 GPT progress block (five tasks)
+
+- Task 256, PR #455: high effort, no raise, blocked. Checked: Release configure/build; exported KLAMALL e0; captured classic and two 3D attempts at tile 28096 with `tools/dev-snapshot.ps1` (`-Still -Shadows`, then `-NoPreview`). Not checked: current 3D reproduction, exact shadow pixels, wall and caster ownership; CTest and regression were not run because no code changed. Blocker: both 3D captures show white ground without the reported shadow edge, so pixel/object diagnosis is not possible.
+- Task 259, PR #457: medium effort, no raise, blocked. Checked: `py -3 tools/shapes/art_sides.py --game-root <game>` and a read-only map scan; saved a matched DENBUS2 cactus pair and sidecars; attempted two `tools/configure-build.ps1 Release` builds. Not checked: a clear cactus rotation pair, the shelf damage-state rotation, a readable cola true-side pair, and a current Release build. Blocker: the two builds failed with Ninja `Permission denied`, cola views were distant or occluded, and no map placement for shelf001 through shelf006 was found.
+- Task 260, PR #459: medium effort, raised to high, blocked. Checked: Abbey e0 map records and exported treatments for all three targets; visually inspected Solo comparisons and a no-Solo full-scene diagnostic. Not checked: target-specific FID-to-pixel mapping, matched no-Solo before/after views at all four turns, and owner game-view placement. Blocker: Solo removed walls and roofs, while the no-Solo frame still could not distinguish each target sprite among clutter, so orientation is unproven.
+- Task 261, PR #460: medium effort, no raise, blocked. Checked: Release build (794/794); shelf capture at turns 0 and 180 with `tools/dev-snapshot.ps1`; Den and `broken1` exports; `py -3 tools/shapes/inventory.py` and original DAT art inspection. Not checked: an unobstructed cola rear view, whether its opposite slot is the actual rear, and the required no-see-through confirmation. Blocker: the shelf's `shelf002.frm` opposite slot is unused art and the cola was hidden by a wall in one attempt and by the test hero in the second.
+- Task 262, PR #461: medium effort, no raise, blocked. Checked: Release build; `py -3 tools/scene_export/export.py --maps enccitycave` (22 maps, 28 scenes); all 28 background `tools/dev-snapshot.ps1 -ClockLadder` runs logged `CLOCK_LADDER PASS`; 21 of 28 3D views differed between 22:00 and 09:00, while seven did not. Not checked: matched live original 2D day/night comparisons and any 3D-only defect. Blocker: both attempted live 2D capture paths failed, so the 3D changes cannot be attributed to a rendering defect.
+
+Verified build: `f2r-verified/version.txt` last line at report time:
+`ca1a7fc10b2663c3bb874a19feeef136e3deb1e0 2026-11-12 Release ctest 27/27 devshot OK; perf-check under 100% CPU from other agents, not comparable: avg 54.3/47.1/46.6/46.1 fps, load 2330/3242/2092/1638 ms (kladwtwn, newr1, vctyctyd, klatoxcv e2)`

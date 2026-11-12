@@ -10,7 +10,7 @@ tier: 1
 claude-only: no
 user-check: no
 depends-on: [127]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -193,3 +193,17 @@ Analysing the shots (a later task).
   #318); the owner's feedback loop with the tool lives in the board
   batch 175-182. The mismatch diagnosis correction (PR #293, not a
   data rebuild) is in the Log above and in #319.
+
+- 2026-11-12, gpt: reviewed #316, #317 and #318 against their diffs,
+  merged files and historical CI. The checked-in evidence covers three
+  plain shots, two region marks and teleport/floor-change runs. Source PR
+  logs record ctest 20/20, the #316 regression 154/154 after one documented
+  single-spot rerun, and successful CI for all three PRs. These are author
+  records; this review did not rerun the game, ctest or pixel regression.
+  Verified the current UTF-8 conversion in owner_shot.cc was added later by
+  #334, so the old CP1251 bytes in the #316/#317 sample sidecars do not prove
+  a current runtime failure. Current docs/owner-shots.md still tells agents
+  to read JSON strings as CP1251. Follow-up task 264 records that doc defect.
+  The README's PNG names versus committed JPEG renditions are an evidence
+  packaging detail documented in the run READMEs, not a runtime defect.
+  Owner-only live-key behavior and visual confirmation remain unverified.
