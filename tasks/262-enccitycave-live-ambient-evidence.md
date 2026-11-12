@@ -2,8 +2,8 @@
 id: 262
 title: Verify live ambient dimming on city cave and mountain encounters
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: gpt
 priority: normal
 tier: 3
