@@ -2,8 +2,8 @@
 id: 261
 title: Verify plain-fit cola and shelf back textures
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: gpt
 priority: normal
 tier: 3
