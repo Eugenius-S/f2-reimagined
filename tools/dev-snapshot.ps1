@@ -278,7 +278,7 @@ if ($MuzzleWeapon -gt 0) {
 if (([int][bool]$GlowLadder + [int][bool]$GlowPair + [int][bool]$GlowLevels) -gt 1) { throw 'Choose one glow comparison mode.' }
 if ($EffectLightCheck -and (-not $EffectFixture -or $EffectFixture -like 'sign*' -or $NoEffectEmission)) { throw '-EffectLightCheck requires an emitting projectile or explosion fixture.' }
 if ($EffectFrame -ge 0 -and -not $EffectFixture) { throw '-EffectFrame requires -EffectFixture.' }
-if ($SunShadows -and ($Shadows -or $CloudShadows -or $ShadowDebug)) { throw '-SunShadows cannot be combined with -Shadows, -CloudShadows, or -ShadowDebug.' }
+if ($SunShadows -and ($Shadows -or $ShadowDebug)) { throw '-SunShadows cannot be combined with -Shadows or -ShadowDebug.' }
 if ($GlowLadder -or $GlowPair -or $GlowLevels -or $EffectFixture) {
     if ($Glow -or $GlowStrength -ge 0 -or $Preferences -or $Classic -or $Probe -or $Tour -or $DialogFixture -or $UiFixture -or $DevPanel -or $PreferencesProbe) {
         throw 'Glow comparisons and effect fixtures require an ordinary scene capture without other glow overrides or fixtures.'
