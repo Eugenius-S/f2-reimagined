@@ -1258,6 +1258,22 @@ if ($DialogFixture -and -not $DialogPageInspect -and -not $DialogCursorCheck) {
         throw "Dialog fixture timed out within $TimeoutSeconds s.`n$fixtureLog"
     }
     if (-not $probeHarnessStoppedProcess) { throw 'Dialog fixture was not stopped by its isolated helper harness.' }
+    if ($snapshots.Count -ne 1) { throw "Dialog fixture must save exactly one presented answer frame, got $($snapshots.Count)." }
+    if (-not $DialogLayoutCheck) {
+        $dialogMetadata = Get-Content -Raw -LiteralPath $snapshots[0].FullName | ConvertFrom-Json
+        $dialogAnswers = @($dialogMetadata.dialogue_answers.items)
+        if ($dialogMetadata.dialogue_answers.coordinate_space -ne 'logical' -or $dialogAnswers.Count -lt 1) {
+            throw 'Dialog fixture sidecar lacks logical answer rectangles.'
+        }
+        foreach ($answer in $dialogAnswers) {
+            if (@($answer.rect).Count -ne 4 -or $answer.rect[2] -le $answer.rect[0] -or $answer.rect[3] -le $answer.rect[1]) {
+                throw "Dialog fixture sidecar has an invalid answer rectangle at index $($answer.index)."
+            }
+        }
+        if (@($dialogAnswers | Where-Object { $_.wrapped }).Count -lt 1) {
+            throw 'Dialog fixture answer frame has no wrapped answer.'
+        }
+    }
 }
 if ($DialogPageInspect) {
     $inspectLog = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
@@ -1296,7 +1312,7 @@ if ($DialogCursorCheck) {
 }
 if ($DialogLayoutCheck) {
     $layoutLog = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
-    if ($dialogFixtureFailed -or $layoutLog -notmatch '(?m)^DIALOG_LAYOUT_CHECK PASS geometry=non-overlapping buttons=7 text_rows=8') {
+    if ($dialogFixtureFailed -or $layoutLog -notmatch '(?m)^DIALOG_LAYOUT_CHECK PASS geometry=non-overlapping buttons=\d+ wrapped_options=\d+') {
         throw "Dialog layout geometry check failed or timed out within $TimeoutSeconds s.`n$layoutLog"
     }
 }
