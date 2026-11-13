@@ -2,36 +2,30 @@
 
 ## Capture method
 
-Built `Release` with `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release`. Exported 23 `encspecial` maps / 28 scenes from the main checkout's game folder into this worktree's isolated `build/scene-cache`.
+Built `Release` on rebased `origin/main` with `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release`. The executable used for current matched captures has SHA-256 `c126ab6574c2c8c8227252689c0d2b6587463bf408b240808ef2f9ce42a7e908` and reports CE commit `263c1060c` in each sidecar.
 
-Captured the exact 25 `encsp-*` regression spots from `tools/regression/spots.json`. Each ClockLadder run used `tools/dev-snapshot.ps1 -Map <map> -Elevation <elevation> -ViewTile <tile> -ClockLadder -SceneCache build/scene-cache` and recorded four in-game time stages: 22:00, 02:00, 06:00 and 09:00. The ladder advances the real game clock through Ctrl+T. No `--dev-hour` or `--dev-ambient` was used. Every original JSON sidecar is retained next to its map sheet and records its `clock_ladder` hour, ticks and ambient. It points to the composite with `evidence_sheet` and `evidence_panel`. A [CSV index](capture-index.csv) lists all 100 samples. Raw PNG captures were removed after making the JPEG sheets.
+The original 25 live 3D spot ladders cover all `encsp-*` regression spots from `tools/regression/spots.json`: four actual game times, 22:00, 02:00, 06:00 and 09:00. Their 100 sidecars use one consistent earlier executable SHA-256, `58dc5c0ac3dc1d5cf522eb813196c23e9dbc6f5f696312e2d989a2187695526b`. They remain comparable within each ladder. The 23 other spot ladders were not compared against a 2D capture from a different build.
 
-All 100 sidecars were checked for map, elevation, view tile, camera, renderer, 1920x1080 resolution, 960x540 logical resolution, scale 2, and four actual game-time values. Every capture reports `scene-gl` and 3D enabled. Each JPEG is under 1 MB.
+After #267 merged, `-Classic -ClockLadder` provided a new live 2D route. To compare across modes on one executable, I captured fresh 3D and original 2D ladders on this Release for outdoor `RNDWHALE.MAP e0`, tile 17705, and indoor `ENCFITE.MAP e0`, tile 20100. All eight captures per map share map, elevation, tile, in-game time, 1920x1080 drawable, 960x540 logical size, scale 2, `scene-gl`, and executable SHA. In 2D the metadata says `view: vanilla-framebuffer` and `scene_view: off`; in 3D it says `scene_view: full`. The 3D camera is the fixed scene camera centered on the same view tile; the 2D camera is the original view centered on that tile.
 
-## Observed 3D ambient changes
+`capture-index.csv` is the only table. It has 100 3D rows for all 25 spots and 8 new 2D rows for these representative pairs. Each row records map, elevation, tile, actual game time and ambient, camera and view mode, renderer and display settings, CE commit, executable hash, contact sheet, `map_panel` and `stage_panel` indices, changed-pixel count from 22:00, pixel source, and local sidecar path. Counts compare pixels whose maximum RGB channel difference is greater than 8. The 23 historical 3D ladders use individual JPEG panels retained under ignored build; the four current mode/map ladders use original PNG frames before JPEG composition. Raw sidecars and PNG captures stay under this worktree's ignored `build/task263-*` folders.
 
-Sixteen views visibly brighten from 22:00 to 09:00 as ambient rises from 28426 to 65536: [cardesrt e0](cardesrt-e0/cardesrt-e0.jpg), [encdock e0](encdock-e0/encdock-e0.jpg), [rndbess e0](rndbess-e0/rndbess-e0.jpg), [rndbhead e0](rndbhead-e0/rndbhead-e0.jpg), [rndbridg e0](rndbridg-e0/rndbridg-e0.jpg), [rndcafe e0](rndcafe-e0/rndcafe-e0.jpg), [rndexcow e0](rndexcow-e0/rndexcow-e0.jpg), [rndforvr e0](rndforvr-e0/rndforvr-e0.jpg), [rndholy1 e0](rndholy1-e0/rndholy1-e0.jpg), [rndholy2 e0](rndholy2-e0/rndholy2-e0.jpg), [rndparih e0](rndparih-e0/rndparih-e0.jpg), [rndshutl e0](rndshutl-e0/rndshutl-e0.jpg), [rndtinwd e0](rndtinwd-e0/rndtinwd-e0.jpg), [rndtoxic e0](rndtoxic-e0/rndtoxic-e0.jpg), [rnduvilg e0](rnduvilg-e0/rnduvilg-e0.jpg), and [rndwhale e0](rndwhale-e0/rndwhale-e0.jpg).
+## Observed changes
 
-Nine views show no visible ambient change:
+- Outdoor `RNDWHALE.MAP e0`: ambient is 28426 at 22:00 and 02:00, then 65536 at 06:00 and 09:00. Both current 3D and original 2D visibly brighten. Changed pixels from 22:00 to 09:00: 1,618,237 in 3D and 1,655,008 in 2D.
+- Indoor `ENCFITE.MAP e0`: ambient stays at 55705 at all four times. The original 2D view is pixel-identical from 22:00 to 09:00, with 0 changed pixels. The current 3D view is also unchanged across the ladder. This is a stationary dark interior example.
+- The earlier 3D set records 16 visibly brightening views and nine with no visible ambient change as listed by map in `capture-index.csv`. No 3D-only defect is claimed.
 
-- The six Enclave interiors [encdet e0](encdet-e0/encdet-e0.jpg), [encfite e0](encfite-e0/encfite-e0.jpg), [encgd e0](encgd-e0/encgd-e0.jpg), [encpres e0](encpres-e0/encpres-e0.jpg), [encrctr e0](encrctr-e0/encrctr-e0.jpg), and [enctrp e0](enctrp-e0/enctrp-e0.jpg) keep ambient 55705 throughout. `encdock e0` is the exception and brightens.
-- `rndbess e1` ambient changes from 28426 to 65536, but the elevation is an all-void black view and remains visually black: [sheet](rndbess-e1/rndbess-e1.jpg).
-- `rndforvr e1` stays at ambient 65536 throughout: [sheet](rndforvr-e1/rndforvr-e1.jpg).
-- `rndholy2 e1` stays at ambient 28426 throughout: [sheet](rndholy2-e1/rndholy2-e1.jpg).
+All 25 3D spot ladders were checked for blank white ground. A near-white scan (all channels at least 248) found at most 14 pixels in the 3D world portion of a panel, at `ENCDET.MAP e0` 22:00; manual inspection of the refreshed outdoor sheet shows textured ground in every stage. This verifies the Task 263 captures only, not the separate KLAMALL reproduction in Task 270. The 23 historical 3D spot ladders are grouped four map/elevations per contact sheet across six JPEGs. The matched current 3D and Classic ladders share one seventh sheet. Every page labels map, elevation, view mode and all four hours; each is below 1 MB.
 
-Each of the other six unchanged Enclave views has a four-stage sheet and four verified metadata sidecars in its named directory. The observations do not establish a 3D-only defect.
+## Missing live entries
 
-## Original 2D comparisons
+No additional route attempts were made because the two distinct prior methods per target had already failed. Their outcomes and original metadata remain recorded locally under `build/task263-sidecars/runs/263-encspecial-live-ambient-evidence/route-attempts/`.
 
-Captured original vanilla-framebuffer snapshots at the same map/elevation/view tile for [outdoor rndwhale e0](2d-live/rndwhale-e0/rndwhale-e0.jpg) and [indoor encfite e0](2d-live/encfite-e0/encfite-e0.jpg). Their JSON metadata confirms `view: vanilla-framebuffer` and `scene_view: off`. These are representative 2D map-lighting comparisons, not matched timed 2D ladders.
+- `encfite e1`: direct startup reached `ENCFITE.MAP e0`; map-tour entry also reached `ENCFITE.MAP e0`.
+- `encfite e2`: direct startup and map-tour entry both reached `ENCFITE.MAP e0`.
+- `cowbomb e0`: direct startup was rerouted to `ARTEMPLE.MAP e0` and hit the 30-second watchdog; map-tour from `cardesrt` remained on `CARDESRT.MAP e0`.
 
-Task 262 already tried and documented two unsuccessful timed 2D methods: `-Classic -ClockLadder` is rejected before launch, and `-Classic -SceneInput` did not start input because the script pump requires the Full view. I did not repeat those attempts. The two Classic snapshots here use a separate supported capture mode and do not claim 2D day/night timing.
+These are documented limitations, not live entry proof. No encode/decode result or artemple capture is counted as cowbomb.
 
-## Missing live map entries
-
-At most two routes were tried for each missing map/elevation. Exact commands and actual sidecar map/elevation results are in [route-attempts.md](route-attempts.md). Neither target was captured:
-
-- `encfite e1` and `e2`: direct startup and a map-tour entry each returned to `ENCFITE.MAP e0`.
-- `cowbomb e0`: direct startup was sent to `ARTEMPLE.MAP e0` and hit the 30-second watchdog without a snapshot image. A second route from `cardesrt` via map-tour remained on `CARDESRT.MAP e0`. No `artemple` capture is counted as cowbomb.
-
-No renderer, exporter or map-data changes were made. No reproducible 3D-only defect was found.
+No renderer, exporter or map-data changes were made.
