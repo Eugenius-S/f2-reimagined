@@ -149,7 +149,10 @@ int falloutMain(int argc, char** argv)
             bool devNewGame = commandLineDevNewGame;
             commandLineDevNewGame = false;
             int mainMenuRc;
-            if (devNewGame) {
+            if (devtools::menuSnapshotRequested()) {
+                devtools::takeSnapshot();
+                mainMenuRc = MAIN_MENU_EXIT;
+            } else if (devNewGame) {
                 mainMenuRc = MAIN_MENU_NEW_GAME;
             } else if (devLoadGameSlot != -1) {
                 commandLineDevLoadGameSlot = -1;

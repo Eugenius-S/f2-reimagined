@@ -57,6 +57,8 @@ param(
     [switch]$DialogPageInspect,
     [switch]$DialogCursorCheck,
     [switch]$DialogLayoutCheck,
+    # 186: capture the main menu and quit; 'plain' leaves the wide picture out.
+    [ValidateSet('', 'wide', 'plain')][string]$MainMenu,
     [ValidateSet('inventory', 'pipboy', 'character', 'barter', 'log', 'bark')]
     [string]$UiFixture,
     [ValidateSet('1.00', '1.08', '1.15', '1.22', '1.29')]
@@ -617,6 +619,7 @@ if ($PreferencesProbe) {
     else { $arguments += @('--dev-new-game', "--dev-map=$Map", "--dev-elevation=$Elevation") }
     $arguments += "--dev-snapshot-run=$runId"
 }
+if ($MainMenu) { $arguments += if ($MainMenu -eq 'plain') { '--dev-menu-snapshot=plain' } else { '--dev-menu-snapshot' } }
 if ($Glow) { $arguments += '--dev-glow' }
 if ($GlowStrength -ge 0) { $arguments += "--dev-glow-strength=$($GlowStrength.ToString([System.Globalization.CultureInfo]::InvariantCulture))" }
 if ($CyclePalette) { $arguments += '--dev-cycle-palette' }

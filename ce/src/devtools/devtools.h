@@ -127,6 +127,9 @@ void draw(unsigned char* surface, int width, int height, int pitch);
 // Saves a PNG of the current frame plus a JSON sidecar with the metadata
 // of the actual state.
 bool takeSnapshot();
+// --dev-menu-snapshot[=plain]: capture the main menu and quit.
+bool menuSnapshotRequested();
+bool menuWithoutWideArt();
 // Background verification of the save-window thumbnail, without writing a save slot.
 bool savePreviewFixtureActive();
 bool savePreviewFixtureLoadActive();
