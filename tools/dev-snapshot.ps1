@@ -1018,7 +1018,7 @@ if ($DevInput -or $SceneInput) {
 }
 if ($watchdogExpired) {
     if ($ClockLadder) {
-        throw "Clock ladder failed: requested map '$Map' elevation $Elevation did not load before $watchdogReason. No ladder frame was accepted. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')"
+        throw "Clock ladder failed: requested map '$Map' elevation $Elevation did not produce the complete ladder before $watchdogReason. No ladder frame was accepted. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')"
     }
     throw "Live check watchdog: $watchdogReason. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')"
 }
@@ -1062,6 +1062,10 @@ if ($ClockLadder) {
     $ladderTimes = @(3384000, 3528000, 3672000, 3780000)
     $ladderSidecars = @($allClockSidecars | Where-Object { $ladderTimes -contains [int]$_.sun.game_time })
     if ($ladderSidecars.Count -ne 4) { throw "Clock ladder expected four clock frames, got $($ladderSidecars.Count)." }
+    foreach ($expectedTime in $ladderTimes) {
+        $matchingFrames = @($ladderSidecars | Where-Object { [int]$_.sun.game_time -eq $expectedTime })
+        if ($matchingFrames.Count -ne 1) { throw "Clock ladder expected one frame at game time $expectedTime, got $($matchingFrames.Count)." }
+    }
     $hours = @($ladderSidecars | ForEach-Object { [int]$_.sun.game_time })
     if ($hours -notcontains 3384000 -or $hours -notcontains 3780000) {
         throw 'Clock ladder sidecars do not contain the 22:00 and 09:00 captures.'
