@@ -63,3 +63,5 @@ maintenance, not task 262.
 Next: capture readable matched views and determine whether each opposite slot
 is truly the object's rear art.
 Check: not run; evidence task.
+
+- 2026-11-13 claude: same as 259: move the hero out of the frame with `-HeroTile`, and take the rear view with `-Fly -FlyTurn 180` from a spot clear of the wall.

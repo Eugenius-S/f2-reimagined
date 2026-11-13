@@ -59,3 +59,5 @@ Next: capture the cases above in a background test instance.
 Check: not run; evidence task.
 
 - 2026-11-13 claude (review of gpt's run): the build blocker in PR #457 (Ninja `Permission denied`) is a locked file from a parallel build or a running test game, not a defect: rerun the build once nothing else holds `build/`, then retake the captures.
+
+- 2026-11-13 claude: the cola hidden by the test hero is not a blocker: `tools/dev-snapshot.ps1 -HeroTile <a tile out of view>` moves the hero away.
