@@ -1,0 +1,7 @@
+exit probe placed: source=KLAGRAZ e0 from=-1 exit=22161 target=kladwtwn/19850/e0 approach=21960 distance=23
+exit probe scan: offset=(16,8) point=(480,240) tile=22361
+exit probe queued: source=KLAGRAZ/22161 dest=kladwtwn/19850/e0 at (463,232)
+exit click dispatched: map=KLAGRAZ.MAP hero=21960->21960 busy=0->1 at (463,232)
+probe click: hero busy=1 tile=21960
+exit transition passed: source=KLAGRAZ/14 exit=22161 target=kladwtwn map=KLADWTWN.MAP index=9 elevation=0 tile=19850 after=27 frames
+probe done: hero tile=19850 busy=0 scene=available
