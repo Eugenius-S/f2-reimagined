@@ -10,6 +10,7 @@
 #include "color.h"
 #include "content_config.h"
 #include "debug.h"
+#include "devtools/devtools.h"
 #include "delay.h"
 #include "draw.h"
 #include "font_manager.h"
@@ -326,6 +327,7 @@ static bool mainMenuLoadArt()
                 "game/user-assets/fullscreen-20261028/wallpapers-selected/hires/menu/hr_mainmenu.png");
         }
     }
+    if (devtools::menuWithoutWideArt()) error = 1;
     if (error == 0 && backgroundWidth > 0 && backgroundHeight > 0
         && backgroundWidth <= SHRT_MAX && backgroundHeight <= SHRT_MAX) {
         mainMenuHasRgbaBackground = true;

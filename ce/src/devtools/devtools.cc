@@ -133,6 +133,10 @@ bool gStartupFloorPreviewAttempted = false;
 int gStartupFloorPreviewReturnAfter = 0;
 int gStartupFloorPreviewFramesRemaining = 0;
 bool gSnapshotOncePending = false;
+// 186: the main menu captured and the game closed; "plain" leaves the wide
+// picture out, as in an install that lost it.
+bool gMenuSnapshot = false;
+bool gMenuWithoutWideArt = false;
 bool gLiveSnapshotOncePending = false;
 bool gForceLiveSnapshot = false;
 Uint32 gLiveSnapshotNotBefore = 0;
@@ -1094,6 +1098,11 @@ bool parseOption(const char* arg)
             fprintf(stderr, "devtools: invalid --dev-floor-preview-return-after value (expected 1..10000)\n");
             fflush(stderr);
         }
+        return true;
+    }
+    if (strncmp(arg, "--dev-menu-snapshot", 19) == 0) {
+        gMenuSnapshot = true;
+        gMenuWithoutWideArt = strcmp(arg + 19, "=plain") == 0;
         return true;
     }
     if (strcmp(arg, "--dev-snapshot-once") == 0
@@ -4554,6 +4563,9 @@ const char* activeRendererName()
     }
     return "sdl-renderer";
 }
+
+bool menuSnapshotRequested() { return gMenuSnapshot; }
+bool menuWithoutWideArt() { return gMenuWithoutWideArt; }
 
 bool takeSnapshot()
 {
