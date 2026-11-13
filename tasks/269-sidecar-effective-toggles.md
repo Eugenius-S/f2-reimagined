@@ -2,7 +2,7 @@
 id: 269
 title: The snapshot sidecar says which shadows, clouds, sun and glow were really on
 milestone: M1
-status: todo
+status: doing
 owner: gpt
 suggested: gpt
 priority: normal
