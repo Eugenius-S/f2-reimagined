@@ -1,15 +1,27 @@
 # Task 262 live ambient evidence
 
-Captured all 28 elevations in the background test game with the existing `ClockLadder` fixture. Each run recorded 22:00, 02:00, 06:00 and 09:00. It begins at 22:00, then advances the game clock through the Ctrl+T handler 11 times; each advance updates map scripts. No `--dev-hour` or `--dev-ambient` argument was used. Every sidecar confirms scene-gl, 1920x1080 output, and identical map/elevation, view tile, camera and settings across the four captures.
+Captured all 28 city, cave and mountain elevations with the background test game and the verified ClockLadder. Each run advances the actual game clock through Ctrl+T and emits 22:00, 02:00, 06:00 and 09:00 frames. No `--dev-hour` or `--dev-ambient` argument was used.
 
-Overview: [all 28 matched night/day pairs](overview-28-elevations.jpg). Each elevation also has a named `map-eN.jpg` four-stage sheet and a matching `.json` metadata sidecar.
+## Evidence
 
-## Observed 3D changes
+- [28 matched 3D night/day pairs](overview-28-elevations.jpg)
+- [Matched original 2D and 3D views for city, mountain and cave](matched-2d-3d-city-mountain-cave.jpg)
+- [Pixel diff table for every 3D frame and the 12 representative 2D frames](ambient-pixel-diffs.csv)
 
-Pixel comparison uses the shared upper 880 pixels to exclude the HUD region. Visible changes between 22:00 and 09:00: cave0-e0, cave1-e0, cave2-e0, cave3-e0, cave4-e0, cave5-e0, cave5-e1, city1-e0, city2-e0, city3-e0, city4-e0, city5-e0, city6-e0, city7-e0, city8-e0, mountn1-e0, mountn2-e0, mountn3-e0, mountn4-e0, mountn5-e0, mountn6-e0.
+The JPEG sheets are each under 1 MB. Raw PNGs and JSON sidecars remain local under `build/262/fresh3d/<map-eN>/` and `build/262/classic2d/<map-e0>/`.
 
-No pixel change: cave1-e1, cave2-e1, cave3-e1, cave4-e1, cave5-e2, cave6-e0, cave7-e0. These seven cave elevations retain ambient 28426 throughout; the other elevations change from ambient 28426 at night to 65536 by 06:00. The observations alone do not establish a 3D-only defect because matched live 2D day/night captures could not be obtained. No rendering defect is claimed.
+## Capture validation
 
-## 2D capture limitation
+The 28 3D runs each passed `CLOCK_LADDER PASS`. Their sidecars match map, elevation, view tile, camera, resolution (1920x1080 drawable, 960x540 logical, scale 2), scene-gl renderer, and relevant settings across all four times. The pixel diff compares the shared upper 880 pixels, excluding the HUD, and counts pixels where any RGB channel changes by more than 8.
 
-Attempt 1: `-Classic -ClockLadder` is rejected by `tools/dev-snapshot.ps1` validation before the game starts. Attempt 2: `-Classic -SceneInput` ran with view 0, but scripted input never started and produced no captures before timeout; the script pump starts only when the active view is Full. The current ClockLadder advances only on the 3D frame path. See [2d-live-limitations.md](2d-live-limitations.md). Task remains blocked on representative live 2D day/night comparisons.
+The representative original 2D runs use city1-e0, mountn1-e0 and cave0-e0, at the same map, elevation, view tile, scale and resolution as their 3D pairs. The sidecars report `view=vanilla-framebuffer`; each 2D frame's actual game time and ambient match its 3D frame.
+
+## Findings and limits
+
+Visible 3D night-to-day changes occur on 21 of 28 elevations. They all change from ambient 28426 at 22:00 to 65536 by 06:00. Seven cave elevations remain visually unchanged and retain ambient 28426 through 09:00: cave1-e1, cave2-e1, cave3-e1, cave4-e1, cave5-e2, cave6-e0 and cave7-e0. A cave's unchanged image is not treated as an error by itself.
+
+The three matched original 2D examples show the same night-to-day ambient transition. Visual review of the 28-elevation sheet and full-size city1-e0, cave0-e0 and mountn1-e0 frames found textured, covered ground and no white-floor capture in this task's target maps. No 3D-only defect was identified.
+
+Task 270 separately confirmed a white ground in the bake-enabled KLAMALL capture even with a fresh cache; its paired `F2CE_NO_BAKE=1` diagnostic shows textured ground. That KLAMALL frame is not used as valid evidence here, and the issue was not reproduced in the representative or target-map frames for task 262. Its cause remains outside this evidence task.
+
+Build: Release from commit `c3b98289c`, executable SHA-256 `418d642bbcf00a9bc7bb7a7e02143f85261eef90e08826984a32782b5acf86c6`.
