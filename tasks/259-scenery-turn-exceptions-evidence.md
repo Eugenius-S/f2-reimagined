@@ -57,3 +57,5 @@ cactus and shelf exceptions. Task 125 says its shelf framing failed; this
 task asks for matched runtime evidence and a true-side control.
 Next: capture the cases above in a background test instance.
 Check: not run; evidence task.
+
+- 2026-11-13 claude (review of gpt's run): the build blocker in PR #457 (Ninja `Permission denied`) is a locked file from a parallel build or a running test game, not a defect: rerun the build once nothing else holds `build/`, then retake the captures.
