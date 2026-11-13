@@ -3006,6 +3006,12 @@ bool requestMapChange(const char* mapFileName, int elevation)
     if (mapId == -1) {
         snprintf(gStatus, sizeof(gStatus), uiText("no such map: %s"), base);
         printf("devtools: requestMapChange %s: not in the worldmap registry\n", base);
+        if (gClockLadder && gClassic && gStartupMap[0] != '\0'
+            && compat_stricmp(base, gStartupMap) == 0) {
+            printf("CLOCK_LADDER FAIL mode=classic reason=requested-map-not-in-registry map=%s elevation=%d\n",
+                base, gStartupElevation);
+            gClockLadder = false;
+        }
         fflush(stdout);
         return false;
     }

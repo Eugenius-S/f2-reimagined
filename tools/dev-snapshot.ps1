@@ -584,7 +584,10 @@ if ($OwnerMark -eq 2) {
     else { $arguments += '--dev-owner-mark-twice' }
 }
 if ($MuzzleWeapon -gt 0) {$arguments += @("--dev-muzzle=$MuzzleWeapon", "--dev-muzzle-animation=$MuzzleAnimation", "--dev-muzzle-rotation=$MuzzleRotation")}
-if ($ClockLadder) { $arguments += '--dev-clock-ladder' }
+if ($ClockLadder) {
+    $arguments += '--dev-clock-ladder'
+    if (-not $Classic) { $arguments += '--dev-snapshot-once' }
+}
     if ($ScrollStep) { $arguments += "--dev-scroll-step=$ScrollStep" }
 if ($ScrollEdge) { $arguments += "--dev-scroll-edge=$ScrollEdge" }
 if ($FollowHero) { $arguments += '--dev-follow-hero' }
@@ -701,6 +704,8 @@ if ($SavePreviewFixture) {
 } elseif ($ScrollStep -or $ScrollEdge -or $FollowHero) {
     $shots = 1
     $arguments += '--dev-snapshot-once'
+} elseif ($ClockLadder) {
+    $shots = 4
 } elseif ($Tour -or ($Classic -and -not $Combat)) {
     # Without the scene the one snapshot comes from a tour with no stops.
     $shots = 1 + @("$Tour".Split(',') | Where-Object { $_.Trim() }).Count
@@ -716,7 +721,6 @@ if ($SavePreviewFixture) {
 if ($GlowLadder) { $shots = 6 }
 if ($GlowPair) { $shots = 2 }
 if ($GlowLevels) { $shots = 1 + $GlowLevels.Count }
-if ($ClockLadder) { $shots = 4 }
 
 $started = Get-Date
 $previousBackground = $env:F2CE_DEV_BACKGROUND
@@ -894,6 +898,7 @@ try {
                 }
             } elseif ($ClockLadder) {
                 $clockLog = Join-Path $OutputDirectory 'process.stdout.log'
+                if ((Test-Path -LiteralPath $clockLog) -and (Select-String -LiteralPath $clockLog -Pattern '^CLOCK_LADDER FAIL ' -Quiet)) { break }
                 if ($snapshots.Count -ge $shots -and (Test-Path -LiteralPath $clockLog) -and (Select-String -LiteralPath $clockLog -Pattern '^CLOCK_LADDER PASS' -Quiet)) { break }
             } elseif ($ScrollStep -or $ScrollEdge -or $FollowHero -or $WalkProbe) {
                 $scrollLog = Join-Path $OutputDirectory 'process.stdout.log'
@@ -1011,7 +1016,12 @@ if ($DevInput -or $SceneInput) {
         } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $OutputDirectory 'input-result.json')
     }
 }
-if ($watchdogExpired) { throw "Live check watchdog: $watchdogReason. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')" }
+if ($watchdogExpired) {
+    if ($ClockLadder) {
+        throw "Clock ladder failed: requested map '$Map' elevation $Elevation did not load before $watchdogReason. No ladder frame was accepted. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')"
+    }
+    throw "Live check watchdog: $watchdogReason. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')"
+}
 if ($SavePreviewFixture) {
     $savePreviewLog = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
     if ($savePreviewLog -notmatch '(?m)^SAVE_PREVIEW_FIXTURE PASS ' -or $savePreviewLog -match '(?m)^SAVE_PREVIEW_FIXTURE FAIL ') {
@@ -1032,7 +1042,52 @@ if ($MuzzleWeapon -gt 0) {
 }
 if ($ClockLadder) {
     $clockText094=Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
-    if ($clockText094 -notmatch '(?m)^CLOCK_LADDER PASS') { throw 'Clock ladder did not finish successfully.' }
+    if ($clockText094 -notmatch '(?m)^CLOCK_LADDER PASS') {
+        $clockFailure = [regex]::Match($clockText094, '(?m)^CLOCK_LADDER FAIL (.+)$')
+        if ($clockFailure.Success) { throw "Clock ladder failed: $($clockFailure.Groups[1].Value)" }
+        throw "Clock ladder did not finish successfully for '$Map' elevation $Elevation."
+    }
+    $allClockSidecars = @($snapshots | ForEach-Object {
+        Get-Content -Raw -LiteralPath $_.FullName | ConvertFrom-Json
+    })
+    if ($allClockSidecars.Count -lt 4) { throw "Clock ladder expected at least four sidecars, got $($allClockSidecars.Count)." }
+    $expectedMap = [System.IO.Path]::GetFileNameWithoutExtension($Map)
+    foreach ($sidecar in $allClockSidecars) {
+        $actualMap = [System.IO.Path]::GetFileNameWithoutExtension([string]$sidecar.map)
+        if (-not [string]::Equals($actualMap, $expectedMap, [System.StringComparison]::OrdinalIgnoreCase) -or
+            [int]$sidecar.elevation -ne $Elevation) {
+            throw "Clock ladder rejected a wrong-map capture: expected $expectedMap elevation $Elevation, got $($sidecar.map) elevation $($sidecar.elevation)."
+        }
+    }
+    $ladderTimes = @(3384000, 3528000, 3672000, 3780000)
+    $ladderSidecars = @($allClockSidecars | Where-Object { $ladderTimes -contains [int]$_.sun.game_time })
+    if ($ladderSidecars.Count -ne 4) { throw "Clock ladder expected four clock frames, got $($ladderSidecars.Count)." }
+    $hours = @($ladderSidecars | ForEach-Object { [int]$_.sun.game_time })
+    if ($hours -notcontains 3384000 -or $hours -notcontains 3780000) {
+        throw 'Clock ladder sidecars do not contain the 22:00 and 09:00 captures.'
+    }
+    $evening = $ladderSidecars | Where-Object { [int]$_.sun.game_time -eq 3384000 } | Select-Object -First 1
+    $morning = $ladderSidecars | Where-Object { [int]$_.sun.game_time -eq 3780000 } | Select-Object -First 1
+    $eveningSnapshot = $null
+    $morningSnapshot = $null
+    foreach ($snapshot in $snapshots) {
+        $metadata = Get-Content -Raw -LiteralPath $snapshot.FullName | ConvertFrom-Json
+        if ($metadata.image -eq $evening.image) { $eveningSnapshot = $snapshot }
+        if ($metadata.image -eq $morning.image) { $morningSnapshot = $snapshot }
+    }
+    if ($null -eq $eveningSnapshot -or $null -eq $morningSnapshot) {
+        throw 'Clock ladder could not match the 22:00 and 09:00 sidecars to their captures.'
+    }
+    $eveningImage = Get-SnapshotImage $eveningSnapshot $evening
+    $morningImage = Get-SnapshotImage $morningSnapshot $morning
+    if (-not (Test-Path -LiteralPath $eveningImage -PathType Leaf) -or -not (Test-Path -LiteralPath $morningImage -PathType Leaf)) {
+        throw 'Clock ladder could not find the 22:00 or 09:00 image.'
+    }
+    $diffMask = Join-Path $OutputDirectory 'clock-ladder-diff.png'
+    $diff = & py -3 (Join-Path $PSScriptRoot 'image_diff.py') $eveningImage $morningImage $diffMask
+    if ($LASTEXITCODE -ne 0 -or ($diff -join "`n") -notmatch 'changed\(>8\):\s*[1-9]\d*') {
+        throw 'Clock ladder 22:00 and 09:00 frames are identical or could not be compared.'
+    }
 }
 if ($ScrollStep -or $ScrollEdge -or $FollowHero -or $WalkProbe) {
     $scrollText = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
