@@ -254,7 +254,7 @@ if ($ExistingSavePreviewFixture) {
 }
 if ($TurnKeys -and -not $SceneInput) { throw '-TurnKeys requires -SceneInput.' }
 if ($ClockLadder) {
-    if (-not $OutputDirectory -or $Tour -or $Classic -or $Probe -or $Preferences -or $MuzzleWeapon -or $GlowLadder -or $GlowPair -or $GlowLevels -or $EffectFixture -or $DialogFixture -or $UiFixture) { throw '-ClockLadder requires its own scene run and -OutputDirectory.' }
+    if (-not $OutputDirectory -or $Tour -or $Probe -or $Preferences -or $MuzzleWeapon -or $GlowLadder -or $GlowPair -or $GlowLevels -or $EffectFixture -or $DialogFixture -or $UiFixture) { throw '-ClockLadder requires its own background run and -OutputDirectory.' }
     $Still=$true; $CaptureConsole=$true
 }
 if (([int][bool]$ScrollStep + [int][bool]$ScrollEdge + [int][bool]$FollowHero + [int][bool]$WalkProbe) -gt 1) { throw 'Choose one scroll or walk probe mode.' }
@@ -584,7 +584,10 @@ if ($OwnerMark -eq 2) {
     else { $arguments += '--dev-owner-mark-twice' }
 }
 if ($MuzzleWeapon -gt 0) {$arguments += @("--dev-muzzle=$MuzzleWeapon", "--dev-muzzle-animation=$MuzzleAnimation", "--dev-muzzle-rotation=$MuzzleRotation")}
-if ($ClockLadder) { $arguments += '--dev-clock-ladder' }
+if ($ClockLadder) {
+    $arguments += '--dev-clock-ladder'
+    if (-not $Classic) { $arguments += '--dev-snapshot-once' }
+}
     if ($ScrollStep) { $arguments += "--dev-scroll-step=$ScrollStep" }
 if ($ScrollEdge) { $arguments += "--dev-scroll-edge=$ScrollEdge" }
 if ($FollowHero) { $arguments += '--dev-follow-hero' }
@@ -701,6 +704,8 @@ if ($SavePreviewFixture) {
 } elseif ($ScrollStep -or $ScrollEdge -or $FollowHero) {
     $shots = 1
     $arguments += '--dev-snapshot-once'
+} elseif ($ClockLadder) {
+    $shots = 4
 } elseif ($Tour -or ($Classic -and -not $Combat)) {
     # Without the scene the one snapshot comes from a tour with no stops.
     $shots = 1 + @("$Tour".Split(',') | Where-Object { $_.Trim() }).Count
@@ -716,7 +721,6 @@ if ($SavePreviewFixture) {
 if ($GlowLadder) { $shots = 6 }
 if ($GlowPair) { $shots = 2 }
 if ($GlowLevels) { $shots = 1 + $GlowLevels.Count }
-if ($ClockLadder) { $shots = 4 }
 
 $started = Get-Date
 $previousBackground = $env:F2CE_DEV_BACKGROUND
@@ -894,6 +898,7 @@ try {
                 }
             } elseif ($ClockLadder) {
                 $clockLog = Join-Path $OutputDirectory 'process.stdout.log'
+                if ((Test-Path -LiteralPath $clockLog) -and (Select-String -LiteralPath $clockLog -Pattern '^CLOCK_LADDER FAIL ' -Quiet)) { break }
                 if ($snapshots.Count -ge $shots -and (Test-Path -LiteralPath $clockLog) -and (Select-String -LiteralPath $clockLog -Pattern '^CLOCK_LADDER PASS' -Quiet)) { break }
             } elseif ($ScrollStep -or $ScrollEdge -or $FollowHero -or $WalkProbe) {
                 $scrollLog = Join-Path $OutputDirectory 'process.stdout.log'
@@ -1011,7 +1016,12 @@ if ($DevInput -or $SceneInput) {
         } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $OutputDirectory 'input-result.json')
     }
 }
-if ($watchdogExpired) { throw "Live check watchdog: $watchdogReason. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')" }
+if ($watchdogExpired) {
+    if ($ClockLadder) {
+        throw "Clock ladder failed: requested map '$Map' elevation $Elevation did not produce the complete ladder before $watchdogReason. No ladder frame was accepted. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')"
+    }
+    throw "Live check watchdog: $watchdogReason. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')"
+}
 if ($SavePreviewFixture) {
     $savePreviewLog = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
     if ($savePreviewLog -notmatch '(?m)^SAVE_PREVIEW_FIXTURE PASS ' -or $savePreviewLog -match '(?m)^SAVE_PREVIEW_FIXTURE FAIL ') {
@@ -1032,7 +1042,34 @@ if ($MuzzleWeapon -gt 0) {
 }
 if ($ClockLadder) {
     $clockText094=Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
-    if ($clockText094 -notmatch '(?m)^CLOCK_LADDER PASS') { throw 'Clock ladder did not finish successfully.' }
+    if ($clockText094 -notmatch '(?m)^CLOCK_LADDER PASS') {
+        $clockFailure = [regex]::Match($clockText094, '(?m)^CLOCK_LADDER FAIL (.+)$')
+        if ($clockFailure.Success) { throw "Clock ladder failed: $($clockFailure.Groups[1].Value)" }
+        throw "Clock ladder did not finish successfully for '$Map' elevation $Elevation."
+    }
+    $allClockSidecars = @($snapshots | ForEach-Object {
+        Get-Content -Raw -LiteralPath $_.FullName | ConvertFrom-Json
+    })
+    if ($allClockSidecars.Count -lt 4) { throw "Clock ladder expected at least four sidecars, got $($allClockSidecars.Count)." }
+    $expectedMap = [System.IO.Path]::GetFileNameWithoutExtension($Map)
+    foreach ($sidecar in $allClockSidecars) {
+        $actualMap = [System.IO.Path]::GetFileNameWithoutExtension([string]$sidecar.map)
+        if (-not [string]::Equals($actualMap, $expectedMap, [System.StringComparison]::OrdinalIgnoreCase) -or
+            [int]$sidecar.elevation -ne $Elevation) {
+            throw "Clock ladder rejected a wrong-map capture: expected $expectedMap elevation $Elevation, got $($sidecar.map) elevation $($sidecar.elevation)."
+        }
+    }
+    $ladderTimes = @(3384000, 3528000, 3672000, 3780000)
+    $ladderSidecars = @($allClockSidecars | Where-Object { $ladderTimes -contains [int]$_.sun.game_time })
+    if ($ladderSidecars.Count -ne 4) { throw "Clock ladder expected four clock frames, got $($ladderSidecars.Count)." }
+    foreach ($expectedTime in $ladderTimes) {
+        $matchingFrames = @($ladderSidecars | Where-Object { [int]$_.sun.game_time -eq $expectedTime })
+        if ($matchingFrames.Count -ne 1) { throw "Clock ladder expected one frame at game time $expectedTime, got $($matchingFrames.Count)." }
+    }
+    $hours = @($ladderSidecars | ForEach-Object { [int]$_.sun.game_time })
+    if ($hours -notcontains 3384000 -or $hours -notcontains 3780000) {
+        throw 'Clock ladder sidecars do not contain the 22:00 and 09:00 captures.'
+    }
 }
 if ($ScrollStep -or $ScrollEdge -or $FollowHero -or $WalkProbe) {
     $scrollText = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')

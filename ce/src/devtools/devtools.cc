@@ -173,6 +173,7 @@ bool gMovieSkipReported = false;
 bool gWatchdogEnabled = false;
 bool gClockLadder = false;
 int gClockLadderStage = -1;
+bool gClassicClockLadderCapturePending = false;
 bool gPreferencesSnapshotPending = false;
 bool gPreferencesSnapshotActive = false;
 bool gPreferencesSnapshotBottom = false;
@@ -3005,6 +3006,12 @@ bool requestMapChange(const char* mapFileName, int elevation)
     if (mapId == -1) {
         snprintf(gStatus, sizeof(gStatus), uiText("no such map: %s"), base);
         printf("devtools: requestMapChange %s: not in the worldmap registry\n", base);
+        if (gClockLadder && gClassic && gStartupMap[0] != '\0'
+            && compat_stricmp(base, gStartupMap) == 0) {
+            printf("CLOCK_LADDER FAIL mode=classic reason=requested-map-not-in-registry map=%s elevation=%d\n",
+                base, gStartupElevation);
+            gClockLadder = false;
+        }
         fflush(stdout);
         return false;
     }
@@ -3575,9 +3582,56 @@ void scenePresented(const scene::RefreshResult& refreshed)
     }
 }
 
+void classicClockLadderFrame()
+{
+    if (!gClockLadder || !gClassic || gDude == nullptr || gMapHeader.name[0] == '\0'
+        || !sceneStartupReady() || inBlockingGameState()) {
+        return;
+    }
+    if (gStartupMap[0] != '\0') {
+        char currentMap[64];
+        stripMapExtension(gMapHeader.name, currentMap, sizeof(currentMap));
+        if (compat_stricmp(currentMap, gStartupMap) != 0
+            || static_cast<int>(gElevation) != gStartupElevation) {
+            return;
+        }
+    }
+
+    if (gClockLadderStage < 0) {
+        gameTimeSetTime(3u * 864000u + 22u * 36000u);
+        scriptsExecMapUpdateProc();
+        gClockLadderStage = 0;
+        gClassicClockLadderCapturePending = true;
+        return;
+    }
+    if (!gClassicClockLadderCapturePending) return;
+
+    gClassicClockLadderCapturePending = false;
+    const bool captured = takeSnapshot();
+    if (!captured) {
+        printf("CLOCK_LADDER FAIL mode=classic stage=%d reason=%s\n", gClockLadderStage, gStatus);
+        gClockLadder = false;
+        fflush(stdout);
+        return;
+    }
+
+    printf("CLOCK_LADDER stage=%d mode=classic ticks=%u hour=%d ambient=%d\n",
+        gClockLadderStage, gameTimeGetTime(), gameTimeGetHour(), lightGetAmbientIntensity());
+    const int steps[] = { 4, 4, 3, 0 };
+    for (int i = 0; i < steps[gClockLadderStage]; i++) handleKey(KEY_CTRL_T);
+    if (++gClockLadderStage < 4) {
+        gClassicClockLadderCapturePending = true;
+    } else {
+        gClockLadder = false;
+        printf("CLOCK_LADDER PASS mode=classic\n");
+    }
+    fflush(stdout);
+}
+
 void vanillaPresented()
 {
     observeTransitionFrame("2d");
+    if (gClockLadder && gClassic) classicClockLadderFrame();
     if (gDialogCursorCheckCursorMoveInProgress) return;
     if (gCombatFixtureRequested && gCombatFixtureIsClassic) runCombatFixtureFrame();
     uiFixtureVanillaPresented();
@@ -4201,7 +4255,7 @@ bool handleKey(int key)
     // the panel is open (063), and the fly camera below would eat the key.
     // The step keeps the minute and advances the calendar across midnight.
     // The status line shows the current hour even when it is dark.
-    if ((key == KEY_CTRL_T || key == KEY_ALT_T) && scene::enabled()) {
+    if ((key == KEY_CTRL_T || key == KEY_ALT_T) && (scene::enabled() || (gClassic && gClockLadder))) {
         const unsigned int ticks = gameTimeGetTime();
         gameTimeSetTime(scene::stepClockHour(ticks, key == KEY_CTRL_T ? 1 : -1));
         // Time jumps bypass the periodic map-update script that sets ambient
