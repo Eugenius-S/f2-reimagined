@@ -1,5 +1,7 @@
 # Classic clock ladder diagnostic
 
+This file records the two original failed attempts and the later resolution. The readiness gate and the corrected harness have since been exercised live; see task 267 and `runs/267-classic-clock-ladder/evidence.md`.
+
 ## Result
 
 The harness reached `CLOCK_LADDER PASS mode=classic` and produced four original 2D framebuffer captures with real game times 22:00, 02:00, 06:00, and 09:00. Both attempts were on `ARTEMPLE.MAP`, not the requested `city1`; the first attempt's image visibly showed the opening movie. These captures do not count as matched map evidence for tasks 262 or 263.
@@ -14,13 +16,13 @@ The harness reached `CLOCK_LADDER PASS mode=classic` and produced four original 
 
 ## Diagnosis and current code
 
-The Classic ladder callback originally ran as soon as a map name and player existed. It could therefore capture the startup screen before the requested startup map finished applying. The current draft waits for `sceneStartupReady()` and for the exact requested map and elevation before setting time or capturing. That readiness gate has compiled but has not been exercised in a live capture; the two-attempt limit was reached before another run.
+The Classic ladder callback originally ran as soon as a map name and player existed. It could therefore capture the startup screen before the requested startup map finished applying. The follow-up gate waits for `sceneStartupReady()` and for the exact requested map and elevation before setting time or capturing. Live runs now pass on `CITY1.MAP` and `RNDWHALE.MAP`, and a nonexistent map exits with `requested-map-not-in-registry`. The Classic harness no longer schedules an extra ordinary map-tour capture. The 3D ladder also receives its initial one-shot snapshot request.
 
 ## Checks
 
-- `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release`: passed.
-- `ctest --test-dir build --output-on-failure`: 27/27 passed.
-- `py -3 tools/check_public_content.py origin/main`: passed before the initial push; rerun before any further push.
-- Not checked: live Classic capture after the readiness gate, matched day/night evidence on a requested map, image comparison, and `tools/perf-check.ps1` before/after.
+- Original attempts: Release build and `ctest --test-dir build --output-on-failure` (27/27) passed, but both captures were on `ARTEMPLE.MAP` and did not count as requested-map evidence.
+- Follow-up task 267: Release and ctest passed; CITY1 and RNDWHALE Classic captures each produced four map/elevation-matched sidecars; 22:00/09:00 changed-pixel counts were 1,627,640 and 1,664,908 respectively.
+- `-Map map-does-not-exist` exited clearly without accepting a ladder frame. The 3D `kladwtwn` ladder logged `CLOCK_LADDER PASS` after exporting its worktree scene cache.
+- No performance baseline: the work changes only the developer snapshot path and startup checks, not renderer or map-load implementation.
 
-PR #472 remains a draft. No changes were made to tasks 262/263 or their PRs.
+PR #472 remains a draft for controller review. Tasks 262/263 and their PRs were not changed.

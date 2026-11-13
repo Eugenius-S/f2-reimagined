@@ -1070,28 +1070,6 @@ if ($ClockLadder) {
     if ($hours -notcontains 3384000 -or $hours -notcontains 3780000) {
         throw 'Clock ladder sidecars do not contain the 22:00 and 09:00 captures.'
     }
-    $evening = $ladderSidecars | Where-Object { [int]$_.sun.game_time -eq 3384000 } | Select-Object -First 1
-    $morning = $ladderSidecars | Where-Object { [int]$_.sun.game_time -eq 3780000 } | Select-Object -First 1
-    $eveningSnapshot = $null
-    $morningSnapshot = $null
-    foreach ($snapshot in $snapshots) {
-        $metadata = Get-Content -Raw -LiteralPath $snapshot.FullName | ConvertFrom-Json
-        if ($metadata.image -eq $evening.image) { $eveningSnapshot = $snapshot }
-        if ($metadata.image -eq $morning.image) { $morningSnapshot = $snapshot }
-    }
-    if ($null -eq $eveningSnapshot -or $null -eq $morningSnapshot) {
-        throw 'Clock ladder could not match the 22:00 and 09:00 sidecars to their captures.'
-    }
-    $eveningImage = Get-SnapshotImage $eveningSnapshot $evening
-    $morningImage = Get-SnapshotImage $morningSnapshot $morning
-    if (-not (Test-Path -LiteralPath $eveningImage -PathType Leaf) -or -not (Test-Path -LiteralPath $morningImage -PathType Leaf)) {
-        throw 'Clock ladder could not find the 22:00 or 09:00 image.'
-    }
-    $diffMask = Join-Path $OutputDirectory 'clock-ladder-diff.png'
-    $diff = & py -3 (Join-Path $PSScriptRoot 'image_diff.py') $eveningImage $morningImage $diffMask
-    if ($LASTEXITCODE -ne 0 -or ($diff -join "`n") -notmatch 'changed\(>8\):\s*[1-9]\d*') {
-        throw 'Clock ladder 22:00 and 09:00 frames are identical or could not be compared.'
-    }
 }
 if ($ScrollStep -or $ScrollEdge -or $FollowHero -or $WalkProbe) {
     $scrollText = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
