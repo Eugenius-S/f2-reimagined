@@ -3,7 +3,7 @@ id: 156
 title: Resolution, window mode and scale change on the fly, without a restart
 milestone: M1
 status: todo
-owner: any
+owner: glm
 suggested: any
 priority: high
 tier: 2
@@ -280,3 +280,4 @@ asked live: whether the under-a-second budget tolerates a brief black
 frame on the switch.
 
 - 2026-11-12 claude: read the device lifetime on main `559a3710`, no run. The first suspect in Context no longer holds: `scene_renderer::isActive()` is true from `scene_renderer::init` at window creation to exit, so `handleWindowSizeChanged()` never destroys the renderer on the GL path, and there is one `SDL_GL_CreateContext` call in the tree (`scene_renderer/context.cc`). The SDL renderer is created only when GL init fails. What is left for the overlay toast is the exclusive fullscreen mode itself (`SDL_WINDOW_FULLSCREEN`: focus loss and return re-enter the mode) and `applyWindowModeLive()`. Next for whoever takes it: log `SDL_WINDOWEVENT_FOCUS_*` and display-mode changes in a fullscreen session and compare with borderless, where the toast should not repeat.
+- 2026-11-13 claude: to glm for the weekend queue; gpt's draft #425 is the start, gpt failed it twice and its new queue leaves 156 out.

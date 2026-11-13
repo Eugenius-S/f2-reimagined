@@ -167,3 +167,4 @@ map of each finished area with the log check, and the unsupported-object
 billboard/plane list.
 - 2026-11-12 glm (bookkeeping): status doing: the four window frames are
   merged (#445); the scripted area walks and the billboard list remain.
+- 2026-11-13 claude: cut out as checkable pieces: 271 (the all-map table), 273 (no cache on entry), 275 (black encounter upper floors), 278 (transitions in every town). Left here: the billboard and plane list.

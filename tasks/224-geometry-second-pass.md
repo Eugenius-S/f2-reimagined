@@ -92,3 +92,4 @@ maps entering 3D (187), view-persistence (173, the owner's draft).
   include the lower one's tall walls), evidence pair
   runs/224-geometry-second-pass/f2-denbus2-e1-2d-vs-3d-now.jpg.
 - F3 newr2 e0 Shark Club marquee: still open, untouched this pass.
+- 2026-11-13 claude: finds F2 and F3 cut as 274 and 277; the full re-walk cut by region as 279-282. This file keeps the register and the finds of other kinds.
