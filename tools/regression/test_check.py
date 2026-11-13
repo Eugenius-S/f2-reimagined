@@ -17,6 +17,8 @@ class CaptureValidationTests(unittest.TestCase):
         self.screen = {"width": 640, "height": 480, "scale": 1}
         self.metadata = {"map": "KLADWTWN.MAP", "elevation": 0, "view_tile": 25075,
                          "still_snapshot": True, "renderer": "scene-gl", "preview_availability": "available",
+                         "effective_render_state": {"sun_shadows": True, "cloud_shadows": False,
+                                                     "point_lights": True, "glow": True, "ambient": 1.0},
                          "view": "static-wall-plus-hero-preview", "image": "scene.png", "resolution": "640x480",
                          "logical_resolution": "640x480", "scale": 1, "windowed": True}
         self.capture = self.root / "one"
@@ -31,6 +33,12 @@ class CaptureValidationTests(unittest.TestCase):
         self.metadata["preview_availability"] = "renderer-inactive"
         self.write_metadata()
         with self.assertRaisesRegex(ValueError, "preview_availability"):
+            read_capture(self.capture, self.spot, self.screen)
+
+    def test_missing_effective_render_state_is_rejected(self):
+        del self.metadata["effective_render_state"]
+        self.write_metadata()
+        with self.assertRaisesRegex(ValueError, "effective_render_state"):
             read_capture(self.capture, self.spot, self.screen)
 
     def test_wrong_camera_hex_is_rejected(self):
