@@ -2,7 +2,7 @@
 id: 268
 title: The dialogue fixture captures the reply list as the player sees it
 milestone: M1
-status: todo
+status: doing
 owner: gpt
 suggested: gpt
 priority: high
