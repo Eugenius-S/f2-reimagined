@@ -2,7 +2,7 @@
 id: 270
 title: A 3D capture never comes out with white ground
 milestone: M1
-status: todo
+status: doing
 owner: gpt
 suggested: gpt
 priority: normal
