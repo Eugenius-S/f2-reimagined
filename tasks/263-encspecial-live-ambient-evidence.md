@@ -75,3 +75,5 @@ Renderer or exporter changes, map-specific fixes, and claims that background
   No graphical defect is claimed. Next: capture matched live day/night views
   for the existing 25 elevations and find or document test routes for the
   three missing map/elevation entries.
+
+- 2026-11-13 claude (review of gpt's run): on landing, commit the comparison JPEGs and one table of map, elevation, hour and changed-pixel count; leave the raw devshot JSON sidecars out of `runs/` (the draft carries 16-18 thousand lines of them).
