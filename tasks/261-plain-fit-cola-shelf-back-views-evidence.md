@@ -64,9 +64,7 @@ Next: capture readable matched views and determine whether each opposite slot
 is truly the object's rear art.
 Check: not run; evidence task.
 
-<<<<<<< HEAD
 - 2026-11-13 claude: same as 259: move the hero out of the frame with `-HeroTile`, and take the rear view with `-Fly -FlyTurn 180` from a spot clear of the wall.
-=======
 ### 2026-11-12 gpt
 Done: identified the plain-fit shelf solid as `shelf002.frm` (`Boxes and
 Sacks`), `broken1.map` elevation 0, tile 9678, record index 436, map object
@@ -87,4 +85,3 @@ exported the Den and `broken1`; `py -3 tools/shapes/inventory.py` identified
 the shelf as `box+back`. No tests run; no code or game files changed. The
 cola pair, clear far-face view, and a no-see-through confirmation are not
 verified. Draft PR #460 remains open.
->>>>>>> d80ecb67 (evidence: record shelf back slot variant and cola blocker)
