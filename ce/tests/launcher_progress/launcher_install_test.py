@@ -45,7 +45,7 @@ def read_lock(path):
 
 
 @unittest.skipUnless(os.name == "nt", "the launcher uses Windows system tools")
-class InstallTests(unittest.TestCase):
+class LauncherFixture(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="f2r-install-test-")
         self.addCleanup(self.temp.cleanup)
@@ -84,6 +84,9 @@ class InstallTests(unittest.TestCase):
         print(f"\n{self.id()}: exit {result.returncode}\n{output}", flush=True)
         return result.returncode, output
 
+
+
+class InstallTests(LauncherFixture):
     def assert_failed(self, code, output, filename):
         self.assertNotEqual(code, 0, output)
         self.assertIn(filename, output)

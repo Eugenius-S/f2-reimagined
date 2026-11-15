@@ -22,6 +22,11 @@ int main()
     check(targetOf("gl_ammomod.int") == "data/scripts/gl_ammomod.int", "the ammo script goes into data/scripts");
     check(targetOf("mods/rpu.dat") == "mods/rpu.dat" && targetOf("ddraw.ini") == "ddraw.ini", "the rest lands as is");
 
+    check(targetOf("data/savegame/slot01/save.dat").empty(), "package saves never overwrite player saves");
+    check(restoredOrder("old.dat", "rpu.dat\r\n", "rpu.dat\r\nru.dat\r\nnew.dat\r\n")
+            == "old.dat\r\nru.dat\r\nnew.dat\r\n", "shared mod order keeps originals and later additions");
+    check(restoredOrder("old.dat\r\n", "rpu.dat\r\nold.dat\r\n", "rpu.dat\r\nold.dat\r\n") == "old.dat\r\n",
+        "original mod lines do not duplicate");
     check(keptInData("SAVEGAME/SLOT01/SAVE.DAT") && keptInData("sound/music/01hub.acm"), "saves and music stay");
     check(keptInData("art/splash/splash0.rix") && keptInData("art/russian/splash/splash0.rix"), "this mod's splash art stays");
     check(keptInData("worldmap.txt") && keptInData("vault13.gcd"), "data/*.txt and data/*.gcd stay");
