@@ -57,6 +57,8 @@ param(
     [switch]$DialogPageInspect,
     [switch]$DialogCursorCheck,
     [switch]$DialogLayoutCheck,
+    # 186: capture the main menu and quit; 'plain' leaves the wide picture out.
+    [ValidateSet('', 'wide', 'plain')][string]$MainMenu,
     [ValidateSet('inventory', 'pipboy', 'character', 'barter', 'log', 'bark')]
     [string]$UiFixture,
     [ValidateSet('1.00', '1.08', '1.15', '1.22', '1.29')]
@@ -215,6 +217,17 @@ param(
     [ValidateRange(1.0, 3.0)]
     [double]$Scale = 2.0
 )
+
+function Get-Sha256FileHash([string]$Path) {
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        return [System.BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
+    } finally {
+        $stream.Dispose()
+        $algorithm.Dispose()
+    }
+}
 $ErrorActionPreference = 'Stop'
 if ($DevInput -and (-not $Preferences -or -not $ConfiguredDisplay -or -not $ReuseTestConfig -or -not $OutputDirectory -or -not $CaptureConsole)) {
     throw '-DevInput requires -Preferences, -ConfiguredDisplay, -ReuseTestConfig, -OutputDirectory and -CaptureConsole.'
@@ -241,7 +254,7 @@ if ($ExistingSavePreviewFixture) {
 }
 if ($TurnKeys -and -not $SceneInput) { throw '-TurnKeys requires -SceneInput.' }
 if ($ClockLadder) {
-    if (-not $OutputDirectory -or $Tour -or $Classic -or $Probe -or $Preferences -or $MuzzleWeapon -or $GlowLadder -or $GlowPair -or $GlowLevels -or $EffectFixture -or $DialogFixture -or $UiFixture) { throw '-ClockLadder requires its own scene run and -OutputDirectory.' }
+    if (-not $OutputDirectory -or $Tour -or $Probe -or $Preferences -or $MuzzleWeapon -or $GlowLadder -or $GlowPair -or $GlowLevels -or $EffectFixture -or $DialogFixture -or $UiFixture) { throw '-ClockLadder requires its own background run and -OutputDirectory.' }
     $Still=$true; $CaptureConsole=$true
 }
 if (([int][bool]$ScrollStep + [int][bool]$ScrollEdge + [int][bool]$FollowHero + [int][bool]$WalkProbe) -gt 1) { throw 'Choose one scroll or walk probe mode.' }
@@ -505,7 +518,7 @@ if ($Set3d) {
     }
     [System.IO.File]::WriteAllLines($configPath, $configLines, [System.Text.UTF8Encoding]::new($false))
 }
-$configHashBefore = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+$configHashBefore = Get-Sha256FileHash $configPath
 $initialZoom = Get-TestConfigValue $configPath '3d' 'zoom'
 $initialEnabled = Get-TestConfigValue $configPath '3d' 'enabled'
 $initialDifficulty = Get-TestConfigValue $configPath 'preferences' 'combat_difficulty'
@@ -521,7 +534,7 @@ if ($logicalWidth -lt 640 -or $logicalHeight -lt 480) {
     throw 'The requested scale must leave at least a 640x480 logical framebuffer.'
 }
 if (-not (Test-Path -LiteralPath $exe) -or
-    (Get-FileHash -LiteralPath $built).Hash -ne (Get-FileHash -LiteralPath $exe).Hash) {
+    (Get-Sha256FileHash $built) -ne (Get-Sha256FileHash $exe)) {
     Copy-Item $built $exe -Force
 }
 # The game reads sfall's ddraw.ini next to its exe: a scratch install's own
@@ -571,7 +584,10 @@ if ($OwnerMark -eq 2) {
     else { $arguments += '--dev-owner-mark-twice' }
 }
 if ($MuzzleWeapon -gt 0) {$arguments += @("--dev-muzzle=$MuzzleWeapon", "--dev-muzzle-animation=$MuzzleAnimation", "--dev-muzzle-rotation=$MuzzleRotation")}
-if ($ClockLadder) { $arguments += '--dev-clock-ladder' }
+if ($ClockLadder) {
+    $arguments += '--dev-clock-ladder'
+    if (-not $Classic) { $arguments += '--dev-snapshot-once' }
+}
     if ($ScrollStep) { $arguments += "--dev-scroll-step=$ScrollStep" }
 if ($ScrollEdge) { $arguments += "--dev-scroll-edge=$ScrollEdge" }
 if ($FollowHero) { $arguments += '--dev-follow-hero' }
@@ -606,6 +622,7 @@ if ($PreferencesProbe) {
     else { $arguments += @('--dev-new-game', "--dev-map=$Map", "--dev-elevation=$Elevation") }
     $arguments += "--dev-snapshot-run=$runId"
 }
+if ($MainMenu) { $arguments += if ($MainMenu -eq 'plain') { '--dev-menu-snapshot=plain' } else { '--dev-menu-snapshot' } }
 if ($Glow) { $arguments += '--dev-glow' }
 if ($GlowStrength -ge 0) { $arguments += "--dev-glow-strength=$($GlowStrength.ToString([System.Globalization.CultureInfo]::InvariantCulture))" }
 if ($CyclePalette) { $arguments += '--dev-cycle-palette' }
@@ -687,6 +704,8 @@ if ($SavePreviewFixture) {
 } elseif ($ScrollStep -or $ScrollEdge -or $FollowHero) {
     $shots = 1
     $arguments += '--dev-snapshot-once'
+} elseif ($ClockLadder) {
+    $shots = 4
 } elseif ($Tour -or ($Classic -and -not $Combat)) {
     # Without the scene the one snapshot comes from a tour with no stops.
     $shots = 1 + @("$Tour".Split(',') | Where-Object { $_.Trim() }).Count
@@ -702,7 +721,6 @@ if ($SavePreviewFixture) {
 if ($GlowLadder) { $shots = 6 }
 if ($GlowPair) { $shots = 2 }
 if ($GlowLevels) { $shots = 1 + $GlowLevels.Count }
-if ($ClockLadder) { $shots = 4 }
 
 $started = Get-Date
 $previousBackground = $env:F2CE_DEV_BACKGROUND
@@ -750,7 +768,7 @@ try {
         while ((Get-Date) -lt $deadline -and -not $process.HasExited) {
             if (Test-Path -LiteralPath $watchdogStdout) {
                 $lines = Get-Content -LiteralPath $watchdogStdout -Tail 40 -ErrorAction SilentlyContinue
-                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
+                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|CAPTURE|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
                 if ($progress.Count -gt 0 -and $progress[0] -ne $watchdogLastLine) {
                     $watchdogLastLine = [string]$progress[0]
                     $watchdogLastProgress = Get-Date
@@ -773,7 +791,7 @@ try {
         while ((Get-Date) -lt $deadline -and -not $process.HasExited) {
             if (Test-Path -LiteralPath $watchdogStdout) {
                 $lines = Get-Content -LiteralPath $watchdogStdout -Tail 40 -ErrorAction SilentlyContinue
-                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
+                $progress = @($lines | Where-Object { $_ -match '(^| )(STEP|START|PASS|FAIL|RESULT|CAPTURE|DEV_INPUT pushed|DEV_INPUT snap|pending map id|waiting for map id)' } | Select-Object -Last 1)
                 if ($progress.Count -gt 0 -and $progress[0] -ne $watchdogLastLine) {
                     $watchdogLastLine = [string]$progress[0]
                     $watchdogLastProgress = Get-Date
@@ -822,7 +840,7 @@ try {
                     break
                 }
                 if ($snapshots.Count -ge $shots -and (Test-Path -LiteralPath $combatLog) -and
-                    (Select-String -LiteralPath $combatLog -Pattern ('^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + ' captures=4') -Quiet)) { break }
+                    (Select-String -LiteralPath $combatLog -Pattern ('^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + '(\.map)? captures=4') -Quiet)) { break }
             } elseif ($DevInput -or $SceneInput) {
                 $inputLog = Join-Path $OutputDirectory 'process.stdout.log'
                 if ((Test-Path -LiteralPath $inputLog) -and (Select-String -LiteralPath $inputLog -Pattern '^DEV_INPUT FAIL' -Quiet)) { break }
@@ -880,6 +898,7 @@ try {
                 }
             } elseif ($ClockLadder) {
                 $clockLog = Join-Path $OutputDirectory 'process.stdout.log'
+                if ((Test-Path -LiteralPath $clockLog) -and (Select-String -LiteralPath $clockLog -Pattern '^CLOCK_LADDER FAIL ' -Quiet)) { break }
                 if ($snapshots.Count -ge $shots -and (Test-Path -LiteralPath $clockLog) -and (Select-String -LiteralPath $clockLog -Pattern '^CLOCK_LADDER PASS' -Quiet)) { break }
             } elseif ($ScrollStep -or $ScrollEdge -or $FollowHero -or $WalkProbe) {
                 $scrollLog = Join-Path $OutputDirectory 'process.stdout.log'
@@ -993,11 +1012,16 @@ if ($DevInput -or $SceneInput) {
             coordinate_space = 'logical'; snapshots = $snapshots.Count
             initial = @{ resolution_x = $initialDisplayWidth; resolution_y = $initialDisplayHeight; scale_factor = $initialDisplayScale }
             saved = @{ resolution_x = $afterWidth; resolution_y = $afterHeight; scale_factor = $afterScale }
-            config_sha256 = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+            config_sha256 = Get-Sha256FileHash $configPath
         } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 -LiteralPath (Join-Path $OutputDirectory 'input-result.json')
     }
 }
-if ($watchdogExpired) { throw "Live check watchdog: $watchdogReason. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')" }
+if ($watchdogExpired) {
+    if ($ClockLadder) {
+        throw "Clock ladder failed: requested map '$Map' elevation $Elevation did not produce the complete ladder before $watchdogReason. No ladder frame was accepted. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')"
+    }
+    throw "Live check watchdog: $watchdogReason. Diagnostics: $(Join-Path $runDirectory 'watchdog.txt')"
+}
 if ($SavePreviewFixture) {
     $savePreviewLog = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
     if ($savePreviewLog -notmatch '(?m)^SAVE_PREVIEW_FIXTURE PASS ' -or $savePreviewLog -match '(?m)^SAVE_PREVIEW_FIXTURE FAIL ') {
@@ -1018,7 +1042,34 @@ if ($MuzzleWeapon -gt 0) {
 }
 if ($ClockLadder) {
     $clockText094=Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
-    if ($clockText094 -notmatch '(?m)^CLOCK_LADDER PASS') { throw 'Clock ladder did not finish successfully.' }
+    if ($clockText094 -notmatch '(?m)^CLOCK_LADDER PASS') {
+        $clockFailure = [regex]::Match($clockText094, '(?m)^CLOCK_LADDER FAIL (.+)$')
+        if ($clockFailure.Success) { throw "Clock ladder failed: $($clockFailure.Groups[1].Value)" }
+        throw "Clock ladder did not finish successfully for '$Map' elevation $Elevation."
+    }
+    $allClockSidecars = @($snapshots | ForEach-Object {
+        Get-Content -Raw -LiteralPath $_.FullName | ConvertFrom-Json
+    })
+    if ($allClockSidecars.Count -lt 4) { throw "Clock ladder expected at least four sidecars, got $($allClockSidecars.Count)." }
+    $expectedMap = [System.IO.Path]::GetFileNameWithoutExtension($Map)
+    foreach ($sidecar in $allClockSidecars) {
+        $actualMap = [System.IO.Path]::GetFileNameWithoutExtension([string]$sidecar.map)
+        if (-not [string]::Equals($actualMap, $expectedMap, [System.StringComparison]::OrdinalIgnoreCase) -or
+            [int]$sidecar.elevation -ne $Elevation) {
+            throw "Clock ladder rejected a wrong-map capture: expected $expectedMap elevation $Elevation, got $($sidecar.map) elevation $($sidecar.elevation)."
+        }
+    }
+    $ladderTimes = @(3384000, 3528000, 3672000, 3780000)
+    $ladderSidecars = @($allClockSidecars | Where-Object { $ladderTimes -contains [int]$_.sun.game_time })
+    if ($ladderSidecars.Count -ne 4) { throw "Clock ladder expected four clock frames, got $($ladderSidecars.Count)." }
+    foreach ($expectedTime in $ladderTimes) {
+        $matchingFrames = @($ladderSidecars | Where-Object { [int]$_.sun.game_time -eq $expectedTime })
+        if ($matchingFrames.Count -ne 1) { throw "Clock ladder expected one frame at game time $expectedTime, got $($matchingFrames.Count)." }
+    }
+    $hours = @($ladderSidecars | ForEach-Object { [int]$_.sun.game_time })
+    if ($hours -notcontains 3384000 -or $hours -notcontains 3780000) {
+        throw 'Clock ladder sidecars do not contain the 22:00 and 09:00 captures.'
+    }
 }
 if ($ScrollStep -or $ScrollEdge -or $FollowHero -or $WalkProbe) {
     $scrollText = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
@@ -1036,7 +1087,7 @@ if ($PreferencesProbe) {
         throw 'Preferences probe did not report a successful production-path assertion.'
     }
     if (-not $probeHarnessStoppedProcess) { throw 'Preferences probe did not stop through the isolated helper harness.' }
-    $configHashAfter = (Get-FileHash -LiteralPath $configPath -Algorithm SHA256).Hash
+    $configHashAfter = Get-Sha256FileHash $configPath
     $zoomAfter = Get-TestConfigValue $configPath '3d' 'zoom'
     $enabledAfter = Get-TestConfigValue $configPath '3d' 'enabled'
     $difficultyAfter = Get-TestConfigValue $configPath 'preferences' 'combat_difficulty'
@@ -1097,7 +1148,7 @@ if ($PreferencesProbe) {
             combat_difficulty = $difficultyAfter
             mouse_sensitivity = $mouseSensitivityAfter
         }
-        executable_sha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+        executable_sha256 = Get-Sha256FileHash $exe
         completion = [ordered]@{
             method = 'C++ finish marker observed before deadline; isolated helper stopped by harness'
             marker_observed_before_deadline = $probeCompletedBeforeDeadline
@@ -1120,7 +1171,7 @@ if ($PreferencesProbe) {
 }
 if ($Combat) {
     $fixtureLog = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
-    if ($fixtureLog -match '(?m)^COMBAT_FIXTURE FAIL ' -or $fixtureLog -notmatch ('(?m)^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + ' captures=4\r?$')) {
+    if ($fixtureLog -match '(?m)^COMBAT_FIXTURE FAIL ' -or $fixtureLog -notmatch ('(?m)^COMBAT_FIXTURE PASS map=' + [regex]::Escape($Map) + '(\.map)? captures=4\r?$')) {
         throw "Combat fixture failed or timed out within $TimeoutSeconds s.`n$fixtureLog"
     }
     if (-not $probeHarnessStoppedProcess -or $snapshots.Count -ne 4) {
@@ -1138,7 +1189,9 @@ if ($Combat) {
         if ($index -lt 3 -and -not $fixture.in_combat) { throw "Combat phase '$($expectedPhases[$index])' was not captured in combat." }
         if ($index -eq 3 -and $fixture.in_combat) { throw 'The final combat fixture frame was captured before combat ended.' }
         if ($index -eq 0 -and -not $fixture.player_turn) { throw 'The targeting frame was not captured during the player turn.' }
-        if ($index -eq 2 -and $fixture.player_turn) { throw 'The enemy frame was not captured during an enemy turn.' }
+        # The engine holds player_turn through enemy turns too: the enemy
+        # frame's proof is whose turn the engine was running.
+        if ($index -eq 2 -and -not $fixture.enemy_turn) { throw 'The enemy frame was not captured during an enemy turn.' }
         if (-not $Classic -and ($metadata.scene_view -ne 'full' -or -not $metadata.preview_requested)) {
             throw "3D combat phase '$($expectedPhases[$index])' lacks a full scene preview."
         }

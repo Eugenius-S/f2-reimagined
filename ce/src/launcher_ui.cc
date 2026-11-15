@@ -93,6 +93,9 @@ bool g_autoUpdates = false;
 bool g_russianInstall = false;
 // The player's own wish for the translation (task 238): -1 not chosen yet (the box follows the disk), 0 no, 1 yes.
 int g_russianWish = -1;
+// The Restoration Project box: the player's wish (-1 not chosen yet); RP on disk always shows ticked.
+bool g_rpInstall = false;
+int g_rpWish = -1;
 // The last Install put the game in but could not get the translation; it is tried again next time.
 bool g_translationFailed = false;
 bool g_logDragging = false;
@@ -241,6 +244,9 @@ void saveSettings()
     if (g_russianWish >= 0) {
         WritePrivateProfileStringW(L"launcher", L"russian_wish", g_russianWish != 0 ? L"1" : L"0", g_settingsPath.c_str());
     }
+    if (g_rpWish >= 0) {
+        WritePrivateProfileStringW(L"launcher", L"rp_wish", g_rpWish != 0 ? L"1" : L"0", g_settingsPath.c_str());
+    }
     if (g_root != nullptr) {
         wchar_t value[32768] = {};
         GetWindowTextW(g_root, value, static_cast<int>(std::size(value)));
@@ -363,6 +369,24 @@ void syncRussianFromDisk()
     if (g_russian != nullptr) InvalidateRect(g_russian, nullptr, TRUE);
 }
 
+bool rpOnDisk()
+{
+    fs::path root = chosenRoot();
+    std::error_code error;
+    return !root.empty() && fs::exists(root / L"mods" / L"rpu.dat", error);
+}
+
+// Installed RP cannot be taken off from here (its own backup/rpu holds the old files), so the box then stays ticked and off.
+void syncRpFromDisk()
+{
+    bool onDisk = rpOnDisk();
+    g_rpInstall = onDisk || g_rpWish == 1;
+    if (g_rp != nullptr) {
+        EnableWindow(g_rp, !g_busy && !onDisk);
+        InvalidateRect(g_rp, nullptr, TRUE);
+    }
+}
+
 std::wstring doneStatus(Operation operation)
 {
     switch (operation) {
@@ -412,6 +436,10 @@ std::wstring upToDateStatus()
         text += tr(L" The Russian translation will be installed on the next Install / Update.",
             L" Русификатор поставим при следующей установке или обновлении.");
     }
+    if (g_rpInstall && !rpOnDisk()) {
+        text += tr(L" The Restoration Project will be installed on the next Install / Update.",
+            L" Restoration Project поставим при следующей установке или обновлении.");
+    }
     return text;
 }
 
@@ -450,6 +478,7 @@ void setBusy(bool busy)
     EnableWindow(g_install, !busy && GetWindowTextLengthW(g_root) != 0);
     EnableWindow(g_browse, !busy);
     EnableWindow(g_russian, !busy);
+    EnableWindow(g_rp, !busy && !rpOnDisk());
     EnableWindow(g_autoUpdate, !busy);
     EnableWindow(g_remove, !busy && g_installed);
     EnableWindow(g_play, !busy && g_installed);
@@ -501,7 +530,8 @@ void updateLabels()
         L"Выберите папку, где находятся master.dat и critter.dat.").c_str());
     SetWindowTextW(g_browse, tr(L"Browse...", L"Обзор...").c_str());
     SetWindowTextW(g_russian, tr(L"Russian text (official RPU translation)", L"Русский текст (официальный перевод RPU)").c_str());
-    SetWindowTextW(g_rp, tr(L"Restoration Project: coming soon", L"Restoration Project: скоро").c_str());
+    SetWindowTextW(g_rp, tr(L"Restoration Project (official RPU release, a 900 MB download)",
+        L"Restoration Project (официальный релиз RPU, загрузка 900 МБ)").c_str());
     SetWindowTextW(g_autoUpdate, tr(L"Install updates automatically on launch", L"Устанавливать обновления при запуске").c_str());
     SetWindowTextW(g_install, tr(L"Install / Update", L"Установить / обновить").c_str());
     SetWindowTextW(g_remove, tr(L"Remove mod", L"Удалить мод").c_str());
@@ -531,6 +561,8 @@ void loadSettings()
     g_autoUpdates = GetPrivateProfileIntW(L"launcher", L"auto_updates", 0, g_settingsPath.c_str()) != 0;
     g_russianWish = GetPrivateProfileIntW(L"launcher", L"russian_wish", -1, g_settingsPath.c_str());
     if (g_russianWish > 1) g_russianWish = 1;
+    g_rpWish = GetPrivateProfileIntW(L"launcher", L"rp_wish", -1, g_settingsPath.c_str());
+    if (g_rpWish > 1) g_rpWish = 1;
     if (g_args.gameRoot.empty()) {
         wchar_t path[32768] = {};
         GetPrivateProfileStringW(L"launcher", L"game_root", L"", path,
@@ -555,8 +587,9 @@ std::vector<std::wstring> workerArguments(Operation operation)
         args = {L"--game-root", g_args.gameRoot, L"--uninstall", L"--ui-language", g_uiLanguage};
     } else if (operation == Operation::RemoveRussian) {
         args = {L"--game-root", g_args.gameRoot, L"--remove-russian", L"--ui-language", g_uiLanguage};
-    } else if (g_russianInstall) {
-        args.push_back(L"--russian");
+    } else {
+        if (g_russianInstall) args.push_back(L"--russian");
+        if (g_rpInstall && !rpOnDisk()) args.push_back(L"--restoration-project");
     }
     return args;
 }
@@ -697,6 +730,7 @@ void chooseGameFolder()
                 EnableWindow(g_play, g_installed);
                 EnableWindow(g_remove, g_installed);
                 syncRussianFromDisk();
+                syncRpFromDisk();
                 setStatus(tr(L"Fallout 2 folder selected.", L"Папка Fallout 2 выбрана."));
             } else {
                 setStatus(tr(L"This folder does not contain master.dat and critter.dat.",
@@ -736,10 +770,9 @@ void createControls(HWND window)
     createControl(window, L"BUTTON", L"Install Russian text from the official RPU release",
         BS_OWNERDRAW | BS_NOTIFY, 24, 284, 690, 28, ID_RUSSIAN);
     g_russian = GetDlgItem(window, ID_RUSSIAN);
-    createControl(window, L"BUTTON", L"Restoration Project: coming soon", BS_OWNERDRAW,
-        24, 316, 690, 28, ID_RP);
+    createControl(window, L"BUTTON", L"Restoration Project (official RPU release, a 900 MB download)",
+        BS_OWNERDRAW | BS_NOTIFY, 24, 316, 690, 28, ID_RP);
     g_rp = GetDlgItem(window, ID_RP);
-    EnableWindow(g_rp, FALSE);
     createControl(window, L"BUTTON", L"Install updates automatically on launch",
         BS_OWNERDRAW | BS_NOTIFY, 24, 348, 690, 28, ID_AUTO_UPDATE);
     g_autoUpdate = GetDlgItem(window, ID_AUTO_UPDATE);
@@ -866,7 +899,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         if (item->CtlID == ID_RUSSIAN || item->CtlID == ID_RP || item->CtlID == ID_AUTO_UPDATE) {
             const bool enabled = (item->itemState & ODS_DISABLED) == 0;
             const bool checked = item->CtlID == ID_RUSSIAN ? g_russianInstall
-                : item->CtlID == ID_AUTO_UPDATE ? g_autoUpdates : false;
+                : item->CtlID == ID_AUTO_UPDATE ? g_autoUpdates : g_rpInstall;
             RECT box = item->rcItem;
             box.left += 2;
             box.top += (box.bottom - box.top - 18) / 2;
@@ -997,6 +1030,14 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
                 // A game that is already installed gets the translation at once; a fresh one gets it with Install.
                 if (g_russianInstall && g_installed) startOperation(Operation::Install);
             }
+        } else if (LOWORD(wParam) == ID_RP && HIWORD(wParam) == BN_CLICKED) {
+            if (g_busy || rpOnDisk()) return 0;
+            g_rpInstall = !g_rpInstall;
+            g_rpWish = g_rpInstall ? 1 : 0;
+            saveSettings();
+            InvalidateRect(g_rp, nullptr, TRUE);
+            // As the translation: an installed game gets it at once, a fresh one with Install.
+            if (g_rpInstall && g_installed) startOperation(Operation::Install);
         } else if (LOWORD(wParam) == ID_INSTALL && HIWORD(wParam) == BN_CLICKED) {
             startOperation(Operation::Install);
         } else if (LOWORD(wParam) == ID_REMOVE && HIWORD(wParam) == BN_CLICKED) {
@@ -1029,6 +1070,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             EnableWindow(g_remove, g_installed);
             EnableWindow(g_install, true);
             syncRussianFromDisk();
+            syncRpFromDisk();
             if (g_busy || g_operationCompleted) return 0;
             std::ifstream installed(gameRoot / L"version.txt");
             std::string installedVersion;
@@ -1036,7 +1078,8 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             if (!g_haveRelease) {
                 setStatus(noReleaseStatus());
             } else if (g_autoUpdates && g_installed
-                && (installedVersion != wideToUtf8(g_releaseVersion) || (g_russianInstall && !russianOnDisk()))) {
+                && (installedVersion != wideToUtf8(g_releaseVersion) || (g_russianInstall && !russianOnDisk())
+                    || (g_rpInstall && !rpOnDisk()))) {
                 startOperation(Operation::Install);
             } else if (!g_installed) {
                 setStatus(tr(L"Press Install / Update. The first install takes about 20 minutes.", L"Нажмите «Установить / обновить». Первая установка идёт около 20 минут."));
@@ -1073,6 +1116,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         }
         setBusy(false);
         syncRussianFromDisk();
+        syncRpFromDisk();
         setStatus(result == 0 || g_translationFailed ? doneStatus(operation) : failedStatus(operation));
         saveSettings();
         // After a removal the launcher may be gone: nothing is left to run the release check or an install.
@@ -1177,6 +1221,7 @@ int runLauncherUi(int argc, char** argv)
         EnableWindow(g_play, g_installed);
         EnableWindow(g_remove, g_installed);
         syncRussianFromDisk();
+        syncRpFromDisk();
     }
     saveSettings();
     checkReleaseAsync();

@@ -2,7 +2,7 @@
 id: 090
 title: Sun shadows with zero seams - no lit holes, no specks, no hatching on faces
 milestone: M1
-status: doing
+status: todo
 owner: claude
 suggested: claude
 priority: normal
@@ -375,3 +375,4 @@ outline there, not a gap in a shadow, and the owner finds foliage fine.
 | 20690 h17 | 14 | 44 | 0 | 0 | 58 |
 
 Total 3022 seam pixels over the 21 views (baseline 157,846).
+- 2026-11-10 claude: back to todo: no open PR and no work since the last log line; the card leaves «В работе».

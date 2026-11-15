@@ -873,7 +873,6 @@ RefreshResult refreshForPresent()
             static_cast<double>(cameraDone - start) * toMs,
             static_cast<double>(objectsDone - cameraDone) * toMs,
             static_cast<double>(end - objectsDone) * toMs);
-        fflush(stdout);
     }
     const double seconds = static_cast<double>(end - start) / SDL_GetPerformanceFrequency();
     return { heroUpdated, seconds };

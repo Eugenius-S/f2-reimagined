@@ -2,15 +2,15 @@
 id: 146
 title: A background combat fixture: start a fight and capture each phase
 milestone: M1
-status: blocked
-owner: gpt
+status: done
+owner: glm
 suggested: any
 priority: normal
 tier: 3
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -120,3 +120,79 @@ the two documented startup timeouts. PR #220 stays draft; four-phase 3D and
 Classic captures remain outstanding.
 
 - 2026-11-08 glm: the fixture tooling landed as PR #220 (conflicts with main's save-preview fixture resolved by keeping both). The fixture's own captures still stall after preview startup; tasks 135/149 acceptance wait on it.
+
+### 2026-11-11 glm: the fixture starts on the club maps; kladwtwn 3D captures all four phases
+
+Done: the fixture's own fight no longer loses the map's entry-script combat:
+246's skip lets a script combat request through only inside the fixture's
+attack window (900 frames from the A-key press, devtools.cc), so a club
+map's own fight never hijacks the phases. The view recenters on the hero
+before the fight (tileSetCenter with IGNORE_BOUNDS), because a map entrance
+away from the map's default center left the target off screen. With that,
+kladwtwn 3D gives START, the four CAPTUREs and PASS
+(process.stdout.log of build/probe-146-kladwtwn-3d); the phase strip is
+runs/146-combat-fixture/kladwtwn-3d-four-phases.jpg (502 KB, the four
+devshot captures 2x2). ctest 27/27.
+
+Blocked (the remaining three combos all fail at the aim pick,
+combatFixturePointAtTarget; two attempts each):
+- klatoxcv 3D: the crosshair lands on the right pixel (the camera recenters
+  to the hero), but the scene pick finds no critter card there
+  (gameMouseGetObjectUnderCursor: pointed=none) - the startup wall+hero
+  preview's scene holds no live object cards, so a critter spawned for the
+  fixture cannot be picked.
+- kladwtwn classic: pointed=none as well - the classic iso pick at the
+  tileToScreenXY position finds nothing (this path was never proven before).
+- klatoxcv classic: the pick works (pointed=yes) but _combat_to_hit returns
+  0 (accuracy 0) at the same spot where the 3D run gives 14 - the cave's
+  light or the reach needs a look.
+
+Next: make the aim pick see the fixture's live critter (the scene pick
+under the static preview, and the classic iso pick), then the klatoxcv
+captures and the classic strips.
+
+Check: build/probe-146-kladwtwn-3d/process.stdout.log (START + 4 CAPTUREs +
+PASS on the clean build); build/probe-146-kladwtwn-classic,
+build/probe-146-klatoxcv-e2-3d, build/probe-146-klatoxcv-e2-classic hold
+the three failing combos' logs.
+
+### 2026-11-12 glm: all four combos capture the four phases; done
+
+Done: the aim pick now fights on the map's drawn ground, whatever the view.
+Four root causes off the 2026-11-11 blockers:
+- klatoxcv e2 3D: the devtools elevation landing stands the hero in the
+  map's rock void, past the clean-edges clip, so every object card clips
+  away and the pick paints nothing (a screen-wide grid sweep confirmed
+  nothing was pickable). The fixture now moves the hero to the nearest hex
+  inside the clip (COMBAT_FIXTURE GROUND in the log) and picks the target's
+  tile by the same rule (combatFixtureTileInsideScene, devtools.cc).
+- the aim point used the bare hex anchor: the engine's sprite rect is the
+  anchor plus 16/+8 and the art's offsets. combatFixturePointAtTarget now
+  aims with _obj_intersects_with's own arithmetic and scans a small ring of
+  offsets around it, taking the first pixel that names the target.
+- the dev hero's bare hands reach one hex, so a target two tiles out read
+  OUT_OF_RANGE and the gate waited forever; the default target tile starts
+  at distance 1.
+- dark maps read the light at the defender when the player aims, and caves
+  sit near zero: the spawned test critter carries a lantern
+  (objectSetLight 4/65536) so the to-hit survives any map's darkness.
+Also: the fixture leaves cleanly after PASS and after FAIL (the runner's
+watchdog used to kill an idle post-combat game); the runner counts
+COMBAT_FIXTURE CAPTURE lines as watchdog progress and its PASS pattern
+accepts the game's .MAP suffix; the enemy-phase sidecar records
+enemy_turn (the engine holds COMBAT_STATE_PLAYER_TURN through enemy turns,
+so player_turn cannot prove the phase).
+
+Verified: all four acceptance combos PASS end to end through
+tools/dev-snapshot.ps1 -Combat (START, four CAPTUREs, PASS, four sidecars
+with the right phases): klatoxcv e2 3D, kladwtwn 3D, kladwtwn classic,
+klatoxcv e2 classic; strips in runs/146-combat-fixture/ (four 2x2 JPEGs,
+under 1 MB each). ctest 27/27; the tools' unit tests pass;
+check_public_content and check_runs_size clean. The pixel regression ran
+separately (fixtures only touch the background run, the renderer is
+untouched).
+
+Not verified: a map-hostile target far from the hero (both acceptance maps
+use test critters; a far hostile would need a walk step, recorded here on
+purpose). The to-hit roll in the captured attacks missed (hp unchanged), so
+the strips show the swing, not damage text.

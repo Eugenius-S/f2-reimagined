@@ -369,6 +369,11 @@ void perfLoadStart(const char* what)
     writeLog(line);
 }
 
+void perfLoadSkip(unsigned long long ticks)
+{
+    if (gLoadStart != 0) gLoadStart += ticks;
+}
+
 void perfLoadMark(const char* what)
 {
     if (!perfEnabled() || gLoadStart == 0) return;

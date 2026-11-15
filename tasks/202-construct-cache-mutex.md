@@ -10,7 +10,7 @@ tier: 0
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 # 202: Construct the cache mutex in cacheInit

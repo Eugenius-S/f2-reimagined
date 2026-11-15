@@ -9,7 +9,7 @@ priority: normal
 claude-only: no
 user-check: yes
 depends-on: [107]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal

@@ -524,7 +524,6 @@ bool prepareSharpTextForPresent(SDL_Surface* indexedSurface, SDL_Surface* rgbaSu
                 scan.staticKey, gSharpStaticKey, gSharpStaticKeyValid ? 1 : 0,
                 glyphKey, gSharpGlyphKey, gSharpGlyphKeyValid ? 1 : 0,
                 scan.maskAvailable ? 1 : 0, gIsoWindow);
-            fflush(stdout);
         }
     }
     if (staticHit) {
@@ -703,7 +702,6 @@ void presentFrameWithSharpText(SDL_Surface* indexedSurface, SDL_Surface* rgbaSur
         if (getenv("F2CE_PERF") != nullptr && ++reports % 120 == 0) {
             printf("perf sharp 2d present ran view=%d shouldPresent=%d\n",
                 static_cast<int>(scene::activeView()), scene::shouldPresent() ? 1 : 0);
-            fflush(stdout);
         }
     }
     if (ready) {

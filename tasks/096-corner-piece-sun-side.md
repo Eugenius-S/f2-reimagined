@@ -9,7 +9,7 @@ priority: normal
 claude-only: no
 user-check: yes
 depends-on: [093]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -175,3 +175,8 @@ New shadow features, the moon, shadow softness.
   in rows whose spans stop at or before the corner line, so there is no
   past stretch to re-home (the pen's cut bites 2-pixel slivers and the
   visible post does not move). Cut as task 107 in this branch.
+
+
+### 2026-11-12 gpt review
+
+- Reviewed merged implementation PR [#142](https://github.com/Eugenius-S/f2-reimagined/pull/142), its saved evidence and the recorded owner decision. The accepted 17:00 seam increases are documented; the corner-post limitation is assigned to task 189. The remaining notched building-shadow edge at tile 28096 is outside the demonstrated fix and is tracked separately in [task 256](https://github.com/Eugenius-S/f2-reimagined/blob/main/tasks/256-bottom-edge-wall-shadow.md), opened as draft PR [#455](https://github.com/Eugenius-S/f2-reimagined/pull/455). PR [#430](https://github.com/Eugenius-S/f2-reimagined/pull/430) already records this review and created task 256; this change supplies the missing reviewed flag and Log entry. Original PR CI passed. No runtime capture was performed for this review.

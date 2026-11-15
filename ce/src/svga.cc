@@ -691,8 +691,10 @@ static void renderPresentBody()
     static double refreshMs = 0.0;
     static int presentFrames = 0;
     const Uint64 presentStart = SDL_GetPerformanceCounter();
-    // 127: the frame-time log samples the same present cadence.
-    fpsCounterOnFrame();
+    // 127: the frame-time log samples the same present cadence. 250: a
+    // present driven by the file read progress handler is a loading screen
+    // frame, marked so in the CSV and kept out of the summary.
+    fpsCounterOnFrame(fileReadProgressHandlerActive());
     owner_shot::pump();
     // 172: the first present of the chain (the loading screen's) against the
     // first sync that loaded the scene.
@@ -793,7 +795,6 @@ static void renderPresentBody()
                 if (static_cast<double>(refreshEnd - windowStart) / SDL_GetPerformanceFrequency() >= 2.0) {
                     printf("perf present sync=%.2f sharp=%.2f refresh=%.2f frames=%d\n",
                         syncMs / presentFrames, sharpMs / presentFrames, refreshMs / presentFrames, presentFrames);
-                    fflush(stdout);
                     syncMs = sharpMs = refreshMs = 0.0;
                     presentFrames = 0;
                     windowStart = refreshEnd;

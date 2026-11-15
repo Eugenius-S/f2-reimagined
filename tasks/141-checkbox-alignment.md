@@ -46,7 +46,7 @@ Other rows, the panel layout (130).
 
 ## Log
 
-- 2026-11-03 — claimed on fresh `main` (`cd05720f`) as `gpt/doing`;
+- 2026-11-03 - claimed on fresh `main` (`cd05720f`) as `gpt/doing`;
   branch `task/141-checkbox-alignment`, claim commit `11b5f552`.
 - The toggle renderer used right-aligned text, so `[ ]` and `[X]` had
   different left positions. It now reserves the `[X]` advance, draws both

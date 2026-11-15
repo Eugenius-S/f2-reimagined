@@ -19,6 +19,7 @@
 #include "critter.h"
 #include "debug.h"
 #include "dialog.h"
+#include "devtools/devtools.h"
 #include "elevator.h"
 #include "endgame.h"
 #include "export.h"
@@ -1323,7 +1324,12 @@ int scriptsHandleRequests()
     }
 
     if ((gScriptsRequests & SCRIPT_REQUEST_COMBAT) != SCRIPT_REQUEST_NONE) {
-        if (!_action_explode_running()) {
+        // 246: a background capture cannot play turn-based combat (the
+        // nested input loop waits for the player forever); the skip itself
+        // lives in devtools.
+        if (devtools::skipScriptCombatRequest()) {
+            gScriptsRequests &= ~(SCRIPT_REQUEST_COMBAT_LOCKED | SCRIPT_REQUEST_COMBAT | SCRIPT_REQUEST_COMBAT_NO_DATA);
+        } else if (!_action_explode_running()) {
             // entering combat
             gScriptsRequests &= ~(SCRIPT_REQUEST_COMBAT_LOCKED | SCRIPT_REQUEST_COMBAT);
             memcpy(&gScriptsCSD, &gScriptsRequestedCSD, sizeof(gScriptsCSD));

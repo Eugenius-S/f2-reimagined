@@ -1,0 +1,11 @@
+devtools: startup target kladwtwn e0 accepted=1 blocking=0
+scene: cache [game-cache]
+scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+PREFERENCES_PROBE viewport logical=960x540 frame_x=0..639 scrollbar_x=812
+PREFERENCES_PROBE rows=25 initialScroll=0 zoom=1.000000 enabled=true combat_difficulty=1
+PREFERENCES_PROBE cursor speed coordinates window=5 rect=0,0..959,539 page_offset=160 row=3 row_top=768 scroll=0 track=776 hit_y=776 start=613,776 target=710,776 transformed=453,776
+PREFERENCES_PROBE cursor speed slider armed row=3 before=1.000000
+perf present sync=1.07 sharp=0.00 refresh=52.80 frames=2
+PREFERENCES_PROBE FAIL: cursor speed slider did not stage a new value
+PREFERENCES_PROBE finished; requesting isolated helper exit
+perf loop input=35.37 world=2810.59 present=68.99 frame=2914.94 frames=2

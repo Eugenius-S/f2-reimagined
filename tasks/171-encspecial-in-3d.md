@@ -10,7 +10,7 @@ tier: 3
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -120,3 +120,9 @@ other areas (each has its own task).
   full regression was re-exporting the same cache - stopped it before
   any damage (the shots it would have reused were taken before the
   regression started, and the sheets were rebuilt after it finished).
+
+### 2026-11-12 gpt review
+
+Reviewed merged PR #312 (commit 7b87b5b). Its diff adds all 23 named maps to `encspecial`, supports tile-less elevations, and adds 26 tour spots and 25 regression references. Historical CI passed exporter, runs-size, all scene jobs and windows-game. `gh pr checks 312` confirmed the recorded checks are green. The task Log records clean export for 23 maps / 28 elevations, 25/25 base walk probes, 154/154 pixel regression, and the 75-capture `--dev-hour` sweep. I visually inspected representative saved sheets `rndwhale-e0.jpg`, `encfite-e0.jpg` and `rndbess-e1.jpg`, plus the encfite e0 2D mural; this was a sample, not every sheet. The turn sheets show the named encounter geometry and match before/after. `rndbess-e1` is a black void view as the Log describes. The mural is a 2D view of encfite e0.
+
+Coverage gaps: the committed sheets are turn views, not time-of-day captures. Task 170's Log confirms background `--dev-hour` leaves ambient at its default, so the 171 hour sweep does not prove real play-time dimming. Task 262 covers city, cave and mountain encounters only. encfite e1/e2 have only the tile-less encode/decode and renderer-path proof: the enter script sends the test run to e0. cowbomb has no live spot because its enter script moves the run to artemple. Task 206 checked encfite e0 map-entry stability, task 124 only recorded old encfite e1/e2 exporter failures and explicitly did not retest them, and task 173 does not provide a route to hold either missing map view. No defect is claimed. Follow-up: task 263 covers the live encspecial lighting evidence and these three missing map/elevation entries.

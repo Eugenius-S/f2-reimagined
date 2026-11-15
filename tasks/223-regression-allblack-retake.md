@@ -10,7 +10,7 @@ tier: 1
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal

@@ -27,9 +27,11 @@
 #include <iterator>
 #include <sstream>
 #include <string>
+#include <chrono>
 #include <vector>
 
 #include "launcher_routes.h"
+#include "launcher_rp.h"
 #include "launcher_ru.h"
 #include "launcher_uninstall.h"
 
@@ -60,6 +62,8 @@ constexpr const char* kDefaultMaps = "all";
 std::string g_mirrorBase = std::string("https://raw.githubusercontent.com/") + kDefaultRepo + "/dist/";
 // --ui-language ru: the user-facing log lines are printed in Russian (launcher_ru.h).
 bool g_ru = false;
+// --rp-zip-url: the Restoration Project zip from elsewhere instead of its GitHub release (tests).
+std::string g_rpZipUrl;
 
 struct Options {
     std::string gameRoot;
@@ -72,6 +76,7 @@ struct Options {
     bool rollback = false;
     bool installRussian = false;
     bool removeRussian = false;
+    bool installRp = false;
     bool uninstall = false;
     std::vector<std::string> gameArgs;
 };
@@ -444,9 +449,15 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
             }
         }
         out.close();
-        ok = total > 0;
-        if (!ok) *errorText = "empty download";
-        else logf("  downloaded %zu bytes", total);
+        ok = launcher_routes::downloadComplete(total, contentLength);
+        if (ok) {
+            logf("  downloaded %zu bytes", total);
+        } else {
+            *errorText = total == 0 ? "empty download" : "the download was cut short";
+            // A stump left in place would be taken for the whole file by the next run.
+            std::error_code ignored;
+            fs::remove(destination, ignored);
+        }
     }
     if (request != nullptr) WinHttpCloseHandle(request);
     if (connect != nullptr) WinHttpCloseHandle(connect);
@@ -729,7 +740,7 @@ const std::vector<std::string>& buildFiles()
     return names;
 }
 
-bool backupInstalledBuild(const fs::path& root, const std::string& version)
+bool backupInstalledBuild(const fs::path& root, const std::string& version, std::string* folderName)
 {
     std::string backupVersion = version.empty() ? "manual" : version;
     for (char& ch : backupVersion) {
@@ -737,6 +748,7 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version)
     }
     if (backupVersion.size() > 100) backupVersion.resize(100);
     fs::path backup = root / "f2reimagined-backups" / backupVersion;
+    *folderName = backupVersion;
     std::error_code error;
     fs::create_directories(backup, error);
     if (error) {
@@ -765,6 +777,32 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version)
     }
     logf("backed up build %s to f2reimagined-backups", version.c_str());
     return true;
+}
+
+// What an older build of ours leaves in the game folder and the new one does not need:
+// every backup but the newest (rollback only ever takes that one), the launcher under
+// its zip name from a hand-unpacked release, and work folders of runs that were cut short.
+void cleanOlderBuildLeftovers(const fs::path& root, const std::string& keptBackup)
+{
+    std::error_code error;
+    for (const fs::path& gone : launcher_uninstall::staleBackups(root / "f2reimagined-backups", keptBackup)) {
+        fs::remove_all(gone, error);
+        logf("  older backup %s: %s", gone.filename().string().c_str(), error ? error.message().c_str() : "removed");
+    }
+    // Fails quietly while it is the running program; the next start takes it.
+    if (fs::remove(root / kZipLauncher, error)) logf("  %s: removed (the launcher is %s now)", kZipLauncher, kRootLauncher);
+
+    char tempPath[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempPath);
+    std::string own = std::to_string(GetCurrentProcessId());
+    auto dayAgo = fs::file_time_type::clock::now() - std::chrono::hours(24);
+    for (fs::directory_iterator it(tempPath, error), end; !error && it != end; it.increment(error)) {
+        std::string name = it->path().filename().string();
+        if (name.rfind("f2ce3d-", 0) != 0 || name.substr(name.rfind('-') + 1) == own) continue;
+        std::error_code ignored;
+        if (!it->is_directory(ignored) || fs::last_write_time(it->path(), ignored) > dayAgo) continue;
+        fs::remove_all(it->path(), ignored);
+    }
 }
 
 bool rollbackInstalledBuild(const fs::path& root)
@@ -990,6 +1028,133 @@ bool installRussianTranslation(const fs::path& root)
     return true;
 }
 
+// --- the Restoration Project (task 186) -------------------------------------
+
+bool rpOnDisk(const fs::path& root)
+{
+    std::error_code error;
+    return fs::exists(root / "mods" / "rpu.dat", error);
+}
+
+// One game-folder file into backup/rpu under the same relative path.
+bool moveToRpBackup(const fs::path& root, const fs::path& relative)
+{
+    std::error_code error;
+    fs::path target = root / launcher_rp::kBackupFolder / relative;
+    fs::create_directories(target.parent_path(), error);
+    fs::rename(root / relative, target, error);
+    if (error) logf("  cannot move %s aside (%s)", wideToUtf8(relative.generic_wstring()).c_str(), error.message().c_str());
+    return !error;
+}
+
+// RPU from its own GitHub release at the player's request (never a copy of ours), put in
+// place the way its manual package's rpu-install.bat does; every file it moves or replaces
+// is kept in backup/rpu.
+bool installRestorationProject(const fs::path& root)
+{
+    if (rpOnDisk(root)) {
+        log("  kept the installed Restoration Project (mods/rpu.dat)");
+        return true;
+    }
+    // A test zip (--rp-zip-url) needs no GitHub lookup.
+    std::string tag = g_rpZipUrl.empty() ? rpuTagFromGithub() : std::string("test");
+    if (tag.empty()) {
+        log("cannot read the official RPU release version on GitHub");
+        return false;
+    }
+    char tempPath[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, tempPath);
+    fs::path work = fs::path(tempPath) / ("f2ce3d-rp-" + std::to_string(GetCurrentProcessId()));
+    std::error_code error;
+    fs::remove_all(work, error);
+    fs::create_directories(work / "stage", error);
+    if (error) {
+        logf("cannot create the Restoration Project staging folder: %s", error.message().c_str());
+        return false;
+    }
+    std::string filename = "rpu_" + tag + ".zip";
+    std::vector<launcher_routes::Route> routes = {
+        { "github.com", std::string("https://github.com/") + kRpuRepo + "/releases/download/" + tag + "/" + filename, "" },
+        { "api", std::string("https://api.github.com/repos/") + kRpuRepo + "/releases/tags/" + tag, filename },
+    };
+    fs::path zip = work / filename;
+    logf("downloading the Restoration Project %s from its official release (about 900 MB)", tag.c_str());
+    std::string routeError;
+    if (!g_rpZipUrl.empty()) routes = { { "test", g_rpZipUrl, "" } };
+    if (!fetchRoutes(routes, nullptr, &zip, &routeError)) {
+        logf("the Restoration Project could not be downloaded (%s)", routeError.c_str());
+        fs::remove_all(work, error);
+        return false;
+    }
+    log("unpacking");
+    fs::path stage = work / "stage";
+    bool unpacked = unpackZip(zip, stage);
+    fs::remove(zip, error);
+    if (!unpacked || !fs::exists(stage / "mods" / "rpu.dat")) {
+        log("the Restoration Project package could not be unpacked or has no mods/rpu.dat; nothing was changed");
+        fs::remove_all(work, error);
+        return false;
+    }
+
+    log("installing the Restoration Project into the game folder:");
+    bool ok = true;
+    // As rpu-install.bat: the old patch archives and the loose vanilla data go aside.
+    std::vector<fs::path> aside;
+    for (fs::directory_iterator it(root, error), end; !error && it != end; it.increment(error)) {
+        if (it->is_regular_file() && launcher_rp::movedAside(wideToUtf8(it->path().filename().wstring()))) {
+            aside.push_back(it->path().filename());
+        }
+    }
+    error.clear();
+    for (fs::recursive_directory_iterator it(root / "data", error), end; !error && it != end; it.increment(error)) {
+        if (!it->is_regular_file()) continue;
+        fs::path relative = fs::relative(it->path(), root / "data");
+        if (!launcher_rp::keptInData(wideToUtf8(relative.generic_wstring()))) aside.push_back(fs::path("data") / relative);
+    }
+    error.clear(); // a game without data/ is fine
+    for (const fs::path& relative : aside) {
+        if (!moveToRpBackup(root, relative)) ok = false;
+    }
+    // The package over the game folder; a file it replaces is kept first.
+    // mods/rpu.dat goes last: it marks RP as installed, so a copy cut short is tried again next time.
+    std::vector<std::pair<fs::path, std::string>> files;
+    for (fs::recursive_directory_iterator it(stage, error), end; !error && it != end; it.increment(error)) {
+        if (!it->is_regular_file()) continue;
+        std::string target = launcher_rp::targetOf(wideToUtf8(fs::relative(it->path(), stage).generic_wstring()));
+        if (!target.empty()) files.push_back({ it->path(), target });
+    }
+    std::stable_partition(files.begin(), files.end(),
+        [](const auto& file) { return launcher_uninstall::lowered(file.second) != "mods/rpu.dat"; });
+    int installed = 0;
+    for (const auto& [source, target] : files) {
+        if (!ok || error) break;
+        fs::path destination = root / utf8ToWide(target);
+        fs::path kept = root / launcher_rp::kBackupFolder / utf8ToWide(target);
+        std::error_code copyError;
+        if (fs::exists(destination, copyError) && !fs::exists(kept, copyError)) {
+            fs::create_directories(kept.parent_path(), copyError);
+            fs::copy_file(destination, kept, copyError);
+        }
+        if (!copyError) {
+            fs::create_directories(destination.parent_path(), copyError);
+            fs::copy_file(source, destination, fs::copy_options::overwrite_existing, copyError);
+        }
+        if (copyError) {
+            logf("  %s: copy failed (%s)", target.c_str(), copyError.message().c_str());
+            ok = false;
+        } else {
+            installed++;
+        }
+    }
+    if (error) {
+        logf("  cannot read the Restoration Project package (%s)", error.message().c_str());
+        ok = false;
+    }
+    fs::remove_all(work, error);
+    if (ok) logf("  installed %d files of RPU %s; what they replaced is in backup/rpu", installed, tag.c_str());
+    return ok;
+}
+
 // --- removing the mod (task 234) -------------------------------------------
 
 std::string readWholeFile(const fs::path& path)
@@ -1067,6 +1232,7 @@ bool uninstallMod(const fs::path& root)
             logf("  removed the folder %s", name.c_str());
         }
     }
+    fs::remove(root / "user-assets", error); // only when nothing of the player's is left in it
     if (!removeRussianTranslation(root)) ok = false;
 
     // The launcher itself, last: if it is the running program, it moves aside and a helper deletes it after we close.
@@ -1209,8 +1375,10 @@ Options parseOptions(int argc, char** argv)
             log("  --rollback          restore the most recent backed-up game build");
             log("  --russian           install the official RPU Russian text translation");
             log("  --remove-russian    remove the Russian translation and set the game language back to English");
+            log("  --restoration-project  install the Restoration Project from its official release and build its 3D scenes");
             log("  --ui-language <ru|en>  the language of the log lines (default: en)");
             log("  --mirror-url <url>  the mirror folder for the release files and the Russian translation (tests)");
+            log("  --rp-zip-url <url>  the Restoration Project zip from this url instead of its release (tests)");
             log("  --uninstall         remove the mod and give back the game as it was (saves and original files stay)");
             log("  --check-release     print the latest version and release notes");
             log("  -- <args>           arguments handed over to the game");
@@ -1233,6 +1401,10 @@ Options parseOptions(int argc, char** argv)
             options.installRussian = true;
         } else if (arg == "--remove-russian") {
             options.removeRussian = true;
+        } else if (arg == "--restoration-project") {
+            options.installRp = true;
+        } else if (arg == "--rp-zip-url" && i + 1 < argc) {
+            g_rpZipUrl = argv[++i];
         } else if (arg == "--ui-language" && i + 1 < argc) {
             g_ru = std::string(argv[++i]) == "ru";
         } else if (arg == "--mirror-url" && i + 1 < argc) {
@@ -1364,7 +1536,9 @@ int runConsole(Options options)
     bool freshInstall = !installedGamePresent;
     bool updated = false;
     // An older launcher installed the build without the wide art folders: pull once more for them.
-    bool wideArtMissing = !fs::exists(root / "user-assets/fullscreen-20261028/wallpapers-selected/hires/menu");
+    // The picture itself, not its folder: an install over an older build left the folders empty.
+    std::error_code artError;
+    bool wideArtMissing = fs::file_size(root / launcher_uninstall::kWideMenuArt, artError) == 0 || artError;
     if (!remoteVersion.empty() && (remoteVersion != installedVersion || wideArtMissing)) {
         // --- download and unpack ---
         if (installedVersion.empty()) logf("installing: none -> %s", remoteVersion.c_str());
@@ -1395,8 +1569,10 @@ int runConsole(Options options)
             die("the downloaded package is damaged (the game is not in it); try the install again");
         }
 
-        if (installedGamePresent && !backupInstalledBuild(root,
-            installedVersion.empty() ? std::string("manual") : installedVersion)) {
+        std::string keptBackup;
+        // A refill of the wide art at the same version is no update: the older build stays the one to roll back to.
+        if (installedGamePresent && remoteVersion != installedVersion && !backupInstalledBuild(root,
+            installedVersion.empty() ? std::string("manual") : installedVersion, &keptBackup)) {
             fs::remove_all(work, error);
             die("could not save the current build before updating; nothing was changed");
         }
@@ -1427,14 +1603,26 @@ int runConsole(Options options)
         }
         logf("  version.txt: %s", remoteVersion.c_str());
         fs::remove_all(work, error);
+        cleanOlderBuildLeftovers(root, keptBackup);
         updated = true;
         installedVersion = remoteVersion;
     } else if (!remoteVersion.empty()) {
         logf("the installed build matches the release: nothing to pull");
     }
 
+    // --- the Restoration Project, before the scenes: its maps and art go into them ---
+    bool rpInstalledNow = false;
+    if (options.installRp && !rpOnDisk(root)) {
+        if (!installRestorationProject(root)) {
+            log("the Restoration Project could not be installed (see the lines above)");
+            return 1;
+        }
+        rpInstalledNow = true;
+    }
+
     // --- 3D scene data, always made on this machine from this game ---
-    std::vector<std::string> maps = splitMaps(options.maps);
+    // RP's own maps are the exporter's "rp" group, outside "all".
+    std::vector<std::string> maps = splitMaps(options.maps == kDefaultMaps && rpOnDisk(root) ? "all,rp" : options.maps);
     std::string mapList;
     for (size_t i = 0; i < maps.size(); i++) {
         if (i != 0) mapList += ",";
@@ -1444,7 +1632,7 @@ int runConsole(Options options)
     if (!fs::exists(exporter)) {
         log("scene-exporter.exe is missing; the game will start without 3D");
     } else {
-        bool needExport = options.forceExport || freshInstall || updated;
+        bool needExport = options.forceExport || freshInstall || updated || rpInstalledNow;
         if (!needExport) {
             // The exporter owns the map groups: "all" is its name, only
             // it knows which scene directories that covers.  Exit 0 = every

@@ -65,6 +65,9 @@ private:
 // map_load, scene_loaded, first_frame. Off with the profiler.
 void perfLoadStart(const char* what);
 void perfLoadMark(const char* what);
+// Takes `ticks` (SDL performance counter) out of the open chain: time the test
+// game spent on itself, so the marks after it read as the player's load.
+void perfLoadSkip(unsigned long long ticks);
 
 // One tick per presented frame, always on (the owner shot, 183): the ring of
 // the last frame intervals, whatever F2CE_PERF says. Main thread only.

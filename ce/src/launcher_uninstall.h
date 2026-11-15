@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -19,11 +20,28 @@ inline const std::vector<std::string>& installedFiles()
     return names;
 }
 
-// Folders only the mod makes: the 3D scene data and the old builds kept on update.
+// The wide menu picture the game draws; without it the menu falls back to the narrow art.
+inline constexpr const char* kWideMenuArt =
+    "user-assets/fullscreen-20261028/wallpapers-selected/hires/menu/art__intrface__hr_mainmenu__d0_f0_21-9.png";
+
+// Folders only the mod makes: the 3D scene data, the old builds kept on update, the wide art.
 inline const std::vector<std::string>& installedFolders()
 {
-    static const std::vector<std::string> names = {"mod-cache", "f2reimagined-backups"};
+    static const std::vector<std::string> names = {"mod-cache", "f2reimagined-backups", "user-assets/fullscreen-20261028"};
     return names;
+}
+
+// Backup folders an update no longer needs: all but `kept`, the one this update made.
+// Empty `kept` (a first install made no backup) leaves every folder alone.
+inline std::vector<std::filesystem::path> staleBackups(const std::filesystem::path& backupRoot, const std::string& kept)
+{
+    std::vector<std::filesystem::path> stale;
+    std::error_code error;
+    if (kept.empty()) return stale;
+    for (std::filesystem::directory_iterator it(backupRoot, error), end; !error && it != end; it.increment(error)) {
+        if (it->is_directory(error) && it->path().filename().string() != kept) stale.push_back(it->path());
+    }
+    return stale;
 }
 
 inline std::string lowered(std::string text)

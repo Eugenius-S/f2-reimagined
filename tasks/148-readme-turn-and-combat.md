@@ -2,15 +2,15 @@
 id: 148
 title: The README shows the camera turn and combat in 3D
 milestone: M1
-status: todo
-owner: any
+status: done
+owner: glm
 suggested: any
 priority: normal
 tier: 3
 claude-only: no
 user-check: yes
 depends-on: [146]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -39,3 +39,22 @@ option) and that fights now play in 3D, each with one picture.
 ## Log
 
 - 2026-11-01 Cut with the 146 pool.
+
+### 2026-11-12 glm: both READMEs show the camera turn and 3D combat
+
+Done: README.md and README.ru.md carry the two features with a picture
+each, in the feature list's style:
+- the camera turn: the bullet now names `[` and `]` in 10-degree steps up
+  to 30, with the four-step sheet from 144's snapshots
+  (docs/images/camera-turn-steps.jpg, 191 KB);
+- 3D combat: a new bullet (the outlines, the hex cursor with its to-hit
+  number, the attacks and the enemy turns in the 3D view) with 146's
+  kladwtwn capture (docs/images/combat-3d.jpg, 243 KB);
+- the stale line "During combat and dialogue the game shows the original
+  view for now" replaced: dialogue keeps the original presentation, combat
+  plays in 3D;
+- the Keys section lists `[` and `]`.
+README.ru.md is the only Russian file; both edited together. Checks:
+tools/check_runs_size.py origin/main passes, check_public_content clean.
+Not verified: a reader's look (user-check: yes); the 097 projectile clips
+stay their own line (097 has no PR).

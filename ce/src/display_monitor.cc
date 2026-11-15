@@ -371,16 +371,19 @@ static void displayMonitorRefresh()
     _max_disp = DISPLAY_MONITOR_HEIGHT / (linePitch > 0 ? linePitch : 1);
 
     ScopedTextCaptureTag captureTag(TextCaptureTag::HudMessageLog);
+    // Even though the display monitor is rectangular, it's graphic is not.
+    // To give a feel of depth it's covered by some metal canopy and
+    // considered inclined outwards. This way earlier messages appear a
+    // little bit far from player's perspective. To implement this small
+    // detail the destination buffer is incremented by 1. The owner (193,
+    // 2026-11-04) rejected the slanted left edge: with the sharp text pass
+    // on, every row starts at the same x, so the sharp glyphs and their
+    // captured ink line up; the pixel view keeps the vanilla stair.
+    const int rowShift = settings.scene3d.sharp_text ? 0 : 1;
     for (int index = 0; index < _max_disp; index++) {
         int stringIndex = (_disp_curr + gDisplayMonitorLinesCapacity + index - _max_disp) % gDisplayMonitorLinesCapacity;
         fontDrawText(buf + index * _intface_full_width * linePitch, gDisplayMonitorLines[stringIndex], DISPLAY_MONITOR_WIDTH, _intface_full_width, COLOR_GREEN);
-
-        // Even though the display monitor is rectangular, it's graphic is not.
-        // To give a feel of depth it's covered by some metal canopy and
-        // considered inclined outwards. This way earlier messages appear a
-        // little bit far from player's perspective. To implement this small
-        // detail the destination buffer is incremented by 1.
-        buf++;
+        buf += rowShift;
     }
 
     windowRefreshRect(gInterfaceBarWindow, &gDisplayMonitorRect);

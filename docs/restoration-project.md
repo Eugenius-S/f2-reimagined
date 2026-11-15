@@ -8,6 +8,18 @@ Its published SHA-256 is `226b2252840a9230bb4ced1550becb2bd69d3580c15ee5c2148d5d
 The upstream installation notes are in the repository README:
 <https://github.com/BGforgeNet/Fallout2_Restoration_Project>.
 
+## Through the launcher
+
+The launcher's **Restoration Project** option (console: `--restoration-project`)
+fetches `rpu_<tag>.zip`, RPU's manual package, from the latest official release
+at the player's request; the project never rehosts it. It copies the package
+over the game folder and applies RPU's `rpu-install.bat` steps: `patch000.dat`,
+`f2_res.dat` and the loose `data/` files move to `backup/rpu` (the saves,
+`data/*.txt`, `data/*.gcd` and the music stay), `mods_order.txt` goes into
+`mods/` and `gl_ammomod.int` into `data/scripts/`. Every file the package
+replaces is kept in `backup/rpu` first. Then the scene export runs with the
+exporter's `rp` map group added to `all`.
+
 ## Install into a separate game copy
 
 RPU's Windows installer handles a large set of files, archives and options, so

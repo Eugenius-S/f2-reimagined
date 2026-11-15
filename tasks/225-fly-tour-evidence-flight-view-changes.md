@@ -4,7 +4,7 @@ title: Fly-tour evidence for flight/turned-view renderer changes, starting with 
 milestone: M1
 status: todo
 owner: glm
-suggested: codex (P1 on #320)
+suggested: any
 priority: high
 tier: 1
 claude-only: no

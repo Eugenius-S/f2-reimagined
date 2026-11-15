@@ -52,3 +52,4 @@ owner's shots that are not of this kind.
 - The 24-view fly-tour control set reports zero changed control views. See `runs/189-batch-walls/fly-tour-changed.jpg`.
 - Build succeeded. CTest: 20/20; exporter tests: 128/128; regression unit tests: 12/12. Full regression passed after updating and rerunning the two Broken Hills references.
 - Acceptance remains open: the expected visible post effect is not present in the exact bathhouse acceptance view or the tested Kladwtwn/GSTFARM candidates. Modinn changes are visible, but this does not establish the rule across maps. PR remains draft. Next step is to diagnose visibility/face selection for these locations before claiming completion.
+- 2026-11-12 task 248 audit: missing implementation evidence for the painted-post rule at the required bathhouse, Kladwtwn, and GSTFARM views; diagnose face selection and make the general rule visible across maps before closing.

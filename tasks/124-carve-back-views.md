@@ -9,7 +9,7 @@ priority: normal
 claude-only: no
 user-check: yes
 depends-on: [123]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -102,3 +102,7 @@ builds every map through the new exporter except the six elevations that
 already fail on the 123 base (coast11 e0, encfite e1 / e2, epamain1 / 2 e2,
 epax e1) - proven by re-exporting those maps on the stashed base code and
 seeing the same four messages.
+### 2026-11-12 gpt review
+Done: reviewed task 124's original PR #179 and folded landing #180 (merge commit e434c327). The exporter composes the opposite view in the near sprite frame, fills remaining pixels from the near body, rejects placeholder/low-coverage slots, and maps away faces to the composed sprite. The five retained Den pairs show the CAR4b back views replacing the mirrored side at turns 120, 180 and 240; the turn 0 and turn 180 controls retain the same visible vehicle surface (their whole-frame changed-pixel labels are 130 and 0). The unit test checks alpha coverage over every opaque near-body texel. CI for #180 passed, including exporter, scene/game-view, runs-size and windows-game jobs.
+Check: `gh pr diff 179`; `gh pr checks 180`; visual inspection of `runs/124-carve-back-views/*.jpg`; task 124/125 Logs.
+Not rerun in this review: local ctest, pixel regression, or whole-game exporter sweep. The recorded combined-stack regression is pixel-identical to task 123's 16 spots; the sweep records six elevations already failing on the 123 base (coast11 e0, encfite e1/e2, epamain1/e2, epax e1; four repeated messages). This review did not independently reproduce those failures or verify every possible transparent sample outside the saved Den views. `user-check: yes` remains for the owner's fly-through.

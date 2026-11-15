@@ -10,14 +10,14 @@ tier: 2
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
 
 The owner, 2026-11-07, after the 208 fixes: "the white strip in the menu is
 still there" (now at 3440x1440 borderless), and "the interface in my current
-build must be Russian" — the settings rows showed "< Window >" in English.
+build must be Russian" - the settings rows showed "< Window >" in English.
 
 ## Cause
 

@@ -9,7 +9,7 @@ priority: normal
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -187,3 +187,26 @@ Shadows, the corner pieces (096).
   (klagraz-e0, klaratcv-e2, klatoxcv-e0, klatoxcv-e1): a run at 08:40,
   before this branch, shows the same spots already failing. Left for the
   board.
+
+### 2026-11-12 gpt: review of merged PR 147
+
+- Reviewed the full PR description and diff. The rule filters scenery by its
+  object flags in `build_props`, not by prototype or map name; the tour sheet
+  shows the rule affecting loose props in Klamath Mall, Canyon, caves, and
+  the stove spots. No new concrete defect found, so no follow-up task was
+  created.
+- Visually inspected `outside-before-after.jpg`, `inside-before-after.jpg`,
+  `above-before-after.jpg`, `stove-before-after.jpg`, and `tour-changed.jpg`.
+  They show the bathhouse wall no longer pierced by the junk, the interior
+  and overhead views, stove shapes, and examples from other maps. Inspected
+  the classic unchanged comparison as well. The saved frames are evidence;
+  this review did not launch a game.
+- The four regression references changed for affected object views are
+  identified in the PR description; the diff also contains reference refreshes
+  from the main rebase. The author recorded the four unrelated pre-existing
+  regression failures and compared them against main. CI for PR 147 is green
+  (`gh pr checks 147`); local exporter tests 145/145 and regression tests
+  12/12 pass. Local ctest was unavailable because this worktree has no build
+  directory; PR CI's `windows-game` passed. Runtime regression was not
+  rerun during this review.
+- Review result: `reviewed: yes`. Existing owner-check metadata is unchanged.

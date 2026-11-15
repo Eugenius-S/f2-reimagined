@@ -11,6 +11,14 @@ namespace scene_renderer {
 
 using namespace internal;
 
+// A hex is clickable wherever the map's own clip keeps it or the map draws
+// ground under it: the exit grids live in the drawn edge zones the
+// clean-edges clip trims, and a player has to be able to click them (147).
+bool groundPickable(double worldX, double worldZ)
+{
+    return mapClipContains(staticMapClip(), worldX, worldZ) || staticFloorHasGround(worldX, worldZ);
+}
+
 bool pickStaticGroundTile(int logicalX, int logicalY, GroundPickResult* result)
 {
     if (!gInitialized || !gHeroProjectionLoaded || gWindow == nullptr || result == nullptr) return false;
@@ -43,11 +51,11 @@ bool pickStaticGroundTile(int logicalX, int logicalY, GroundPickResult* result)
     GameView view;
     if (!currentGameView(&view)) {
         return pickGroundTile(projection, camera, viewport, logicalX, logicalY, result)
-            && mapClipContains(staticMapClip(), result->worldX, result->worldZ);
+            && groundPickable(result->worldX, result->worldZ);
     }
     if (staticFlyCameraActive()) {
         return pickGroundTile(projection, camera, viewport, logicalX, logicalY, result)
-            && mapClipContains(staticMapClip(), result->worldX, result->worldZ);
+            && groundPickable(result->worldX, result->worldZ);
     }
 
     double worldX, worldZ;
@@ -58,8 +66,7 @@ bool pickStaticGroundTile(int logicalX, int logicalY, GroundPickResult* result)
     const double u = worldX + 50.0;
     const double v = worldZ + 50.0;
     // The exported scene covers the map's 100x100 squares.
-    if (u < 0.0 || u >= 100.0 || v < 0.0 || v >= 100.0
-        || !mapClipContains(staticMapClip(), worldX, worldZ)) return false;
+    if (u < 0.0 || u >= 100.0 || v < 0.0 || v >= 100.0 || !groundPickable(worldX, worldZ)) return false;
     const double artX = projection.origin[0] + u * projection.squ[0] + v * projection.sqv[0];
     const double artY = projection.origin[1] + u * projection.squ[1] + v * projection.sqv[1];
     const int tile = donorHexFromPixel(artX, artY);

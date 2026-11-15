@@ -17,6 +17,13 @@ struct Route {
     std::string apiAsset;
 };
 
+// A download is whole when the server named no length or every byte of it came.
+// A dropped connection ends the read early and looks like the end of the file.
+inline bool downloadComplete(size_t received, size_t declared)
+{
+    return received > 0 && (declared == 0 || received == declared);
+}
+
 // The first route `attempt` accepts wins; its label lands in *worked.  Every
 // failure is reported through `attempt` itself (the caller logs it).  When
 // all fail, *error holds the labels and reasons joined with "; ".

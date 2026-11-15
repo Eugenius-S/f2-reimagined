@@ -98,6 +98,9 @@ MAP_GROUPS = {
     # maps/rnd*.map, enc*.map, cowbomb.map and cardesrt.map files).
     "encspecial": ("rndwhale", "rndtinwd", "rndbhead", "rndshutl", "rnduvilg", "rndbridg", "rndcafe", "rndholy1", "rndholy2", "rndforvr", "rndtoxic", "rndparih", "rndexcow", "rndbess", "encdet", "encdock", "encfite", "encgd", "encpres", "encrctr", "enctrp", "cowbomb", "cardesrt"),
 }
+# --maps rp: the maps only the Restoration Project ships (its restored areas and the
+# original maps it brings back). Not part of "all": a vanilla game has none of them.
+RP_MAPS = ("abbasem", "abbey", "abundgr", "easter", "epamain1", "epamain2", "epasl", "epax", "gammovie", "gcenclen", "hubstash", "merchant", "safehs1", "safehs2", "safehs3", "sfsheng", "sfsub", "slvcamp", "tribe01", "tribe02", "v13_orig", "v15_orig", "vill", "vilmerch")
 EXPECTED_OUTPUT_FILES = {"scene.json", "provenance.json", "floor.bin", "walls.bin", "projection.bin", "baked.bin",
                          "shadows.bin", "tiles.png", "light.png", "rock.png", "roof_fringe.png"}
 
@@ -406,7 +409,7 @@ def parse_args(argv=None):
     targets = parser.add_mutually_exclusive_group()
     targets.add_argument("--map", default=DEFAULT_MAP, help=f"one map, without .map (default: {DEFAULT_MAP})")
     targets.add_argument("--maps", help="every elevation of several maps: a comma-separated list of maps and "
-                         "groups (all, " + ", ".join(MAP_GROUPS) + ")")
+                         "groups (all, " + ", ".join(MAP_GROUPS) + ", and rp: the Restoration Project's own maps)")
     parser.add_argument("--elevation", type=int, choices=(0, 1, 2), default=0,
                         help="the elevation of --map (default: 0)")
     parser.add_argument("--cache-root", type=Path,
@@ -434,6 +437,8 @@ def expand_maps(spec: str) -> list[str]:
             continue
         if item == "all":
             group = [name for members in MAP_GROUPS.values() for name in members]
+        elif item == "rp":
+            group = RP_MAPS
         else:
             group = MAP_GROUPS.get(item, (item,))
         for name in group:

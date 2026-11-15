@@ -1,0 +1,15 @@
+devtools: startup target kladwtwn e0 accepted=1 blocking=0
+scene: cache [worktree-cache]
+scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+PREFERENCES_PROBE viewport logical=960x540 frame_x=0..639 scrollbar_x=812
+PREFERENCES_PROBE rows=25 initialScroll=0 zoom=1.000000 enabled=true combat_difficulty=1
+PREFERENCES_PROBE cursor speed slider armed row=3 before=1.000000
+perf present sync=1.04 sharp=0.00 refresh=92.55 frames=2
+PREFERENCES_PROBE PASS cursor_speed staged 1.000000 -> 2.500000
+PREFERENCES_PROBE queued isolated Enter through SDL input after cursor speed change
+PREFERENCES_PROBE footer loop event=13 mouse_event=0 pos=480,270 phase=0
+PREFERENCES_PROBE actual footer input event=13
+PREFERENCES_PROBE PASS cursor_speed before=1.000000 committed=2.500000 runtime=2.500000
+PREFERENCES_PROBE finished; requesting isolated helper exit
+perf loop input=39.39 world=3996.00 present=112.74 frame=4148.12 frames=2
+scene: hero card skipped: player is hidden, off-map, or on another elevation

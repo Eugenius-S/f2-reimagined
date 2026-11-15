@@ -9,7 +9,7 @@ priority: normal
 claude-only: no
 user-check: yes
 depends-on: [122]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -40,6 +40,10 @@ roof.
 New art, engine work, other ruin fixes.
 
 ## Log
+### 2026-11-12 gpt review
+Done: reviewed source PR #177 and folded landing #180. Inspected all six saved evidence images in runs/123-rebar-stands/: the Abbey joined cases at four turns and turn-90 zoom show the wallCards plane standing on the wall; the game-vs-fly state, Den car4b control and gstcav1 pair were also inspected. PR #177 and #180 required CI checks passed, including exporter, windows-game and scene jobs. No new source defect established by these materials. The task Log says only 6/9 Abbey scenery wdbeams joined; three retain other treatments (one walls-batched SKIP, two accepted fits), and the saved pairs do not isolate these three. Their orientation against the original acceptance remains unverified.
+Next: capture the three Abbey exceptions separately under task 260.
+Check: `gh pr view 177`, `gh pr view 180`, saved images under `runs/123-rebar-stands/`; no local build or runtime checks run in this review.
 
 ### 2026-11-01 claude review
 Done: merged task 122 (with 121's band cap) and current main (114 landed). Fresh Release build, ctest 18/18, exporter tests 83. Regression: the 16 spots give the same changed-pixel counts as the 121 run (entrance 776, corrals 449, ..., klatrap 0): 123 adds no pixel to the game's views, the remaining deltas are 121's thin-gap fill. The rule is general (long-low gate by measured aspect; a tall piece beside a wall run joins it through the doors' PLANE machinery), no name lists. Not verified: no Klamath tour spot shows wdbeams, so the abbey pairs in runs/123-rebar-stands/ are the evidence; the combined tour of the whole stack is in task 125's log.

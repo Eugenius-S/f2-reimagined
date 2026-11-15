@@ -1,0 +1,38 @@
+{
+  "task": 255,
+  "map": "KLAMALL.MAP",
+  "elevation": 0,
+  "hero_tile": 13086,
+  "view_tile": 13086,
+  "angles_degrees": [0, 45],
+  "background_test_instance": true,
+  "still_snapshot": true,
+  "resolution": "1920x1080",
+  "logical_resolution": "960x540",
+  "scale": 2,
+  "build_commit": "14feea02a",
+  "executable_sha256": "77b61d272e8ca93c5fcce093990570f98001e25800d48c1205613d65c0f4aa7f",
+  "scene_cache": {
+    "root": "build/scene-cache",
+    "klamall_e0_fingerprint_sha256": "28b428f002fceaf19a591888067cdb68f513747e6952a020ad32cb8e95ec5e94",
+    "klamall_e1_fingerprint_sha256": "dbec492f315c3a8185c4b76934dab00fb17439bd6f2418abe32e0164d58db476"
+  },
+  "captures": [
+    {
+      "angle_degrees": 0,
+      "run_id": "0be15f6308f343c2ad340dba0ed8a731",
+      "source_image": "build/task255/angle0/devhero-20261112-084032-000.png",
+      "snapshot_json": "build/task255/angle0/devshot-20261112-084032-000.json",
+      "evidence_image": "runs/255-cabinet-order-turned/angle-0.jpg"
+    },
+    {
+      "angle_degrees": 45,
+      "run_id": "13ff4a5151654c7da617a065598c42fc",
+      "source_image": "build/task255/angle45/devhero-20261112-084054-000.png",
+      "snapshot_json": "build/task255/angle45/devshot-20261112-084054-000.json",
+      "evidence_image": "runs/255-cabinet-order-turned/angle-45.jpg"
+    }
+  ],
+  "comparison_image": "runs/255-cabinet-order-turned/comparison.jpg",
+  "reference": "runs/067-card-order-cabinet/front.jpg"
+}

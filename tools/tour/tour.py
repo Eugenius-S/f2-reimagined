@@ -52,6 +52,11 @@ MAX_JPEG = 1_000_000  # CI refuses larger files in runs/
 EMPTY_SHARE = 0.9
 
 
+def powershell_args(command):
+    """Run a dev-snapshot command in Windows PowerShell."""
+    return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command]
+
+
 def load_spots(maps, path):
     data = json.loads(path.read_text(encoding="utf-8"))
     groups = {}
@@ -166,8 +171,7 @@ def shoot(name, side, turns, distance, groups, reuse, rp_game_root=None):
             command += f" -SceneCache '{path}'"
         if rp_game_root:
             command += f" -GameRoot '{rp_game_root}'"
-        run = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
-                             capture_output=True, text=True, errors="replace")
+        run = subprocess.run(powershell_args(command), capture_output=True, text=True, errors="replace")
         if run.returncode != 0:
             raise SystemExit(f"{name} {map_name} e{elevation}: dev-snapshot failed: {run.stderr[-600:]}")
         # The first snapshot is the start, before the tour.

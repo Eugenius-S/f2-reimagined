@@ -59,6 +59,11 @@ void prepareStillSnapshot();
 bool gameMoviesSuppressed();
 // True only for a background probe explicitly told to skip script dialogue.
 bool skipScriptDialogRequest();
+// True for any background capture: a script-started combat would sit in the
+// engine's nested turn loop waiting for the player forever, so the run only
+// ends at the watchdog. The engine's own attack key keeps working, which is
+// how the combat fixture starts its fights.
+bool skipScriptCombatRequest();
 
 // Prints the maps available in game resources (stdout). Requires the game
 // (db) to be initialized.
@@ -122,6 +127,9 @@ void draw(unsigned char* surface, int width, int height, int pitch);
 // Saves a PNG of the current frame plus a JSON sidecar with the metadata
 // of the actual state.
 bool takeSnapshot();
+// --dev-menu-snapshot[=plain]: capture the main menu and quit.
+bool menuSnapshotRequested();
+bool menuWithoutWideArt();
 // Background verification of the save-window thumbnail, without writing a save slot.
 bool savePreviewFixtureActive();
 bool savePreviewFixtureLoadActive();

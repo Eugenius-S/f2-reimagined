@@ -65,6 +65,25 @@ namespace {
 constexpr int kMaxRegionTiles = 256;
 constexpr int kMaxRegionObjects = 128;
 constexpr int kMaxRegionHexProbe = 20000;
+
+// The PNG and sidecar encode threads: the exit joins the last one, so
+// quitting right after F12 cannot cut a file mid-write. A fresh shot hands
+// the previous thread to a holder thread; joining it here would stall the
+// frame for a whole PNG encode (the marked shot starts two in a row).
+std::thread gEncodeThread;
+struct EncodeThreadJoiner {
+    ~EncodeThreadJoiner() {
+        if (gEncodeThread.joinable()) gEncodeThread.join();
+    }
+};
+EncodeThreadJoiner gEncodeThreadJoiner;
+
+void launchEncodeThread(std::thread&& next) {
+    gEncodeThread = std::thread([prev = std::move(gEncodeThread), next = std::move(next)]() mutable {
+        if (prev.joinable()) prev.join();
+        next.join();
+    });
+}
 #ifdef _WIN32
 constexpr char kPathSeparator = '\\';
 #else
@@ -462,7 +481,7 @@ void writeShotFiles(const std::string& imagePath, const std::string& sidecarPath
         fwrite(json.data(), 1, json.size(), f);
         fclose(f);
     });
-    worker.detach();
+    launchEncodeThread(std::move(worker));
 }
 
 bool takeShot()
@@ -807,7 +826,7 @@ bool saveMark()
             fflush(stdout);
         }
     });
-    markedWorker.detach();
+    launchEncodeThread(std::move(markedWorker));
 
     displayMonitorAddMessage(scene::menuStatusText("mark saved: " + shownPath(markedPath), settings.system.language).c_str());
     return true;

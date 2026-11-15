@@ -10,7 +10,7 @@ tier: 0
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 # 204: Invoke the file read progress handler only on the thread that installed it
