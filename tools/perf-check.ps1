@@ -212,16 +212,28 @@ if ($SelfTest) {
 # One speed measurement on the whole machine (290): take the lock before the
 # first map and hold it to the end, so warmups and measured runs of two
 # agents never overlap. The wait is patient: a full check is four maps
-# times two runs. The trap lets go on any exit path.
+# times two runs, and it says so while it waits. The trap lets go on any
+# exit path.
 $script:perfLock = $null
 function Release-PerfLock {
     Release-Lock $script:perfLock
     $script:perfLock = $null
 }
 trap { Release-PerfLock; break }
-$script:perfLock = Acquire-PerfLock 'Global\fallout2-ce-perf-check' $WaitMinutes
-if (-not $perfLock.Held) {
-    throw "The perf-check lock stayed busy for $WaitMinutes minutes: another run is measuring on this machine. Rerun when it ends."
+$script:perfLock = Acquire-PerfLock 'Global\fallout2-ce-perf-check' 0
+$waitTold = $false
+$waitDeadline = (Get-Date).AddMinutes($WaitMinutes)
+while (-not $perfLock.Held) {
+    if (-not $waitTold) {
+        Write-Output "perf-check: the measurement lock is busy, another run is measuring; waiting up to $WaitMinutes minutes"
+        $waitTold = $true
+    }
+    if ((Get-Date) -gt $waitDeadline) {
+        throw "The perf-check lock stayed busy for $WaitMinutes minutes: another run is measuring on this machine. Rerun when it ends."
+    }
+    Release-Lock $perfLock
+    Start-Sleep -Seconds 5
+    $script:perfLock = Acquire-PerfLock 'Global\fallout2-ce-perf-check' 1
 }
 
 $maps = @(
