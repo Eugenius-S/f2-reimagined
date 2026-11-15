@@ -4,7 +4,7 @@ title: A merge to main does not cancel the publish of the players' build
 milestone: M1
 status: todo
 owner: any
-suggested: gpt
+suggested: glm
 priority: high
 tier: 0
 claude-only: no

@@ -4,8 +4,8 @@ title: Speed is measured one run at a time on the machine
 milestone: M1
 status: todo
 owner: any
-suggested: gpt
-priority: normal
+suggested: glm
+priority: high
 tier: 1
 claude-only: no
 user-check: no
