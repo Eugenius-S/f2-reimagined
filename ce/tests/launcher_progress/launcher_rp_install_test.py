@@ -482,10 +482,9 @@ class RpInstallTests(LauncherFixture):
             self.assertIsNotNone(window, "scratch launcher did not create its window")
             # HWND creation precedes the initial disk-state sync and local release reply.
             deadline = time.monotonic() + 15
-            release = ui.user.GetDlgItem(window, 1009)
-            while time.monotonic() < deadline and "new-build" not in ui.text(release):
+            while time.monotonic() < deadline and "new-build" not in ui.text(ui.user.GetDlgItem(window, 1009)):
                 time.sleep(0.05)
-            self.assertIn("new-build", ui.text(release), "scratch launcher did not finish initialization")
+            self.assertIn("new-build", ui.text(ui.user.GetDlgItem(window, 1009)), "scratch launcher did not finish initialization")
             checkbox = ui.user.GetDlgItem(window, 1005)
             self.assertTrue(ui.user.IsWindowEnabled(checkbox))
             self.assertTrue(ui.checked(window), "installed RP must paint a ticked checkbox")
