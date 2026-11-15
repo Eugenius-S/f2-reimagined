@@ -671,24 +671,33 @@ bool unpackZip(const fs::path& zip, const fs::path& stage)
     if (fs::exists(tar)) {
         std::wstring command = L"\"" + tar.wstring() + L"\" -xf \"" + zip.wstring() + L"\" -C \""
             + stage.wstring() + L"\"";
-        if (runTool(command, stage.wstring())) return true;
+        DWORD code = 1;
+        if (runTool(command, stage.wstring(), &code, true) && code == 0) return true;
         log("tar.exe failed; falling back to Expand-Archive");
+        // A failed extractor may have left files behind; the fallback starts clean.
+        std::error_code error;
+        fs::remove_all(stage, error);
+        if (error) return false;
+        fs::create_directories(stage, error);
+        if (error) return false;
     }
     std::wstring command = L"powershell -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive "
-        L"-LiteralPath '" + zip.wstring() + L"' -DestinationPath '" + stage.wstring() + L"' -Force\"";
-    return runTool(command, stage.wstring());
+        L"-LiteralPath '" + zip.wstring() + L"' -DestinationPath '" + stage.wstring() + L"' -Force -ErrorAction Stop\"";
+    DWORD code = 1;
+    return runTool(command, stage.wstring(), &code, true) && code == 0;
 }
 
 bool copyIfPresent(const fs::path& stage, const char* name, const fs::path& destination, bool overwrite,
     const char* note)
 {
     fs::path source = stage / name;
-    if (!fs::exists(source)) {
-        logf("  %s: not in the package, skipped", name);
-        return false;
-    }
     std::error_code error;
-    fs::copy_file(source, destination / name,
+    bool present = fs::exists(source, error);
+    if (!error && !present) {
+        logf("  %s: not in the package, skipped", name);
+        return true;
+    }
+    if (!error) fs::copy_file(source, destination / name,
         overwrite ? fs::copy_options::overwrite_existing : fs::copy_options::none, error);
     if (error) {
         logf("  %s: copy failed (%s)", name, error.message().c_str());
@@ -712,6 +721,7 @@ bool copyLauncher(const fs::path& source, const fs::path& target)
         moved = !error;
     }
     fs::copy_file(source, target, fs::copy_options::overwrite_existing, error);
+    if (error) logf("  %s: copy failed (%s)", kRootLauncher, error.message().c_str());
     if (error && moved) {
         std::error_code ignored;
         fs::rename(aside, target, ignored);
@@ -720,18 +730,44 @@ bool copyLauncher(const fs::path& source, const fs::path& target)
 }
 
 // The wide menu, death and loading art ships as folders next to the exe.
-void copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& destination)
+bool copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& destination)
 {
     fs::path source = stage / name;
-    if (!fs::is_directory(source)) {
-        logf("  %s: not in the package, skipped", name);
-        return;
-    }
     std::error_code error;
-    fs::create_directories(destination / name, error);
-    fs::copy(source, destination / name,
+    bool present = fs::exists(source, error);
+    if (!error && !present) {
+        logf("  %s: not in the package, skipped", name);
+        return true;
+    }
+    if (!error && !fs::is_directory(source, error)) error = std::make_error_code(std::errc::not_a_directory);
+    if (!error) fs::create_directories(destination / name, error);
+    if (!error) fs::copy(source, destination / name,
         fs::copy_options::recursive | fs::copy_options::overwrite_existing, error);
-    logf("  %s: %s", name, error ? error.message().c_str() : "installed");
+    if (error) {
+        logf("  %s: copy failed (%s)", name, error.message().c_str());
+        return false;
+    }
+    logf("  %s: installed", name);
+    return true;
+}
+
+bool writeBuildVersion(const fs::path& root, const std::string& version)
+{
+    fs::path target = root / kVersionTxt;
+    fs::path temporary = target;
+    temporary += ".new-" + std::to_string(GetCurrentProcessId());
+    std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
+    file << version;
+    file.close();
+    // Replace only a fully written stamp, keeping the old version on any failure.
+    bool written = file && MoveFileExW(temporary.c_str(), target.c_str(),
+        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+    if (!written) {
+        log("  version.txt: write failed");
+        std::error_code ignored;
+        fs::remove(temporary, ignored);
+    }
+    return written;
 }
 
 const std::vector<std::string>& buildFiles()
@@ -1564,9 +1600,11 @@ int runConsole(Options options)
             fs::remove_all(work, error);
             die("the downloaded file could not be unpacked; try the install again");
         }
-        if (!fs::exists(stage / kGameExe)) {
-            fs::remove_all(work, error);
-            die("the downloaded package is damaged (the game is not in it); try the install again");
+        for (const char* name : { kGameExe, "ce.dat", kExporterExe }) {
+            if (!fs::is_regular_file(stage / name, error)) {
+                fs::remove_all(work, error);
+                die("the downloaded package is damaged (required file %s is missing); nothing was changed", name);
+            }
         }
 
         std::string keptBackup;
@@ -1579,28 +1617,29 @@ int runConsole(Options options)
 
         // --- into the game folder; the player's things stay theirs ---
         log("installing into the game folder:");
-        copyIfPresent(stage, kGameExe, root, true, "installed");
-        copyIfPresent(stage, "ce.dat", root, true, "installed");
-        copyIfPresent(stage, kExporterExe, root, true, "installed");
+        auto stopUpdate = [&]() {
+            fs::remove_all(work, error);
+            die("the update could not be installed (see the lines above); the build version was not changed");
+        };
+        if (!copyIfPresent(stage, kGameExe, root, true, "installed")
+            || !copyIfPresent(stage, "ce.dat", root, true, "installed")
+            || !copyIfPresent(stage, kExporterExe, root, true, "installed")) stopUpdate();
         if (!fs::exists(stage / kZipLauncher)) {
             logf("  %s: not in the package, skipped", kRootLauncher);
         } else if (copyLauncher(stage / kZipLauncher, root / kRootLauncher)) {
             logf("  %s: installed", kRootLauncher);
         } else {
-            logf("  %s: copy failed", kRootLauncher);
+            stopUpdate();
         }
-        copyTreeIfPresent(stage, "user-assets", root);
-        copyTreeIfPresent(stage, "data/art/splash", root);
-        copyTreeIfPresent(stage, "data/art/russian/splash", root);
+        if (!copyTreeIfPresent(stage, "user-assets", root)
+            || !copyTreeIfPresent(stage, "data/art/splash", root)
+            || !copyTreeIfPresent(stage, "data/art/russian/splash", root)) stopUpdate();
         if (fs::exists(root / kCfg)) {
             log("  fallout2.cfg: kept (the player's file is never overwritten)");
         } else {
-            copyIfPresent(stage, kCfg, root, false, "installed (default)");
+            if (!copyIfPresent(stage, kCfg, root, false, "installed (default)")) stopUpdate();
         }
-        {
-            std::ofstream file(root / kVersionTxt, std::ios::binary | std::ios::trunc);
-            file << remoteVersion;
-        }
+        if (!writeBuildVersion(root, remoteVersion)) stopUpdate();
         logf("  version.txt: %s", remoteVersion.c_str());
         fs::remove_all(work, error);
         cleanOlderBuildLeftovers(root, keptBackup);

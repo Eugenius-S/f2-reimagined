@@ -820,6 +820,14 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
             target_link_options(fallout2-ce-3d-launcher PRIVATE /MANIFEST:NO)
         endif()
     endif()
+    if(WIN32 AND BUILD_TESTING)
+        find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        add_test(NAME launcher_install_tests COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_install_test.py"
+            "$<TARGET_FILE:fallout2-ce-3d-launcher>")
+        set_tests_properties(launcher_install_tests PROPERTIES TIMEOUT 180)
+    endif()
+
     if(MINGW)
         target_link_options(fallout2-ce-3d-launcher PRIVATE
             -static

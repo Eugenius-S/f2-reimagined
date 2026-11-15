@@ -2,15 +2,15 @@
 id: 287
 title: A failed update is never written down as done
 milestone: M1
-status: todo
-owner: any
+status: done
+owner: gpt
 suggested: gpt
 priority: high
 tier: 0
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -37,3 +37,17 @@ A rollback of files already copied (the backup made before the update covers it)
 ## Log
 
 - 2026-11-15 claude: cut from the repo audit of 2026-11-15 (find 1 and 3).
+
+### 2026-11-15 gpt
+
+Done: extractor exit codes and clean Expand-Archive fallback are checked in
+`ce/src/launcher_main.cc`; all three required regular files are validated before
+installation writes. Required and present optional copy failures stop the update,
+and only a fully written temporary version stamp replaces version.txt. Russian
+messages cover the new failures. `runs/287-update-failure/checks.md` records the
+scratch reproduction and checks; partial-copy rollback stays in task 307.
+Next: merge after final green CI, then complete Rule 1 from fresh main.
+Check: Release build; ctest 28/28, including nine real launcher integration tests;
+exporter 148 and regression tools 12 unit tests; pixel regression 154/154 spots,
+150 with 0 changed pixels, four with 1 or 2 within existing tolerance; no capture
+errors or skips. No rendering code or regression reference changed.
