@@ -2,7 +2,7 @@
 id: 225
 title: Fly-tour evidence for flight/turned-view renderer changes, starting with the quadrant sea fill (#320)
 milestone: M1
-status: todo
+status: done
 owner: glm
 suggested: any
 priority: high
@@ -10,7 +10,7 @@ tier: 1
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -79,3 +79,24 @@ the one open find.
 - The tour is still running at commit time (after side pending);
   the sheets + changed.jpg + README verdicts land in this branch's
   evidence commit next session.
+
+### 2026-11-15 glm
+Done: the full evidence run under runs/205-fly-tour-evidence/ (227
+sheet pages, changed-*.jpg, eye crops, scrubbed run logs, README
+verdict register). The run isolates #320 exactly: before = b4b54575
+Release build, after = 5943d865 Release build (the #320 squash, one
+commit later), both on the shared 130-map scene cache. All 294 spots
+of spots.json shot and compared; every difference is the past-the-edge
+horizon wedge at the top of the fly frame (deepest changed pixel y=74
+of 1080, klamall e0), the before side shows the raw map beyond the
+water corner, the after side removes it; sidecar pairs are identical
+in camera, sun, ambient, wall triangles and drawn objects. sfdock's
+horizon sliver confirmed. Findings: none. Three map elevations hit the
+known devshot stall (task 246, neither build has the combat-skip
+fix); tour.py gained --skip-failed so the run kept going, one --reuse
+retry shot all three (denbus1 e2, dnslvrun e2, navarro e1) with the
+same strip-only pattern. The AGENTS.md standing line (a renderer
+change to the flight/turned passes runs the tour) rides in this PR.
+Next: merge; no game code changed, docs-and-evidence merge.
+Check: runs/205-fly-tour-evidence/README.md, its sheets/ and eye/.
+status: done, reviewed: yes.

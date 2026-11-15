@@ -1,0 +1,690 @@
+before kladwtwn e0: reused
+before klamall e0: 21 views
+before klacanyn e0: 6 views
+before klagraz e0: 6 views
+before klatrap e0: 9 views
+before klaratcv e0: 6 views
+before klaratcv e1: 6 views
+before klaratcv e2: 3 views
+before klatoxcv e0: 6 views
+before klatoxcv e1: 6 views
+before klatoxcv e2: 3 views
+before newr1 e0: 6 views
+before newr1 e1: 3 views
+before newr1 e2: 3 views
+before newr2 e0: 6 views
+before newr2 e1: 3 views
+before newr2 e2: 3 views
+before newr3 e0: reused
+before newr3 e1: reused
+before newr4 e0: reused
+before newr4 e1: reused
+before newrcs e0: 3 views
+before newrgo e0: reused
+before newrgo e1: reused
+before newrst e0: 3 views
+before newrst e1: 3 views
+before newrba e0: 3 views
+before newrvb e0: reused
+before broken1 e0: 9 views
+before broken1 e1: 3 views
+before broken2 e0: 9 views
+before broken2 e1: 3 views
+before broken2 e2: 3 views
+before bhrnddst e0: 3 views
+before gecksetl e0: 6 views
+before geckpwpl e0: 6 views
+before geckjunk e0: 6 views
+before gecktunl e0: 6 views
+before vctyctyd e0: 6 views
+before vctydwtn e0: 9 views
+before vctycocl e0: 3 views
+before vctyvlt e0: 9 views
+before vctyvlt e1: 3 views
+before vctyvlt e2: 6 views
+before raiders1 e0: 6 views
+before raiders1 e1: 3 views
+before raiders2 e0: 6 views
+before raiders2 e1: 6 views
+before raiders2 e2: 3 views
+before modmain e0: 9 views
+before modinn e0: 6 views
+before modinn e1: 3 views
+before modbrah e0: 6 views
+before modgard e0: reused
+before modshit e0: reused
+before modwell e0: 6 views
+before gstfarm e0: 6 views
+before gstcav1 e0: 6 views
+before gstcav2 e0: 6 views
+before arcaves e0: 6 views
+before arcaves e1: 6 views
+before arcaves e2: 6 views
+before arvillag e0: 9 views
+before arbridge e0: 6 views
+before argarden e0: 6 views
+before ardead e0: 6 views
+before artemple e0: 6 views
+before denbus1 e0: 6 views
+before denbus1 e1: 6 views
+before denbus1 e2: SKIPPED, before denbus1 e2: dev-snapshot failed: No snapshot within 144 s.
+<repo>\tools\dev-snapshot.ps1:1136 ����:36
++ ... s.Count -lt $shots) { throw "No snapshot within $TimeoutSeconds s." }
++                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (No snapshot within 144 s.:String) [], RuntimeException
+    + FullyQualifiedErrorId : No snapshot within 144 s.
+ 
+
+before denbus2 e0: 6 views
+before denbus2 e1: 6 views
+before denres1 e0: 6 views
+before denres1 e1: 6 views
+before dnslvrun e0: 6 views
+before dnslvrun e1: 6 views
+before dnslvrun e2: SKIPPED, before dnslvrun e2: dev-snapshot failed: No snapshot within 144 s.
+<repo>\tools\dev-snapshot.ps1:1136 ����:36
++ ... s.Count -lt $shots) { throw "No snapshot within $TimeoutSeconds s." }
++                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (No snapshot within 144 s.:String) [], RuntimeException
+    + FullyQualifiedErrorId : No snapshot within 144 s.
+ 
+
+before reddown e0: 3 views
+before redment e0: 3 views
+before reddtun e0: reused
+before redmtun e0: reused
+before redwame e0: 3 views
+before redwan1 e0: reused
+before redwan1 e1: reused
+before ncr1 e0: 9 views
+before ncr1 e1: 9 views
+before ncr2 e0: 9 views
+before ncr3 e0: 9 views
+before ncr4 e0: 9 views
+before ncrent e0: 9 views
+before ncrent e1: 6 views
+before v15ent e0: 9 views
+before v15ent e1: 9 views
+before v15sent e0: 9 views
+before vault15 e0: 9 views
+before vault15 e1: 6 views
+before vault15 e2: 6 views
+before v13ent e0: 3 views
+before vault13 e0: 3 views
+before vault13 e1: 3 views
+before vault13 e2: 6 views
+before depolv1 e0: 3 views
+before depolv1 e1: 3 views
+before depolva e0: 3 views
+before depolva e1: 3 views
+before depolva e2: 3 views
+before depolvb e0: 3 views
+before sfdock e0: 3 views
+before sfchina e0: reused
+before sfchina2 e0: reused
+before sfchina2 e1: reused
+before sfchina2 e2: reused
+before sftanker e0: 3 views
+before sftanker e1: 3 views
+before sftanker e2: 3 views
+before sfshutl1 e0: reused
+before sfshutl2 e0: reused
+before sfelronb e0: reused
+before navarro e0: 3 views
+before navarro e1: 3 views
+before navarro e2: 3 views
+before mbclose e0: 3 views
+before mbase12 e0: 3 views
+before mbase12 e1: 3 views
+before mbase34 e0: 3 views
+before mbase34 e1: 3 views
+before coast1 e0: 3 views
+before coast2 e0: reused
+before coast4 e0: reused
+before coast10 e0: 3 views
+before desert5 e0: 3 views
+before desert5 e1: 3 views
+before desert7 e0: reused
+before desrt10 e0: reused
+before desrt13 e0: reused
+before city1 e0: 3 views
+before city2 e0: 3 views
+before city3 e0: 3 views
+before city4 e0: 3 views
+before city5 e0: 3 views
+before city6 e0: 3 views
+before city7 e0: 3 views
+before city8 e0: 3 views
+before cave0 e0: 3 views
+before cave1 e0: 3 views
+before cave1 e1: 3 views
+before cave2 e0: 3 views
+before cave2 e1: 3 views
+before cave3 e0: 3 views
+before cave3 e1: 3 views
+before cave4 e0: 3 views
+before cave4 e1: 3 views
+before cave5 e0: 3 views
+before cave5 e1: 3 views
+before cave5 e2: 3 views
+before cave6 e0: 3 views
+before cave7 e0: 3 views
+before mountn1 e0: 3 views
+before mountn2 e0: 3 views
+before mountn3 e0: 3 views
+before mountn4 e0: 3 views
+before mountn5 e0: 3 views
+before mountn6 e0: 3 views
+before rndwhale e0: 3 views
+before rndtinwd e0: 3 views
+before rndbhead e0: 3 views
+before rndshutl e0: 3 views
+before rnduvilg e0: 3 views
+before rndbridg e0: 3 views
+before rndcafe e0: 3 views
+before rndholy1 e0: 3 views
+before rndholy2 e0: 3 views
+before rndholy2 e1: 3 views
+before rndforvr e0: 3 views
+before rndforvr e1: 3 views
+before rndtoxic e0: 3 views
+before rndparih e0: 3 views
+before rndexcow e0: 3 views
+before rndbess e0: 3 views
+before rndbess e1: 3 views
+before encdet e0: 3 views
+before encdock e0: 3 views
+before encfite e0: 3 views
+before encgd e0: 3 views
+before encpres e0: 3 views
+before encrctr e0: 3 views
+before enctrp e0: 3 views
+before cardesrt e0: 3 views
+after kladwtwn e0: reused
+after klamall e0: 21 views
+after klacanyn e0: 6 views
+after klagraz e0: 6 views
+after klatrap e0: 9 views
+after klaratcv e0: 6 views
+after klaratcv e1: 6 views
+after klaratcv e2: 3 views
+after klatoxcv e0: 6 views
+after klatoxcv e1: 6 views
+after klatoxcv e2: 3 views
+after newr1 e0: 6 views
+after newr1 e1: 3 views
+after newr1 e2: 3 views
+after newr2 e0: 6 views
+after newr2 e1: 3 views
+after newr2 e2: 3 views
+after newr3 e0: 6 views
+after newr3 e1: 3 views
+after newr4 e0: 6 views
+after newr4 e1: 3 views
+after newrcs e0: 3 views
+after newrgo e0: 3 views
+after newrgo e1: 3 views
+after newrst e0: 3 views
+after newrst e1: 3 views
+after newrba e0: 3 views
+after newrvb e0: 3 views
+after broken1 e0: 9 views
+after broken1 e1: 3 views
+after broken2 e0: 9 views
+after broken2 e1: 3 views
+after broken2 e2: 3 views
+after bhrnddst e0: 3 views
+after gecksetl e0: 6 views
+after geckpwpl e0: 6 views
+after geckjunk e0: 6 views
+after gecktunl e0: 6 views
+after vctyctyd e0: 6 views
+after vctydwtn e0: 9 views
+after vctycocl e0: 3 views
+after vctyvlt e0: 9 views
+after vctyvlt e1: 3 views
+after vctyvlt e2: 6 views
+after raiders1 e0: 6 views
+after raiders1 e1: 3 views
+after raiders2 e0: 6 views
+after raiders2 e1: 6 views
+after raiders2 e2: 3 views
+after modmain e0: 9 views
+after modinn e0: 6 views
+after modinn e1: 3 views
+after modbrah e0: 6 views
+after modgard e0: 6 views
+after modshit e0: 6 views
+after modwell e0: 6 views
+after gstfarm e0: 6 views
+after gstcav1 e0: 6 views
+after gstcav2 e0: 6 views
+after arcaves e0: 6 views
+after arcaves e1: 6 views
+after arcaves e2: 6 views
+after arvillag e0: 9 views
+after arbridge e0: 6 views
+after argarden e0: 6 views
+after ardead e0: 6 views
+after artemple e0: 6 views
+after denbus1 e0: 6 views
+after denbus1 e1: 6 views
+after denbus1 e2: 6 views
+after denbus2 e0: 6 views
+after denbus2 e1: 6 views
+after denres1 e0: 6 views
+after denres1 e1: 6 views
+after dnslvrun e0: 6 views
+after dnslvrun e1: 6 views
+after dnslvrun e2: 6 views
+after reddown e0: 3 views
+after redment e0: 3 views
+after reddtun e0: 3 views
+after redmtun e0: 3 views
+after redwame e0: 3 views
+after redwan1 e0: 3 views
+after redwan1 e1: 3 views
+after ncr1 e0: 9 views
+after ncr1 e1: 9 views
+after ncr2 e0: 9 views
+after ncr3 e0: 9 views
+after ncr4 e0: 9 views
+after ncrent e0: 9 views
+after ncrent e1: 6 views
+after v15ent e0: 9 views
+after v15ent e1: 9 views
+after v15sent e0: 9 views
+after vault15 e0: 9 views
+after vault15 e1: 6 views
+after vault15 e2: 6 views
+after v13ent e0: 3 views
+after vault13 e0: 3 views
+after vault13 e1: 3 views
+after vault13 e2: 6 views
+after depolv1 e0: 3 views
+after depolv1 e1: 3 views
+after depolva e0: 3 views
+after depolva e1: 3 views
+after depolva e2: 3 views
+after depolvb e0: 3 views
+after sfdock e0: 3 views
+after sfchina e0: 3 views
+after sfchina2 e0: 3 views
+after sfchina2 e1: 3 views
+after sfchina2 e2: 3 views
+after sftanker e0: 3 views
+after sftanker e1: 3 views
+after sftanker e2: 3 views
+after sfshutl1 e0: 3 views
+after sfshutl2 e0: 3 views
+after sfelronb e0: 3 views
+after navarro e0: 3 views
+after navarro e1: SKIPPED, after navarro e1: dev-snapshot failed: No snapshot within 132 s.
+<repo>\tools\dev-snapshot.ps1:1136 ����:36
++ ... s.Count -lt $shots) { throw "No snapshot within $TimeoutSeconds s." }
++                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (No snapshot within 132 s.:String) [], RuntimeException
+    + FullyQualifiedErrorId : No snapshot within 132 s.
+ 
+
+after navarro e2: 3 views
+after mbclose e0: 3 views
+after mbase12 e0: 3 views
+after mbase12 e1: 3 views
+after mbase34 e0: 3 views
+after mbase34 e1: 3 views
+after coast1 e0: 3 views
+after coast2 e0: 3 views
+after coast4 e0: 3 views
+after coast10 e0: 3 views
+after desert5 e0: 3 views
+after desert5 e1: 3 views
+after desert7 e0: 3 views
+after desrt10 e0: 3 views
+after desrt13 e0: 3 views
+after city1 e0: 3 views
+after city2 e0: 3 views
+after city3 e0: 3 views
+after city4 e0: 3 views
+after city5 e0: 3 views
+after city6 e0: 3 views
+after city7 e0: 3 views
+after city8 e0: 3 views
+after cave0 e0: 3 views
+after cave1 e0: 3 views
+after cave1 e1: 3 views
+after cave2 e0: 3 views
+after cave2 e1: 3 views
+after cave3 e0: 3 views
+after cave3 e1: 3 views
+after cave4 e0: 3 views
+after cave4 e1: 3 views
+after cave5 e0: 3 views
+after cave5 e1: 3 views
+after cave5 e2: 3 views
+after cave6 e0: 3 views
+after cave7 e0: 3 views
+after mountn1 e0: 3 views
+after mountn2 e0: 3 views
+after mountn3 e0: 3 views
+after mountn4 e0: 3 views
+after mountn5 e0: 3 views
+after mountn6 e0: 3 views
+after rndwhale e0: 3 views
+after rndtinwd e0: 3 views
+after rndbhead e0: 3 views
+after rndshutl e0: 3 views
+after rnduvilg e0: 3 views
+after rndbridg e0: 3 views
+after rndcafe e0: 3 views
+after rndholy1 e0: 3 views
+after rndholy2 e0: 3 views
+after rndholy2 e1: 3 views
+after rndforvr e0: 3 views
+after rndforvr e1: 3 views
+after rndtoxic e0: 3 views
+after rndparih e0: 3 views
+after rndexcow e0: 3 views
+after rndbess e0: 3 views
+after rndbess e1: 3 views
+after encdet e0: 3 views
+after encdock e0: 3 views
+after encfite e0: 3 views
+after encgd e0: 3 views
+after encpres e0: 3 views
+after encrctr e0: 3 views
+after enctrp e0: 3 views
+after cardesrt e0: 3 views
+changed: kladwtwn e0 tile 24268 long building, south-west corner (071)
+changed: kladwtwn e0 tile 24292 long building, south-east corner (071)
+changed: kladwtwn e0 tile 20268 long building, north-west corner (071)
+changed: kladwtwn e0 tile 20292 long building, north-east corner (071)
+changed: kladwtwn e0 tile 20690 corner by the street (071, 083)
+changed: kladwtwn e0 tile 19265 bathhouse front
+changed: kladwtwn e0 tile 17467 Vic's shack
+changed: kladwtwn e0 tile 17104 dark house corner, light stripe (review2, 076)
+changed: kladwtwn e0 tile 19108 gargoyle corner (083)
+changed: kladwtwn e0 tile 24678 corner (review2, 076-081)
+changed: kladwtwn e0 tile 22958 corner (review2, 076-081)
+changed: kladwtwn e0 tile 24481 corner (review2, 076-081)
+changed: kladwtwn e0 tile 17666 corner (review2, 076-081)
+changed: kladwtwn e0 tile 20736 corner (review2, 076-081)
+changed: kladwtwn e0 tile 14505 corner (review2, 076-081)
+changed: kladwtwn e0 tile 25075 entrance street, walls
+changed: kladwtwn e0 tile 23481 corrals, fences
+changed: kladwtwn e0 tile 22885 western rooms, furniture
+changed: kladwtwn e0 tile 17699 central doors and rooms
+changed: klamall e0 tile 13050 STOP corner (review2 01)
+changed: klamall e0 tile 12666 corner, light stripe (076)
+changed: klamall e0 tile 15450 corner (083)
+changed: klamall e0 tile 21700 mesh fence corner
+changed: klamall e0 tile 23145 regression gallery view
+changed: klamall e0 tile 27886 south buildings
+changed: klamall e0 tile 28493 south-east buildings
+changed: klacanyn e0 tile 15909 regression gallery view
+changed: klacanyn e0 tile 23869 south of the canyon
+changed: klagraz e0 tile 24727 building, regression gallery view
+changed: klagraz e0 tile 16333 north fences
+changed: klatrap e0 tile 21913 regression gallery view
+changed: klatrap e0 tile 13913 north
+changed: klatrap e0 tile 20733 building
+changed: klaratcv e0 tile 21511 cave, regression gallery view
+changed: klaratcv e0 tile 13511 cave, north
+changed: klaratcv e1 tile 14701 cave, regression gallery view
+changed: klaratcv e1 tile 22661 cave, south
+changed: klaratcv e2 tile 17107 cave, regression gallery view
+changed: klatoxcv e0 tile 15919 cave, regression gallery view
+changed: klatoxcv e0 tile 23879 cave, south
+changed: klatoxcv e1 tile 19091 cave, regression gallery view
+changed: klatoxcv e1 tile 22924 cave, south-east
+changed: klatoxcv e2 tile 15065 cave, regression gallery view
+changed: newr1 e0 tile 24105 the first street entrance
+changed: newr1 e0 tile 18100 the lit casino corner
+changed: newr1 e1 tile 15087 the first street, upper floor
+changed: newr1 e2 tile 18085 the first street, top floor
+changed: newr2 e0 tile 20100 the second street entrance
+changed: newr2 e0 tile 26105 the car lot and the murals
+changed: newr2 e1 tile 18093 the second street, upper floor
+changed: newr2 e2 tile 18695 the second street, top floor
+changed: newr3 e0 tile 29495 the third street entrance
+changed: newr3 e0 tile 27495 the neon corner
+changed: newr3 e1 tile 29094 the third street, upper floor
+changed: newr4 e0 tile 27103 the fourth street entrance
+changed: newr4 e0 tile 25103 the truck by the street
+changed: newr4 e1 tile 18493 the fourth street, upper floor
+changed: newrcs e0 tile 24537 the chop shop
+changed: newrgo e0 tile 28101 Golgatha entrance
+changed: newrgo e1 tile 24706 Golgatha, upper floor
+changed: newrst e0 tile 25915 the stables
+changed: newrst e1 tile 24711 the stables, upper floor
+changed: newrba e0 tile 20100 the boxing arena
+changed: newrvb e0 tile 21732 the VIP basement
+changed: broken1 e0 tile 17947 Broken Hills entrance
+changed: broken1 e0 tile 19947 the jail and the fence line
+changed: broken1 e0 tile 23947 the brahmin pen
+changed: broken1 e1 tile 13530 Broken Hills, upper floor
+changed: broken2 e0 tile 20944 Broken Hills east entrance
+changed: broken2 e0 tile 18944 the street with the cactus planters
+changed: broken2 e0 tile 24944 the brick building and the shack
+changed: broken2 e1 tile 21340 Broken Hills east, level 1
+changed: broken2 e2 tile 21341 Broken Hills east, level 2
+changed: bhrnddst e0 tile 22897 the Broken Hills desert
+changed: gecksetl e0 tile 23709 the settlement entrance
+changed: gecksetl e0 tile 27709 the brahmin pen and the farm
+changed: geckpwpl e0 tile 20533 the power plant
+changed: geckpwpl e0 tile 16533 the reactor hall
+changed: geckjunk e0 tile 26311 the junkyard
+changed: geckjunk e0 tile 22311 the wrecked car and the pens
+changed: gecktunl e0 tile 20100 the access tunnels
+changed: gecktunl e0 tile 16100 the tunnel crossing
+changed: vctyctyd e0 tile 27506 the courtyard entrance
+changed: vctyctyd e0 tile 25506 the gate with the towers
+changed: vctydwtn e0 tile 24117 downtown entrance
+changed: vctydwtn e0 tile 22117 the downtown blocks
+changed: vctydwtn e0 tile 28117 the wall and the gate
+changed: vctycocl e0 tile 19292 the council entrance
+changed: vctyvlt e0 tile 17095 the vault courtyard
+changed: vctyvlt e0 tile 13095 the vault corridor crossing
+changed: vctyvlt e0 tile 21095 the vault door
+changed: vctyvlt e1 tile 17095 the vault, level 1
+changed: vctyvlt e2 tile 16694 the vault, level 2
+changed: vctyvlt e2 tile 20694 the anomaly room
+changed: raiders1 e0 tile 23305 the raiders ground camp
+changed: raiders1 e0 tile 19305 the cliff and the cave mouth
+changed: raiders1 e1 tile 22703 the raiders, upper floor
+changed: raiders2 e0 tile 20100 the raiders cave entrance
+changed: raiders2 e0 tile 16100 the cave fire
+changed: raiders2 e1 tile 20100 the raiders cave, level 1
+changed: raiders2 e1 tile 22100 the cave passage
+changed: raiders2 e2 tile 19899 the raiders cave, level 2
+changed: modmain e0 tile 23333 main street entrance
+changed: modmain e0 tile 19333 the big barn
+changed: modmain e0 tile 21333 the farmhouse and pens
+changed: modinn e0 tile 25321 the bed and breakfast
+changed: modinn e0 tile 21321 the inn, the car and the pens
+changed: modinn e1 tile 25321 the bed and breakfast, upper floor
+changed: modbrah e0 tile 19324 the brahmin pastures
+changed: modbrah e0 tile 17324 the brahmin herd
+changed: modgard e0 tile 18711 Farrel's garden
+changed: modgard e0 tile 16711 the dead brahmin garden
+changed: modshit e0 tile 20699 the outhouse corner
+changed: modshit e0 tile 18699 the lit outhouse pit
+changed: modwell e0 tile 16710 the town well
+changed: modwell e0 tile 14710 the well shaft and ladder
+changed: gstfarm e0 tile 23345 the ghost farm entrance
+changed: gstfarm e0 tile 21345 the massacre in the corn
+changed: gstcav1 e0 tile 14255 the main cavern
+changed: gstcav1 e0 tile 12255 the hermit camp
+changed: gstcav2 e0 tile 25713 the underground lake
+changed: gstcav2 e0 tile 23713 the lake shore camp
+changed: arcaves e0 tile 28706 entrance, the caves mouth
+changed: arcaves e0 tile 26706 the exit gate, torches
+changed: arcaves e1 tile 28706 lower cave, entrance
+changed: arcaves e1 tile 22706 the cave mouth
+changed: arcaves e2 tile 26097 upper cave, entrance
+changed: arcaves e2 tile 22097 the corridor maze
+changed: arvillag e0 tile 21115 village entrance
+changed: arvillag e0 tile 25115 the stone head plaza
+changed: arvillag e0 tile 19115 north huts
+changed: arbridge e0 tile 16686 bridge entrance
+changed: arbridge e0 tile 20686 the rope bridge over the cliff
+changed: argarden e0 tile 21474 wilderness entrance
+changed: argarden e0 tile 17474 the forest heart
+changed: ardead e0 tile 26719 destroyed bridge entrance
+changed: ardead e0 tile 24719 cliff and the brahmin pen
+changed: artemple e0 tile 17288 temple entrance
+changed: artemple e0 tile 21288 the camp south of the temple
+changed: denbus1 e0 tile 13292 business street entrance
+changed: denbus1 e0 tile 17292 the shop block, signs
+changed: denbus1 e1 tile 15070 business street, upper floor
+changed: denbus1 e1 tile 19070 the upstairs apartment
+denbus1 e2: skipped in the sheets, 0 before and 6 after views, 6 expected
+changed: denbus2 e0 tile 27898 brothel entrance
+changed: denbus2 e0 tile 25698 the Cat's Paw sign block
+changed: denbus2 e1 tile 1110 brothel, second storey
+changed: denbus2 e1 tile 3110 the small second storey
+changed: denres1 e0 tile 11308 residential street entrance
+changed: denres1 e0 tile 15308 the residential block
+changed: denres1 e1 tile 11308 residential street, upper floor
+changed: denres1 e1 tile 15308 the residential block, upper floor
+changed: dnslvrun e0 tile 26905 slave run entrance
+changed: dnslvrun e0 tile 22905 the fire pit
+changed: dnslvrun e1 tile 26706 slave run, upper floor
+changed: dnslvrun e1 tile 20706 the slave camp garden
+dnslvrun e2: skipped in the sheets, 0 before and 6 after views, 6 expected
+changed: reddown e0 tile 19059 downtown entrance
+changed: redment e0 tile 26912 the mine entrance
+changed: reddtun e0 tile 20100 the downtown tunnels
+changed: redmtun e0 tile 20100 the mine tunnels
+changed: redwame e0 tile 20275 the Wanamingo mine entrance
+changed: redwan1 e0 tile 26893 the Wanamingo mine, level 1
+changed: redwan1 e1 tile 26893 the Wanamingo mine, level 2
+changed: ncr1 e0 tile 20898 NCR city, elevation 0, overview
+changed: ncr1 e0 tile 13915 NCR city, elevation 0, entry
+changed: ncr1 e0 tile 13915 the NCR council square
+changed: ncr1 e1 tile 20106 NCR city, elevation 1, overview
+changed: ncr1 e1 tile 13915 NCR city, elevation 1, entry
+changed: ncr1 e1 tile 16104 the council building top floor
+changed: ncr2 e0 tile 20902 NCR bazaar, elevation 0, overview
+changed: ncr2 e0 tile 20100 NCR bazaar, elevation 0, entry
+changed: ncr2 e0 tile 13895 the statue plaza
+changed: ncr3 e0 tile 21499 squatters camp, elevation 0, overview
+changed: ncr3 e0 tile 23869 squatters camp, elevation 0, entry
+changed: ncr3 e0 tile 23669 the west gate street
+changed: ncr4 e0 tile 20481 north NCR, elevation 0, overview
+changed: ncr4 e0 tile 17699 north NCR, elevation 0, entry
+changed: ncr4 e0 tile 18279 the brahmin pens
+changed: ncrent e0 tile 19112 NCR entrance, elevation 0, overview
+changed: ncrent e0 tile 20877 NCR entrance, elevation 0, entry
+changed: ncrent e0 tile 20274 the NCR entrance
+changed: ncrent e1 tile 22148 NCR entrance, elevation 1, overview
+changed: ncrent e1 tile 19733 the entrance warehouse
+changed: v15ent e0 tile 23907 Vault 15 entrance, elevation 0, overview
+changed: v15ent e0 tile 29523 Vault 15 entrance, elevation 0, entry
+changed: v15ent e0 tile 29325 the Vault 15 entrance desert
+changed: v15ent e1 tile 23907 Vault 15 entrance, elevation 1, overview
+changed: v15ent e1 tile 29523 Vault 15 entrance, elevation 1, entry
+changed: v15ent e1 tile 29325 the vault plaza
+changed: v15sent e0 tile 19088 Vault 15 south entrance, elevation 0, overview
+changed: v15sent e0 tile 17700 Vault 15 south entrance, elevation 0, entry
+changed: v15sent e0 tile 18097 the squatters' camp
+changed: vault15 e0 tile 19094 Vault 15 ruins, elevation 0, overview
+changed: vault15 e0 tile 20100 Vault 15 ruins, elevation 0, entry
+changed: vault15 e0 tile 27103 the vault door cave
+changed: vault15 e1 tile 21907 Vault 15 ruins, elevation 1, overview
+changed: vault15 e1 tile 20100 Vault 15 ruins, elevation 1, entry
+changed: vault15 e2 tile 20897 Vault 15 ruins, elevation 2, overview
+changed: vault15 e2 tile 20100 Vault 15 ruins, elevation 2, entry
+changed: v13ent e0 tile 25943 the Vault 13 entrance cave
+changed: vault13 e0 tile 17095 the Vault 13 command centre
+changed: vault13 e1 tile 17095 the Vault 13 living quarters
+changed: vault13 e2 tile 16694 the deathclaw floor
+changed: vault13 e2 tile 14694 the Vault 13 dining hall
+changed: depolv1 e0 tile 27705 the Sierra depot gatehouse
+changed: depolv1 e1 tile 21321 the depot bunker level
+changed: depolva e0 tile 26505 the depot workshop
+changed: depolva e1 tile 26504 the robot storage hall
+changed: depolva e2 tile 26104 the depot top level
+changed: depolvb e0 tile 21910 the robotics bay
+changed: sfdock e0 tile 20100 the docks pier
+changed: sfchina e0 tile 26504 Chinatown street
+changed: sfchina2 e0 tile 26504 Chinatown, the shaman's floor
+changed: sfchina2 e1 tile 20133 Chinatown, the upper walk
+changed: sfchina2 e2 tile 24722 Chinatown, the top floor
+changed: sftanker e0 tile 27701 the tanker deck, bow
+changed: sftanker e1 tile 27701 the tanker deck, midship
+changed: sftanker e2 tile 23490 the tanker, the top level
+changed: sfshutl1 e0 tile 26311 the shuttle exterior
+changed: sfshutl2 e0 tile 20695 the shuttle interior
+changed: sfelronb e0 tile 23155 the Elronologists' base
+changed: navarro e0 tile 28694 Navarro, the base floor
+navarro e1: skipped in the sheets, 3 before and 0 after views, 3 expected
+changed: navarro e2 tile 28694 Navarro, the hangar level
+changed: mbclose e0 tile 23939 the military base surface
+changed: mbase12 e0 tile 16089 the military base corridors
+changed: mbase12 e1 tile 16089 the military base lower level
+changed: mbase34 e0 tile 14141 the base corridor fork
+changed: mbase34 e1 tile 15131 the vat room
+changed: coast1 e0 tile 20100 the coast road and the car
+changed: coast2 e0 tile 20100 the night shore
+changed: coast4 e0 tile 18488 the cliffs and the cave mouth
+changed: coast10 e0 tile 19716 the shanty camp by the road
+changed: desert5 e0 tile 21099 the rock wall and the arch
+changed: desert5 e1 tile 508 the canyon rim
+changed: desert7 e0 tile 20101 the dry trees
+changed: desrt10 e0 tile 21894 the varnish trader camp
+changed: desrt13 e0 tile 20100 the night camp
+changed: city1 e0 tile 14692 the ruined crossroads
+changed: city2 e0 tile 12501 the south street
+changed: city3 e0 tile 22136 the rubble square
+changed: city4 e0 tile 25892 the west ruin
+changed: city5 e0 tile 18868 the walled yard
+changed: city6 e0 tile 27302 the north street
+changed: city7 e0 tile 19121 the burned block
+changed: city8 e0 tile 19899 the market ruin
+changed: cave0 e0 tile 18688 the cavern mouth
+changed: cave1 e0 tile 24103 the first gallery
+changed: cave1 e1 tile 24103 the lower gallery
+changed: cave2 e0 tile 21103 the flooded hall
+changed: cave2 e1 tile 21103 the hall's ledge
+changed: cave3 e0 tile 21909 the twist passage
+changed: cave3 e1 tile 21909 the deep passage
+changed: cave4 e0 tile 23112 the stone bridge
+changed: cave4 e1 tile 23112 the lower bridge
+changed: cave5 e0 tile 24103 the great cavern
+changed: cave5 e1 tile 24103 the cavern shelf
+changed: cave5 e2 tile 24103 the cavern floor
+changed: cave6 e0 tile 20100 the narrow cave
+changed: cave7 e0 tile 20100 the dead end cave
+changed: mountn1 e0 tile 18688 the mountain path
+changed: mountn2 e0 tile 18688 the ridge trail
+changed: mountn3 e0 tile 18688 the switchback
+changed: mountn4 e0 tile 18688 the pass
+changed: mountn5 e0 tile 19683 the scree slope
+changed: mountn6 e0 tile 19683 the summit trail
+changed: rndwhale e0 tile 17705 the whale carcass
+changed: rndtinwd e0 tile 18920 the woodsman's camp
+changed: rndbhead e0 tile 23323 the giant brahmin head
+changed: rndshutl e0 tile 17699 the crashed shuttle
+changed: rnduvilg e0 tile 20100 the unwashed village
+changed: rndbridg e0 tile 19298 the broken bridge
+changed: rndcafe e0 tile 21302 the cafe of broken dreams
+changed: rndholy1 e0 tile 18323 the holy hut 1
+changed: rndholy2 e0 tile 19270 the holy hut 2
+changed: rndholy2 e1 tile 19270 the holy hut 2, upstairs
+changed: rndforvr e0 tile 17095 the guardian's gateway
+changed: rndforvr e1 tile 17095 the guardian's plaza
+changed: rndtoxic e0 tile 20512 the toxic dump
+changed: rndparih e0 tile 20100 the pariahs
+changed: rndexcow e0 tile 20100 the mad cow
+changed: rndbess e0 tile 13085 Bess's corral
+changed: rndbess e1 tile 20100 Bess's pen, inside
+changed: encdet e0 tile 20100 the Enclave detention corner
+changed: encdock e0 tile 20100 the Enclave dock
+changed: encfite e0 tile 20100 the Enclave fight room
+changed: encgd e0 tile 20100 the guard barracks
+changed: encpres e0 tile 20100 the presidential hall
+changed: encrctr e0 tile 20100 the reactor hall
+changed: enctrp e0 tile 20100 the trap room
+changed: cardesrt e0 tile 20100 the car in the desert
+289 of 289 spots changed, 3 map elevations skipped; sheets in <repo>\build\tour\sheets
