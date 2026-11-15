@@ -2,8 +2,8 @@
 id: 287
 title: A failed update is never written down as done
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: gpt
 priority: high
 tier: 0
