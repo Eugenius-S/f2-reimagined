@@ -44,8 +44,10 @@ tree copy; locked optional launcher; locked version stamp. The exporter passed
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/regression.ps1
 ```
 
-Pixel regression passed all 154 spots, each with 0 changed pixels. No captures
-failed or were skipped. Its isolated run is
+Pixel regression passed all 154 spots with the existing tolerances (channel delta
+2; maximum changed fraction 0.00001). 150 spots had 0 changed pixels;
+newreno-first and ncr-ncr1-e0 had 2 each; ncr-ncr3-e0 and ncr-ncrent-e0 had 1
+each. No captures failed or were skipped. Its isolated run is
 `runs/regression/20261115-112308-554-46036/`; raw captures stay uncommitted.
 
 To run just the isolated launcher checks:
@@ -56,3 +58,13 @@ py -3 ce/tests/launcher_progress/launcher_install_test.py build/fallout2-ce-3d-l
 
 Rollback of already copied files stays in task 307; RP transactions and shared
 installer refactoring stay in 289 and 292. No gameplay or rendering code changed.
+
+The game executable was built before the launcher patch and was not rebuilt by
+it: the incremental build compiled and linked only the launcher. Its SHA-256 is
+`e6651790fb3073707b43288c203d50daaa54faf7f38ff53c000569f5e7e0190d`.
+The six isolated pixels are within the pre-existing regression tolerance;
+rendering code and regression references are unchanged.
+
+Targeted `tools/regression.ps1 -Spot <name>` repeats of those four spots passed
+with the same 2/2/1/1 changed-pixel counts using that unchanged executable.
+No references were retaken and no tolerance was changed.

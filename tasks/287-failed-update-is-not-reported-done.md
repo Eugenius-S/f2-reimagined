@@ -49,4 +49,5 @@ scratch reproduction and checks; partial-copy rollback stays in task 307.
 Next: merge after final green CI, then complete Rule 1 from fresh main.
 Check: Release build; ctest 28/28, including nine real launcher integration tests;
 exporter 148 and regression tools 12 unit tests; pixel regression 154/154 spots,
-all 0 changed pixels, no capture errors or skips.
+150 with 0 changed pixels, four with 1 or 2 within existing tolerance; no capture
+errors or skips. No rendering code or regression reference changed.
