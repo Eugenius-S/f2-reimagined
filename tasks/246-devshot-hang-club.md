@@ -51,18 +51,18 @@ load / startup, not the 3D scene path. Diagnose and fix, so the
   probe at 180 s step timeout confirms a hard hang.
 
 - 2026-11-10 glm, build-range observation: the 225 before-side tour
-  (build b4b54575, BEFORE #320/#370) shot all club maps fine — its
+  (build b4b54575, BEFORE #320/#370) shot all club maps fine - its
   stamps for klacanyn e0, klatoxcv e0/e1, broken2 e1, newrvb e0
   reused cleanly on this run. The hang appeared somewhere in
   b4b54575..ba79b58d (#320 water corners, #370's cache+revert,
   #387..#395). Also on 2026-11-10: the BEFORE build itself stalled
-  on sfelronb e0 (tour stop, 132 s timeout, twice in a row) — a
+  on sfelronb e0 (tour stop, 132 s timeout, twice in a row) - a
   sixth staller, and one that b4b54575 did NOT hang on in past
   runs. So the stall set shifts between runs/builds: treat as a
   load-time race, not a per-map data poison. Next probe: hang the
   loader under a debugger (thread dump at the stall), or bisect
   b4b54575..ba79b58d with a klacanyn e0 devshot probe (clear the
-  probe output dir per step — stale devshot JSONs fake GOOD).
+  probe output dir per step - stale devshot JSONs fake GOOD).
 
 - 2026-11-11 claude (audit): raised to tier 0. If a player's game hangs the same way, these are places nobody can get past; and task 146's combat fixture died on the same map (`runs/146-combat-fixture/klatoxcv-3d-fixed-startup/process.stdout.log` has no `COMBAT_FIXTURE START`), so 146, 135, 149, 148 and 111 wait on this. First step: tell whether a plain player entry (a save next to the map, walking in) hangs too.
 - 2026-11-11 glm
