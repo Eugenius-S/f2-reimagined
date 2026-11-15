@@ -130,57 +130,71 @@ def check_views(folder, map_name, elevation, spots, turns):
         raise SystemExit("views not taken in the 3D scene:\n  " + "\n  ".join(problems))
 
 
-def shoot(name, side, turns, distance, groups, reuse, rp_game_root=None):
+def shoot(name, side, turns, distance, groups, reuse, rp_game_root=None, skip_failed=False):
     kind, path = side_kind(side)
     root = path if kind == "checkout" else ROOT
     if kind == "checkout" and not (path / "build" / "scene-cache").is_dir():
         print(f"{name}: {path} has no build/scene-cache, so its scenes come from the game's mod-cache", flush=True)
     for (map_name, elevation), spots in groups.items():
-        stops = [f"{map_name}:{elevation}:{spot['tile']}:-1:{turn}:{spot.get('distance', distance)}"
-                 for spot in spots for turn in turns]
-        folder = OUT / name / f"{map_name}-e{elevation}"
-        # A rebuilt exe or a re-exported scene makes the old shots stale.
-        stamp = {"side": str(path), "kind": kind, "stops": stops,
-                 "exe": file_hash(root / "build" / "fallout2-ce.exe"),
-                 "scene": file_hash(scene_folder(kind, path, map_name, elevation) / "provenance.json"),
-                 "rp_game_root": str(rp_game_root) if rp_game_root else None,
-                 "still_snapshot": rp_game_root is None,
-                 "startup_preview": rp_game_root is None,
-                 "skip_script_blocking": rp_game_root is not None,
-                 "rp_mod": file_hash(rp_game_root / "mods" / "rpu.dat") if rp_game_root else None}
-        stamp_file = folder / "tour.json"
-        if (reuse and stamp_file.is_file() and json.loads(stamp_file.read_text(encoding="utf-8")) == stamp
-                and len(list(folder.glob("*.png"))) == len(stops) + 1):
-            print(f"{name} {map_name} e{elevation}: reused", flush=True)
-            continue
-        if folder.exists():
-            shutil.rmtree(folder)
-        folder.mkdir(parents=True)
-        # -Command, quoted: through -File a list with commas becomes an array.
-        command = (f"& '{root / 'tools' / 'dev-snapshot.ps1'}' -Map {map_name} -Elevation {elevation} "
-                   f"-Tour '{','.join(stops)}' -Ambient 65536 -OutputDirectory '{folder}' "
-                   f"-TimeoutSeconds {120 + 4 * len(stops)} -StepTimeoutSeconds 120")
-        if rp_game_root is None:
-            command += " -Still"
-        else:
-            # RP map-enter scripts may leave a dialogue request pending until
-            # the game advances. Let the dev snapshot dismiss blocking dialog
-            # or movie requests, and do not freeze startup in still mode.
-            command += " -NoPreview -SkipScriptBlocking"
-        if kind == "cache":
-            command += f" -SceneCache '{path}'"
-        if rp_game_root:
-            command += f" -GameRoot '{rp_game_root}'"
-        run = subprocess.run(powershell_args(command), capture_output=True, text=True, errors="replace")
-        if run.returncode != 0:
-            raise SystemExit(f"{name} {map_name} e{elevation}: dev-snapshot failed: {run.stderr[-600:]}")
-        # The first snapshot is the start, before the tour.
-        shots = sorted(folder.glob("*.png"))
-        if len(shots) != len(stops) + 1:
-            raise SystemExit(f"{name} {map_name} e{elevation}: {len(shots) - 1} views for {len(stops)} stops")
-        check_views(folder, map_name, elevation, spots, turns)
-        stamp_file.write_text(json.dumps(stamp, indent=1) + "\n", encoding="utf-8")
-        print(f"{name} {map_name} e{elevation}: {len(stops)} views", flush=True)
+        try:
+            shoot_group(name, side, kind, path, root, turns, distance, map_name, elevation,
+                        spots, reuse, rp_game_root)
+        except SystemExit as stop:
+            if not skip_failed:
+                raise
+            # The group's folder keeps no stamp, so --reuse treats it as stale.
+            print(f"{name} {map_name} e{elevation}: SKIPPED, {stop}", flush=True)
+            with (OUT / "skipped.log").open("a", encoding="utf-8") as log:
+                log.write(f"{name} {map_name} e{elevation}: {stop}\n")
+
+
+def shoot_group(name, side, kind, path, root, turns, distance, map_name, elevation,
+            spots, reuse, rp_game_root):
+    stops = [f"{map_name}:{elevation}:{spot['tile']}:-1:{turn}:{spot.get('distance', distance)}"
+             for spot in spots for turn in turns]
+    folder = OUT / name / f"{map_name}-e{elevation}"
+    # A rebuilt exe or a re-exported scene makes the old shots stale.
+    stamp = {"side": str(path), "kind": kind, "stops": stops,
+             "exe": file_hash(root / "build" / "fallout2-ce.exe"),
+             "scene": file_hash(scene_folder(kind, path, map_name, elevation) / "provenance.json"),
+             "rp_game_root": str(rp_game_root) if rp_game_root else None,
+             "still_snapshot": rp_game_root is None,
+             "startup_preview": rp_game_root is None,
+             "skip_script_blocking": rp_game_root is not None,
+             "rp_mod": file_hash(rp_game_root / "mods" / "rpu.dat") if rp_game_root else None}
+    stamp_file = folder / "tour.json"
+    if (reuse and stamp_file.is_file() and json.loads(stamp_file.read_text(encoding="utf-8")) == stamp
+            and len(list(folder.glob("*.png"))) == len(stops) + 1):
+        print(f"{name} {map_name} e{elevation}: reused", flush=True)
+        return
+    if folder.exists():
+        shutil.rmtree(folder)
+    folder.mkdir(parents=True)
+    # -Command, quoted: through -File a list with commas becomes an array.
+    command = (f"& '{root / 'tools' / 'dev-snapshot.ps1'}' -Map {map_name} -Elevation {elevation} "
+               f"-Tour '{','.join(stops)}' -Ambient 65536 -OutputDirectory '{folder}' "
+               f"-TimeoutSeconds {120 + 4 * len(stops)} -StepTimeoutSeconds 120")
+    if rp_game_root is None:
+        command += " -Still"
+    else:
+        # RP map-enter scripts may leave a dialogue request pending until
+        # the game advances. Let the dev snapshot dismiss blocking dialog
+        # or movie requests, and do not freeze startup in still mode.
+        command += " -NoPreview -SkipScriptBlocking"
+    if kind == "cache":
+        command += f" -SceneCache '{path}'"
+    if rp_game_root:
+        command += f" -GameRoot '{rp_game_root}'"
+    run = subprocess.run(powershell_args(command), capture_output=True, text=True, errors="replace")
+    if run.returncode != 0:
+        raise SystemExit(f"{name} {map_name} e{elevation}: dev-snapshot failed: {run.stderr[-600:]}")
+    # The first snapshot is the start, before the tour.
+    shots = sorted(folder.glob("*.png"))
+    if len(shots) != len(stops) + 1:
+        raise SystemExit(f"{name} {map_name} e{elevation}: {len(shots) - 1} views for {len(stops)} stops")
+    check_views(folder, map_name, elevation, spots, turns)
+    stamp_file.write_text(json.dumps(stamp, indent=1) + "\n", encoding="utf-8")
+    print(f"{name} {map_name} e{elevation}: {len(stops)} views", flush=True)
 
 
 def views(name, map_name, elevation):
@@ -266,19 +280,24 @@ def save_page(rows, path):
     path.write_bytes(buffer.getvalue())
 
 
-def sheets(turns, groups, out):
+def sheets(turns, groups, out, skip_failed=False):
     if out.exists():
         for old in out.glob("*.jpg"):
             old.unlink()
     out.mkdir(parents=True, exist_ok=True)
     changed_rows = []
-    total = changed = 0
+    total = changed = skipped = 0
     for (map_name, elevation), spots in groups.items():
         before, after = views("before", map_name, elevation), views("after", map_name, elevation)
         expected = len(spots) * len(turns)
         if len(before) != expected or len(after) != expected:
-            raise SystemExit(f"{map_name} e{elevation}: {len(before)} before and {len(after)} after views, "
-                             f"{expected} expected; shoot first")
+            if not skip_failed:
+                raise SystemExit(f"{map_name} e{elevation}: {len(before)} before and {len(after)} after views, "
+                                 f"{expected} expected; shoot first")
+            skipped += 1
+            print(f"{map_name} e{elevation}: skipped in the sheets, "
+                  f"{len(before)} before and {len(after)} after views, {expected} expected", flush=True)
+            continue
         rows = []
         for index, spot in enumerate(spots):
             part = slice(index * len(turns), (index + 1) * len(turns))
@@ -302,7 +321,8 @@ def sheets(turns, groups, out):
         note = Image.new("RGB", (900, 40), (24, 24, 24))
         ImageDraw.Draw(note).text((8, 10), f"fly tour: no spot changed of {total}", fill=(255, 230, 0), font=font(16))
         note.save(out / "changed.jpg", quality=90)
-    print(f"{changed} of {total} spots changed; sheets in {out}")
+    print(f"{changed} of {total} spots changed"
+          + (f", {skipped} map elevations skipped" if skipped else "") + f"; sheets in {out}")
 
 
 def main():
@@ -313,6 +333,9 @@ def main():
     parser.add_argument("--rp-game-root", type=Path,
                         help="explicit RP game folder; selects rp_spots.json and runs the tour against that install")
     parser.add_argument("--reuse", action="store_true", help="keep shots of the same side and stops")
+    parser.add_argument("--skip-failed", action="store_true",
+                        help="keep going when one map elevation fails to shoot; its folder keeps no stamp, "
+                             "so a later --reuse run shoots it again")
     parser.add_argument("--out", type=Path, default=OUT / "sheets", help="where the sheets go")
     args = parser.parse_args()
     rp_game_root = args.rp_game_root.resolve() if args.rp_game_root else None
@@ -323,9 +346,9 @@ def main():
             raise SystemExit("--rp-game-root must contain mods/rpu.dat")
     spots_path = HERE / ("rp_spots.json" if rp_game_root else "spots.json")
     turns, distance, groups = load_spots(set(args.maps.split(",")) if args.maps else None, spots_path)
-    shoot("before", args.before, turns, distance, groups, args.reuse, rp_game_root)
-    shoot("after", args.after, turns, distance, groups, args.reuse, rp_game_root)
-    sheets(turns, groups, args.out)
+    shoot("before", args.before, turns, distance, groups, args.reuse, rp_game_root, args.skip_failed)
+    shoot("after", args.after, turns, distance, groups, args.reuse, rp_game_root, args.skip_failed)
+    sheets(turns, groups, args.out, args.skip_failed)
 
 
 if __name__ == "__main__":
