@@ -1,5 +1,7 @@
 # Inbox: the owner's finds
 
+- 2026-11-15 (-> 293-304, tooling follow-up to 183/188/220/225/242/248/249/252 and geometry re-walks 279-282) The owner asked for more bounded GLM work. Source inspection found gaps in cache completeness and publication, JSON rule fingerprints, reused tour validation, packaged-export smoke coverage, tool-test discovery, wide-art validation, board metadata checks, snapshot output ownership, RP failure summaries, tour coverage reporting and the exporter guide. These tasks verify the stated gaps without assuming a game bug cause. Existing 288 and 290 are suggested for GLM; 271 waits for 290. The installer sequence 287, 289, 292 remains one executor's separate batch.
+
 What the owner notices and sends in chat goes here first, one line each: the
 date, what is wrong, where (map, hex, turn), the picture in `runs/inbox/`.
 A find is not urgent unless the owner says "now". Every line ends in one
