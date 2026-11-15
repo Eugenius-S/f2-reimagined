@@ -2,8 +2,8 @@
 id: 288
 title: A merge to main does not cancel the publish of the players' build
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: glm
 priority: high
 tier: 0
