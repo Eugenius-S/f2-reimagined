@@ -67,7 +67,9 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
   launcher's `latest` release carries exactly the verified build. The owner's
   `Run F2R.lnk` swaps that build into `game/` on its next start (the previous
   one stays as `fallout2-ce.exe.bak`). Main must always be playable. Docs-only
-  merges skip the check.
+  merges skip the check. A perf-check row marked noisy was measured while the
+  machine was busy (290): it is not a result and not a regression; rerun
+  perf-check when the machine is free.
 - Limits go on re-reading the context: every call pays for the whole
   thread so far (measured in 079: 99% of the tokens). So:
   - one task per thread; after its PR, or once the thread is long, start a

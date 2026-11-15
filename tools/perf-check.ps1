@@ -10,6 +10,18 @@
 # window (157's Log): the thresholds guard against a regression, they do
 # not prove the bar. Everything it writes goes under build/.
 #
+# 290: the whole run holds one machine-wide named mutex
+# (Global\fallout2-ce-perf-check), so two agents never measure speed at
+# once; a busy lock is waited for (-WaitMinutes), and worktrees line up
+# behind it instead of measuring and building side by side. The table
+# prints the CPU load seen at the start of each map; a map measured under
+# more than -NoisyCpuPercent load is marked noisy: its numbers say nothing
+# about the game, so a threshold breach there is not a FAIL, it is a NOISY
+# line asking for a rerun on a free machine. The thresholds do not move
+# for noise, and a run with a noisy breach never prints PASS. Exit codes:
+# 0 PASS, 1 FAIL (a clean row breached the bar, or an artifact is
+# missing), 2 NOISY (rerun needed, no verdict).
+#
 # -SelfTest feeds saved samples to the parsing functions and fails on a
 # wrong answer without running the game.
 param(
@@ -17,6 +29,12 @@ param(
     [double]$MaxLoadMs = 2000,
     # Seconds the game stays on the measured map after its snapshot: the sample.
     [int]$HoldSeconds = 10,
+    # A map measured under more CPU load than this is noisy (290): the
+    # numbers were taken on a busy machine, rerun instead of judging.
+    [double]$NoisyCpuPercent = 30,
+    # Minutes to wait for the machine-wide measurement lock (290).
+    [ValidateRange(0, 240)]
+    [int]$WaitMinutes = 30,
     [switch]$SelfTest
 )
 $ErrorActionPreference = 'Stop'
@@ -68,6 +86,47 @@ function Read-LoadMs([string[]]$lines) {
     return $ms
 }
 
+# The machine-wide measurement lock (290): a named mutex, the same for every
+# worktree, so agents line up behind one speed run instead of measuring side
+# by side. A zero wait is an immediate try; an abandoned lock (its holder
+# died) counts as taken over.
+function Acquire-PerfLock([string]$name, [int]$minutes) {
+    $mutex = New-Object System.Threading.Mutex($false, $name)
+    $held = $false
+    try { $held = $mutex.WaitOne([TimeSpan]::FromMinutes($minutes)) }
+    catch [System.Threading.AbandonedMutexException] { $held = $true }
+    if (-not $held) { $mutex.Dispose() }
+    return @{ Mutex = $mutex; Held = $held }
+}
+function Release-Lock($lock) {
+    if ($null -ne $lock -and $lock.Held) {
+        $lock.Held = $false
+        $lock.Mutex.ReleaseMutex()
+        $lock.Mutex.Dispose()
+    }
+}
+
+# The CPU load at the start of a map (290): Win32_Processor LoadPercentage
+# sampled four times over about a second, so one twitch does not decide.
+# Locale-free, unlike Get-Counter's localized counter names. $null when the
+# read says nothing (then the row stays clean: no verdict without evidence).
+function Read-CpuLoadPercent {
+    $samples = @()
+    foreach ($i in 1..4) {
+        $samples += (Get-CimInstance Win32_Processor |
+            Measure-Object -Property LoadPercentage -Average).Average
+        Start-Sleep -Milliseconds 250
+    }
+    $avg = ($samples | Where-Object { $null -ne $_ } | Measure-Object -Average).Average
+    if ($null -eq $avg) { return $null }
+    return [Math]::Round($avg, 0)
+}
+
+# A map measured over this load is noisy (290); at the limit it is not.
+function Test-NoisyRow([double]$loadPercent, [double]$noisyAbove) {
+    return $loadPercent -gt $noisyAbove
+}
+
 if ($SelfTest) {
     $sampleCsv = @(
         'frame,ms,load',
@@ -90,6 +149,12 @@ if ($SelfTest) {
             $script:failed = $true
         }
     }
+    function Assert-True([string]$what, $got) {
+        if (-not $got) {
+            Write-Output ("selftest: FAIL {0}" -f $what)
+            $script:failed = $true
+        }
+    }
     # Rows 0-3 are before the last load row; 6 and 7 fill its first second.
     Assert-Equal 'play' $s.Play 2
     Assert-Equal 'load' $s.Load 2
@@ -108,9 +173,55 @@ if ($SelfTest) {
     )
     $load = Read-LoadMs $sampleLog
     Assert-Equal 'loadMs (last chain wins)' $load 900.10
+    # 290: strictly over the limit is noisy, at it is not.
+    Assert-True 'load 29 at 30 is clean' (-not (Test-NoisyRow 29 30))
+    Assert-True 'load 30 at 30 is clean' (-not (Test-NoisyRow 30 30))
+    Assert-True 'load 31 at 30 is noisy' (Test-NoisyRow 31 30)
+    # The CPU read itself: a number within 0..100 on a live machine, or an
+    # honest $null where the counter says nothing.
+    $cpu = Read-CpuLoadPercent
+    if ($null -ne $cpu -and ($cpu -lt 0 -or $cpu -gt 100)) {
+        Write-Output ("selftest: FAIL cpu read out of range: {0}" -f $cpu)
+        $failed = $true
+    }
+    # 290: the machine-wide lock wait. A holder process takes a test mutex
+    # for three seconds; this process must see it busy, and free once the
+    # holder lets go. A name of its own, so runs never fight the real one.
+    $probeName = 'Global\fallout2-ce-perf-check-selftest'
+    $holderCommand = "`$m = New-Object System.Threading.Mutex(`$false, '{0}'); [void]`$m.WaitOne(20000); Start-Sleep -Seconds 3; `$m.ReleaseMutex(); `$m.Dispose()" -f $probeName
+    $holder = Start-Process powershell -PassThru -WindowStyle Hidden -ArgumentList @('-NoProfile', '-Command', $holderCommand)
+    $busySeen = $false
+    $deadline = (Get-Date).AddSeconds(20)
+    while ((Get-Date) -lt $deadline) {
+        $probe = Acquire-PerfLock $probeName 0
+        if (-not $probe.Held) { $busySeen = $true; break }
+        Release-Lock $probe
+        Start-Sleep -Milliseconds 300
+    }
+    Assert-True 'the lock is seen busy while another process holds it' $busySeen
+    [void]$holder.WaitForExit(30000)
+    $probe = Acquire-PerfLock $probeName 1
+    $freedSeen = $probe.Held
+    Release-Lock $probe
+    Assert-True 'the lock is free again after the holder lets go' $freedSeen
     if ($failed) { exit 1 }
     Write-Output 'selftest: ok'
     exit 0
+}
+
+# One speed measurement on the whole machine (290): take the lock before the
+# first map and hold it to the end, so warmups and measured runs of two
+# agents never overlap. The wait is patient: a full check is four maps
+# times two runs. The trap lets go on any exit path.
+$script:perfLock = $null
+function Release-PerfLock {
+    Release-Lock $script:perfLock
+    $script:perfLock = $null
+}
+trap { Release-PerfLock; break }
+$script:perfLock = Acquire-PerfLock 'Global\fallout2-ce-perf-check' $WaitMinutes
+if (-not $perfLock.Held) {
+    throw "The perf-check lock stayed busy for $WaitMinutes minutes: another run is measuring on this machine. Rerun when it ends."
 }
 
 $maps = @(
@@ -125,6 +236,7 @@ New-Item -ItemType Directory -Path $outRoot -Force | Out-Null
 
 $rows = @()
 $failures = @()
+$reruns = @()
 foreach ($m in $maps) {
     $label = ('{0} e{1}' -f $m.map, $m.elevation)
     $outDir = Join-Path $outRoot ('{0}-e{1}' -f $m.map, $m.elevation)
@@ -132,6 +244,11 @@ foreach ($m in $maps) {
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'dev-snapshot.ps1') `
         -Map $m.map -Elevation $m.elevation -Set3d 'frame_log=1' `
         -OutputDirectory (Join-Path $outDir 'warmup') -TimeoutSeconds 240 | Out-Null
+    # 290: the load seen at the start of this map's measurement. A row over
+    # -NoisyCpuPercent is noisy: a breach there asks for a rerun, it does
+    # not judge the game.
+    $cpu = Read-CpuLoadPercent
+    $noisy = ($null -ne $cpu) -and (Test-NoisyRow $cpu $NoisyCpuPercent)
     # Measured run: F2CE_PERF=1 makes the load chain print; the frame log
     # fills the CSV this pass parses. -KeepRunFolder keeps the run folder
     # (dev-snapshot removes it once the -OutputDirectory copies are done),
@@ -165,23 +282,34 @@ foreach ($m in $maps) {
         oneLowFps = [Math]::Round($summary.OneLowFps, 1)
         worstMs = [Math]::Round($summary.WorstMs, 1)
         loadMs = if ($null -ne $loadMs) { [Math]::Round($loadMs, 1) } else { -1 }
+        cpu = if ($null -ne $cpu) { $cpu } else { '?' }
+        noisy = if ($noisy) { 'noisy' } else { '' }
         play = $summary.Play
         load = $summary.Load
     }
     if ($summary.OneLowFps -lt $MinFps) {
-        $failures += "{0}: 1% low {1} fps is under {2}" -f $label, [Math]::Round($summary.OneLowFps, 1), $MinFps
+        $msg = "{0}: 1% low {1} fps is under {2}" -f $label, [Math]::Round($summary.OneLowFps, 1), $MinFps
+        if ($noisy) { $reruns += $msg } else { $failures += $msg }
     }
     if ($null -eq $loadMs) {
         $failures += "{0}: no 'perf load first_frame' line in the measured run" -f $label
     } elseif ($loadMs -gt $MaxLoadMs) {
-        $failures += "{0}: load {1} ms is over {2}" -f $label, [Math]::Round($loadMs, 1), $MaxLoadMs
+        $msg = "{0}: load {1} ms is over {2}" -f $label, [Math]::Round($loadMs, 1), $MaxLoadMs
+        if ($noisy) { $reruns += $msg } else { $failures += $msg }
     }
 }
 
-$rows | Format-Table -AutoSize map, avgFps, oneLowFps, worstMs, loadMs, play, load
+Release-PerfLock
 
+$rows | Format-Table -AutoSize map, avgFps, oneLowFps, worstMs, loadMs, cpu, noisy, play, load
+
+foreach ($r in $reruns) { Write-Output "NOISY $r" }
 if ($failures.Count -gt 0) {
     foreach ($f in $failures) { Write-Output "FAIL $f" }
     exit 1
+}
+if ($reruns.Count -gt 0) {
+    Write-Output ("perf-check: NOISY {0} of {1} maps were measured under CPU load over {2} percent: the gate says nothing about them, and this is not a PASS. Rerun perf-check when the machine is free." -f $reruns.Count, $maps.Count, $NoisyCpuPercent)
+    exit 2
 }
 Write-Output ("perf-check: PASS all {0} maps (1% low >= {1} fps, load <= {2} ms)" -f $maps.Count, $MinFps, $MaxLoadMs)
