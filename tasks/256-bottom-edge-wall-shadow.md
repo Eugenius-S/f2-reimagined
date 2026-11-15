@@ -9,7 +9,7 @@ priority: normal
 tier: 3
 claude-only: no
 user-check: yes
-depends-on: [096, 108]
+depends-on: [096, 108, 270]
 reviewed: no
 ---
 

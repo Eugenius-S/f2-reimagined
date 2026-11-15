@@ -5,11 +5,11 @@ milestone: M1
 status: todo
 owner: any
 suggested: any
-priority: low
-tier: 3
+priority: high
+tier: 1
 claude-only: no
 user-check: no
-depends-on: [287]
+depends-on: [289]
 reviewed: no
 ---
 
@@ -18,6 +18,8 @@ reviewed: no
 The launcher's three HTTP functions share one request opener, the before and after hash of the saves is gone, and `fallout2.cfg` is rewritten through a temporary file.
 
 ## Context
+
+- Prerequisite for 307 and 309: keep the same installer worker through 287, 289, 292, 307 and 309; this dependency raises the cleanup priority.
 
 - `httpGet`, `httpRedirectLocation` and `httpDownload` in `ce/src/launcher_main.cc` repeat the session, connect and request setup. The cut-short fix (#473) reached only `httpDownload`: `httpGet` still takes a dropped answer for the whole text.
 - The `sha256Tree` check around the game run is a leftover of 091's acceptance: it prints CHANGED whenever the player saved.

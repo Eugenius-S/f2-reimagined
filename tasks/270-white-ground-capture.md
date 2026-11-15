@@ -9,7 +9,7 @@ priority: normal
 tier: 3
 claude-only: no
 user-check: no
-depends-on: []
+depends-on: [306]
 reviewed: no
 ---
 
@@ -18,6 +18,8 @@ reviewed: no
 Find why `tools/dev-snapshot.ps1` on KLAMALL e0 at view tile 28096 gave a 3D frame with white ground (256, PR #455), and fix the cause or make the run fail.
 
 ## Context
+
+- 2026-11-15: PR #504 isolates the white floor to the bake-enabled renderer path. Task 306 supplies the renderer fix excluded below; resume this evidence check after it lands.
 
 Both 3D attempts in 256 (`-Still -Shadows`, then `-NoPreview`) show white ground where the floor should be. Suspects: a stale or half-built scene cache for the map, a missing `tiles.png`, the capture taken before the floor texture is uploaded.
 
