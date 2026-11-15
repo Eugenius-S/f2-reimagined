@@ -2,7 +2,7 @@
 id: 288
 title: A merge to main does not cancel the publish of the players' build
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: glm
 priority: high
@@ -10,7 +10,7 @@ tier: 0
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -52,3 +52,11 @@ Done: independent review found that the concurrency queue does not guarantee dis
 Check: the real helper passed 151 focused assertions with fake gh/git and disposable real ZIP payloads: 11/B then delayed 10/A, normal 10/A then 11/B, rerun, legacy absence, malformed/read-error failure before writes, partial upload and push failure without a watermark advance, and a successful older request after a newer failed one. The fixture snapshots staged/committed dist state and performs no remote writes. The check is wired into Windows CI. Existing game/launcher gates above remain valid; neither production game nor launcher changed, and the 154-view pixel gate was not repeated.
 
 Next: freeze for independent recheck of the publication-order fix, then require green CI on that exact SHA before the protected merge. The post-merge Rule 1 and real dispatch/main-push acceptance above remain required.
+
+### 2026-11-15 gpt, final publication acceptance
+
+Done: post-merge Rule 1 handover and real publication accepted for verified commit c1b9afefedd696b55396a178c2e45d1857e3c957. Run [43705230932](https://github.com/Eugenius-S/f2-reimagined/actions/runs/43705230932), number 1907, succeeded. The genuine docs-only PR505 push to main (54e9fc8b3f7b37f8c09a5c04fa53c3c3aa052d97, 10:41:45 UTC) landed during this run: publication remained in progress after the push and finished successfully. This supersedes the pending handover/publication above.
+
+Check: clean Release 796 targets, CTest 29/29, exact-commit offscreen runtime and SHA256 e1efdd0d7ff3ec63aa2d3e77c25e53e20c7629c111aa250c2103f9b1c8d727ba; independent publisher review 151 checks and pixel regression 154/154 with zero differences. The owner explicitly accepted the one noisy CPU31 row in perf attempt 2 for this task: three clean rows and one noisy row, all speed thresholds passed. This is not a four-clean-row PASS; thresholds and noise flags are unchanged. Verified executable/hash and append-only version history were checked. The downloaded latest version, ZIP version and pinned dist version all equal the full verified commit; dist watermark is 1907 and its ZIP matches the release ZIP byte for byte. No new build, performance run or pixel capture was needed for this task-only closure.
+
+Next: none for 288. Stop; no next task started.
