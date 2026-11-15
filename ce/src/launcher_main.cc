@@ -1985,16 +1985,30 @@ int runConsole(Options options)
             fs::remove_all(work, error);
             die("the downloaded file could not be unpacked; try the install again");
         }
-        for (const char* name : { kGameExe, "ce.dat", kExporterExe }) {
+        for (const char* name : { kGameExe, "ce.dat", kExporterExe, kVersionTxt }) {
             if (!fs::is_regular_file(stage / name, error)) {
                 fs::remove_all(work, error);
                 die("the downloaded package is damaged (required file %s is missing); nothing was changed", name);
             }
         }
 
+        std::ifstream versionFile(stage / kVersionTxt, std::ios::binary);
+        std::string packageVersion, extraLine;
+        bool hasVersion = static_cast<bool>(std::getline(versionFile, packageVersion));
+        bool hasExtraLine = static_cast<bool>(std::getline(versionFile, extraLine));
+        packageVersion = trim(packageVersion);
+        if (!hasVersion || hasExtraLine || !versionFile.eof() || packageVersion.empty()
+            || packageVersion == "." || packageVersion == ".."
+            || std::any_of(packageVersion.begin(), packageVersion.end(), [](unsigned char ch) { return ch < 32 || ch == 127; })) {
+            versionFile.close();
+            fs::remove_all(work, error);
+            die("the downloaded package has an invalid version.txt; nothing was changed");
+        }
+        versionFile.close();
+
         std::string keptBackup;
         // A refill of the wide art at the same version is no update: the older build stays the one to roll back to.
-        if (installedGamePresent && remoteVersion != installedVersion && !backupInstalledBuild(root,
+        if (installedGamePresent && packageVersion != installedVersion && !backupInstalledBuild(root,
             installedVersion.empty() ? std::string("manual") : installedVersion, &keptBackup)) {
             fs::remove_all(work, error);
             die("could not save the current build before updating; nothing was changed");
@@ -2024,12 +2038,12 @@ int runConsole(Options options)
         } else {
             if (!copyIfPresent(stage, kCfg, root, false, "installed (default)")) stopUpdate();
         }
-        if (!writeBuildVersion(root, remoteVersion)) stopUpdate();
-        logf("  version.txt: %s", remoteVersion.c_str());
+        if (!writeBuildVersion(root, packageVersion)) stopUpdate();
+        logf("  version.txt: %s", packageVersion.c_str());
         fs::remove_all(work, error);
         cleanOlderBuildLeftovers(root, keptBackup);
         updated = true;
-        installedVersion = remoteVersion;
+        installedVersion = packageVersion;
     } else if (!remoteVersion.empty()) {
         logf("the installed build matches the release: nothing to pull");
     }

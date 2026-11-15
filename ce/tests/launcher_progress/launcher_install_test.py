@@ -93,6 +93,51 @@ class InstallTests(LauncherFixture):
         self.assertEqual((self.root / "version.txt").read_bytes(), b"old-build")
         self.assertNotIn("done (--no-start)", output)
 
+    def test_zip_version_wins_over_remote_version(self):
+        (self.release / "version.txt").write_text("remote-build-A", encoding="ascii")
+        self.payload["version.txt"] = b"package-build-B\r\n"
+        self.package()
+        code, output = self.run_launcher()
+        self.assertEqual(code, 0, output)
+        self.assertEqual((self.root / REQUIRED[0]).read_bytes(), b"new-build")
+        self.assertEqual((self.root / "version.txt").read_bytes(), b"package-build-B")
+        self.assertIn("the game folder holds build package-build-B", output)
+
+    def test_zip_version_matches_installed_keeps_previous_backup(self):
+        self.payload["version.txt"] = b"old-build"
+        previous = self.root / "f2reimagined-backups" / "previous-build"
+        previous.mkdir(parents=True)
+        (previous / "version.txt").write_bytes(b"previous-build")
+        self.package()
+        code, output = self.run_launcher()
+        self.assertEqual(code, 0, output)
+        self.assertEqual((self.root / "version.txt").read_bytes(), b"old-build")
+        self.assertEqual(list(previous.parent.iterdir()), [previous])
+
+    def test_invalid_zip_version_changes_nothing(self):
+        for invalid in (None, b"", b" \t\r\n", b"first\nsecond", b"first\n\n",
+                        b"\nsecond", b"first\rsecond", b"bad\x00version", b".", b".."):
+            with self.subTest(version=invalid):
+                self.payload.pop("version.txt", None)
+                if invalid is not None:
+                    self.payload["version.txt"] = invalid
+                self.package()
+                before = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+                code, output = self.run_launcher()
+                self.assert_failed(code, output, "version.txt")
+                after = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+                self.assertEqual(before, after)
+                self.assertFalse((self.root / "f2reimagined-backups").exists())
+
+    def test_zip_version_is_a_directory(self):
+        self.payload.pop("version.txt")
+        self.payload["version.txt/"] = b""
+        self.package()
+        code, output = self.run_launcher()
+        self.assert_failed(code, output, "version.txt")
+        self.assertEqual((self.root / REQUIRED[0]).read_bytes(), b"old-build")
+        self.assertFalse((self.root / "f2reimagined-backups").exists())
+
     def test_locked_exe_and_retry(self):
         with read_lock(self.root / REQUIRED[0]):
             code, output = self.run_launcher()

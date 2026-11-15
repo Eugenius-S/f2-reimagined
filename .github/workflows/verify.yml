@@ -12,10 +12,10 @@ on:
         description: 'The commit to build and publish (empty: the branch head)'
         required: false
         default: ''
-# A newer push to the same branch cancels the older run.
+# Publications share one queue across refs; automatic checks cancel stale runs.
 concurrency:
-  group: verify-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'workflow_dispatch' && 'verify-publish-latest' || format('verify-check-{0}', github.head_ref || github.ref) }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 permissions:
   contents: read
 jobs:
