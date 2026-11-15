@@ -33,7 +33,10 @@ from the rolling [latest release](https://github.com/Eugenius-S/f2-reimagined/re
    the launcher downloads RPU from its official GitHub release (about
    900 MB), installs it the way RPU's own manual install does and builds its
    maps in 3D. Install it on a clean Fallout 2, as RPU asks; the files it
-   replaces are kept in `backup/rpu`.
+   replaces are kept in `backup/rpu`. Untick **Restoration Project** to remove
+   RP installed by this launcher and restore the originals, keeping your saves.
+   Vanilla 3D scenes are refreshed before Play is enabled. An RP installation
+   made by hand is left untouched.
 4. Choose **Install / Update**. Turn on automatic updates if you want the
    launcher to install a newer build when it starts. Press **Play** when the
    installation finishes. **Roll back** restores the previous build.

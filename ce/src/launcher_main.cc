@@ -20,6 +20,9 @@
 #include <cctype>
 #include <cstdarg>
 #include <cstdio>
+#include <iomanip>
+#include <map>
+#include <set>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -77,6 +80,7 @@ struct Options {
     bool installRussian = false;
     bool removeRussian = false;
     bool installRp = false;
+    bool removeRp = false;
     bool uninstall = false;
     std::vector<std::string> gameArgs;
 };
@@ -175,12 +179,22 @@ bool sha256File(const fs::path& path, std::string* hex)
 {
     std::ifstream file(path, std::ios::binary);
     if (!file) return false;
-    std::vector<unsigned char> contents((std::istreambuf_iterator<char>(file)),
-        std::istreambuf_iterator<char>());
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    if (BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) != 0) return false;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    bool ok = BCryptCreateHash(algorithm, &hash, nullptr, 0, nullptr, 0, 0) == 0;
+    char buffer[65536];
+    while (ok && file) {
+        file.read(buffer, sizeof(buffer));
+        if (file.gcount() > 0) ok = BCryptHashData(hash, reinterpret_cast<PUCHAR>(buffer), static_cast<ULONG>(file.gcount()), 0) == 0;
+    }
     unsigned char digest[32];
-    if (!sha256Data(contents.data(), contents.size(), digest)) return false;
-    *hex = hashToHex(digest);
-    return true;
+    ok = ok && file.eof();
+    if (ok) ok = BCryptFinishHash(hash, digest, 32, 0) == 0;
+    if (hash != nullptr) BCryptDestroyHash(hash);
+    BCryptCloseAlgorithmProvider(algorithm, 0);
+    if (ok) *hex = hashToHex(digest);
+    return ok;
 }
 
 // One hash over every file under the directory (paths and contents); saves
@@ -1072,22 +1086,314 @@ bool rpOnDisk(const fs::path& root)
     return fs::exists(root / "mods" / "rpu.dat", error);
 }
 
-// One game-folder file into backup/rpu under the same relative path.
-bool moveToRpBackup(const fs::path& root, const fs::path& relative)
+constexpr const char* kRpManifest = "backup/rpu/f2r-manifest.txt";
+constexpr const char* kRpOrder = "backup/rpu/f2r-order.txt";
+
+struct RpFile {
+    std::string path;
+    std::string original = "-";
+    std::string installed = "-";
+};
+struct RpManifest {
+    bool pending = true;
+    bool restored = false;
+    std::vector<RpFile> files;
+    std::set<std::string> directories;
+};
+
+// A package or edited manifest must never escape the game, alias a file, or touch saves.
+bool rpRelativePath(const std::string& path)
 {
+    if (std::any_of(path.begin(), path.end(), [](unsigned char ch) { return ch < 32 || ch == 127; })) return false;
+    if (path.empty() || path.find_first_of("\\:*?\"<>|\r\n\t") != std::string::npos) return false;
+    std::string lower = launcher_uninstall::lowered(path);
+    if (lower == "backup" || lower.rfind("backup/", 0) == 0
+        || lower == "data/savegame" || lower.rfind("data/savegame/", 0) == 0
+        || lower == "master.dat" || lower == "critter.dat") return false;
+    std::stringstream parts(lower);
+    std::string part;
+    while (std::getline(parts, part, '/')) {
+        if (part.empty() || part == "." || part == ".." || part.back() == '.' || part.back() == ' ') return false;
+        std::string base = part.substr(0, part.find('.'));
+        if (base == "con" || base == "nul" || base == "aux" || base == "prn"
+            || (base.size() == 4 && (base.rfind("com", 0) == 0 || base.rfind("lpt", 0) == 0)
+                && base[3] >= '1' && base[3] <= '9')) return false;
+    }
+    return path.back() != '/';
+}
+
+// Lexical paths are relative and normalized above; reject every child reparse point too.
+bool rpContained(const fs::path& root, const fs::path& relative)
+{
+    fs::path current = root;
+    for (const auto& part : relative) {
+        current /= part;
+        DWORD attributes = GetFileAttributesW(current.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES) {
+            DWORD error = GetLastError();
+            if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND) return false;
+        } else if (attributes & FILE_ATTRIBUTE_REPARSE_POINT) return false;
+    }
+    return true;
+}
+
+bool rpPresent(const fs::path& path)
+{
+    return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
+fs::path rpOriginal(const fs::path& root, const std::string& path)
+{
+    return root / launcher_rp::kBackupFolder / "originals" / utf8ToWide(path);
+}
+
+void replaceRpFile(const fs::path& temp, const fs::path& destination, const std::string& expected, std::error_code& error)
+{
+    std::string hash;
+    if (!error && (!sha256File(temp, &hash) || hash != expected)) error = std::make_error_code(std::errc::io_error);
+    if (!error && !MoveFileExW(temp.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        error = std::error_code(GetLastError(), std::system_category());
+    if (!error && (!sha256File(destination, &hash) || hash != expected)) error = std::make_error_code(std::errc::io_error);
+}
+
+bool writeRpManifest(const fs::path& root, const RpManifest& manifest)
+{
+    fs::path path = root / kRpManifest;
+    fs::path temp = path;
+    temp += ".tmp";
+    if (!rpContained(root, temp.lexically_relative(root))) return false;
     std::error_code error;
-    fs::path target = root / launcher_rp::kBackupFolder / relative;
-    fs::create_directories(target.parent_path(), error);
-    fs::rename(root / relative, target, error);
-    if (error) logf("  cannot move %s aside (%s)", wideToUtf8(relative.generic_wstring()).c_str(), error.message().c_str());
-    return !error;
+    fs::remove(temp, error);
+    if (error) return false;
+    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+    out << "F2R-RP-1 " << (manifest.restored ? "restored" : manifest.pending ? "pending" : "installed") << '\n';
+    for (const auto& file : manifest.files)
+        out << "F " << file.original << ' ' << file.installed << ' ' << std::quoted(file.path) << '\n';
+    for (const auto& directory : manifest.directories) out << "D " << std::quoted(directory) << '\n';
+    out.close();
+    return out && MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+}
+
+bool readRpManifest(const fs::path& root, RpManifest* manifest)
+{
+    if (!rpContained(root, kRpManifest) || !rpContained(root, kRpOrder)
+        || !rpContained(root, fs::path(launcher_rp::kBackupFolder) / "f2r-restore.tmp")) return false;
+    std::ifstream in(root / kRpManifest, std::ios::binary);
+    std::string line;
+    if (!std::getline(in, line) || (line != "F2R-RP-1 pending" && line != "F2R-RP-1 installed" && line != "F2R-RP-1 restored")) return false;
+    manifest->pending = line == "F2R-RP-1 pending";
+    manifest->restored = line == "F2R-RP-1 restored";
+    std::set<std::string> names;
+    auto hash = [](const std::string& value) {
+        return value == "-" || (value.size() == 64 && value.find_first_not_of("0123456789abcdef") == std::string::npos);
+    };
+    while (std::getline(in, line)) {
+        std::istringstream row(line);
+        char type;
+        RpFile file;
+        if (!(row >> type)) return false;
+        if (type == 'F') {
+            if (!(row >> file.original >> file.installed >> std::quoted(file.path))
+                || !hash(file.original) || !hash(file.installed) || (file.original == "-" && file.installed == "-")) return false;
+        } else if (type == 'D') {
+            if (!(row >> std::quoted(file.path))) return false;
+        } else return false;
+        row >> std::ws;
+        std::string name = launcher_uninstall::lowered(file.path);
+        if (!row.eof() || !rpRelativePath(file.path) || !rpContained(root, utf8ToWide(file.path))
+            || !names.insert(name).second) return false;
+        if (type == 'F') {
+            if (!rpContained(root, fs::path(launcher_rp::kBackupFolder) / "originals" / utf8ToWide(file.path))) return false;
+            manifest->files.push_back(file);
+        } else manifest->directories.insert(file.path);
+    }
+    std::set<std::string> files;
+    for (const auto& file : manifest->files) files.insert(launcher_uninstall::lowered(file.path));
+    for (const auto& name : names) {
+        for (fs::path parent = fs::path(name).parent_path(); !parent.empty(); parent = parent.parent_path())
+            if (files.count(parent.generic_string())) return false;
+    }
+    return in.eof() && files.count("mods/rpu.dat");
+}
+
+std::string rpRead(const fs::path& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+// The restored receipt survives a failed backup cleanup, so retry needs no deleted originals.
+bool cleanupRp(const fs::path& root, const RpManifest& manifest)
+{
+    for (const auto& file : manifest.files) {
+        fs::path path = rpOriginal(root, file.path);
+        if (file.original == "-" || !rpPresent(path)) continue;
+        std::string hash;
+        if (!sha256File(path, &hash) || hash != file.original) {
+            logf("RP restore: invalid or missing backup for %s; backup/rpu was kept", file.path.c_str());
+            return false;
+        }
+    }
+    bool ok = true;
+    auto remove = [&](const fs::path& path) {
+        std::error_code error;
+        fs::remove(path, error);
+        if (error) {
+            logf("RP cleanup: cannot remove %s (%s); the restore receipt was kept",
+                wideToUtf8(path.lexically_relative(root).generic_wstring()).c_str(), error.message().c_str());
+            ok = false;
+        }
+    };
+    for (const auto& file : manifest.files) if (file.original != "-") remove(rpOriginal(root, file.path));
+    remove(root / kRpOrder);
+    remove(root / launcher_rp::kBackupFolder / "f2r-restore.tmp");
+    remove(fs::path(root / kRpManifest).wstring() + L".tmp");
+    if (!ok) return false;
+    remove(root / kRpManifest);
+    if (!ok) return false;
+    std::error_code error;
+    for (auto it = manifest.directories.rbegin(); it != manifest.directories.rend(); ++it)
+        if (fs::is_directory(root / utf8ToWide(*it), error)) fs::remove(root / utf8ToWide(*it), error);
+    // Only known backup parents are ours; unrelated empty folders and junctions stay.
+    std::set<fs::path> directories;
+    const fs::path backup = root / launcher_rp::kBackupFolder;
+    for (const auto& file : manifest.files) {
+        if (file.original == "-") continue;
+        for (fs::path parent = rpOriginal(root, file.path).parent_path(); parent != backup; parent = parent.parent_path())
+            directories.insert(parent);
+    }
+    for (auto it = directories.rbegin(); it != directories.rend(); ++it) fs::remove(*it, error);
+    fs::remove(backup, error);
+    log("the Restoration Project was removed; original files restored and saves kept");
+    return true;
+}
+
+// Both a failed copy and player removal restore the same saved originals.
+bool restoreRp(const fs::path& root, RpManifest manifest, bool cleanup = true)
+{
+    if (manifest.restored) return cleanup ? cleanupRp(root, manifest) : true;
+    for (const auto& directory : manifest.directories) {
+        fs::path path = root / utf8ToWide(directory);
+        std::error_code error;
+        if (rpPresent(path) && !fs::is_directory(path, error)) {
+            logf("RP restore: %s was changed by the player; backup/rpu was kept", directory.c_str());
+            return false;
+        }
+    }
+    std::map<std::string, std::string> sharedOrders;
+    for (const auto& file : manifest.files) {
+        std::string original;
+        if (file.original != "-" && (!sha256File(rpOriginal(root, file.path), &original) || original != file.original)) {
+            logf("RP restore: invalid or missing backup for %s; backup/rpu was kept", file.path.c_str());
+            return false;
+        }
+        fs::path destination = root / utf8ToWide(file.path);
+        if (!rpPresent(destination)) continue;
+        std::string current;
+        std::error_code error;
+        if (!fs::is_regular_file(destination, error) || !sha256File(destination, &current)) {
+            logf("RP restore: cannot read %s; backup/rpu was kept", file.path.c_str());
+            return false;
+        }
+        if (current == file.original || current == file.installed) continue;
+        if (launcher_uninstall::lowered(file.path) == "mods/mods_order.txt" && file.installed != "-") {
+            std::string installed;
+            if (!sha256File(root / kRpOrder, &installed) || installed != file.installed) {
+                logf("RP restore: invalid or missing backup for %s; backup/rpu was kept", file.path.c_str());
+                return false;
+            }
+            sharedOrders[file.path] = launcher_rp::restoredOrder(file.original == "-" ? "" : rpRead(rpOriginal(root, file.path)),
+                rpRead(root / kRpOrder), rpRead(destination));
+        } else {
+            logf("RP restore: %s was changed by the player; backup/rpu was kept", file.path.c_str());
+            return false;
+        }
+    }
+    if (!manifest.pending) {
+        manifest.pending = true;
+        if (!writeRpManifest(root, manifest)) {
+            log("RP restore: cannot save recovery state; the game was left untouched");
+            return false;
+        }
+    }
+    bool ok = true;
+    const fs::path temp = root / launcher_rp::kBackupFolder / "f2r-restore.tmp";
+    for (const auto& file : manifest.files) {
+        fs::path destination = root / utf8ToWide(file.path);
+        std::error_code error;
+        std::string current;
+        if (file.original != "-" && sha256File(destination, &current) && current == file.original) continue;
+        auto order = sharedOrders.find(file.path);
+        bool hasOrder = order != sharedOrders.end() && !order->second.empty();
+        if (file.original != "-" || hasOrder) {
+            fs::create_directories(destination.parent_path(), error);
+            if (!error) fs::remove(temp, error);
+            std::string expected = file.original;
+            if (!error && hasOrder) {
+                std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+                out << order->second;
+                out.close();
+                unsigned char digest[32];
+                if (!out || !sha256Data(reinterpret_cast<const unsigned char*>(order->second.data()), order->second.size(), digest))
+                    error = std::make_error_code(std::errc::io_error);
+                else expected = hashToHex(digest);
+            } else if (!error) fs::copy_file(rpOriginal(root, file.path), temp, error);
+            replaceRpFile(temp, destination, expected, error);
+        } else if (rpPresent(destination)) fs::remove(destination, error);
+        if (error) {
+            logf("RP restore: cannot restore %s (%s); backup/rpu was kept", file.path.c_str(), error.message().c_str());
+            ok = false;
+        }
+    }
+    if (!ok) return false;
+    manifest.restored = true;
+    if (!writeRpManifest(root, manifest)) {
+        log("RP cleanup: cannot save the restore receipt; backup/rpu was kept");
+        return false;
+    }
+    return cleanup ? cleanupRp(root, manifest) : true;
+}
+
+bool removeRestorationProject(const fs::path& root, bool refreshScenes = false)
+{
+    if (!rpPresent(root / kRpManifest)) {
+        if (rpOnDisk(root) || rpPresent(root / launcher_rp::kBackupFolder))
+            log("Restoration Project has no installer manifest; a manual install was left untouched");
+        return true;
+    }
+    RpManifest manifest;
+    if (!readRpManifest(root, &manifest)) {
+        log("RP restore: invalid installer manifest; the game and backup/rpu were left untouched");
+        return false;
+    }
+    if (!restoreRp(root, manifest, !refreshScenes)) return false;
+    if (!refreshScenes) return true;
+    log("refreshing the vanilla 3D scenes after removing Restoration Project");
+    fs::path exporter = root / kExporterExe;
+    std::wstring command = L"\"" + exporter.wstring() + L"\" --game-root \"" + root.wstring() + L"\" --maps all";
+    DWORD code = 1;
+    if (!fs::is_regular_file(exporter) || !runTool(command, root.wstring(), &code, true) || code != 0) {
+        log("RP removal: vanilla 3D scenes could not be refreshed; retry removal before playing, backup/rpu was kept");
+        return false;
+    }
+    RpManifest restored;
+    return readRpManifest(root, &restored) && cleanupRp(root, restored);
 }
 
 // RPU from its own GitHub release at the player's request (never a copy of ours), put in
 // place the way its manual package's rpu-install.bat does; every file it moves or replaces
 // is kept in backup/rpu.
-bool installRestorationProject(const fs::path& root)
+bool installRestorationProject(const fs::path& root, bool* installedNow)
 {
+    *installedNow = false;
+    if (rpPresent(root / kRpManifest)) {
+        RpManifest previous;
+        if (!readRpManifest(root, &previous)) {
+            log("RP restore: invalid installer manifest; the game and backup/rpu were left untouched");
+            return false;
+        }
+        if ((previous.pending || previous.restored) && !restoreRp(root, previous)) return false;
+    }
     if (rpOnDisk(root)) {
         log("  kept the installed Restoration Project (mods/rpu.dat)");
         return true;
@@ -1132,62 +1438,131 @@ bool installRestorationProject(const fs::path& root)
         return false;
     }
 
+    RpManifest manifest;
+    std::map<std::string, fs::path> sources;
+    std::set<std::string> targets;
+    auto add = [&](const std::string& path, const fs::path& source) {
+        if (!rpRelativePath(path) || !rpContained(root, utf8ToWide(path))) return false;
+        std::string name = launcher_uninstall::lowered(path);
+        if (!source.empty() && !targets.insert(name).second) return false;
+        auto found = std::find_if(manifest.files.begin(), manifest.files.end(), [&](const auto& file) {
+            return launcher_uninstall::lowered(file.path) == name;
+        });
+        if (found == manifest.files.end()) {
+            manifest.files.push_back({path});
+            found = manifest.files.end() - 1;
+        }
+        if (!source.empty()) {
+            if (!sha256File(source, &found->installed)) return false;
+            sources[found->path] = source;
+        }
+        return true;
+    };
+    bool ok = !rpPresent(root / launcher_rp::kBackupFolder) && rpContained(root, launcher_rp::kBackupFolder);
+    for (fs::directory_iterator it(root, error), end; ok && !error && it != end; it.increment(error)) {
+        if (it->is_regular_file(error) && launcher_rp::movedAside(wideToUtf8(it->path().filename().wstring())))
+            ok = add(wideToUtf8(it->path().filename().wstring()), {});
+    }
+    if (error) ok = false;
+    if (ok && rpPresent(root / "data")) {
+        if (!rpContained(root, "data")) ok = false;
+        for (fs::recursive_directory_iterator it(root / "data", error), end; ok && !error && it != end; it.increment(error)) {
+            fs::path relative = it->path().lexically_relative(root / "data");
+            std::string path = wideToUtf8(relative.generic_wstring());
+            if (launcher_rp::keptInData(path + "/")) { it.disable_recursion_pending(); continue; }
+            if (!rpContained(root, fs::path("data") / relative)) { ok = false; break; }
+            if (it->is_regular_file(error) && !launcher_rp::keptInData(path)) ok = add("data/" + path, {});
+        }
+        if (error) ok = false;
+    }
+    for (fs::recursive_directory_iterator it(stage, error), end; ok && !error && it != end; it.increment(error)) {
+        if (!rpContained(stage, it->path().lexically_relative(stage))) { ok = false; break; }
+        if (!it->is_regular_file(error)) continue;
+        std::string target = launcher_rp::targetOf(wideToUtf8(it->path().lexically_relative(stage).generic_wstring()));
+        if (!target.empty()) ok = add(target, it->path());
+    }
+    if (error) ok = false;
+    // Reject package file/parent collisions before taking any originals aside.
+    for (const auto& target : targets)
+        for (fs::path parent = fs::path(target).parent_path(); !parent.empty(); parent = parent.parent_path())
+            if (targets.count(parent.generic_string())) ok = false;
+    if (!targets.count("mods/rpu.dat")) ok = false;
+    if (!ok) {
+        log("RP install: unsafe or duplicate target, unreadable files, or existing backup/rpu; nothing was changed");
+        fs::remove_all(work, error);
+        return false;
+    }
+    for (auto& file : manifest.files) {
+        fs::path destination = root / utf8ToWide(file.path);
+        if (rpPresent(destination) && (!fs::is_regular_file(destination, error) || !sha256File(destination, &file.original))) ok = false;
+        for (fs::path parent = destination.parent_path(); parent != root && !rpPresent(parent); parent = parent.parent_path())
+            manifest.directories.insert(wideToUtf8(parent.lexically_relative(root).generic_wstring()));
+    }
+    if (!ok) { fs::remove_all(work, error); return false; }
+    fs::create_directories(root / launcher_rp::kBackupFolder, error);
+    ok = !error;
+    for (const auto& file : manifest.files) {
+        if (!ok || file.original == "-") continue;
+        fs::path kept = rpOriginal(root, file.path);
+        fs::create_directories(kept.parent_path(), error);
+        if (!error) fs::copy_file(root / utf8ToWide(file.path), kept, error);
+        std::string hash;
+        ok = !error && sha256File(kept, &hash) && hash == file.original;
+    }
+    for (const auto& file : manifest.files) {
+        if (ok && launcher_uninstall::lowered(file.path) == "mods/mods_order.txt" && file.installed != "-") {
+            fs::copy_file(sources[file.path], root / kRpOrder, error);
+            ok = !error;
+        }
+    }
+    if (ok) ok = writeRpManifest(root, manifest);
+    if (!ok) {
+        log("RP install: cannot save originals and installer manifest; nothing was changed");
+        fs::remove_all(root / launcher_rp::kBackupFolder, error);
+        fs::remove_all(work, error);
+        return false;
+    }
     log("installing the Restoration Project into the game folder:");
-    bool ok = true;
-    // As rpu-install.bat: the old patch archives and the loose vanilla data go aside.
-    std::vector<fs::path> aside;
-    for (fs::directory_iterator it(root, error), end; !error && it != end; it.increment(error)) {
-        if (it->is_regular_file() && launcher_rp::movedAside(wideToUtf8(it->path().filename().wstring()))) {
-            aside.push_back(it->path().filename());
-        }
-    }
-    error.clear();
-    for (fs::recursive_directory_iterator it(root / "data", error), end; !error && it != end; it.increment(error)) {
-        if (!it->is_regular_file()) continue;
-        fs::path relative = fs::relative(it->path(), root / "data");
-        if (!launcher_rp::keptInData(wideToUtf8(relative.generic_wstring()))) aside.push_back(fs::path("data") / relative);
-    }
-    error.clear(); // a game without data/ is fine
-    for (const fs::path& relative : aside) {
-        if (!moveToRpBackup(root, relative)) ok = false;
-    }
-    // The package over the game folder; a file it replaces is kept first.
-    // mods/rpu.dat goes last: it marks RP as installed, so a copy cut short is tried again next time.
-    std::vector<std::pair<fs::path, std::string>> files;
-    for (fs::recursive_directory_iterator it(stage, error), end; !error && it != end; it.increment(error)) {
-        if (!it->is_regular_file()) continue;
-        std::string target = launcher_rp::targetOf(wideToUtf8(fs::relative(it->path(), stage).generic_wstring()));
-        if (!target.empty()) files.push_back({ it->path(), target });
-    }
-    std::stable_partition(files.begin(), files.end(),
-        [](const auto& file) { return launcher_uninstall::lowered(file.second) != "mods/rpu.dat"; });
-    int installed = 0;
-    for (const auto& [source, target] : files) {
-        if (!ok || error) break;
-        fs::path destination = root / utf8ToWide(target);
-        fs::path kept = root / launcher_rp::kBackupFolder / utf8ToWide(target);
-        std::error_code copyError;
-        if (fs::exists(destination, copyError) && !fs::exists(kept, copyError)) {
-            fs::create_directories(kept.parent_path(), copyError);
-            fs::copy_file(destination, kept, copyError);
-        }
-        if (!copyError) {
-            fs::create_directories(destination.parent_path(), copyError);
-            fs::copy_file(source, destination, fs::copy_options::overwrite_existing, copyError);
-        }
-        if (copyError) {
-            logf("  %s: copy failed (%s)", target.c_str(), copyError.message().c_str());
+    // Remove loose originals before RP takes over, then put its marker archive last.
+    for (const auto& file : manifest.files) {
+        if (file.original == "-" || sources.count(file.path)) continue;
+        fs::remove(root / utf8ToWide(file.path), error);
+        if (error) {
+            logf("  cannot move %s aside (%s)", file.path.c_str(), error.message().c_str());
             ok = false;
-        } else {
-            installed++;
+            break;
         }
     }
-    if (error) {
-        logf("  cannot read the Restoration Project package (%s)", error.message().c_str());
-        ok = false;
+    std::stable_partition(manifest.files.begin(), manifest.files.end(), [](const auto& file) {
+        return launcher_uninstall::lowered(file.path) != "mods/rpu.dat";
+    });
+    int installed = 0;
+    for (const auto& file : manifest.files) {
+        if (!ok || file.installed == "-") continue;
+        fs::path destination = root / utf8ToWide(file.path);
+        fs::create_directories(destination.parent_path(), error);
+        fs::path temp = root / launcher_rp::kBackupFolder / "f2r-restore.tmp";
+        if (!error) fs::remove(temp, error);
+        if (!error) fs::copy_file(sources[file.path], temp, error);
+        replaceRpFile(temp, destination, file.installed, error);
+        if (error) {
+            logf("  %s: copy failed (%s)", file.path.c_str(), error.message().c_str());
+            ok = false;
+        } else ++installed;
+    }
+    if (ok) {
+        manifest.pending = false;
+        ok = writeRpManifest(root, manifest);
+        if (!ok) manifest.pending = true;
+    }
+    if (!ok) {
+        log("RP install failed; restoring the original game files");
+        restoreRp(root, manifest);
+    } else {
+        *installedNow = true;
+        logf("  installed %d files of RPU %s; what they replaced is in backup/rpu", installed, tag.c_str());
     }
     fs::remove_all(work, error);
-    if (ok) logf("  installed %d files of RPU %s; what they replaced is in backup/rpu", installed, tag.c_str());
     return ok;
 }
 
@@ -1245,6 +1620,7 @@ bool removeRussianTranslation(const fs::path& root)
 // mod builds, so it goes with the mod.
 bool uninstallMod(const fs::path& root)
 {
+    if (!removeRestorationProject(root)) return false;
     bool ok = true;
     std::error_code error;
     log("removing the mod from the game folder:");
@@ -1411,6 +1787,7 @@ Options parseOptions(int argc, char** argv)
             log("  --rollback          restore the most recent backed-up game build");
             log("  --russian           install the official RPU Russian text translation");
             log("  --remove-russian    remove the Russian translation and set the game language back to English");
+            log("  --remove-restoration-project  remove installer-managed RP and restore original files");
             log("  --restoration-project  install the Restoration Project from its official release and build its 3D scenes");
             log("  --ui-language <ru|en>  the language of the log lines (default: en)");
             log("  --mirror-url <url>  the mirror folder for the release files and the Russian translation (tests)");
@@ -1437,6 +1814,8 @@ Options parseOptions(int argc, char** argv)
             options.installRussian = true;
         } else if (arg == "--remove-russian") {
             options.removeRussian = true;
+        } else if (arg == "--remove-restoration-project") {
+            options.removeRp = true;
         } else if (arg == "--restoration-project") {
             options.installRp = true;
         } else if (arg == "--rp-zip-url" && i + 1 < argc) {
@@ -1523,12 +1902,18 @@ int runConsole(Options options)
     }
 
     {
+        std::error_code error;
+        root = fs::canonical(root, error);
+        if (error) { log("cannot resolve the game folder"); return 1; }
+    }
+    {
         std::error_code ignored;
         fs::path old = root / kRootLauncher;
         old += ".old";
         fs::remove(old, ignored);
     }
 
+    if (options.removeRp) return removeRestorationProject(root, true) ? 0 : 1;
     if (options.uninstall) return uninstallMod(root) ? 0 : 1;
     if (options.removeRussian) {
         log("removing the Russian translation:");
@@ -1651,12 +2036,11 @@ int runConsole(Options options)
 
     // --- the Restoration Project, before the scenes: its maps and art go into them ---
     bool rpInstalledNow = false;
-    if (options.installRp && !rpOnDisk(root)) {
-        if (!installRestorationProject(root)) {
+    if (options.installRp) {
+        if (!installRestorationProject(root, &rpInstalledNow)) {
             log("the Restoration Project could not be installed (see the lines above)");
             return 1;
         }
-        rpInstalledNow = true;
     }
 
     // --- 3D scene data, always made on this machine from this game ---

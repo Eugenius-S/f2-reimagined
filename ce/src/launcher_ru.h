@@ -23,6 +23,22 @@ struct Entry {
 };
 
 inline constexpr Entry kTable[] = {
+    { "RP restore: invalid or missing backup for %s; backup/rpu was kept", "Восстановление RP: резервная копия %s отсутствует или повреждена; backup/rpu сохранена" },
+    { "RP restore: cannot read %s; backup/rpu was kept", "Восстановление RP: не удалось прочитать %s; backup/rpu сохранена" },
+    { "RP restore: %s was changed by the player; backup/rpu was kept", "Восстановление RP: игрок изменил %s; backup/rpu сохранена" },
+    { "RP restore: cannot restore %s (%s); backup/rpu was kept", "Восстановление RP: не удалось восстановить %s (%s); backup/rpu сохранена" },
+    { "the Restoration Project was removed; original files restored and saves kept", "Restoration Project удалён; исходные файлы восстановлены, сохранения целы" },
+    { "Restoration Project has no installer manifest; a manual install was left untouched", "Нет списка файлов установщика Restoration Project; ручная установка оставлена без изменений" },
+    { "RP restore: invalid installer manifest; the game and backup/rpu were left untouched", "Восстановление RP: список файлов установщика повреждён; игра и backup/rpu оставлены без изменений" },
+    { "RP install: unsafe or duplicate target, unreadable files, or existing backup/rpu; nothing was changed", "Установка RP: небезопасный или повторяющийся путь, нечитаемые файлы либо уже существующая backup/rpu; ничего не изменено" },
+    { "RP install: cannot save originals and installer manifest; nothing was changed", "Установка RP: не удалось сохранить исходные файлы и список установщика; ничего не изменено" },
+    { "RP install failed; restoring the original game files", "Не удалось установить RP; восстанавливаем исходные файлы игры" },
+    { "cannot resolve the game folder", "не удалось определить полный путь папки игры" },
+    { "RP cleanup: cannot remove %s (%s); the restore receipt was kept", "Очистка RP: не удалось удалить %s (%s); запись о восстановлении сохранена" },
+    { "RP cleanup: cannot save the restore receipt; backup/rpu was kept", "Очистка RP: не удалось сохранить запись о восстановлении; backup/rpu сохранена" },
+    { "refreshing the vanilla 3D scenes after removing Restoration Project", "обновляем 3D-сцены исходной игры после удаления Restoration Project" },
+    { "RP removal: vanilla 3D scenes could not be refreshed; retry removal before playing, backup/rpu was kept", "Удаление RP: не удалось обновить 3D-сцены исходной игры; повторите удаление перед игрой, backup/rpu сохранена" },
+    { "RP restore: cannot save recovery state; the game was left untouched", "Восстановление RP: не удалось сохранить состояние восстановления; игра оставлена без изменений" },
     { "ERROR: %s", "ОШИБКА: %s" },
     { "  route %s failed: %s", "  путь %s не сработал: %s" },
     { "  route that worked: %s", "  сработал путь: %s" },

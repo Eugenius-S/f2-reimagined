@@ -20,7 +20,7 @@ While a worker is installing or removing files, late release replies, path edits
 ## Context
 
 - Standalone UI race follow-up to the completed installer tasks: 287/289 repair worker filesystem failures, not the window's operation state. Start after 289's RP checkbox changes.
-- `ce/src/launcher_ui.cc:475-485` disables buttons but not the root text field. `WM_RELEASE_INFO:1069-1074` enables Play/Install before checking `g_busy`; `launchGame:685-705` has no busy guard. A delayed release reply during an update can therefore let Play lock the files being replaced.
+- `ce/src/launcher_ui.cc` disables buttons but not the root text field. `WM_RELEASE_INFO` enables Play/Install before checking `g_busy`. Task 289 adds a busy guard to `launchGame`, so the handler rejects Play during an operation even if a late reply enables the button. Root edits, stale callbacks, busy-close handling and the full acceptance fixture below remain task 308.
 - `startOperation:597-621` snapshots a root for the detached worker, but UI disk checks read the editable root. `WM_DESTROY:1128-1136` exits without a busy-close path, leaving the child operation without its window. Treat close handling as part of this same UI operation lifecycle, not a separate framework.
 
 ## Acceptance
