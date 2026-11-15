@@ -344,6 +344,19 @@ class RpInstallTests(LauncherFixture):
         self.assertTrue(foreign.is_dir())
         self.assertFalse(manifest.exists())
 
+    def test_changed_backup_after_failed_cleanup_is_kept(self):
+        self.install_rp()
+        backup = self.root / "backup/rpu/originals/patch000.dat"
+        with read_lock(backup):
+            code, output = self.rp_run("--remove-restoration-project")
+        self.assertNotEqual(code, 0, output)
+        backup.write_bytes(b"player changed the remaining backup after restore")
+        before = snapshot(self.root)
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("invalid or missing backup", output)
+        self.assertEqual(before, snapshot(self.root))
+
     def test_created_directory_replaced_by_player_file_is_kept(self):
         self.install_rp()
         (self.root / "data/scripts/gl_ammomod.int").unlink()

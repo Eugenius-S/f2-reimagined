@@ -1213,6 +1213,15 @@ std::string rpRead(const fs::path& path)
 // The restored receipt survives a failed backup cleanup, so retry needs no deleted originals.
 bool cleanupRp(const fs::path& root, const RpManifest& manifest)
 {
+    for (const auto& file : manifest.files) {
+        fs::path path = rpOriginal(root, file.path);
+        if (file.original == "-" || !rpPresent(path)) continue;
+        std::string hash;
+        if (!sha256File(path, &hash) || hash != file.original) {
+            logf("RP restore: invalid or missing backup for %s; backup/rpu was kept", file.path.c_str());
+            return false;
+        }
+    }
     bool ok = true;
     auto remove = [&](const fs::path& path) {
         std::error_code error;
