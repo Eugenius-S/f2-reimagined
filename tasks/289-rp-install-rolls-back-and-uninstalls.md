@@ -45,3 +45,11 @@ Done: RP installation and removal now use an installer-owned hash manifest in `b
 Check: Release build; CTest 29/29, including 26 scratch RP integration cases; exporter 148 and regression-tool 12 Python tests. Pixel regression 154/154 passed: 150 exact matches, four with 2/2/1/1 changed pixels within unchanged thresholds. Real English/Russian checkbox outcomes are in `runs/289-rp-install-rollback/`.
 
 Next: merge only on final green CI, then complete Rule 1 for fresh merged main before handing over the verified build.
+
+### 2026-11-15 gpt: publication fixture follow-up
+
+Publication workflow 43687036536 for merged commit 51a71641 failed in `launcher_rp_install_tests`: `test_window_checkbox_removes_only_rp` observed an unticked initial checkbox before any removal click. The HWND and controls are created before the UI synchronizes installed RP state. The fixture now waits up to 15 seconds for its real local release reply before checking all three GUI flows. Pixel, disk and Play assertions are unchanged; no production code or test skips were added.
+
+Check: CTest 29/29 passed, including all 26 RP integration cases. Five sequential repeats of the affected real-window case passed in English, Russian, English, Russian and English. The existing 180-second CTest timeout and all pixel/disk/Play assertions are unchanged.
+
+Next: final CI, then Rule 1 and publication for the follow-up's merged commit. The verified 51a71641 executable remains locally checked; its failed publication is not recorded as success.
