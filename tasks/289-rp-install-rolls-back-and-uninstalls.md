@@ -2,7 +2,7 @@
 id: 289
 title: The Restoration Project install can be undone, by a failure or by the player
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: gpt
 priority: high
@@ -10,7 +10,7 @@ tier: 1
 claude-only: no
 user-check: no
 depends-on: [287]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -37,3 +37,11 @@ The Russian translation's install and removal (they work).
 ## Log
 
 - 2026-11-15 claude: cut from the repo audit of 2026-11-15 (find 4 and 5).
+
+### 2026-11-15 gpt
+
+Done: RP installation and removal now use an installer-owned hash manifest in `backup/rpu`, checked atomic file replacement, and one restore routine. Failed copies restore original files; manual RP and changed player files are preserved. The RP checkbox removes managed RP, refreshes vanilla scenes with a checked exporter run, and blocks Play while recovery is pending. Interrupted backup cleanup retains a retryable restored receipt. Saves, added mod-order lines and external hardlinked files are preserved. Both READMEs describe removal; follow-up context stays in tasks 296 and 308.
+
+Check: Release build; CTest 29/29, including 26 scratch RP integration cases; exporter 148 and regression-tool 12 Python tests. Pixel regression 154/154 passed: 150 exact matches, four with 2/2/1/1 changed pixels within unchanged thresholds. Real English/Russian checkbox outcomes are in `runs/289-rp-install-rollback/`.
+
+Next: merge only on final green CI, then complete Rule 1 for fresh merged main before handing over the verified build.

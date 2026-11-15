@@ -1147,12 +1147,24 @@ fs::path rpOriginal(const fs::path& root, const std::string& path)
     return root / launcher_rp::kBackupFolder / "originals" / utf8ToWide(path);
 }
 
+void replaceRpFile(const fs::path& temp, const fs::path& destination, const std::string& expected, std::error_code& error)
+{
+    std::string hash;
+    if (!error && (!sha256File(temp, &hash) || hash != expected)) error = std::make_error_code(std::errc::io_error);
+    if (!error && !MoveFileExW(temp.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        error = std::error_code(GetLastError(), std::system_category());
+    if (!error && (!sha256File(destination, &hash) || hash != expected)) error = std::make_error_code(std::errc::io_error);
+}
+
 bool writeRpManifest(const fs::path& root, const RpManifest& manifest)
 {
     fs::path path = root / kRpManifest;
     fs::path temp = path;
     temp += ".tmp";
     if (!rpContained(root, temp.lexically_relative(root))) return false;
+    std::error_code error;
+    fs::remove(temp, error);
+    if (error) return false;
     std::ofstream out(temp, std::ios::binary | std::ios::trunc);
     out << "F2R-RP-1 " << (manifest.restored ? "restored" : manifest.pending ? "pending" : "installed") << '\n';
     for (const auto& file : manifest.files)
@@ -1257,10 +1269,9 @@ bool cleanupRp(const fs::path& root, const RpManifest& manifest)
 }
 
 // Both a failed copy and player removal restore the same saved originals.
-// Only writes attempted by this process may have partial contents; an old pending receipt cannot prove ownership.
-bool restoreRp(const fs::path& root, RpManifest manifest, const std::set<std::string>& attemptedWrites = {})
+bool restoreRp(const fs::path& root, RpManifest manifest, bool cleanup = true)
 {
-    if (manifest.restored) return cleanupRp(root, manifest);
+    if (manifest.restored) return cleanup ? cleanupRp(root, manifest) : true;
     for (const auto& directory : manifest.directories) {
         fs::path path = root / utf8ToWide(directory);
         std::error_code error;
@@ -1284,7 +1295,7 @@ bool restoreRp(const fs::path& root, RpManifest manifest, const std::set<std::st
             logf("RP restore: cannot read %s; backup/rpu was kept", file.path.c_str());
             return false;
         }
-        if (attemptedWrites.count(file.path) || current == file.original || current == file.installed) continue;
+        if (current == file.original || current == file.installed) continue;
         if (launcher_uninstall::lowered(file.path) == "mods/mods_order.txt" && file.installed != "-") {
             std::string installed;
             if (!sha256File(root / kRpOrder, &installed) || installed != file.installed) {
@@ -1295,6 +1306,13 @@ bool restoreRp(const fs::path& root, RpManifest manifest, const std::set<std::st
                 rpRead(root / kRpOrder), rpRead(destination));
         } else {
             logf("RP restore: %s was changed by the player; backup/rpu was kept", file.path.c_str());
+            return false;
+        }
+    }
+    if (!manifest.pending) {
+        manifest.pending = true;
+        if (!writeRpManifest(root, manifest)) {
+            log("RP restore: cannot save recovery state; the game was left untouched");
             return false;
         }
     }
@@ -1309,6 +1327,7 @@ bool restoreRp(const fs::path& root, RpManifest manifest, const std::set<std::st
         bool hasOrder = order != sharedOrders.end() && !order->second.empty();
         if (file.original != "-" || hasOrder) {
             fs::create_directories(destination.parent_path(), error);
+            if (!error) fs::remove(temp, error);
             std::string expected = file.original;
             if (!error && hasOrder) {
                 std::ofstream out(temp, std::ios::binary | std::ios::trunc);
@@ -1318,12 +1337,8 @@ bool restoreRp(const fs::path& root, RpManifest manifest, const std::set<std::st
                 if (!out || !sha256Data(reinterpret_cast<const unsigned char*>(order->second.data()), order->second.size(), digest))
                     error = std::make_error_code(std::errc::io_error);
                 else expected = hashToHex(digest);
-            } else if (!error) fs::copy_file(rpOriginal(root, file.path), temp, fs::copy_options::overwrite_existing, error);
-            std::string hash;
-            if (!error && (!sha256File(temp, &hash) || hash != expected)) error = std::make_error_code(std::errc::io_error);
-            if (!error && !MoveFileExW(temp.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-                error = std::error_code(GetLastError(), std::system_category());
-            if (!error && (!sha256File(destination, &hash) || hash != expected)) error = std::make_error_code(std::errc::io_error);
+            } else if (!error) fs::copy_file(rpOriginal(root, file.path), temp, error);
+            replaceRpFile(temp, destination, expected, error);
         } else if (rpPresent(destination)) fs::remove(destination, error);
         if (error) {
             logf("RP restore: cannot restore %s (%s); backup/rpu was kept", file.path.c_str(), error.message().c_str());
@@ -1336,10 +1351,10 @@ bool restoreRp(const fs::path& root, RpManifest manifest, const std::set<std::st
         log("RP cleanup: cannot save the restore receipt; backup/rpu was kept");
         return false;
     }
-    return cleanupRp(root, manifest);
+    return cleanup ? cleanupRp(root, manifest) : true;
 }
 
-bool removeRestorationProject(const fs::path& root)
+bool removeRestorationProject(const fs::path& root, bool refreshScenes = false)
 {
     if (!rpPresent(root / kRpManifest)) {
         if (rpOnDisk(root) || rpPresent(root / launcher_rp::kBackupFolder))
@@ -1351,7 +1366,18 @@ bool removeRestorationProject(const fs::path& root)
         log("RP restore: invalid installer manifest; the game and backup/rpu were left untouched");
         return false;
     }
-    return restoreRp(root, manifest);
+    if (!restoreRp(root, manifest, !refreshScenes)) return false;
+    if (!refreshScenes) return true;
+    log("refreshing the vanilla 3D scenes after removing Restoration Project");
+    fs::path exporter = root / kExporterExe;
+    std::wstring command = L"\"" + exporter.wstring() + L"\" --game-root \"" + root.wstring() + L"\" --maps all";
+    DWORD code = 1;
+    if (!fs::is_regular_file(exporter) || !runTool(command, root.wstring(), &code, true) || code != 0) {
+        log("RP removal: vanilla 3D scenes could not be refreshed; retry removal before playing, backup/rpu was kept");
+        return false;
+    }
+    RpManifest restored;
+    return readRpManifest(root, &restored) && cleanupRp(root, restored);
 }
 
 // RPU from its own GitHub release at the player's request (never a copy of ours), put in
@@ -1511,17 +1537,15 @@ bool installRestorationProject(const fs::path& root, bool* installedNow)
         return launcher_uninstall::lowered(file.path) != "mods/rpu.dat";
     });
     int installed = 0;
-    std::set<std::string> attemptedWrites;
     for (const auto& file : manifest.files) {
         if (!ok || file.installed == "-") continue;
         fs::path destination = root / utf8ToWide(file.path);
         fs::create_directories(destination.parent_path(), error);
-        if (!error) {
-            attemptedWrites.insert(file.path);
-            fs::copy_file(sources[file.path], destination, fs::copy_options::overwrite_existing, error);
-        }
-        std::string hash;
-        if (error || !sha256File(destination, &hash) || hash != file.installed) {
+        fs::path temp = root / launcher_rp::kBackupFolder / "f2r-restore.tmp";
+        if (!error) fs::remove(temp, error);
+        if (!error) fs::copy_file(sources[file.path], temp, error);
+        replaceRpFile(temp, destination, file.installed, error);
+        if (error) {
             logf("  %s: copy failed (%s)", file.path.c_str(), error.message().c_str());
             ok = false;
         } else ++installed;
@@ -1533,7 +1557,7 @@ bool installRestorationProject(const fs::path& root, bool* installedNow)
     }
     if (!ok) {
         log("RP install failed; restoring the original game files");
-        restoreRp(root, manifest, attemptedWrites);
+        restoreRp(root, manifest);
     } else {
         *installedNow = true;
         logf("  installed %d files of RPU %s; what they replaced is in backup/rpu", installed, tag.c_str());
@@ -1889,7 +1913,7 @@ int runConsole(Options options)
         fs::remove(old, ignored);
     }
 
-    if (options.removeRp) return removeRestorationProject(root) ? 0 : 1;
+    if (options.removeRp) return removeRestorationProject(root, true) ? 0 : 1;
     if (options.uninstall) return uninstallMod(root) ? 0 : 1;
     if (options.removeRussian) {
         log("removing the Russian translation:");

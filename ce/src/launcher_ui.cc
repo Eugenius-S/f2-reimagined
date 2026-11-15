@@ -376,11 +376,29 @@ bool rpOnDisk()
     return !root.empty() && fs::exists(root / L"mods" / L"rpu.dat", error);
 }
 
+bool rpRecoveryPending()
+{
+    fs::path root = chosenRoot();
+    if (root.empty()) return false;
+    std::error_code error;
+    fs::path receipt = root / L"backup/rpu/f2r-manifest.txt";
+    if (!fs::exists(receipt, error)) return bool(error);
+    std::ifstream in(receipt, std::ios::binary);
+    std::string state;
+    return !std::getline(in, state) || state != "F2R-RP-1 installed" || !rpOnDisk();
+}
+
+std::wstring rpRecoveryStatus()
+{
+    return tr(L"Click the Restoration Project checkbox to finish recovery before playing.",
+        L"Нажмите флажок Restoration Project, чтобы завершить восстановление перед игрой.");
+}
+
 // Keep the installed state visible until the restore operation finishes.
 void syncRpFromDisk()
 {
     bool onDisk = rpOnDisk();
-    g_rpInstall = onDisk || g_rpWish == 1;
+    g_rpInstall = onDisk || rpRecoveryPending() || g_rpWish == 1;
     if (g_rp != nullptr) {
         EnableWindow(g_rp, !g_busy);
         InvalidateRect(g_rp, nullptr, TRUE);
@@ -453,6 +471,7 @@ std::wstring upToDateStatus()
 void refreshStatusFromRelease()
 {
     if (g_busy) return;
+    if (rpRecoveryPending()) { setStatus(rpRecoveryStatus()); return; }
     if (g_operationCompleted) {
         setStatus(doneStatus(g_lastOperation));
         return;
@@ -485,10 +504,10 @@ void setBusy(bool busy)
     EnableWindow(g_install, !busy && GetWindowTextLengthW(g_root) != 0);
     EnableWindow(g_browse, !busy);
     EnableWindow(g_russian, !busy);
-    EnableWindow(g_rp, !busy && !rpOnDisk());
+    EnableWindow(g_rp, !busy);
     EnableWindow(g_autoUpdate, !busy);
     EnableWindow(g_remove, !busy && g_installed);
-    EnableWindow(g_play, !busy && g_installed);
+    EnableWindow(g_play, !busy && g_installed && !rpRecoveryPending());
     if (busy) {
         g_tracker = launcher_progress::Tracker();
         g_progressValue = 2;
@@ -694,6 +713,11 @@ void checkReleaseAsync()
 
 void launchGame()
 {
+    if (g_busy) return;
+    if (rpRecoveryPending()) {
+        setStatus(rpRecoveryStatus());
+        return;
+    }
     wchar_t root[32768] = {};
     GetWindowTextW(g_root, root, static_cast<int>(std::size(root)));
     if (root[0] == L'\0') return;
@@ -737,7 +761,7 @@ void chooseGameFolder()
                 std::wstring versionPath = (selected / L"version.txt").wstring();
                 std::wstring exe = (selected / L"fallout2-ce.exe").wstring();
                 g_installed = fs::exists(exe);
-                EnableWindow(g_play, g_installed);
+                EnableWindow(g_play, g_installed && !rpRecoveryPending());
                 EnableWindow(g_remove, g_installed);
                 syncRussianFromDisk();
                 syncRpFromDisk();
@@ -1042,7 +1066,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             }
         } else if (LOWORD(wParam) == ID_RP && HIWORD(wParam) == BN_CLICKED) {
             if (g_busy) return 0;
-            if (rpOnDisk()) {
+            if (rpOnDisk() || rpRecoveryPending()) {
                 startOperation(Operation::RemoveRp);
                 return 0;
             }
@@ -1080,7 +1104,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         if (root[0] != L'\0') {
             fs::path gameRoot(root);
             g_installed = fs::exists(gameRoot / L"fallout2-ce.exe");
-            EnableWindow(g_play, g_installed);
+            EnableWindow(g_play, g_installed && !rpRecoveryPending());
             EnableWindow(g_remove, g_installed);
             EnableWindow(g_install, true);
             syncRussianFromDisk();
@@ -1089,7 +1113,9 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             std::ifstream installed(gameRoot / L"version.txt");
             std::string installedVersion;
             if (installed) installedVersion.assign((std::istreambuf_iterator<char>(installed)), std::istreambuf_iterator<char>());
-            if (!g_haveRelease) {
+            if (rpRecoveryPending()) {
+                setStatus(rpRecoveryStatus());
+            } else if (!g_haveRelease) {
                 setStatus(noReleaseStatus());
             } else if (g_autoUpdates && g_installed
                 && (installedVersion != wideToUtf8(g_releaseVersion) || (g_russianInstall && !russianOnDisk())
@@ -1124,7 +1150,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             InvalidateRect(g_progress, nullptr, TRUE);
             g_installed = operation != Operation::Uninstall;
             if (result == 0 && operation == Operation::RemoveRussian) g_russianWish = 0;
-            if (result == 0 && operation == Operation::RemoveRp && !rpOnDisk()) g_rpWish = 0;
+            if (result == 0 && operation == Operation::RemoveRp && !rpOnDisk() && !rpRecoveryPending()) g_rpWish = 0;
         } else {
             // A half-done removal may have taken the game exe: look again.
             g_installed = fs::exists(fs::path(g_args.gameRoot) / L"fallout2-ce.exe");
@@ -1233,7 +1259,7 @@ int runLauncherUi(int argc, char** argv)
     if (!g_args.gameRoot.empty()) {
         SetWindowTextW(g_root, g_args.gameRoot.c_str());
         g_installed = fs::exists(fs::path(g_args.gameRoot) / L"fallout2-ce.exe");
-        EnableWindow(g_play, g_installed);
+        EnableWindow(g_play, g_installed && !rpRecoveryPending());
         EnableWindow(g_remove, g_installed);
         syncRussianFromDisk();
         syncRpFromDisk();

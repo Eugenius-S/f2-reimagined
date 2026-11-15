@@ -82,6 +82,12 @@ class NativeUi:
             self.gdi.DeleteObject(bitmap)
             self.gdi.DeleteDC(dc)
 
+    def text(self, hwnd):
+        length = self.user.SendMessageW(hwnd, 0xE, 0, 0)
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        self.user.SendMessageW(hwnd, 0xD, len(buffer), ctypes.addressof(buffer))
+        return buffer.value
+
     def checked(self, hwnd):
         width, _, pixels = self.pixels(hwnd)
         # Owner-drawn checkbox uses gold fill when ticked, dark fill when clear.
@@ -114,7 +120,8 @@ class RpInstallTests(LauncherFixture):
     def rp_run(self, *args):
         result = subprocess.run([str(LAUNCHER), "--game-root", str(self.root),
             "--update-url", self.url, "--mirror-url", self.url, "--no-start",
-            "--rp-zip-url", self.url + "/rp.zip", *args], capture_output=True, timeout=90)
+            "--rp-zip-url", self.url + "/rp.zip", *args], capture_output=True, timeout=90,
+            env={**os.environ, **getattr(self, "launcher_env", {})})
         output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
         print(f"\n{self.id()}: exit {result.returncode}\n{output}", flush=True)
         return result.returncode, output
@@ -367,17 +374,97 @@ class RpInstallTests(LauncherFixture):
         self.assertNotEqual(code, 0, output)
         self.assertEqual(before, snapshot(self.root))
 
+    def use_logging_exporter(self, fail=False):
+        self.export_log = self.base / "exporter-calls.txt"
+        self.export_fail = self.base / "exporter-failure.txt"
+        self.export_fail.write_text("1" if fail else "0")
+        self.launcher_env = {"F2R_RP_EXPORT_LOG": str(self.export_log), "F2R_RP_EXPORT_FAIL_FILE": str(self.export_fail)}
+        (self.root / "scene-exporter.exe").write_bytes(LAUNCHER.with_name("launcher_rp_exporter_stub.exe").read_bytes())
+        self.cache = self.root / "mod-cache/scene/fixture-scene.txt"
+        self.cache.parent.mkdir(parents=True, exist_ok=True)
+        self.cache.write_text("RP")
+
+    def test_install_breaks_hardlink_without_changing_external_bytes(self):
+        outside = self.base / "outside.ini"
+        original = b"external file shared with the original game config"
+        outside.write_bytes(original)
+        destination = self.root / "ddraw.ini"
+        destination.unlink()
+        os.link(outside, destination)
+        before = snapshot(self.root)
+        self.install_rp()
+        self.assertEqual(outside.read_bytes(), original)
+        self.assertEqual(destination.read_bytes(), b"RP settings")
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertEqual(code, 0, output)
+        self.assertEqual(outside.read_bytes(), original)
+        self.assertEqual(before, snapshot(self.root))
+
+    def test_rp_only_removal_refreshes_actual_vanilla_scenes(self):
+        self.install_rp()
+        self.use_logging_exporter()
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertEqual(code, 0, output)
+        calls = self.export_log.read_text().splitlines()
+        self.assertEqual(calls, ["--game-root", str(self.root), "--maps", "all", "END"])
+        self.assertEqual(self.cache.read_text(), "vanilla")
+        self.assertFalse((self.root / "backup/rpu/f2r-manifest.txt").exists())
+
+    def test_failed_vanilla_refresh_retains_receipt_and_retries(self):
+        self.install_rp()
+        self.use_logging_exporter(fail=True)
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("vanilla 3D scenes could not be refreshed", output)
+        self.assertEqual(self.cache.read_text(), "RP")
+        receipt = self.root / "backup/rpu/f2r-manifest.txt"
+        self.assertTrue(receipt.read_text().startswith("F2R-RP-1 restored"))
+        self.assertFalse((self.root / "mods/rpu.dat").exists())
+        (self.root / "patch000.dat").write_bytes(b"player edit between retries")
+        self.export_fail.write_text("0")
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertEqual(code, 0, output)
+        self.assertEqual(self.export_log.read_text().count("END"), 2)
+        self.assertEqual(self.cache.read_text(), "vanilla")
+        self.assertEqual((self.root / "patch000.dat").read_bytes(), b"player edit between retries")
+        self.assertFalse(receipt.exists())
+
+    def test_missing_exporter_keeps_removal_pending(self):
+        self.install_rp()
+        (self.root / "scene-exporter.exe").unlink()
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("vanilla 3D scenes could not be refreshed", output)
+        self.assertTrue((self.root / "backup/rpu/f2r-manifest.txt").exists())
+
     def test_window_checkbox_removes_only_rp(self):
+        self.window_removal()
+
+    def test_window_failed_refresh_disables_play_and_retries(self):
+        self.window_removal(fail_refresh=True)
+
+    def test_window_partial_removal_blocks_play_and_recovers(self):
+        self.window_removal(partial_removal=True)
+
+    def window_removal(self, fail_refresh=False, partial_removal=False):
         import configparser
         self.install_rp()
+        if fail_refresh:
+            self.use_logging_exporter(fail=True)
+        if partial_removal:
+            with read_lock(self.root / "mods/rpu.dat"):
+                code, output = self.rp_run("--remove-restoration-project")
+            self.assertNotEqual(code, 0, output)
+            self.assertTrue((self.root / "mods/rpu.dat").exists())
+            self.assertTrue((self.root / "backup/rpu/f2r-manifest.txt").read_text().startswith("F2R-RP-1 pending"))
         settings = self.base / "ui.ini"
         language = os.environ.get("F2R_RP_UI_LANGUAGE", "en")
-        settings.write_text(f"[launcher]\nauto_updates=0\nlanguage={language}\n", encoding="utf-8")
+        settings.write_text(f"[launcher]\nauto_updates={int(partial_removal)}\nlanguage={language}\n", encoding="utf-8")
         (self.release / "info.json").write_text(json.dumps({"tag_name": "new-build", "body": "Scratch fixture"}))
         startup = subprocess.STARTUPINFO()
         startup.dwFlags = subprocess.STARTF_USESHOWWINDOW
         startup.wShowWindow = 4  # SW_SHOWNOACTIVATE
-        env = os.environ.copy()
+        env = {**os.environ, **getattr(self, "launcher_env", {})}
         env.update(APPDATA=str(self.base / "roaming"), LOCALAPPDATA=str(self.base / "local"))
         process = subprocess.Popen([str(LAUNCHER), "--ui", "--no-activate", "--game-root", str(self.root),
             "--settings-file", str(settings), "--update-url", self.url,
@@ -396,6 +483,13 @@ class RpInstallTests(LauncherFixture):
             checkbox = ui.user.GetDlgItem(window, 1005)
             self.assertTrue(ui.user.IsWindowEnabled(checkbox))
             self.assertTrue(ui.checked(window), "installed RP must paint a ticked checkbox")
+            if partial_removal:
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline and "new-build" not in ui.text(ui.user.GetDlgItem(window, 1009)):
+                    time.sleep(0.05)
+                self.assertIn("new-build", ui.text(ui.user.GetDlgItem(window, 1009)))
+                self.assertTrue(ui.user.IsWindowEnabled(checkbox), "auto-update must leave pending recovery for the removal retry")
+                self.assertFalse(ui.user.IsWindowEnabled(ui.user.GetDlgItem(window, 1014)), "a pending partial restore must block Play even with rpu.dat still present")
             before_ce = (self.root / "fallout2-ce.exe").read_bytes()
             ui.user.SendMessageW(checkbox, 0xF5, 0, 0)  # BM_CLICK, no focus change.
             deadline = time.monotonic() + 15
@@ -405,7 +499,21 @@ class RpInstallTests(LauncherFixture):
                 time.sleep(0.05)
             self.assertFalse((self.root / "mods/rpu.dat").exists())
             self.assertTrue(ui.user.IsWindowEnabled(checkbox))
+            if fail_refresh:
+                self.assertTrue(ui.checked(window), "pending removal must stay ticked for retry")
+                self.assertFalse(ui.user.IsWindowEnabled(ui.user.GetDlgItem(window, 1014)), "Play must stay disabled with stale RP scenes")
+                self.assertEqual(self.cache.read_text(), "RP")
+                self.export_fail.write_text("0")
+                ui.user.SendMessageW(checkbox, 0xF5, 0, 0)
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline:
+                    if not (self.root / "backup/rpu/f2r-manifest.txt").exists() and ui.user.IsWindowEnabled(checkbox):
+                        break
+                    time.sleep(0.05)
+                self.assertEqual(self.cache.read_text(), "vanilla")
+                self.assertEqual(self.export_log.read_text().count("END"), 2)
             self.assertFalse(ui.checked(window), "successful removal must paint an unticked checkbox")
+            self.assertTrue(ui.user.IsWindowEnabled(ui.user.GetDlgItem(window, 1014)), "Play is enabled only after refresh succeeds")
             self.assertEqual((self.root / "fallout2-ce.exe").read_bytes(), before_ce)
             config = configparser.ConfigParser()
             config.read(settings, encoding="utf-16" if settings.read_bytes().startswith(b"\xff\xfe") else "utf-8")

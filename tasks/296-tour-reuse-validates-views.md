@@ -21,6 +21,8 @@ reviewed: no
 
 `tools/tour/tour.py:145-155` reuses captures on stamp equality and PNG count, before `check_views` at line 181. `check_views` itself iterates partial slices with `zip`, so explicit count validation belongs with this check. This supports the [fly-tour evidence batch](225-fly-tour-evidence-flight-view-changes.md), not new renderer behavior.
 
+After task 225 (PR 508), also check the shared validation at the sheet-building boundary with `--skip-failed`: a capture group can have the full PNG count while failing `check_views`. Add a fixture ensuring such a group cannot count as valid sheet evidence. This is a validation gap to verify, not an observed visual defect.
+
 ## Acceptance
 
 - Reuse runs the shared view validation before accepting saved captures. Validate exact turn counts, matching map/elevation/tile sidecars, full 3D renderer state and decodable PNGs.
