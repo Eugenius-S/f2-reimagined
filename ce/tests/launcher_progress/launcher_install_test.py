@@ -123,8 +123,10 @@ class InstallTests(LauncherFixture):
                     self.payload["version.txt"] = invalid
                 self.package()
                 before = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
-                code, output = self.run_launcher()
+                code, output = self.run_launcher("ru" if invalid == b"" else "en")
                 self.assert_failed(code, output, "version.txt")
+                if invalid == b"":
+                    self.assertIn("в скачанном пакете некорректный version.txt; ничего не изменено", output)
                 after = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
                 self.assertEqual(before, after)
                 self.assertFalse((self.root / "f2reimagined-backups").exists())

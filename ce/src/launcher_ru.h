@@ -66,6 +66,8 @@ inline constexpr Entry kTable[] = {
     { "tar.exe failed; falling back to Expand-Archive", "tar.exe не распаковал архив; пробуем Expand-Archive" },
     { "the downloaded package is damaged (required file %s is missing); nothing was changed",
         "скачанный пакет повреждён (нет обязательного файла %s); ничего не изменено" },
+    { "the downloaded package has an invalid version.txt; nothing was changed",
+        "в скачанном пакете некорректный version.txt; ничего не изменено" },
     { "the update could not be installed (see the lines above); the build version was not changed",
         "обновление не установлено (см. строки выше); версия сборки не изменена" },
     { "  version.txt: write failed", "  version.txt: не удалось записать версию" },

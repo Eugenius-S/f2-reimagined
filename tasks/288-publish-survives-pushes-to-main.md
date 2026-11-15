@@ -36,3 +36,11 @@ Signing the release.
 ## Log
 
 - 2026-11-15 claude: cut from the repo audit of 2026-11-15 (find 2).
+
+### 2026-11-15 gpt
+
+Done: isolated manual publication in the fixed `verify-publish-latest` concurrency group across refs; automatic checks keep their separate `verify-check-` prefix and cancel stale runs. The launcher validates the package's regular, nonempty, single-line `version.txt` before backups or copies, records that ZIP identity through the existing atomic stamp after successful installation, and preserves the previous rollback backup when the ZIP already matches the installed version. Rule 1 names `gh run watch <dispatch run ID> --exit-status`.
+
+Check: Release build and full CTest 29/29 passed, including 13 real HTTP installer tests (10 invalid-version subcases) and the existing 26 RP integration tests. Added remote A/package B, same-installed-version backup, missing/empty/multiline/control/dot/directory version coverage. The existing empty-version subcase also asserts the Russian error. Exporter Python tests 148/148 and regression Python tests 12/12 passed. Standard pixel regression passed all 154 views with zero changed pixels; references and thresholds were unchanged. A local incremental build initially missed the translation header; the actual launcher consumers were then rebuilt, the live Russian HTTP assertion passed, and full CTest passed again. No build-script changes are included.
+
+Next: keep this task doing until independent review, the protected merge and post-merge Rule 1 handover finish. Rebuild fresh main, confirm runtime commit and executable hash, run offscreen and clean four-map performance gates, then publish that same full commit and watch it to success. Before the first dispatch using the new key, wait for all legacy-key manual runs to become terminal. Stage a genuine main push during publication if safe, otherwise record the exact reason; confirm `latest/version.txt` matches. No post-merge dispatch has been run yet.
