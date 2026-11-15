@@ -2,8 +2,8 @@
 id: 290
 title: Speed is measured one run at a time on the machine
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: glm
 suggested: glm
 priority: high
 tier: 1
