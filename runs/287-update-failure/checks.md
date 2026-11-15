@@ -40,6 +40,14 @@ a required file; absent optional files; failed default config copy; failed art
 tree copy; locked optional launcher; locked version stamp. The exporter passed
 148 unit tests, and regression tools passed 12 unit tests.
 
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/regression.ps1
+```
+
+Pixel regression passed all 154 spots, each with 0 changed pixels. No captures
+failed or were skipped. Its isolated run is
+`runs/regression/20261115-112308-554-46036/`; raw captures stay uncommitted.
+
 To run just the isolated launcher checks:
 
 ```powershell
