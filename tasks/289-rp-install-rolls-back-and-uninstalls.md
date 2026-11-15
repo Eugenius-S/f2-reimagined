@@ -2,8 +2,8 @@
 id: 289
 title: The Restoration Project install can be undone, by a failure or by the player
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: gpt
 priority: high
 tier: 1
