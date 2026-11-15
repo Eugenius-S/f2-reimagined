@@ -9,7 +9,7 @@ priority: normal
 tier: 3
 claude-only: no
 user-check: no
-depends-on: []
+depends-on: [270]
 reviewed: no
 ---
 
@@ -18,6 +18,8 @@ reviewed: no
 Every devshot JSON records the effective state of sun shadows, cloud shadows, point lights, glow and ambient at the moment of the capture, read from the renderer, not from the command line.
 
 ## Context
+
+- 2026-11-15: the implementation and blocked runtime checks live in draft PR #503. Finish with 270's valid floor capture after 306; continue that PR rather than starting a duplicate sidecar implementation.
 
 143 (soft cloud edges) is blocked because six captures could not prove which toggles were in effect (PR #470). The same doubt sits in 256, where the 3D frame came out with white ground.
 
