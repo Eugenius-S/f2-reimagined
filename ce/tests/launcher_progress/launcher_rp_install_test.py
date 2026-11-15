@@ -480,14 +480,16 @@ class RpInstallTests(LauncherFixture):
                     break
                 time.sleep(0.05)
             self.assertIsNotNone(window, "scratch launcher did not create its window")
+            # HWND creation precedes the initial disk-state sync and local release reply.
+            deadline = time.monotonic() + 15
+            release = ui.user.GetDlgItem(window, 1009)
+            while time.monotonic() < deadline and "new-build" not in ui.text(release):
+                time.sleep(0.05)
+            self.assertIn("new-build", ui.text(release), "scratch launcher did not finish initialization")
             checkbox = ui.user.GetDlgItem(window, 1005)
             self.assertTrue(ui.user.IsWindowEnabled(checkbox))
             self.assertTrue(ui.checked(window), "installed RP must paint a ticked checkbox")
             if partial_removal:
-                deadline = time.monotonic() + 10
-                while time.monotonic() < deadline and "new-build" not in ui.text(ui.user.GetDlgItem(window, 1009)):
-                    time.sleep(0.05)
-                self.assertIn("new-build", ui.text(ui.user.GetDlgItem(window, 1009)))
                 self.assertTrue(ui.user.IsWindowEnabled(checkbox), "auto-update must leave pending recovery for the removal retry")
                 self.assertFalse(ui.user.IsWindowEnabled(ui.user.GetDlgItem(window, 1014)), "a pending partial restore must block Play even with rpu.dat still present")
             before_ce = (self.root / "fallout2-ce.exe").read_bytes()
