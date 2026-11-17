@@ -629,7 +629,7 @@ bool unpackZip(const fs::path& zip, const fs::path& stage)
 }
 
 bool copyIfPresent(const fs::path& stage, const char* name, const fs::path& destination, bool overwrite,
-    const char* note, const fs::path* journal = nullptr)
+    const char* note)
 {
     fs::path source = stage / name;
     std::error_code error;
@@ -644,8 +644,6 @@ bool copyIfPresent(const fs::path& stage, const char* name, const fs::path& dest
         logf("  %s: copy failed (%s)", name, error.message().c_str());
         return false;
     }
-    // The interrupted-update journal (307): one line per file the update touched.
-    if (journal != nullptr) launcher_update::appendCopied(*journal, name);
     logf("  %s: %s", name, tr(note));
     return true;
 }
@@ -673,8 +671,7 @@ bool copyLauncher(const fs::path& source, const fs::path& target)
 }
 
 // The wide menu, death and loading art ships as folders next to the exe.
-bool copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& destination,
-    const fs::path* journal = nullptr)
+bool copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& destination)
 {
     fs::path source = stage / name;
     std::error_code error;
@@ -685,24 +682,8 @@ bool copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& 
     }
     if (!error && !fs::is_directory(source, error)) error = std::make_error_code(std::errc::not_a_directory);
     if (!error) fs::create_directories(destination / name, error);
-    if (!error) {
-        // File by file, so the interrupted-update journal (307) knows exactly
-        // which paths the update touched and a restore can remove the ones
-        // the package introduced without touching the player's own files.
-        fs::path target = destination / name;
-        for (fs::recursive_directory_iterator it(source, fs::directory_options::skip_permission_denied, error), end;
-             !error && it != end; it.increment(error)) {
-            if (!it->is_regular_file(error)) continue;
-            std::string relative = name + std::string("/")
-                + wideToUtf8(fs::relative(it->path(), source).generic_wstring());
-            fs::path targetFile = target / fs::relative(it->path(), source);
-            fs::create_directories(targetFile.parent_path(), error);
-            if (error) break;
-            fs::copy_file(it->path(), targetFile, fs::copy_options::overwrite_existing, error);
-            if (error) break;
-            if (journal != nullptr) launcher_update::appendCopied(*journal, relative);
-        }
-    }
+    if (!error) fs::copy(source, destination / name,
+        fs::copy_options::recursive | fs::copy_options::overwrite_existing, error);
     if (error) {
         logf("  %s: copy failed (%s)", name, error.message().c_str());
         return false;
@@ -754,6 +735,17 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version, std:
     fs::path backup = root / "f2reimagined-backups" / backupVersion;
     *folderName = backupVersion;
     std::error_code error;
+    // 307: a version-named backup with a valid receipt is a finished
+    // snapshot of that whole version; it is never rebuilt, so a retry can
+    // never capture a mixed state over it.  A damaged or partial one (no
+    // receipt, hashes off) is rebuilt from the current, still-whole state.
+    std::string bad;
+    if (fs::is_directory(backup, error)
+        && launcher_update::validateBackup(backup, buildFiles(), sha256File, &bad)) {
+        logf("backup %s already stands complete, kept", backupVersion.c_str());
+        return true;
+    }
+    fs::remove_all(backup, error);
     fs::create_directories(backup, error);
     if (error) {
         logf("cannot create build backup: %s", error.message().c_str());
@@ -777,12 +769,23 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version, std:
     for (const std::string& name : buildTrees()) {
         fs::path source = root / fs::u8path(name);
         if (!fs::is_directory(source, error)) continue;
+        fs::create_directories(backup / fs::u8path(name).parent_path(), error);
+        if (error) {
+            logf("cannot prepare the backup folder for %s: %s", name.c_str(), error.message().c_str());
+            return false;
+        }
         fs::copy(source, backup / fs::u8path(name),
             fs::copy_options::recursive | fs::copy_options::overwrite_existing, error);
         if (error) {
             logf("cannot back up %s: %s", name.c_str(), error.message().c_str());
             return false;
         }
+    }
+    // The receipt is the last write: from here the backup is known-good.
+    std::string receiptBlocked;
+    if (!launcher_update::writeBackupReceipt(backup, sha256File, &receiptBlocked)) {
+        logf("cannot write the backup receipt (%s)", receiptBlocked.c_str());
+        return false;
     }
     if (!fs::exists(backup / kVersionTxt)) {
         std::ofstream versionFile(backup / kVersionTxt, std::ios::binary | std::ios::trunc);
@@ -835,6 +838,14 @@ bool rollbackInstalledBuild(const fs::path& root)
         log("no build different from the installed version is available for rollback");
         return false;
     }
+    // A known-good backup only: a damaged or partial one is refused before
+    // any destructive step, and its material stays for the next attempt.
+    std::string bad;
+    if (!launcher_update::validateBackup(selected, buildFiles(), sha256File, &bad)) {
+        logf("rollback refused: the backup %s is not known-good (%s)",
+            selected.filename().string().c_str(), bad.c_str());
+        return false;
+    }
     std::string blocked;
     if (!launcher_update::restoreSavedBuild(root, selected, buildFiles(), buildTrees(), &blocked)) {
         logf("rollback failed: %s could not be restored; the backup stays as it is", blocked.c_str());
@@ -844,7 +855,11 @@ bool rollbackInstalledBuild(const fs::path& root)
     // build stands, and a later launch must not restore it a second time.
     std::string interruptedBackup = launcher_update::readMarker(root);
     if (!interruptedBackup.empty() && selected.filename().string() == interruptedBackup) {
-        launcher_update::clearMarker(root);
+        if (!launcher_update::clearMarker(root)) {
+            log("rollback restored the build but could not clear the marker; "
+                "the next start will restore the same backup again (it is idempotent)");
+            return false;
+        }
     }
     logf("restored previous build %s", selectedVersion.c_str());
     return true;
@@ -857,15 +872,28 @@ bool rollbackInstalledBuild(const fs::path& root)
 // the backup stay so nothing pretends the game is whole.
 bool recoverInterruptedUpdate(const fs::path& root)
 {
+    if (!launcher_update::markerExists(root)) return true;
     std::string backupFolder = launcher_update::readMarker(root);
-    if (backupFolder.empty()) return true;
+    // An existing marker that names nothing is a pending state too: block on
+    // it instead of sailing past a half-installed build.
+    if (backupFolder.empty()) {
+        log("an update marker stands but names no backup; "
+            "recovery blocked (delete f2reimagined-backups/update-in-progress.txt "
+            "only when you understand what it means)");
+        return false;
+    }
     logf("an update was interrupted; restoring the saved build from f2reimagined-backups/%s",
         backupFolder.c_str());
     std::error_code error;
     fs::path backup = root / launcher_update::kBackupsFolder / fs::u8path(backupFolder);
-    if (!fs::is_regular_file(backup / kVersionTxt, error)) {
-        logf("recovery blocked: the backup f2reimagined-backups/%s has no version.txt",
-            backupFolder.c_str());
+    if (!fs::is_directory(backup, error)) {
+        logf("recovery blocked: the backup f2reimagined-backups/%s is not there", backupFolder.c_str());
+        return false;
+    }
+    std::string bad;
+    if (!launcher_update::validateBackup(backup, buildFiles(), sha256File, &bad)) {
+        logf("recovery blocked: the backup %s is not known-good (%s); the marker and the backup stay",
+            backupFolder.c_str(), bad.c_str());
         return false;
     }
     std::string blocked;
@@ -874,7 +902,11 @@ bool recoverInterruptedUpdate(const fs::path& root)
             blocked.c_str());
         return false;
     }
-    launcher_update::clearMarker(root);
+    if (!launcher_update::clearMarker(root)) {
+        log("the build was restored but the marker could not be removed; recovery stays pending "
+            "and repeats the same idempotent restore on the next start");
+        return false;
+    }
     logf("the interrupted update was rolled back; the saved build %s stands", backupFolder.c_str());
     return true;
 }
@@ -1880,9 +1912,13 @@ int runConsole(Options options)
     // 307: an interrupted update is repaired before anything can launch or
     // mutate the half-installed build, before even the stale launcher .old
     // is removed or any other branch runs.
-    if (!recoverInterruptedUpdate(root)) {
-        die("the interrupted update could not be rolled back (see the lines above); remove the "
-            "obstruction, or delete f2reimagined-backups/update-in-progress.txt only when you understand what it means");
+    bool recoveredPendingUpdate = false;
+    if (launcher_update::markerExists(root)) {
+        if (!recoverInterruptedUpdate(root)) {
+            die("the interrupted update could not be rolled back (see the lines above); remove the "
+                "obstruction, or delete f2reimagined-backups/update-in-progress.txt only when you understand what it means");
+        }
+        recoveredPendingUpdate = true;
     }
 
     {
@@ -1898,7 +1934,15 @@ int runConsole(Options options)
         log("removing the Russian translation:");
         return removeRussianTranslation(root) ? 0 : 1;
     }
-    if (options.rollback) return rollbackInstalledBuild(root) ? 0 : 1;
+    if (options.rollback) {
+        // The interrupted state was already repaired at this start; rolling
+        // back again would walk past the repaired build to an even older one.
+        if (recoveredPendingUpdate) {
+            log("the interrupted update was already rolled back at this start; nothing more to do");
+            return 0;
+        }
+        return rollbackInstalledBuild(root) ? 0 : 1;
+    }
 
     bool installedGamePresent = fs::exists(root / kGameExe);
     std::string installedVersion;
@@ -1986,19 +2030,51 @@ int runConsole(Options options)
         versionFile.close();
 
         std::string keptBackup;
-        // A refill of the wide art at the same version is no update: the older build stays the one to roll back to.
-        if (installedGamePresent && packageVersion != installedVersion && !backupInstalledBuild(root,
+        // A refill of the wide art at the same version still overwrites
+        // files: it backs up and journals the same way, so a failed refill
+        // restores the same way (307).
+        if (installedGamePresent && !backupInstalledBuild(root,
             installedVersion.empty() ? std::string("manual") : installedVersion, &keptBackup)) {
             fs::remove_all(work, error);
             die("could not save the current build before updating; nothing was changed");
         }
         // 307: from here to the version stamp the game folder may hold a
-        // half-installed build; the marker names the backup a recovery
-        // restores from, and the journal lists every file the update touches.
+        // half-installed build.  The marker names the backup a recovery
+        // restores from, and the intended touched set (every path the update
+        // will write, marked replaced or introduced) is written whole before
+        // the first copy, so a crash between a mutation and its bookkeeping
+        // cannot lose a path.
         bool journaling = !keptBackup.empty();
         if (journaling && !launcher_update::writeMarker(root, keptBackup)) {
             fs::remove_all(work, error);
             die("could not write the update recovery marker; nothing was changed");
+        }
+        if (journaling) {
+            std::vector<launcher_update::PendingPath> intended;
+            for (const char* name : { kGameExe, "ce.dat", kExporterExe }) {
+                if (fs::exists(stage / name, error)) intended.push_back({name, fs::exists(root / name, error)});
+            }
+            if (fs::exists(stage / kZipLauncher, error)) {
+                intended.push_back({kRootLauncher, fs::exists(root / kRootLauncher, error)});
+            }
+            for (const std::string& tree : buildTrees()) {
+                fs::path source = stage / fs::u8path(tree);
+                if (!fs::is_directory(source, error)) continue;
+                for (fs::recursive_directory_iterator it(source, fs::directory_options::skip_permission_denied, error), end;
+                     !error && it != end; it.increment(error)) {
+                    if (!it->is_regular_file(error)) continue;
+                    std::string relative = tree + std::string("/")
+                        + wideToUtf8(fs::relative(it->path(), source).generic_wstring());
+                    intended.push_back({relative, fs::exists(root / fs::u8path(relative), error)});
+                }
+            }
+            if (!fs::exists(root / kCfg, error) && fs::exists(stage / kCfg, error)) {
+                intended.push_back({kCfg, false});
+            }
+            if (!launcher_update::writeIntendedSet(root, intended)) {
+                fs::remove_all(work, error);
+                die("could not write the update journal; nothing was changed");
+            }
         }
 
         // --- into the game folder; the player's things stay theirs ---
@@ -2006,34 +2082,47 @@ int runConsole(Options options)
         auto stopUpdate = [&]() {
             fs::remove_all(work, error);
             if (journaling) {
-                die("the update could not be installed (see the lines above); the game folder may hold "
-                    "part of the new build, and the next start restores the saved build from "
-                    "f2reimagined-backups before it does anything else");
+                // Hand the old whole build back right here: a failed update
+                // must not leave a mixture for the player to stumble into.
+                fs::path backup = root / launcher_update::kBackupsFolder / fs::u8path(keptBackup);
+                std::string bad;
+                std::string blocked;
+                if (launcher_update::validateBackup(backup, buildFiles(), sha256File, &bad)
+                    && launcher_update::restoreSavedBuild(root, backup, buildFiles(), buildTrees(), &blocked)
+                    && launcher_update::clearMarker(root)) {
+                    die("the update could not be installed (see the lines above); "
+                        "the previous build was restored in full");
+                }
+                die("the update could not be installed and the restore could not finish (see the lines above); "
+                    "the next start restores the saved build from f2reimagined-backups before it does anything else");
             }
             die("the update could not be installed (see the lines above); the build version was not changed");
         };
-        if (!copyIfPresent(stage, kGameExe, root, true, "installed", journaling ? &root : nullptr)
-            || !copyIfPresent(stage, "ce.dat", root, true, "installed", journaling ? &root : nullptr)
-            || !copyIfPresent(stage, kExporterExe, root, true, "installed", journaling ? &root : nullptr)) stopUpdate();
+        if (!copyIfPresent(stage, kGameExe, root, true, "installed")
+            || !copyIfPresent(stage, "ce.dat", root, true, "installed")
+            || !copyIfPresent(stage, kExporterExe, root, true, "installed")) stopUpdate();
         if (!fs::exists(stage / kZipLauncher)) {
             logf("  %s: not in the package, skipped", kRootLauncher);
         } else if (copyLauncher(stage / kZipLauncher, root / kRootLauncher)) {
-            if (journaling) launcher_update::appendCopied(root, kRootLauncher);
             logf("  %s: installed", kRootLauncher);
         } else {
             stopUpdate();
         }
-        if (!copyTreeIfPresent(stage, "user-assets", root, journaling ? &root : nullptr)
-            || !copyTreeIfPresent(stage, "data/art/splash", root, journaling ? &root : nullptr)
-            || !copyTreeIfPresent(stage, "data/art/russian/splash", root, journaling ? &root : nullptr)) stopUpdate();
+        if (!copyTreeIfPresent(stage, "user-assets", root)
+            || !copyTreeIfPresent(stage, "data/art/splash", root)
+            || !copyTreeIfPresent(stage, "data/art/russian/splash", root)) stopUpdate();
         if (fs::exists(root / kCfg)) {
             log("  fallout2.cfg: kept (the player's file is never overwritten)");
         } else {
-            if (!copyIfPresent(stage, kCfg, root, false, "installed (default)", journaling ? &root : nullptr)) stopUpdate();
+            if (!copyIfPresent(stage, kCfg, root, false, "installed (default)")) stopUpdate();
         }
         if (!writeBuildVersion(root, packageVersion)) stopUpdate();
         logf("  version.txt: %s", packageVersion.c_str());
-        if (journaling) launcher_update::clearMarker(root);  // the update is committed whole now
+        if (journaling && !launcher_update::clearMarker(root)) {
+            die("the update installed whole, but its recovery marker could not be removed (it may be held by "
+                "another program); the next start will roll this build back to f2reimagined-backups/%s. Do not "
+                "restart the game; remove the marker once the program holding it is closed", keptBackup.c_str());
+        }
         fs::remove_all(work, error);
         cleanOlderBuildLeftovers(root, keptBackup);
         updated = true;
