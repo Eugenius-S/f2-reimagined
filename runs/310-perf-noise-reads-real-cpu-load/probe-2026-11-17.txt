@@ -1,0 +1,38 @@
+probe.ps1, AMD Ryzen 7 5800X, 16 logical cores, 1 socket, 2026-11-17 ~23:35-23:41 local.
+Columns: k busy processes, added = 100*k/16, load = Win32_Processor.LoadPercentage,
+time = PerfOS_Processor _Total PercentProcessorTime, util/perf = ProcessorInformation _Total
+PercentProcessorUtility / PercentProcessorPerformance, procs = readable processes' CPU time
+share of all cores (lower bound). Means of 6 one-second samples per phase.
+
+run 0 (discarded: workers lived 9 s and exited during sampling, procs did not rise)
+k  added  load  time  util  perf  procs
+0      0    33    19    18   105   10,9
+2     13    45    21    26   105    9,8
+4     25    54    26    29   106    9,1
+8     50    65    53    40   105   10,8
+
+run 1
+k  added  load  time  util  perf  procs
+0      0    55    20    27   106   18,1
+2     13    46    36    33   107   25,7
+4     25    60    45    48   107   38,6
+8     50    82    69    75   107   65,1
+
+run 2
+k  added  load  time  util  perf  procs
+0      0    53    27    29   106   21,4
+2     13    47    36    34   106   27,0
+4     25    61    44    47   108   40,9
+8     50    83    72    73   107   65,4
+
+run 3
+k  added  load  time  util  perf  procs
+0      0    52    36    36   107   24,4
+2     13    61    38    39   107   30,2
+4     25    71    45    49   108   39,0
+8     50    89    67    78   107   61,0
+
+time - procs over the 12 valid phases: +1.9 to +11.6 (kernel, interrupts, protected processes).
+load - time over the 12 valid phases: +10 to +35, largest near idle; runs 1 and 2 read more at k=0 than at k=2.
+perf stays 105-108%, so frequency scaling does not explain load: util follows time.
+New Read-CpuLoadPercent on the same machine right after: 8, 11, 11.
