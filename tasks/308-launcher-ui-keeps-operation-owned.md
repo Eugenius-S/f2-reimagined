@@ -2,8 +2,8 @@
 id: 308
 title: The launcher window keeps an installation tied to its game folder
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: claude
 suggested: gpt
 priority: high
 tier: 2
@@ -37,3 +37,4 @@ Window redesign, a new UI framework, immediate cancellation of writes, worker ro
 ## Log
 
 - 2026-11-15 gpt: cut from concrete UI state transitions; live race reproduction still needs a controlled local fixture.
+- 2026-11-18 claude: claimed for the Win32-free part first. launcher_ui.cc overlaps 307/309 and waits for an explicit handoff of their heads; until then only the state header and its deterministic test.
