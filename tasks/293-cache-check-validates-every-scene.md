@@ -2,8 +2,8 @@
 id: 293
 title: The existing cache check rejects missing or damaged scene artifacts
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: claude
 suggested: glm
 priority: high
 tier: 1
