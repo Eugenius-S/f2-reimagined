@@ -2,6 +2,11 @@
 
     py -3 tools/tour/tour.py --before SIDE [--after SIDE] [--maps kladwtwn,klamall] [--reuse] [--out DIR]
     py -3 tools/tour/tour.py --before CACHE --rp-game-root RP_GAME [--maps abbey,sfsheng]
+    py -3 tools/tour/tour.py --coverage [--maps ...] [--expect kladwtwn:0,kladwtwn:1] [--rp-game-root RP_GAME]
+
+--coverage shoots nothing: it prints which requested maps, map elevations,
+named spots and turns the spot list covers and which it misses (also printed
+before every tour). --expect adds map elevations the selection must have.
 
 A side is either a checkout (its build/fallout2-ce.exe and the scenes its own
 tools/dev-snapshot.ps1 reads) or a scene cache folder (<map>/<elevation>/
@@ -58,15 +63,50 @@ def powershell_args(command):
     return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command]
 
 
-def load_spots(maps, path):
-    data = json.loads(path.read_text(encoding="utf-8"))
+def spot_groups(data, maps):
+    """The selected spots by (map, elevation); every map when maps is empty."""
     groups = {}
     for spot in data["spots"]:
         if not maps or spot["map"] in maps:
             groups.setdefault((spot["map"], spot["elevation"]), []).append(spot)
+    return groups
+
+
+def load_spots(maps, path):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    groups = spot_groups(data, maps)
     if not groups:
         raise SystemExit("no spots for those maps")
     return data["turns"], data.get("distance", -1), groups
+
+
+def coverage(data, maps=None, expected=()):
+    """The report lines: requested maps, each covered map elevation with its
+    spots, then every requested map and expected map elevation with no spot."""
+    turns = data["turns"]
+    groups = spot_groups(data, maps)
+    lines = ["turns: " + " ".join(f"{turn:+d}" for turn in turns),
+             "requested maps: " + (", ".join(sorted(maps)) if maps else "every configured map")]
+    for (map_name, elevation), spots in sorted(groups.items()):
+        lines.append(f"covered {map_name} e{elevation}: {len(spots)} spots x {len(turns)} turns "
+                     f"= {len(spots) * len(turns)} views")
+        lines += [f"  tile {spot['tile']} {spot['name']}" for spot in spots]
+    if not groups:
+        lines.append("covered: none")
+    missing = [f"missing {map_name}: no configured spots" for map_name in sorted(maps or ())
+               if not any(key[0] == map_name for key in groups)]
+    missing += [f"missing {map_name} e{elevation}: expected, no configured spots"
+                for map_name, elevation in expected if (map_name, elevation) not in groups]
+    lines += missing or ["missing: none"]
+    if not expected:
+        lines.append("elevations: not checked, no expected map elevations given (--expect)")
+    lines.append("A named spot proves only its own view, not every object of its class.")
+    return lines
+
+
+def map_elevations(text):
+    """'kladwtwn:0,kladwtwn:1' as [('kladwtwn', 0), ('kladwtwn', 1)]."""
+    return [(map_name, int(elevation)) for map_name, _, elevation in (item.partition(":") for item in text.split(","))]
 
 
 def side_kind(side):
@@ -342,7 +382,7 @@ def sheets(turns, groups, out, skip_failed=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--before", required=True, help="a built checkout or a scene cache folder")
+    parser.add_argument("--before", help="a built checkout or a scene cache folder (required unless --coverage)")
     parser.add_argument("--after", default=str(ROOT), help="the same (default: this checkout)")
     parser.add_argument("--maps", help="comma-separated map names (default: every map in spots.json)")
     parser.add_argument("--rp-game-root", type=Path,
@@ -352,15 +392,25 @@ def main():
                         help="keep going when one map elevation fails to shoot; its folder keeps no stamp, "
                              "so a later --reuse run shoots it again")
     parser.add_argument("--out", type=Path, default=OUT / "sheets", help="where the sheets go")
+    parser.add_argument("--coverage", action="store_true", help="print the coverage report and shoot nothing")
+    parser.add_argument("--expect", type=map_elevations, default=[],
+                        help="comma-separated map:elevation pairs the selection must cover")
     args = parser.parse_args()
+    if not args.coverage and not args.before:
+        parser.error("--before is required unless --coverage")
     rp_game_root = args.rp_game_root.resolve() if args.rp_game_root else None
+    spots_path = HERE / ("rp_spots.json" if rp_game_root else "spots.json")
+    maps = set(args.maps.split(",")) if args.maps else None
+    print(f"tour coverage ({spots_path.name}):")
+    print("\n".join(coverage(json.loads(spots_path.read_text(encoding="utf-8")), maps, args.expect)), flush=True)
+    if args.coverage:
+        return 0
     if rp_game_root:
         if not (rp_game_root / "master.dat").is_file() or not (rp_game_root / "critter.dat").is_file():
             raise SystemExit("--rp-game-root must contain master.dat and critter.dat")
         if not (rp_game_root / "mods" / "rpu.dat").is_file():
             raise SystemExit("--rp-game-root must contain mods/rpu.dat")
-    spots_path = HERE / ("rp_spots.json" if rp_game_root else "spots.json")
-    turns, distance, groups = load_spots(set(args.maps.split(",")) if args.maps else None, spots_path)
+    turns, distance, groups = load_spots(maps, spots_path)
     shoot("before", args.before, turns, distance, groups, args.reuse, rp_game_root, args.skip_failed)
     shoot("after", args.after, turns, distance, groups, args.reuse, rp_game_root, args.skip_failed)
     sheets(turns, groups, args.out, args.skip_failed)

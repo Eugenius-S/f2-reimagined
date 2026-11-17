@@ -1,0 +1,120 @@
+py -3 tools/tour/tour.py --coverage --maps bhrnddst,bhrndmtn,broken1,broken2,geckjunk,geckpwpl,gecksetl,gecktunl,newr1,newr1a,newr2,newr2a,newr3,newr4,newrba,newrcs,newrgo,newrst,newrvb,raiders1,raiders2,reddown,reddtun,redment,redmtun,redwame,redwan1,vctycocl,vctyctyd,vctydwtn,vctyvlt
+tour coverage (spots.json):
+turns: -45 +0 +45
+requested maps: bhrnddst, bhrndmtn, broken1, broken2, geckjunk, geckpwpl, gecksetl, gecktunl, newr1, newr1a, newr2, newr2a, newr3, newr4, newrba, newrcs, newrgo, newrst, newrvb, raiders1, raiders2, reddown, reddtun, redment, redmtun, redwame, redwan1, vctycocl, vctyctyd, vctydwtn, vctyvlt
+covered bhrnddst e0: 1 spots x 3 turns = 3 views
+  tile 22897 the Broken Hills desert
+covered broken1 e0: 3 spots x 3 turns = 9 views
+  tile 17947 Broken Hills entrance
+  tile 19947 the jail and the fence line
+  tile 23947 the brahmin pen
+covered broken1 e1: 1 spots x 3 turns = 3 views
+  tile 13530 Broken Hills, upper floor
+covered broken2 e0: 3 spots x 3 turns = 9 views
+  tile 20944 Broken Hills east entrance
+  tile 18944 the street with the cactus planters
+  tile 24944 the brick building and the shack
+covered broken2 e1: 1 spots x 3 turns = 3 views
+  tile 21340 Broken Hills east, level 1
+covered broken2 e2: 1 spots x 3 turns = 3 views
+  tile 21341 Broken Hills east, level 2
+covered geckjunk e0: 2 spots x 3 turns = 6 views
+  tile 26311 the junkyard
+  tile 22311 the wrecked car and the pens
+covered geckpwpl e0: 2 spots x 3 turns = 6 views
+  tile 20533 the power plant
+  tile 16533 the reactor hall
+covered gecksetl e0: 2 spots x 3 turns = 6 views
+  tile 23709 the settlement entrance
+  tile 27709 the brahmin pen and the farm
+covered gecktunl e0: 2 spots x 3 turns = 6 views
+  tile 20100 the access tunnels
+  tile 16100 the tunnel crossing
+covered newr1 e0: 2 spots x 3 turns = 6 views
+  tile 24105 the first street entrance
+  tile 18100 the lit casino corner
+covered newr1 e1: 1 spots x 3 turns = 3 views
+  tile 15087 the first street, upper floor
+covered newr1 e2: 1 spots x 3 turns = 3 views
+  tile 18085 the first street, top floor
+covered newr2 e0: 2 spots x 3 turns = 6 views
+  tile 20100 the second street entrance
+  tile 26105 the car lot and the murals
+covered newr2 e1: 1 spots x 3 turns = 3 views
+  tile 18093 the second street, upper floor
+covered newr2 e2: 1 spots x 3 turns = 3 views
+  tile 18695 the second street, top floor
+covered newr3 e0: 2 spots x 3 turns = 6 views
+  tile 29495 the third street entrance
+  tile 27495 the neon corner
+covered newr3 e1: 1 spots x 3 turns = 3 views
+  tile 29094 the third street, upper floor
+covered newr4 e0: 2 spots x 3 turns = 6 views
+  tile 27103 the fourth street entrance
+  tile 25103 the truck by the street
+covered newr4 e1: 1 spots x 3 turns = 3 views
+  tile 18493 the fourth street, upper floor
+covered newrba e0: 1 spots x 3 turns = 3 views
+  tile 20100 the boxing arena
+covered newrcs e0: 1 spots x 3 turns = 3 views
+  tile 24537 the chop shop
+covered newrgo e0: 1 spots x 3 turns = 3 views
+  tile 28101 Golgatha entrance
+covered newrgo e1: 1 spots x 3 turns = 3 views
+  tile 24706 Golgatha, upper floor
+covered newrst e0: 1 spots x 3 turns = 3 views
+  tile 25915 the stables
+covered newrst e1: 1 spots x 3 turns = 3 views
+  tile 24711 the stables, upper floor
+covered newrvb e0: 1 spots x 3 turns = 3 views
+  tile 21732 the VIP basement
+covered raiders1 e0: 2 spots x 3 turns = 6 views
+  tile 23305 the raiders ground camp
+  tile 19305 the cliff and the cave mouth
+covered raiders1 e1: 1 spots x 3 turns = 3 views
+  tile 22703 the raiders, upper floor
+covered raiders2 e0: 2 spots x 3 turns = 6 views
+  tile 20100 the raiders cave entrance
+  tile 16100 the cave fire
+covered raiders2 e1: 2 spots x 3 turns = 6 views
+  tile 20100 the raiders cave, level 1
+  tile 22100 the cave passage
+covered raiders2 e2: 1 spots x 3 turns = 3 views
+  tile 19899 the raiders cave, level 2
+covered reddown e0: 1 spots x 3 turns = 3 views
+  tile 19059 downtown entrance
+covered reddtun e0: 1 spots x 3 turns = 3 views
+  tile 20100 the downtown tunnels
+covered redment e0: 1 spots x 3 turns = 3 views
+  tile 26912 the mine entrance
+covered redmtun e0: 1 spots x 3 turns = 3 views
+  tile 20100 the mine tunnels
+covered redwame e0: 1 spots x 3 turns = 3 views
+  tile 20275 the Wanamingo mine entrance
+covered redwan1 e0: 1 spots x 3 turns = 3 views
+  tile 26893 the Wanamingo mine, level 1
+covered redwan1 e1: 1 spots x 3 turns = 3 views
+  tile 26893 the Wanamingo mine, level 2
+covered vctycocl e0: 1 spots x 3 turns = 3 views
+  tile 19292 the council entrance
+covered vctyctyd e0: 2 spots x 3 turns = 6 views
+  tile 27506 the courtyard entrance
+  tile 25506 the gate with the towers
+covered vctydwtn e0: 3 spots x 3 turns = 9 views
+  tile 24117 downtown entrance
+  tile 22117 the downtown blocks
+  tile 28117 the wall and the gate
+covered vctyvlt e0: 3 spots x 3 turns = 9 views
+  tile 17095 the vault courtyard
+  tile 13095 the vault corridor crossing
+  tile 21095 the vault door
+covered vctyvlt e1: 1 spots x 3 turns = 3 views
+  tile 17095 the vault, level 1
+covered vctyvlt e2: 2 spots x 3 turns = 6 views
+  tile 16694 the vault, level 2
+  tile 20694 the anomaly room
+missing bhrndmtn: no configured spots
+missing newr1a: no configured spots
+missing newr2a: no configured spots
+elevations: not checked, no expected map elevations given (--expect)
+A named spot proves only its own view, not every object of its class.
