@@ -6,6 +6,7 @@ a local HTTP release, the real launcher exe, --no-start."""
 
 import contextlib
 import ctypes
+from ctypes import wintypes
 import functools
 import http.server
 import os
@@ -21,13 +22,22 @@ from launcher_install_test import ART, LAUNCHER, LauncherFixture, QuietHandler, 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 LOCK = "f2reimagined.lock"
+INVALID_HANDLE = ctypes.c_void_p(-1).value
+ERROR_SHARING_VIOLATION = 32
 # A separate process that holds the lock file: READY only after it owns it.
+# CreateFileW fails with INVALID_HANDLE_VALUE, not NULL, so both are checked
+# (312). Plain attributes (0x80): a killed holder leaves the file behind,
+# the stale case the next worker must still walk past.
 HOLDER = (
     "import ctypes, sys, time\n"
+    "from ctypes import wintypes\n"
     "k = ctypes.WinDLL('kernel32', use_last_error=True)\n"
-    "k.CreateFileW.restype = ctypes.c_void_p\n"
-    "h = k.CreateFileW(sys.argv[1], 0xC0000000, 0, None, 3, 0x400, None)\n"
-    "if not h: sys.stdout.write('FAIL'); sys.stdout.flush(); sys.exit(1)\n"
+    "k.CreateFileW.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,\n"
+    "    wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)\n"
+    "k.CreateFileW.restype = wintypes.HANDLE\n"
+    "h = k.CreateFileW(sys.argv[1], 0xC0000000, 0, None, 3, 0x80, None)\n"
+    "if h is None or h == ctypes.c_void_p(-1).value:\n"
+    "    sys.stdout.write('FAIL %d' % ctypes.get_last_error()); sys.stdout.flush(); sys.exit(1)\n"
     "sys.stdout.write('READY'); sys.stdout.flush()\n"
     "time.sleep(60)\n"
 )
@@ -168,15 +178,15 @@ class LockTests(LauncherFixture):
             self.assertEqual((other / "version.txt").read_bytes(), b"new-build")
 
     def test_killed_holder_releases_the_lock(self):
-        # The holder really owns the lock (exclusive open, checked handle,
-        # DELETE_ON_CLOSE), signals READY only after acquiring it, and the
-        # parent proves a contender cannot enter before the kill; when the
-        # holder's process dies, the OS closes the handle, the file goes
-        # away, and the next worker walks in.
+        # The holder really owns the lock (exclusive open, checked handle),
+        # signals READY only after acquiring it, and the parent proves a
+        # contender cannot enter before the kill; when the holder's process
+        # dies, the OS closes the handle, its stale file stays, and the next
+        # worker walks in anyway.
+        (self.root / LOCK).write_bytes(b"")  # the child opens with OPEN_EXISTING
         holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(self.root / LOCK)],
                                   stdout=subprocess.PIPE)
         self.addCleanup(holder.kill)
-        (self.root / LOCK).write_bytes(b"")  # the child opens with OPEN_EXISTING
         try:
             state = holder.stdout.read(5).decode("ascii")
         except OSError:
@@ -185,12 +195,19 @@ class LockTests(LauncherFixture):
         # A contender's exclusive open of the same file must fail while the
         # holder stands (the proof the lock excludes, before the kill).
         kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel.CreateFileW.restype = ctypes.c_void_p
+        kernel.CreateFileW.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+                                       wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+        kernel.CreateFileW.restype = wintypes.HANDLE
+        kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
         contender = kernel.CreateFileW(str(self.root / LOCK), 0xC0000000, 0, None, 3, 0, None)
-        self.assertEqual(contender, ctypes.c_void_p(-1).value,
-                         "a second exclusive open is refused while the holder stands")
+        contenderError = ctypes.get_last_error()
+        if contender is not None and contender != INVALID_HANDLE:
+            kernel.CloseHandle(contender)  # only a valid handle of our own
+        self.assertEqual(contender, INVALID_HANDLE, "a second exclusive open is refused while the holder stands")
+        self.assertEqual(contenderError, ERROR_SHARING_VIOLATION)
         holder.kill()
         holder.wait(timeout=10)
+        self.assertTrue((self.root / LOCK).exists(), "the killed holder leaves a stale lock file")
         code, output = self.run_launcher()
         self.assertEqual(code, 0, output)
         self.assertEqual((self.root / "version.txt").read_bytes(), b"new-build")
