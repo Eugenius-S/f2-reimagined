@@ -148,6 +148,18 @@ class RecoveryTests(RecoveryFixture):
         self.assertEqual({p.name: p.read_bytes() for p in self.root.iterdir() if p.is_file()}, before)
         self.assertTrue((self.root / BACKUPS / MARKER).exists())
 
+    def test_end_count_with_a_suffix_is_blocked(self):
+        # "END 3junk" names no count: the journal is malformed, so recovery
+        # blocks and every file, marker included, stays (312).
+        (self.root / BACKUPS / MANIFEST).write_text(
+            "Y fallout2-ce.exe\nY ce.dat\nY version.txt\nEND 3junk\n", encoding="ascii")
+        before = tree(self.root)
+        code, output = self.run_rollback()
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("journal", output)
+        self.assertEqual(tree(self.root), before)
+        self.assertTrue((self.root / BACKUPS / MARKER).exists())
+
     def test_missing_journal_is_blocked_not_guessed(self):
         # A standing marker without its journal: the update died between the
         # two, or the journal was lost.  The touched set is unknown, so

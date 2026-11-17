@@ -29,10 +29,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace launcher_update {
@@ -211,12 +213,12 @@ inline bool intendedSetCorrupt(const fs::path& gameRoot)
         }
         if (line.rfind("END ", 0) == 0) {
             endSeen = true;
-            try {
-                endCount = static_cast<size_t>(std::stoull(line.substr(4)));
-                endCountOk = true;
-            } catch (...) {
-                endCountOk = false;
-            }
+            // 312: the whole token, plain decimal digits only: no sign, no
+            // spaces, no suffix, and no value past size_t.
+            const char* first = line.data() + 4;
+            const char* last = line.data() + line.size();
+            std::from_chars_result parsed = std::from_chars(first, last, endCount);
+            endCountOk = parsed.ec == std::errc() && parsed.ptr == last;
             continue;
         }
         if (line.size() < 3 || (line[0] != 'Y' && line[0] != 'N') || line[1] != ' '

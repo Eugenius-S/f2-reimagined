@@ -93,6 +93,14 @@ int main()
     check(intendedSetCorrupt(root), "an END count that disagrees with the entries");
     put(backupsRoot(root) / "update-manifest.txt", "Y a.png\nEND 1\njunk\n");
     check(intendedSetCorrupt(root), "anything after the END line breaks the transaction");
+    // 312: the END count is the whole token, plain decimal digits only.
+    for (const char* bad : { "1junk", "1 ", " 1", "+1", "-1", "1.0", "0x1", "", "18446744073709551617",
+             "99999999999999999999999" }) {
+        put(backupsRoot(root) / "update-manifest.txt", std::string("Y a.png\nEND ") + bad + "\n");
+        check(intendedSetCorrupt(root), (std::string("a malformed END count is refused: [") + bad + "]").c_str());
+    }
+    put(backupsRoot(root) / "update-manifest.txt", "Y a.png\r\nEND 1\r\n");
+    check(!intendedSetCorrupt(root), "a CRLF journal with a plain END count stays good");
     std::error_code journalError;
     fs::remove_all(backupsRoot(root) / "update-manifest.txt", journalError);
     check(intendedSetCorrupt(root), "a missing journal under a standing marker is an unknown set");
