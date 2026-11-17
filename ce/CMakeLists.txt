@@ -492,6 +492,12 @@ if(BUILD_TESTING)
     target_include_directories(preview_policy_tests PRIVATE "src/scene")
     add_test(NAME preview_policy_tests COMMAND preview_policy_tests)
 
+    add_executable(launcher_ui_state_tests
+        "tests/launcher_progress/launcher_ui_state_test.cc"
+    )
+    target_include_directories(launcher_ui_state_tests PRIVATE "src")
+    add_test(NAME launcher_ui_state_tests COMMAND launcher_ui_state_tests)
+
     add_executable(ground_pick_tests
         "src/scene_renderer/ground_pick.cc"
         "tests/ground_pick/ground_pick_test.cc"

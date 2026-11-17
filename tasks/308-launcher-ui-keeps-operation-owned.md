@@ -38,3 +38,15 @@ Window redesign, a new UI framework, immediate cancellation of writes, worker ro
 
 - 2026-11-15 gpt: cut from concrete UI state transitions; live race reproduction still needs a controlled local fixture.
 - 2026-11-18 claude: claimed for the Win32-free part first. launcher_ui.cc overlaps 307/309 and waits for an explicit handoff of their heads; until then only the state header and its deterministic test.
+- 2026-11-18 claude: part 1 of 2 in PR 533, the Win32-free state. **Not integrated:** `launcher_ui.cc` is unchanged and waits for an explicit handoff of the 307/309 heads.
+  - **Done.** `ce/src/launcher_ui_state.h`:
+    - `controls()`: everything is off while busy, whatever reply arrives. Play needs an installed game and no pending recovery. Install needs a folder and the launcher.
+    - `Lifecycle`: `start` refuses a second operation; `changeRoot` refuses while busy and otherwise bumps `rootGeneration`; `releaseMayAct(asked)` is true only when idle and for the same folder; `requestClose` defers while busy and `finish` then reports that the deferred close is due.
+  - The test is `ce/tests/launcher_progress/launcher_ui_state_test.cc`, registered as the CTest `launcher_ui_state_tests`. It plays through four sequences: a delayed release reply during a slow install, a folder change, and a close while busy, then idle. Not compiled locally (no compiler outside the heavy slot); CI builds and runs it.
+  - **Next, after the handoff,** wire `launcher_ui.cc`:
+    - one `refreshControls()` replaces the scattered `EnableWindow` calls, with 307's `updatePending()` going into the `playBlocked` argument;
+    - make the folder field read-only while busy, and have `chosenRoot()` return the operation's folder while busy;
+    - on `EN_CHANGE` while idle, run `changeRoot()`, refresh the installed, version, RP and translation state, and clear `g_operationCompleted`;
+    - `WM_RELEASE_INFO` carries the generation it was asked under and does nothing while busy;
+    - `WM_CLOSE` while busy defers, says so in the status and the log, and `WM_OPERATION_DONE` then closes.
+  - **Still missing:** the scratch-folder fixture, CTest, and the outcome images, all in the heavy slot.
