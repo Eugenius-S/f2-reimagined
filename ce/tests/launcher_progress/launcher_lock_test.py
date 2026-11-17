@@ -97,8 +97,7 @@ class LockTests(LauncherFixture):
             "k = ctypes.WinDLL('kernel32', use_last_error=True)\n"
             "k.CreateFileW.restype = ctypes.c_void_p\n"
             "h = k.CreateFileW(sys.argv[1], 0xC0000000, 0, None, 3, 0x400, None)\n"
-            "if not h:\n"
-            "    sys.stdout.write('FAIL'); sys.stdout.flush(); sys.exit(1)\n"
+            "if not h: sys.stdout.write('FAIL'); sys.stdout.flush(); sys.exit(1)\n"
             "sys.stdout.write('READY'); sys.stdout.flush()\n"
             "time.sleep(60)\n"
         )
