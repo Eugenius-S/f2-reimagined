@@ -43,6 +43,10 @@ def write_receipt(backup):
     (backup / RECEIPT).write_text("\n".join(lines) + "\n", encoding="ascii")
 
 
+def tree(root):
+    return {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
 def run_launcher(args):
     result = subprocess.run(args, capture_output=True, timeout=90)
     output = result.stdout.decode("utf-8", errors="replace") + result.stderr.decode("utf-8", errors="replace")
@@ -143,6 +147,42 @@ class RecoveryTests(RecoveryFixture):
         self.assertIn("journal", output)
         self.assertEqual({p.name: p.read_bytes() for p in self.root.iterdir() if p.is_file()}, before)
         self.assertTrue((self.root / BACKUPS / MARKER).exists())
+
+    def test_missing_journal_is_blocked_not_guessed(self):
+        # A standing marker without its journal: the update died between the
+        # two, or the journal was lost.  The touched set is unknown, so
+        # recovery blocks and every file, marker included, stays (311).
+        (self.root / BACKUPS / MANIFEST).unlink()
+        before = tree(self.root)
+        code, output = self.run_rollback()
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("journal is missing", output)
+        self.assertEqual(tree(self.root), before)
+        self.assertTrue((self.root / BACKUPS / MARKER).exists())
+
+    def test_player_files_survive_the_restore(self):
+        # Only journaled paths are the update's: an introduced file goes, and
+        # everything the journal does not name stays byte for byte, even
+        # inside a build tree (311).
+        player = {
+            "data/savegame/SLOT01/SAVE.DAT": b"player-save",
+            "fallout2.cfg": b"player-config",
+            "user-assets/mine.png": b"mine",
+        }
+        for relative, data in player.items():
+            (self.root / relative).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / relative).write_bytes(data)
+        introduced = self.root / "user-assets" / "new-art.png"
+        introduced.write_bytes(b"new-art")
+        (self.root / BACKUPS / MANIFEST).write_text(
+            "Y fallout2-ce.exe\nY ce.dat\nY version.txt\nN user-assets/new-art.png\nEND 4\n", encoding="ascii")
+        code, output = self.run_rollback()
+        self.assertEqual(code, 0, output)
+        self.assert_restored()
+        self.assertFalse(introduced.exists())
+        for relative, data in player.items():
+            self.assertEqual((self.root / relative).read_bytes(), data, relative)
+        self.assertEqual((self.root / "master.dat").read_bytes(), b"old")
 
     def test_rollback_repairs_in_one_step(self):
         # The backup's version equals the installed stamp: the repair happens

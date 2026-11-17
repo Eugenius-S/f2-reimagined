@@ -6,18 +6,34 @@ a local HTTP release, the real launcher exe, --no-start."""
 
 import contextlib
 import ctypes
+import functools
+import http.server
 import os
 import subprocess
 import sys
+import threading
 import time
 import unittest
 from pathlib import Path
 
-from launcher_install_test import ART, LAUNCHER, LauncherFixture, REQUIRED, read_lock
+from launcher_install_test import ART, LAUNCHER, LauncherFixture, QuietHandler, REQUIRED, read_lock
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 LOCK = "f2reimagined.lock"
+
+
+class GatedHandler(QuietHandler):
+    # The first request waits until the test opens the gate: the launcher
+    # that sent it stands past its root lock, before any write (311).
+    def do_GET(self):
+        with self.server.mutex:
+            self.server.paths.append(self.path)
+            first = len(self.server.paths) == 1
+        if first:
+            self.server.arrived.set()
+            self.server.gate.wait(60)
+        super().do_GET()
 
 
 @contextlib.contextmanager
@@ -41,6 +57,61 @@ class LockTests(LauncherFixture):
 
     def tree(self, root):
         return {p.relative_to(root): p.read_bytes() for p in Path(root).rglob("*") if p.is_file()}
+
+    def parked_launcher(self):
+        # A real launcher worker parked on its first release request, which
+        # it sends only after it holds the root lock.
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0),
+            functools.partial(GatedHandler, directory=str(self.release)))
+        server.mutex, server.paths = threading.Lock(), []
+        server.arrived, server.gate = threading.Event(), threading.Event()
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(thread.join)
+        self.addCleanup(server.shutdown)
+        self.addCleanup(server.gate.set)
+        url = f"http://127.0.0.1:{server.server_port}"
+        worker = subprocess.Popen([str(LAUNCHER), "--game-root", str(self.root),
+            "--update-url", url, "--mirror-url", url, "--ui-language", "en", "--no-start"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.addCleanup(worker.wait, 10)
+        self.addCleanup(worker.kill)
+        self.assertTrue(server.arrived.wait(30), "the parked launcher reached the release")
+        self.assertTrue((self.root / LOCK).exists(), "the parked launcher holds the root lock")
+        return worker, server
+
+    def test_second_launcher_refuses_a_live_one(self):
+        # Two real launcher processes on one root: the second refuses before
+        # any network or write, then the first finishes its install (311).
+        first, server = self.parked_launcher()
+        # The live holder opened the lock with no sharing, so it is not read.
+        before = {p.relative_to(self.root): p.read_bytes()
+                  for p in self.root.rglob("*") if p.name != LOCK and p.is_file()}
+        code, output = self.run_launcher()
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("already running", output)
+        self.assertNotIn("release build", output)
+        after = {p.relative_to(self.root): p.read_bytes()
+                 for p in self.root.rglob("*") if p.name != LOCK and p.is_file()}
+        self.assertEqual(before, after)
+        server.gate.set()
+        firstOutput = first.communicate(timeout=90)[0].decode("utf-8", errors="replace")
+        print(f"\n{self.id()} first: exit {first.returncode}\n{firstOutput}", flush=True)
+        self.assertEqual(first.returncode, 0, firstOutput)
+        self.assertEqual((self.root / "version.txt").read_bytes(), b"new-build")
+        self.assertFalse((self.root / LOCK).exists())
+
+    def test_killed_launcher_releases_the_lock(self):
+        # A real launcher killed while it holds the root: the OS closes its
+        # handle, and the next worker walks in and installs (311).
+        first, _server = self.parked_launcher()
+        first.kill()
+        first.wait(timeout=10)
+        code, output = self.run_launcher()
+        self.assertEqual(code, 0, output)
+        self.assertEqual((self.root / "version.txt").read_bytes(), b"new-build")
+        self.assertFalse((self.root / LOCK).exists())
 
     def test_busy_root_changes_nothing(self):
         # A live holder of the lock file: the second worker refuses and the
