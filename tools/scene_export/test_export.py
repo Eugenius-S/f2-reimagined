@@ -344,6 +344,27 @@ class TargetTests(unittest.TestCase):
             game = Path(tmp)
             self.assertEqual(scene_directory(game, "klatrap", 2), game / "mod-cache" / "scene" / "klatrap" / "2")
 
+    @unittest.skipUnless(os.name == "nt", "a Windows junction")
+    def test_a_junction_inside_the_cache_is_refused(self):
+        import _winapi
+        with TemporaryDirectory() as tmp:
+            cache, outside = Path(tmp) / "cache", Path(tmp) / "outside"
+            cache.mkdir()
+            outside.mkdir()
+            _winapi.CreateJunction(str(outside), str(cache / "klatrap"))
+            with self.assertRaises(SystemExit) as refused:
+                scene_directory(Path(tmp), "klatrap", 0, cache)
+            self.assertIn("escaped the cache", str(refused.exception))
+            game = Path(tmp) / "game"  # the default cache: a junction on the way in is refused too
+            (outside / "scene").mkdir()
+            game.mkdir()
+            _winapi.CreateJunction(str(outside), str(game / "mod-cache"))
+            with self.assertRaises(SystemExit) as refused:
+                scene_directory(game, "klatrap", 0)
+            self.assertIn("refusing a link in output path", str(refused.exception))
+            self.assertEqual([p.name for p in outside.iterdir()], ["scene"])
+            self.assertEqual(list((outside / "scene").iterdir()), [])
+
 
 class SyntheticCache(unittest.TestCase):
     """Synthetic game: map "two" has elevations 0 and 1, map "upper" 1 and 2 and no 0 (the map loader
@@ -660,10 +681,10 @@ class PublishTests(SyntheticCache):
     def test_a_hard_stop_before_the_backup_is_removed_keeps_the_new_scene(self):
         real = export.remove_scene_dir
 
-        def remove(path):
+        def remove(path, **kwargs):
             if path.name.endswith(".old"):
                 raise Killed()
-            return real(path)
+            return real(path, **kwargs)
         with mock.patch.object(export, "remove_scene_dir", side_effect=remove), self.assertRaises(Killed):
             self.publish(self.new_export)
         self.assertEqual(self.folders(), ["0", "0.old", "1"])
@@ -715,6 +736,100 @@ class PublishTests(SyntheticCache):
         self.assertEqual((staging / "notes.txt").read_text(), "not ours")
         self.assertEqual({k: v for k, v in self.snapshot().items() if not k.startswith("two/0.staging/")},
                          self.before)
+
+    def copy_live(self, name):
+        folder = self.cache / "two" / name
+        folder.mkdir()
+        for path in self.live.iterdir():
+            (folder / path.name).write_bytes(path.read_bytes())
+        return folder
+
+    def test_a_backup_that_cannot_be_read_is_kept_while_the_scene_is_damaged(self):
+        self.copy_live("0.old")
+        (self.live / "walls.bin").write_bytes(b"damaged")
+        kept = self.snapshot()
+        real = export.sha256_file
+
+        def sha256_file(path):
+            if Path(path).parent.name == "0.old" and Path(path).name == "tiles.png":
+                raise PermissionError("held by a scanner")
+            return real(path)
+        with mock.patch.object(export, "sha256_file", side_effect=sha256_file), \
+                self.assertRaises(SystemExit) as stopped:
+            self.publish(self.new_export)
+        self.assertIn("both kept", str(stopped.exception))
+        self.assertEqual(self.snapshot(), kept)
+        self.publish(self.new_export)  # readable again: the backup comes back, then the rebuild replaces it
+        self.assert_new_scene()
+
+    def test_a_cleanup_stopped_half_way_is_finished_next_time(self):
+        real, calls = Path.unlink, []
+
+        def unlink(path, *args, **kwargs):
+            calls.append(path.name)
+            if len(calls) == 3:
+                raise Killed()
+            return real(path, *args, **kwargs)
+
+        def failing(*args):
+            self.new_export(*args)
+            raise OSError("disk full")
+        with mock.patch.object(Path, "unlink", autospec=True, side_effect=unlink), self.assertRaises(Killed):
+            self.publish(failing)
+        self.assertIn("provenance.json", [p.name for p in (self.cache / "two" / "0.staging").iterdir()])
+        self.assertEqual(self.publish(self.new_export), 0)
+        self.assert_new_scene()
+
+    def test_a_foreign_backup_never_becomes_the_scene(self):
+        shutil.rmtree(self.live)
+        backup = self.cache / "two" / "0.old"
+        backup.mkdir()
+        (backup / "tiles.png").write_bytes(b"somebody else's bytes")
+        with self.assertRaises(SystemExit) as stopped:
+            self.publish(self.new_export)
+        self.assertIn("not made by this exporter", str(stopped.exception))
+        self.assertEqual(self.folders(), ["0.old", "1"])
+        self.assertEqual((backup / "tiles.png").read_bytes(), b"somebody else's bytes")
+
+    def test_a_scene_with_a_broken_provenance_is_still_rebuilt_or_restored(self):
+        self.copy_live("0.old")
+        (self.live / "provenance.json").write_text("{")
+        with self.assertRaises(OSError):
+            self.publish(self.broken_export(OSError("disk full")))
+        self.assert_old_scene()  # the scene folder is the exporter's own: the good backup replaced it
+        (self.live / "provenance.json").write_text("{")
+        self.assertEqual(self.publish(self.new_export), 0)  # no backup: moved aside, rebuilt, aside removed
+        self.assert_new_scene()
+
+    def test_a_new_scene_that_is_not_current_for_this_target_is_never_published(self):
+        def another_map(gf, game_root, name, elevation, out_dir):
+            self.fake_export(gf, game_root, "upper", 1, out_dir)  # whole and self-consistent, but upper e1
+
+        def old_inputs(*args):
+            self.new_export(*args)
+            provenance = json.loads((args[-1] / "provenance.json").read_text())
+            provenance["inputs_sha256"] = "0" * 64
+            (args[-1] / "provenance.json").write_text(json.dumps(provenance))
+        for writer, reason in ((another_map, "the scene is another map's"), (old_inputs, "the exporter changed")):
+            with self.subTest(reason):
+                with self.assertRaises(RuntimeError) as stopped:
+                    self.publish(writer)
+                self.assertIn(f"the new scene failed its check: {reason}", str(stopped.exception))
+                self.assert_old_scene()
+
+    def test_a_staging_or_backup_folder_the_export_did_not_make_is_kept(self):
+        for name in ("0.staging", "0.old"):
+            with self.subTest(name):
+                folder = self.cache / "two" / name
+                folder.mkdir()
+                (folder / "tiles.png").write_bytes(b"somebody else's bytes")
+                with self.assertRaises(SystemExit) as stopped:
+                    self.publish(self.new_export)
+                self.assertIn("not made by this exporter", str(stopped.exception))
+                self.assertEqual((folder / "tiles.png").read_bytes(), b"somebody else's bytes")
+                self.assertEqual({k: v for k, v in self.snapshot().items() if not k.startswith(f"two/{name}/")},
+                                 self.before)
+                shutil.rmtree(folder)
 
 
 class ShapeRulesFingerprintTests(unittest.TestCase):
