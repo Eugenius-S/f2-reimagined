@@ -243,11 +243,17 @@ if (-not (Test-Path -LiteralPath $buildExe)) {
     throw "No build\fallout2-ce.exe in this worktree: build the Release exe first (tools/configure-build.ps1), then run the sweep."
 }
 # 516 P2: the commit is identity, not a free label.  It must name a real
-# commit object, and it lands in every row so the builder can refuse a
-# relabeled table.
+# commit object, and the sweep measures this worktree's build\ exe, so the
+# recorded commit is this worktree's HEAD: a label pointing anywhere else
+# would misname whatever exe stands in build\.  The exe's own sha256 rides
+# in every row either way.
 if ($Commit -ne '') {
     git -C $Root cat-file -e ("{0}^{{commit}}" -f $Commit) 2>$null
     if ($LASTEXITCODE -ne 0) { throw "commit '$Commit' does not exist in this repository" }
+    $headCommit = (git -C $Root rev-parse HEAD).Trim()
+    if ($headCommit -ne $Commit) {
+        throw "this worktree stands at $headCommit, not $Commit; the exe in build\ was built here, so only the HEAD commit may be recorded (or move the worktree first)"
+    }
 }
 $devSnapshot = Join-Path $PSScriptRoot 'dev-snapshot.ps1'
 $mapListScript = Join-Path $PSScriptRoot 'map_health_maps.py'
@@ -284,9 +290,13 @@ if (Test-Path -LiteralPath $StateFile) {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         try { $row = $line | ConvertFrom-Json } catch { continue }
         $key = '{0}:e{1}' -f $row.map, $row.elevation
-        if ($row.exe_sha256 -ne $exeHash) {
+        # Identity is the build AND the commit it was recorded on: a row from
+        # another exe or another commit cannot stand in this sweep's table.
+        $sameCommit = ($row.PSObject.Properties['commit'] -and $row.commit -eq $Commit) `
+            -or (-not $row.PSObject.Properties['commit'] -and $Commit -eq '')
+        if ($row.exe_sha256 -ne $exeHash -or -not $sameCommit) {
             $staleRows += $line
-            $staleKept += "$key was measured on build $($row.exe_sha256), moved out of this journal"
+            $staleKept += "$key was measured on build $($row.exe_sha256) commit $($row.commit), moved out of this journal"
             continue
         }
         $rows[$key] = $row
@@ -394,6 +404,13 @@ foreach ($t in $pending) {
         $sidecar = Get-Content -Raw -LiteralPath $sidecarPath.FullName | ConvertFrom-Json
         $scene3d = $sidecar.scene_3d_enabled
         $renderer = $sidecar.renderer
+        # The sidecar names the exe the frame came from; a mismatch means the
+        # row would describe another build than the one this sweep measures.
+        if ($sidecar.PSObject.Properties['exe_sha256'] -and $sidecar.exe_sha256) {
+            if ($sidecar.exe_sha256.ToLower() -ne $exeHash) {
+                throw "the devshot sidecar names exe $($sidecar.exe_sha256.Substring(0, 12)), not this sweep's build: the row would misattribute its frame"
+            }
+        }
         if ($sidecar.image) {
             $candidate = Join-Path $sidecarPath.DirectoryName $sidecar.image
             if (Test-Path -LiteralPath $candidate) { $snapshotPath = Get-Item -LiteralPath $candidate }

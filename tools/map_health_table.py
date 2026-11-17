@@ -65,6 +65,10 @@ def evidence_missing(row):
             missing.append(field)
     if not row.get('snapshot'):
         missing.append('snapshot')
+    elif not Path(row['snapshot']).exists():
+        # The capture file itself must stand: a path to nothing is not
+        # visual evidence (516 P2).
+        missing.append('snapshot file')
     return missing
 
 
@@ -157,10 +161,22 @@ def build_table(rows, commit, out, expected=None):
     invalid = [row for row in ordered if not (row.get('status') == 'ok' and not row.get('noisy'))]
     flagged = [row for row in valid if flags(row, shares.get((row['map'], row['elevation'])))]
 
+    # Coverage is computed before the headline: only a table whose rows cover
+    # the whole expected list may claim the whole game was walked (516 P2).
+    full_coverage = False
+    if expected is not None:
+        expected_keys = {(m, int(e)) for m, e in expected}
+        covered = expected_keys & {(row['map'], int(row['elevation'])) for row in rows}
+        extra = {(row['map'], int(row['elevation'])) for row in rows} - expected_keys
+        full_coverage = covered == expected_keys and not extra
+
     lines = []
     lines.append('# All-map health table (271)')
     lines.append('')
-    lines.append('One command (tools/map-health.ps1) walked every playable map and elevation.')
+    if full_coverage:
+        lines.append('One command (tools/map-health.ps1) walked every playable map and elevation.')
+    else:
+        lines.append('One command (tools/map-health.ps1) walked the map elevations this table carries.')
     lines.append(f'Build: exe sha256 `{exe_sha[:16] if exe_sha else "?"}`, main commit `{commit or "not recorded"}`.')
     lines.append('')
     valid_n = len(valid)
@@ -171,10 +187,7 @@ def build_table(rows, commit, out, expected=None):
                  f'{len(invalid)} rows are not valid results and never count in the numbers above a table row.')
     # Coverage is a claim with a source or not a claim at all (516 P2).
     if expected is not None:
-        expected_keys = {(m, int(e)) for m, e in expected}
-        covered = expected_keys & {(row['map'], int(row['elevation'])) for row in rows}
-        extra = {(row['map'], int(row['elevation'])) for row in rows} - expected_keys
-        if covered == expected_keys and not extra:
+        if full_coverage:
             lines.append(f'Coverage: every one of the {len(expected_keys)} expected map elevations '
                          f'(checked against tools/map_health_maps.py) has a row.')
         else:
