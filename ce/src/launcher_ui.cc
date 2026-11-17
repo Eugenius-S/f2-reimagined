@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "launcher_progress.h"
+#include "launcher_ui_state.h"
 #include "launcher_uninstall.h"
 
 namespace fs = std::filesystem;
@@ -99,7 +100,9 @@ int g_rpWish = -1;
 // The last Install put the game in but could not get the translation; it is tried again next time.
 bool g_translationFailed = false;
 bool g_logDragging = false;
-bool g_busy = false;
+// The running operation, its fixed folder and a close waiting for it (308).
+launcher_ui_state::Lifecycle g_life;
+bool g_releaseAnswered = false; // until then the status says nothing about GitHub
 bool g_haveRelease = false;
 std::wstring g_releaseError;
 bool g_installed = false;
@@ -342,8 +345,10 @@ bool confirm(const std::wstring& title, const std::wstring& text)
     return MessageBoxW(g_window, text.c_str(), title.c_str(), MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES;
 }
 
+// While an operation runs, every disk check looks at the folder its worker changes.
 fs::path chosenRoot()
 {
+    if (g_life.busy) return fs::path(g_args.gameRoot);
     wchar_t root[32768] = {};
     GetWindowTextW(g_root, root, static_cast<int>(std::size(root)));
     return fs::path(root);
@@ -366,6 +371,7 @@ void syncRussianFromDisk()
 {
     if (g_russianWish >= 0) g_russianInstall = g_russianWish != 0;
     else if (g_installed) g_russianInstall = russianOnDisk();
+    else g_russianInstall = false; // a newly chosen bare folder does not keep the old folder's box
     if (g_russian != nullptr) InvalidateRect(g_russian, nullptr, TRUE);
 }
 
@@ -400,7 +406,7 @@ void syncRpFromDisk()
     bool onDisk = rpOnDisk();
     g_rpInstall = onDisk || rpRecoveryPending() || g_rpWish == 1;
     if (g_rp != nullptr) {
-        EnableWindow(g_rp, !g_busy);
+        EnableWindow(g_rp, !g_life.busy);
         InvalidateRect(g_rp, nullptr, TRUE);
     }
 }
@@ -470,7 +476,7 @@ std::wstring upToDateStatus()
 
 void refreshStatusFromRelease()
 {
-    if (g_busy) return;
+    if (g_life.busy) return;
     if (rpRecoveryPending()) { setStatus(rpRecoveryStatus()); return; }
     if (g_operationCompleted) {
         setStatus(doneStatus(g_lastOperation));
@@ -498,16 +504,43 @@ void refreshStatusFromRelease()
         : tr(L"A newer build is available.", L"Доступна новая сборка."));
 }
 
-void setBusy(bool busy)
+// The one place the window turns its controls on or off (308): while an
+// operation runs everything is off and its folder is read-only, whatever
+// reply arrives meanwhile.
+void refreshControls()
 {
-    g_busy = busy;
-    EnableWindow(g_install, !busy && GetWindowTextLengthW(g_root) != 0);
-    EnableWindow(g_browse, !busy);
-    EnableWindow(g_russian, !busy);
-    EnableWindow(g_rp, !busy);
-    EnableWindow(g_autoUpdate, !busy);
-    EnableWindow(g_remove, !busy && g_installed);
-    EnableWindow(g_play, !busy && g_installed && !rpRecoveryPending());
+    std::error_code error;
+    const launcher_ui_state::Controls controls = launcher_ui_state::controls(g_life.busy,
+        GetWindowTextLengthW(g_root) != 0, g_installed, rpRecoveryPending(), fs::exists(exePath(), error));
+    SendMessageW(g_root, EM_SETREADONLY, !controls.root, 0);
+    EnableWindow(g_browse, controls.root);
+    EnableWindow(g_russian, controls.options);
+    EnableWindow(g_rp, controls.options);
+    EnableWindow(g_autoUpdate, controls.options);
+    EnableWindow(g_install, controls.install);
+    EnableWindow(g_remove, controls.remove);
+    EnableWindow(g_play, controls.play);
+}
+
+// The chosen folder changed while idle: what the window shows, the boxes
+// and the status, comes from the new folder, and a success or a release
+// reply of the old one no longer speaks for it.
+void refreshRootState()
+{
+    if (!g_life.changeRoot()) return;
+    fs::path root = chosenRoot();
+    std::error_code error;
+    g_installed = !root.empty() && fs::exists(root / L"fallout2-ce.exe", error);
+    g_operationCompleted = false;
+    syncRussianFromDisk();
+    syncRpFromDisk();
+    refreshControls();
+    if (g_releaseAnswered) refreshStatusFromRelease();
+}
+
+void showBusy(bool busy)
+{
+    refreshControls();
     if (busy) {
         g_tracker = launcher_progress::Tracker();
         g_progressValue = 2;
@@ -624,19 +657,21 @@ std::vector<std::wstring> workerArguments(Operation operation)
 
 void startOperation(Operation operation)
 {
-    if (g_busy) return;
+    if (g_life.busy) return;
     wchar_t path[32768] = {};
     GetWindowTextW(g_root, path, static_cast<int>(std::size(path)));
-    g_args.gameRoot = path;
-    if (g_args.gameRoot.empty()) {
+    if (path[0] == L'\0') {
         setStatus(tr(L"Choose the folder containing master.dat and critter.dat.",
             L"Выберите папку с файлами master.dat и critter.dat."));
         return;
     }
+    // From here until WM_OPERATION_DONE this is the worker's folder.
+    g_args.gameRoot = path;
+    g_life.start();
     saveSettings();
     g_operationCompleted = false;
     g_translationFailed = false;
-    setBusy(true);
+    showBusy(true);
     setStatus(operation == Operation::Uninstall ? tr(L"Removing the mod...", L"Удаляем мод...")
                        : operation == Operation::RemoveRp ? tr(L"Removing Restoration Project...", L"Удаляем Restoration Project...")
                        : operation == Operation::RemoveRussian ? tr(L"Removing the Russian translation...", L"Удаляем русификатор...")
@@ -661,13 +696,15 @@ void checkReleaseAsync()
         args.push_back(L"--release-info-url");
         args.push_back(g_args.releaseInfoUrl);
     }
-    std::thread([args = std::move(args)]() {
+    // The reply says which folder it was asked for; it may act only for that one.
+    const WPARAM asked = g_life.rootGeneration;
+    std::thread([args = std::move(args), asked]() {
         SECURITY_ATTRIBUTES security = {sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
         HANDLE readPipe = nullptr;
         HANDLE writePipe = nullptr;
         ReleaseInfo* info = new ReleaseInfo();
         if (!CreatePipe(&readPipe, &writePipe, &security, 0)) {
-            if (!PostMessageW(g_window, WM_RELEASE_INFO, 0, reinterpret_cast<LPARAM>(info))) delete info;
+            if (!PostMessageW(g_window, WM_RELEASE_INFO, asked, reinterpret_cast<LPARAM>(info))) delete info;
             return;
         }
         SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
@@ -707,13 +744,13 @@ void checkReleaseAsync()
             info->error = utf8ToWide(value("RELEASE_ERROR:"));
         }
         CloseHandle(readPipe);
-        if (!PostMessageW(g_window, WM_RELEASE_INFO, 0, reinterpret_cast<LPARAM>(info))) delete info;
+        if (!PostMessageW(g_window, WM_RELEASE_INFO, asked, reinterpret_cast<LPARAM>(info))) delete info;
     }).detach();
 }
 
 void launchGame()
 {
-    if (g_busy) return;
+    if (g_life.busy) return;
     if (rpRecoveryPending()) {
         setStatus(rpRecoveryStatus());
         return;
@@ -741,6 +778,7 @@ void launchGame()
 
 void chooseGameFolder()
 {
+    if (g_life.busy) return;
     IFileDialog* dialog = nullptr;
     if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
         IID_PPV_ARGS(&dialog))) || dialog == nullptr) return;
@@ -757,14 +795,7 @@ void chooseGameFolder()
             if (fs::exists(selected / L"master.dat") && fs::exists(selected / L"critter.dat")) {
                 SetWindowTextW(g_root, selected.wstring().c_str());
                 saveSettings();
-                EnableWindow(g_install, TRUE);
-                std::wstring versionPath = (selected / L"version.txt").wstring();
-                std::wstring exe = (selected / L"fallout2-ce.exe").wstring();
-                g_installed = fs::exists(exe);
-                EnableWindow(g_play, g_installed && !rpRecoveryPending());
-                EnableWindow(g_remove, g_installed);
-                syncRussianFromDisk();
-                syncRpFromDisk();
+                refreshRootState();
                 setStatus(tr(L"Fallout 2 folder selected.", L"Папка Fallout 2 выбрана."));
             } else {
                 setStatus(tr(L"This folder does not contain master.dat and critter.dat.",
@@ -910,7 +941,8 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLORBTN: {
         HDC dc = reinterpret_cast<HDC>(wParam);
-        if (reinterpret_cast<HWND>(lParam) == g_log) {
+        // A read-only edit asks here: the log always, the folder while an operation runs.
+        if (reinterpret_cast<HWND>(lParam) == g_log || reinterpret_cast<HWND>(lParam) == g_root) {
             SetTextColor(dc, RGB(234, 231, 218));
             SetBkColor(dc, RGB(8, 13, 19));
             SetBkMode(dc, OPAQUE);
@@ -1026,7 +1058,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
     }
     case WM_COMMAND:
         if (LOWORD(wParam) == ID_GAME_ROOT && HIWORD(wParam) == EN_CHANGE) {
-            EnableWindow(g_install, !g_busy && GetWindowTextLengthW(g_root) != 0);
+            refreshRootState();
         } else if (LOWORD(wParam) == ID_LANGUAGE && HIWORD(wParam) == BN_CLICKED) {
             HMENU menu = CreatePopupMenu();
             AppendMenuW(menu, MF_STRING | (g_uiLanguage == L"en" ? MF_CHECKED : 0), 1, L"English");
@@ -1049,7 +1081,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             InvalidateRect(g_autoUpdate, nullptr, TRUE);
             saveSettings();
         } else if (LOWORD(wParam) == ID_RUSSIAN && HIWORD(wParam) == BN_CLICKED) {
-            if (g_busy) return 0;
+            if (g_life.busy) return 0;
             if (g_russianInstall && g_installed && russianOnDisk()) {
                 if (confirm(tr(L"Remove the Russian translation?", L"Удалить русификатор?"),
                         tr(L"The game text goes back to English. Your saves are not touched.",
@@ -1065,7 +1097,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
                 if (g_russianInstall && g_installed) startOperation(Operation::Install);
             }
         } else if (LOWORD(wParam) == ID_RP && HIWORD(wParam) == BN_CLICKED) {
-            if (g_busy) return 0;
+            if (g_life.busy) return 0;
             if (rpOnDisk() || rpRecoveryPending()) {
                 startOperation(Operation::RemoveRp);
                 return 0;
@@ -1079,7 +1111,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         } else if (LOWORD(wParam) == ID_INSTALL && HIWORD(wParam) == BN_CLICKED) {
             startOperation(Operation::Install);
         } else if (LOWORD(wParam) == ID_REMOVE && HIWORD(wParam) == BN_CLICKED) {
-            if (!g_busy && confirm(tr(L"Remove the mod?", L"Удалить мод?"),
+            if (!g_life.busy && confirm(tr(L"Remove the mod?", L"Удалить мод?"),
                     tr(L"This takes Fallout 2: Reimagined off your computer: the new game program, the 3D data, "
                        L"the Russian translation and this launcher. The game goes back to how it was before the mod.\n\n"
                        L"Your saves and the original Fallout 2 files stay.",
@@ -1098,18 +1130,24 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         g_releaseNotes = info->notes;
         g_haveRelease = info->online;
         g_releaseError = info->error;
+        g_releaseAnswered = true;
         updateLabels();
+        // A running operation owns the controls and the status; a late reply only updates the labels (308).
+        if (g_life.busy) return 0;
+        if (!g_life.releaseMayAct(static_cast<unsigned>(wParam))) {
+            // Asked for a folder that is no longer chosen: no update starts from it.
+            refreshStatusFromRelease();
+            return 0;
+        }
         wchar_t root[32768] = {};
         GetWindowTextW(g_root, root, static_cast<int>(std::size(root)));
         if (root[0] != L'\0') {
             fs::path gameRoot(root);
             g_installed = fs::exists(gameRoot / L"fallout2-ce.exe");
-            EnableWindow(g_play, g_installed && !rpRecoveryPending());
-            EnableWindow(g_remove, g_installed);
-            EnableWindow(g_install, true);
             syncRussianFromDisk();
             syncRpFromDisk();
-            if (g_busy || g_operationCompleted) return 0;
+            refreshControls();
+            if (g_operationCompleted) return 0;
             std::ifstream installed(gameRoot / L"version.txt");
             std::string installedVersion;
             if (installed) installedVersion.assign((std::istreambuf_iterator<char>(installed)), std::istreambuf_iterator<char>());
@@ -1139,6 +1177,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         return 0;
     }
     case WM_OPERATION_DONE: {
+        const bool closeNow = g_life.finish();
         DWORD result = static_cast<DWORD>(wParam);
         Operation operation = static_cast<Operation>(lParam);
         // Exit 2: the game is in, only the translation is missing (it stays wished and is tried again).
@@ -1155,17 +1194,33 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             // A half-done removal may have taken the game exe: look again.
             g_installed = fs::exists(fs::path(g_args.gameRoot) / L"fallout2-ce.exe");
         }
-        setBusy(false);
         syncRussianFromDisk();
         syncRpFromDisk();
+        // After a removal the launcher may be gone: refreshControls then keeps Install off.
+        showBusy(false);
         setStatus(result == 0 || g_translationFailed ? doneStatus(operation) : failedStatus(operation));
         saveSettings();
-        // After a removal the launcher may be gone: nothing is left to run the release check or an install.
-        const bool launcherLeft = fs::exists(exePath());
-        EnableWindow(g_install, launcherLeft && GetWindowTextLengthW(g_root) != 0);
-        if ((result == 0 || g_translationFailed) && launcherLeft) checkReleaseAsync();
+        if (closeNow) {
+            // The close the player asked for while the worker ran.
+            DestroyWindow(window);
+            return 0;
+        }
+        // Nothing is left to run the release check when the launcher removed itself.
+        if ((result == 0 || g_translationFailed) && fs::exists(exePath())) checkReleaseAsync();
         return 0;
     }
+    case WM_CLOSE:
+        if (!g_life.requestClose()) {
+            // Closing now would leave the worker changing files with no window: wait for it (308).
+            const std::wstring text = tr(L"The window closes when the current operation finishes. "
+                                         L"Files are being changed and are not stopped halfway.",
+                L"Окно закроется, когда текущая операция завершится. Файлы сейчас меняются, "
+                L"их не прерывают на середине.");
+            setStatus(text);
+            appendLog(text);
+            return 0;
+        }
+        break;
     case WM_DESTROY:
         saveSettings();
         if (g_logo != nullptr) DeleteObject(g_logo);
@@ -1258,11 +1313,7 @@ int runLauncherUi(int argc, char** argv)
     }
     if (!g_args.gameRoot.empty()) {
         SetWindowTextW(g_root, g_args.gameRoot.c_str());
-        g_installed = fs::exists(fs::path(g_args.gameRoot) / L"fallout2-ce.exe");
-        EnableWindow(g_play, g_installed && !rpRecoveryPending());
-        EnableWindow(g_remove, g_installed);
-        syncRussianFromDisk();
-        syncRpFromDisk();
+        refreshRootState();
     }
     saveSettings();
     checkReleaseAsync();
