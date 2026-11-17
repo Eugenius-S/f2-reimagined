@@ -14,7 +14,13 @@
 param(
     [string]$Next,
     [switch]$Review,
-    [switch]$SelfTest
+    [switch]$SelfTest,
+    # 300: validate the headers and dependency graph of the checked-out
+    # tasks\*.md (or -TasksDir for the fixtures); exit nonzero on any hard
+    # metadata error. Legacy gaps (an old task without priority or tier) are
+    # named but do not fail the check.
+    [string]$TasksDir,
+    [switch]$CheckMetadata
 )
 $ErrorActionPreference = 'Stop'
 
@@ -45,6 +51,129 @@ function Resolve-LockState {
     return 'plain'
 }
 
+# 300: the task metadata validator. Hard errors fail the check (a duplicate
+# numeric id, an id that does not match its file name, an unknown or
+# self dependency, a dependency cycle, a status or field value outside the
+# board's own vocabulary). Legacy gaps - an old task without a priority or
+# tier, or the historical 'medium' priority - are named but never fail:
+# the owner's priorities and assignments are not rewritten here.
+function Test-TaskMetadata {
+    param([string]$TasksDir)
+    $errors = [System.Collections.Generic.List[string]]::new()
+    $legacy = [System.Collections.Generic.List[string]]::new()
+    $statuses = @('todo', 'doing', 'blocked', 'done')
+    $owners = @('claude', 'gpt', 'glm', 'any', 'none', 'owner')
+    # 'medium' is a historical value the board carries; legal, but named.
+    $priorities = @('high', 'normal', 'low', 'medium')
+
+    $tasks = [ordered]@{}
+    $seen = @{}
+    Get-ChildItem (Join-Path $TasksDir '*.md') | Sort-Object Name | ForEach-Object {
+        $name = $_.Name
+        if ($name -eq 'inbox.md') { return }  # the owner's finds inbox, not a task
+        if ($name -notmatch '^(\d+)-') {
+            $errors.Add("$name : the file name does not start with a numeric task id")
+            return
+        }
+        $id = $Matches[1]
+        # Two files claiming one numeric id: the evidence must survive the
+        # parse (a later file would otherwise silently overwrite the key).
+        if ($seen.ContainsKey($id)) {
+            $errors.Add("$name : duplicate numeric id $id (also $($seen[$id]))")
+        } else { $seen[$id] = $name }
+        $lines = Get-Content -LiteralPath $_.FullName
+        if ($lines.Count -eq 0 -or $lines[0] -ne '---') {
+            $errors.Add("$name : no frontmatter header")
+            return
+        }
+        $header = @{}
+        for ($i = 1; $i -lt $lines.Count -and $lines[$i] -ne '---'; $i++) {
+            if ($lines[$i] -match '^([a-z-]+):\s*(.*?)\s*(#.*)?$') { $header[$Matches[1]] = $Matches[2] }
+        }
+        foreach ($field in @('id', 'title', 'status', 'owner', 'depends-on')) {
+            if (-not $header.ContainsKey($field)) { $errors.Add("$name : missing required field $field") }
+        }
+        if ($header.ContainsKey('id') -and $header['id'] -ne $id) {
+            $errors.Add("$name : header id '$($header['id'])' does not match the file name's id $id")
+        }
+        if ($header.ContainsKey('status') -and $statuses -notcontains $header['status']) {
+            $errors.Add("$name : status '$($header['status'])' is not one of $($statuses -join ', ')")
+        }
+        if ($header.ContainsKey('owner') -and $owners -notcontains $header['owner']) {
+            $errors.Add("$name : owner '$($header['owner'])' is not one of $($owners -join ', ')")
+        }
+        if ($header.ContainsKey('priority')) {
+            if ($priorities -notcontains $header['priority']) {
+                $errors.Add("$name : priority '$($header['priority'])' is not one of $($priorities -join ', ')")
+            }
+            if ($header['priority'] -eq 'medium') { $legacy.Add("$name : historical 'medium' priority") }
+        } else {
+            $legacy.Add("$name : no priority (a task from before the field existed)")
+        }
+        if ($header.ContainsKey('tier')) {
+            if ($header['tier'] -notmatch '^\d+$' -or [int]$header['tier'] -gt 4) {
+                $errors.Add("$name : tier '$($header['tier'])' is not 0-4")
+            }
+        } else {
+            $legacy.Add("$name : no tier (a task from before the field existed)")
+        }
+        foreach ($field in @('claude-only', 'user-check', 'reviewed')) {
+            if ($header.ContainsKey($field) -and $header[$field] -notin 'yes', 'no') {
+                $errors.Add("$name : $field '$($header[$field])' is not yes or no")
+            }
+        }
+        $tasks[$id] = @{ name = $name; deps = @() ; header = $header }
+        $raw = if ($header.ContainsKey('depends-on')) { $header['depends-on'] } else { '' }
+        foreach ($dep in ($raw -split '[,\s]+' | Where-Object { $_ } | ForEach-Object { $_.Trim('[]') } | Where-Object { $_ })) {
+            $tasks[$id].deps += $dep
+        }
+    }
+    # Dependencies must exist, not self-reference, and not cycle.
+    foreach ($id in $tasks.Keys) {
+        foreach ($dep in $tasks[$id].deps) {
+            if (-not $tasks.Contains($dep)) {
+                $errors.Add("$($tasks[$id].name) : depends-on unknown task $dep")
+            } elseif ($dep -eq $id) {
+                $errors.Add("$($tasks[$id].name) : depends on itself")
+            }
+        }
+    }
+    $color = @{}
+    foreach ($start in $tasks.Keys) {
+        $stack = [System.Collections.Generic.List[string]]::new()
+        function Walk([string]$node) {
+            if ($color.ContainsKey($node)) { return $color[$node] -eq 1 }
+            $color[$node] = 1
+            [void]$stack.Add($node)
+            foreach ($dep in $tasks[$node].deps) {
+                if ($tasks.Contains($dep) -and (Walk $dep)) {
+                    $errors.Add("$($tasks[$node].name) : dependency cycle through $dep")
+                }
+            }
+            # List.Remove returns a bool that must not join the function's
+            # pipeline: it would make every call return a truthy array.
+            [void]$stack.Remove($node)
+            $color[$node] = 2
+            return $false
+        }
+        [void](Walk $start)
+    }
+    return @{ Errors = $errors; Legacy = $legacy; Tasks = $tasks.Count }
+}
+
+if ($CheckMetadata) {
+    $dir = if ($TasksDir) { $TasksDir } else { Join-Path (Split-Path -Parent $PSScriptRoot) 'tasks' }
+    $result = Test-TaskMetadata -TasksDir $dir
+    foreach ($gap in $result.Legacy) { Write-Output "TASKS legacy: $gap" }
+    foreach ($err in $result.Errors) { Write-Output "TASKS ERROR $err" }
+    if ($result.Errors.Count -gt 0) {
+        Write-Output ("TASKS FAIL {0} metadata errors" -f $result.Errors.Count)
+        exit 1
+    }
+    Write-Output ("TASKS ok ({0} tasks, {1} legacy gaps named)" -f $result.Tasks, $result.Legacy.Count)
+    exit 0
+}
+
 if ($SelfTest) {
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $cases = @(
@@ -72,6 +201,128 @@ if ($SelfTest) {
             $failed = $true
         }
     }
+    # 300: the metadata validator against synthetic fixtures.
+    function Assert-True([string]$what, [bool]$got) {
+        if (-not $got) {
+            Write-Output ("selftest: FAIL {0}" -f $what)
+            $script:failed = $true
+        }
+    }
+    $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("f2r-tasks-selftest-" + [guid]::NewGuid().ToString('N'))
+    $debugFixture = $true
+    New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
+    function Write-Task([string]$name, [string]$body) {
+        Set-Content -LiteralPath (Join-Path $fixtureRoot $name) -Value $body -Encoding ascii
+    }
+    Write-Task '001-valid.md' @'
+---
+id: 001
+title: A valid task
+status: todo
+owner: any
+priority: high
+tier: 1
+depends-on: [002]
+---
+body
+'@
+    Write-Task '002-valid-blocked.md' @'
+---
+id: 002
+title: A legal blocked task
+status: blocked
+owner: glm
+priority: normal
+tier: 0
+depends-on: []
+---
+body
+'@
+    $valid = Test-TaskMetadata -TasksDir $fixtureRoot
+    Assert-True 'a valid pair with a legal blocked status has no errors' ($valid.Errors.Count -eq 0)
+    Assert-True 'the valid pair still names nothing' ($valid.Legacy.Count -eq 0)
+
+    # A true duplicate: two files claiming the numeric id 002.
+    Write-Task '002-dup.md' @'
+---
+id: 002
+title: A duplicate numeric id
+status: todo
+owner: any
+priority: low
+tier: 2
+depends-on: []
+---
+body
+'@
+    $dup = Test-TaskMetadata -TasksDir $fixtureRoot
+    Assert-True 'a duplicate numeric id fails' (($dup.Errors | Where-Object { $_ -like '*duplicate numeric id*' }).Count -gt 0)
+
+    Remove-Item -LiteralPath (Join-Path $fixtureRoot '002-dup.md') -Force
+    Write-Task '003-unknown-dep.md' @'
+---
+id: 003
+title: An unknown dependency
+status: todo
+owner: any
+priority: low
+tier: 2
+depends-on: [999]
+---
+body
+'@
+    $unknown = Test-TaskMetadata -TasksDir $fixtureRoot
+    Assert-True 'an unknown dependency fails' (($unknown.Errors | Where-Object { $_ -like '*unknown task 999*' }).Count -gt 0)
+
+    Set-Content -LiteralPath (Join-Path $fixtureRoot '003-unknown-dep.md') -Value @'
+---
+id: 003
+title: A self dependency
+status: doing
+owner: any
+priority: low
+tier: 2
+depends-on: [003]
+---
+body
+'@ -Encoding ascii
+    $self = Test-TaskMetadata -TasksDir $fixtureRoot
+    Assert-True 'a self dependency fails' (($self.Errors | Where-Object { $_ -like '*depends on itself*' }).Count -gt 0)
+
+    Set-Content -LiteralPath (Join-Path $fixtureRoot '003-cycle.md') -Value @'
+---
+id: 003
+title: One half of a cycle
+status: todo
+owner: any
+priority: low
+tier: 2
+depends-on: [001]
+---
+body
+'@ -Encoding ascii
+    $cycle = Test-TaskMetadata -TasksDir $fixtureRoot
+    Assert-True 'a dependency cycle fails' (($cycle.Errors | Where-Object { $_ -like '*dependency cycle*' }).Count -gt 0)
+
+    # The legacy check runs against the clean pair again: the earlier
+    # deliberate errors must not leak into it.
+    Remove-Item -LiteralPath (Join-Path $fixtureRoot '003-unknown-dep.md') -Force
+    Remove-Item -LiteralPath (Join-Path $fixtureRoot '003-cycle.md') -Force
+    Write-Task '004-legacy.md' @'
+---
+id: 004
+title: An old task without priority or tier
+status: todo
+owner: any
+depends-on: []
+---
+body
+'@
+    $legacy = Test-TaskMetadata -TasksDir $fixtureRoot
+    Assert-True 'a legacy task without priority or tier is not a hard error' ($legacy.Errors.Count -eq 0)
+    Assert-True 'the legacy gap is named' (($legacy.Legacy | Where-Object { $_ -like '*004-legacy.md*' }).Count -gt 0)
+
+    Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
     if ($failed) { exit 1 }
     Write-Output ("selftest: ok ({0} cases)" -f $cases.Count)
     exit 0
