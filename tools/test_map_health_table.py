@@ -95,17 +95,68 @@ class BuildTableTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             mht.build_table(mht.load_rows(path), 'deadbeef', out)
 
+    def test_mixed_commits_refuse(self):
+        # 516 P2: the commit is identity; rows recorded on two commits do not
+        # build one table.
+        path = write_state([
+            {'map': 'kladwtwn', 'elevation': 0, 'status': 'ok', 'exe_sha256': 'a', 'commit': 'aaa', 'oneLowFps': 90.0},
+            {'map': 'newr1', 'elevation': 0, 'status': 'ok', 'exe_sha256': 'a', 'commit': 'bbb', 'oneLowFps': 90.0},
+        ])
+        out = Path(tempfile.gettempdir()) / 'mht-commits.md'
+        with self.assertRaises(SystemExit):
+            mht.build_table(mht.load_rows(path), '', out)
+
+    def test_relabeling_commit_refused(self):
+        # A --commit that contradicts the rows is refused, not stamped over.
+        path = write_state([
+            {'map': 'kladwtwn', 'elevation': 0, 'status': 'ok', 'exe_sha256': 'a', 'commit': 'aaa', 'oneLowFps': 90.0},
+        ])
+        out = Path(tempfile.gettempdir()) / 'mht-relabel.md'
+        with self.assertRaises(SystemExit):
+            mht.build_table(mht.load_rows(path), 'bbb', out)
+
+    def test_row_without_evidence_is_not_valid(self):
+        # 516 P2: an ok row without its capture evidence counts nowhere.
+        path = write_state([
+            {'map': 'x', 'elevation': 0, 'status': 'ok', 'exe_sha256': 'a', 'oneLowFps': 90.0},
+        ])
+        out = Path(tempfile.gettempdir()) / 'mht-evidence.md'
+        valid, flagged = mht.build_table(mht.load_rows(path), '', out)
+        self.assertEqual((valid, flagged), (0, 0))
+        text = out.read_text(encoding='utf-8')
+        self.assertIn('no capture evidence', text)
+        self.assertIn('incomplete', text)
+
+    def test_coverage_claim_needs_the_expected_list(self):
+        # Without --expected the table never claims the whole game was walked.
+        path = write_state([
+            {'map': 'x', 'elevation': 0, 'status': 'ok', 'exe_sha256': 'a', 'oneLowFps': 90.0,
+             'avgFps': 100.0, 'worstMs': 20.0, 'loadMs': 100.0, 'scene_3d_enabled': True,
+             'snapshot': 'missing.png'},
+        ])
+        out = Path(tempfile.gettempdir()) / 'mht-coverage-none.md'
+        mht.build_table(mht.load_rows(path), '', out)
+        self.assertIn('Coverage: partial', out.read_text(encoding='utf-8'))
+        # With an expected list that the rows do not cover: partial too.
+        out2 = Path(tempfile.gettempdir()) / 'mht-coverage-partial.md'
+        mht.build_table(mht.load_rows(path), '', out2, expected=[('x', 0), ('y', 1)])
+        self.assertIn('partial, 1 of 2 expected', out2.read_text(encoding='utf-8'))
+        # Full coverage says so, and only then.
+        out3 = Path(tempfile.gettempdir()) / 'mht-coverage-full.md'
+        mht.build_table(mht.load_rows(path), '', out3, expected=[('x', 0)])
+        self.assertIn('Coverage: every one of the 1 expected', out3.read_text(encoding='utf-8'))
+
     def test_table_marks_invalid_rows_and_counts(self):
         path = write_state([
             {'map': 'kladwtwn', 'elevation': 0, 'status': 'ok', 'attempts': 1, 'exe_sha256': 'a',
              'avgFps': 100.0, 'oneLowFps': 90.0, 'worstMs': 33.0, 'loadMs': 900.0, 'cpu': 12,
-             'fallback': [], 'scene_3d_enabled': True},
+             'fallback': [], 'scene_3d_enabled': True, 'snapshot': 'unused.png'},
             {'map': 'gstcav2', 'elevation': 1, 'status': 'timeout', 'attempts': 2, 'exe_sha256': 'a',
              'error': 'No snapshot within 300 s.'},
             {'map': 'newr1', 'elevation': 0, 'status': 'ok', 'attempts': 1, 'exe_sha256': 'a',
              'avgFps': 60.0, 'oneLowFps': 45.0, 'worstMs': 90.0, 'loadMs': 2600.0, 'cpu': 10,
              'fallback': ['scene: NEWR1 elevation 0 stays 2D: walls.bin is missing'],
-             'scene_3d_enabled': True},
+             'scene_3d_enabled': True, 'snapshot': 'unused.png'},
         ])
         out = Path(tempfile.gettempdir()) / 'mht-basic.md'
         valid, flagged = mht.build_table(mht.load_rows(path), 'de6d5267', out)
@@ -122,7 +173,8 @@ class BuildTableTest(unittest.TestCase):
     def test_invalid_rows_sort_before_valid(self):
         path = write_state([
             {'map': 'aaa', 'elevation': 0, 'status': 'ok', 'exe_sha256': 'a',
-             'avgFps': 100.0, 'oneLowFps': 30.0, 'loadMs': 100.0, 'fallback': []},
+             'avgFps': 100.0, 'oneLowFps': 30.0, 'worstMs': 20.0, 'loadMs': 100.0, 'fallback': [],
+             'scene_3d_enabled': True, 'snapshot': 'unused.png'},
             {'map': 'zzz', 'elevation': 0, 'status': 'failed', 'attempts': 2, 'exe_sha256': 'a',
              'error': 'crash'},
         ])

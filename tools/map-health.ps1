@@ -61,6 +61,10 @@ param(
     [int]$Limit = 0,
     # Only rows matching these "map:e" labels (a targeted rerun).
     [string[]]$Only,
+    # The main commit the build was made from; it lands in every row and the
+    # table builder refuses rows that mix commits.  A bare label is rejected
+    # here: the sweep checks the commit object exists before measuring.
+    [string]$Commit,
     # Drop the state file and start from an empty table.
     [switch]$Fresh,
     [switch]$SelfTest
@@ -148,6 +152,31 @@ function Test-NoisyRow([double]$loadPercent, [double]$noisyAbove) {
     return $loadPercent -gt $noisyAbove
 }
 
+# The sweep's verdict from every selected row's final state, not from this
+# invocation's attempts: capped failures and noisy rows keep the exit honest
+# however many times the sweep already ran (516 P1).  Returns 0 when every
+# row is a valid clean result, 1 when rows are missing or invalid, 2 when
+# only noisy rows stand between the sweep and done.
+function Get-SweepExit([object[]]$targets, $rows) {
+    $script:validCount = 0
+    $script:incomplete = @()
+    $script:noisyRows = @()
+    foreach ($t in $targets) {
+        $key = '{0}:e{1}' -f $t.map, $t.elevation
+        $row = $rows[$key]
+        if ($null -eq $row) {
+            $script:incomplete += "$key never measured"
+            continue
+        }
+        if ($row.status -eq 'ok' -and -not $row.noisy) { $script:validCount++; continue }
+        if ($row.status -eq 'ok' -and $row.noisy) { $script:noisyRows += $key; continue }
+        $script:incomplete += ('{0} {1} after {2} attempts' -f $key, $row.status, $row.attempts)
+    }
+    if ($script:incomplete.Count -gt 0) { return 1 }
+    if ($script:noisyRows.Count -gt 0) { return 2 }
+    return 0
+}
+
 if ($SelfTest) {
     $failed = $false
     function Assert-Equal([string]$what, $got, $want) {
@@ -187,6 +216,22 @@ if ($SelfTest) {
     Assert-True 'ground plane wording' ($fb[1] -like '*uses 3D ground plane*')
     Assert-True 'load 31 at 30 is noisy' (Test-NoisyRow 31 30)
     Assert-True 'load 30 at 30 is clean' (-not (Test-NoisyRow 30 30))
+    # 516 P1: the verdict reads every selected row, capped rows included.
+    $targets = @(
+        [pscustomobject]@{ map = 'a'; elevation = 0 },
+        [pscustomobject]@{ map = 'b'; elevation = 0 }
+    )
+    $rows = @{
+        'a:e0' = [pscustomobject]@{ status = 'failed'; attempts = 2; noisy = $false }
+        'b:e0' = [pscustomobject]@{ status = 'ok'; attempts = 1; noisy = $false }
+    }
+    Assert-True 'a capped failure keeps the exit at 1' ((Get-SweepExit $targets $rows) -eq 1)
+    $rows['a:e0'] = [pscustomobject]@{ status = 'ok'; attempts = 3; noisy = $true }
+    Assert-True 'only noisy rows left is a 2' ((Get-SweepExit $targets $rows) -eq 2)
+    $rows['a:e0'] = [pscustomobject]@{ status = 'ok'; attempts = 1; noisy = $false }
+    Assert-True 'all rows valid is a 0' ((Get-SweepExit $targets $rows) -eq 0)
+    $targetsOnlyB = @($targets | Select-Object -Skip 1)
+    Assert-True 'a subset sweep judges its own selection' ((Get-SweepExit $targetsOnlyB $rows) -eq 0)
     if ($failed) { exit 1 }
     Write-Output 'selftest: ok'
     exit 0
@@ -196,6 +241,13 @@ if ($SelfTest) {
 $buildExe = Join-Path $Root 'build\fallout2-ce.exe'
 if (-not (Test-Path -LiteralPath $buildExe)) {
     throw "No build\fallout2-ce.exe in this worktree: build the Release exe first (tools/configure-build.ps1), then run the sweep."
+}
+# 516 P2: the commit is identity, not a free label.  It must name a real
+# commit object, and it lands in every row so the builder can refuse a
+# relabeled table.
+if ($Commit -ne '') {
+    git -C $Root cat-file -e ("{0}^{{commit}}" -f $Commit) 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "commit '$Commit' does not exist in this repository" }
 }
 $devSnapshot = Join-Path $PSScriptRoot 'dev-snapshot.ps1'
 $mapListScript = Join-Path $PSScriptRoot 'map_health_maps.py'
@@ -219,24 +271,36 @@ if ($Limit -gt 0 -and $targets.Count -gt $Limit) { $targets = @($targets | Selec
 if ($targets.Count -eq 0) { throw 'The map list is empty: check -Groups against the game data.' }
 
 # Resume: keep finished rows whose exe is the current one; a row retried in
-# this run replaces its own previous line, never another row's.
+# this run replaces its own previous line, never another row's.  516 P2: the
+# journal is rewritten to the current build's rows only, and stale rows move
+# to a sidecar file, so a later table over this journal cannot mix builds
+# with rows that no longer belong.
 $exeHash = (Get-FileHash -LiteralPath $buildExe -Algorithm SHA256).Hash.ToLower()
 $rows = [ordered]@{}
-$noisyKept = @()
+$staleRows = @()
+$staleKept = @()
 if (Test-Path -LiteralPath $StateFile) {
     foreach ($line in @(Get-Content -LiteralPath $StateFile -ErrorAction SilentlyContinue)) {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         try { $row = $line | ConvertFrom-Json } catch { continue }
         $key = '{0}:e{1}' -f $row.map, $row.elevation
         if ($row.exe_sha256 -ne $exeHash) {
-            $noisyKept += "$key was measured on build $($row.exe_sha256), this sweep rebuilds it from scratch"
+            $staleRows += $line
+            $staleKept += "$key was measured on build $($row.exe_sha256), moved out of this journal"
             continue
         }
         $rows[$key] = $row
     }
 }
-if ($noisyKept.Count -gt 0) {
-    Write-Output ("map-health: {0} state rows belong to another build and start fresh: {1}" -f $noisyKept.Count, ($noisyKept | Select-Object -First 3) -join '; ')
+if ($staleRows.Count -gt 0) {
+    $stalePath = "$StateFile.stale-exe.jsonl"
+    Add-Content -LiteralPath $stalePath -Value $staleRows -Encoding utf8
+    # Every current-build row stays in the journal, whatever this run's
+    # selection was: a subset rerun must not drop the rest of the table.
+    $keptLines = @()
+    foreach ($key in @($rows.Keys)) { $keptLines += ($rows[$key] | ConvertTo-Json -Compress -Depth 4) }
+    Set-Content -LiteralPath $StateFile -Value $keptLines -Encoding utf8
+    Write-Output ("map-health: {0} stale rows belong to another build: moved to {1}, the journal now carries this build only ({2})" -f $staleRows.Count, $stalePath, ($staleKept | Select-Object -First 2) -join '; ')
 }
 
 function Save-Row($row) {
@@ -264,8 +328,6 @@ $doneCount = $total - $pending.Count
 Write-Output ("map-health: {0} map elevations, {1} already measured, {2} to run (build {3})" -f $total, $doneCount, $pending.Count, $exeHash.Substring(0, 12))
 foreach ($m in $list.missing) { Write-Output "map-health: map missing from the game data, not playable: $m" }
 
-$incomplete = @()
-$noisyRows = @()
 foreach ($t in $pending) {
     $map = $t.map
     $elevation = [int]$t.elevation
@@ -276,7 +338,7 @@ foreach ($t in $pending) {
     $attempts++
     $row = [ordered]@{
         map = $map; elevation = $elevation; exe_sha256 = $exeHash; attempts = $attempts
-        status = 'failed'; started = (Get-Date).ToString('o')
+        commit = $Commit; status = 'failed'; started = (Get-Date).ToString('o')
         avgFps = $null; oneLowFps = $null; worstMs = $null; loadMs = $null
         cpu = $null; noisy = $false; play = 0; loads = 0
         fallback = @(); snapshot = $null; scene_3d_enabled = $null; renderer = $null
@@ -321,20 +383,22 @@ foreach ($t in $pending) {
         if ($null -eq $loadMs) { throw "no 'perf load first_frame' line in the measured run" }
 
         # The sidecar names the build, the frame's 3D state and its image.
+        # 516 P2: a row without its capture evidence is not a clean valid
+        # measurement; the sweep refuses to grade it ok.
         $sidecarPath = Get-ChildItem -LiteralPath $measuredDir -Filter 'devshot-*.json' -File -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if (-not $sidecarPath) { throw 'no devshot sidecar json in the measured run: the row has no capture evidence' }
         $scene3d = $null
         $renderer = $null
         $snapshotPath = $null
-        if ($sidecarPath) {
-            $sidecar = Get-Content -Raw -LiteralPath $sidecarPath.FullName | ConvertFrom-Json
-            $scene3d = $sidecar.scene_3d_enabled
-            $renderer = $sidecar.renderer
-            if ($sidecar.image) {
-                $candidate = Join-Path $sidecarPath.DirectoryName $sidecar.image
-                if (Test-Path -LiteralPath $candidate) { $snapshotPath = Get-Item -LiteralPath $candidate }
-            }
+        $sidecar = Get-Content -Raw -LiteralPath $sidecarPath.FullName | ConvertFrom-Json
+        $scene3d = $sidecar.scene_3d_enabled
+        $renderer = $sidecar.renderer
+        if ($sidecar.image) {
+            $candidate = Join-Path $sidecarPath.DirectoryName $sidecar.image
+            if (Test-Path -LiteralPath $candidate) { $snapshotPath = Get-Item -LiteralPath $candidate }
         }
+        if (-not $snapshotPath) { throw 'the sidecar names no readable snapshot image: the row has no capture evidence' }
 
         $fallback = Read-FallbackLines @(Get-Content -LiteralPath (Join-Path $measuredDir 'process.stdout.log') -ErrorAction SilentlyContinue)
 
@@ -358,9 +422,20 @@ foreach ($t in $pending) {
         $row.breach = ($breaches -join '; ')
     } catch {
         # Only a real hang counts as TIMEOUT; a crash or a missing artifact
-        # is FAILED (the table never calls a crash a timeout).
-        $row.status = if ($_.Exception.Message -match 'No snapshot|timeout|watchdog') { 'timeout' } else { 'failed' }
+        # is FAILED (the table never calls a crash a timeout).  516: the
+        # child's own watchdog reason, when it wrote one, stays in the row
+        # instead of collapsing into a bare exit code.
+        $watchdogText = ''
+        foreach ($d in @((Join-Path $outDir 'warmup'), (Join-Path $outDir 'measured'))) {
+            $wd = Join-Path $d 'watchdog.txt'
+            if (Test-Path -LiteralPath $wd) {
+                $watchdogText = (Get-Content -LiteralPath $wd -TotalCount 1 -ErrorAction SilentlyContinue)
+                break
+            }
+        }
+        $row.status = if ($_.Exception.Message -match 'No snapshot|timeout|watchdog' -or $watchdogText -match 'timeout') { 'timeout' } else { 'failed' }
         $row.error = ($_.Exception.Message -replace '\r?\n', ' ')
+        if ($watchdogText) { $row.error = ($watchdogText -replace '\r?\n', ' ') + ' | ' + $row.error }
         if ($row.error.Length -gt 300) { $row.error = $row.error.Substring(0, 300) }
         Write-Output ("map-health: {0} {1}: {2}" -f $row.status.ToUpper(), $label, $row.error)
     } finally {
@@ -368,26 +443,16 @@ foreach ($t in $pending) {
         Save-Row $row
         $rows[$label] = [pscustomobject]$row
     }
-    if ($row.status -ne 'ok') {
-        $incomplete += "$label $($row.status) after $attempts attempts"
-    } elseif ($row.noisy) {
-        $noisyRows += $label
-    }
 }
 
-# Final sweep status: valid rows stand on their own, the rest is listed.
-$valid = 0
-foreach ($t in $targets) {
-    $row = $rows[('{0}:e{1}' -f $t.map, $t.elevation)]
-    if ($null -ne $row -and $row.status -eq 'ok' -and -not $row.noisy) { $valid++ }
+# Final sweep status from every selected row's final state (516 P1): capped
+# failures and noisy rows count even when this invocation retried nothing.
+$exitCode = Get-SweepExit $targets $rows
+Write-Output ("map-health: {0} of {1} rows are valid results (build {2}, commit {3})" -f $script:validCount, $targets.Count, $exeHash.Substring(0, 12), $(if ($Commit) { $Commit } else { 'not recorded' }))
+if ($script:noisyRows.Count -gt 0) {
+    Write-Output ("map-health: NOISY rows (not valid results, rerun on a free machine): {0}" -f ($script:noisyRows -join ', '))
 }
-Write-Output ("map-health: {0} of {1} rows are valid results (build {2})" -f $valid, $targets.Count, $exeHash.Substring(0, 12))
-if ($noisyRows.Count -gt 0) {
-    Write-Output ("map-health: NOISY rows (not valid results, rerun on a free machine): {0}" -f ($noisyRows -join ', '))
-    exit 2
+if ($script:incomplete.Count -gt 0) {
+    Write-Output ("map-health: INCOMPLETE rows: {0}" -f ($script:incomplete -join ', '))
 }
-if ($incomplete.Count -gt 0) {
-    Write-Output ("map-health: INCOMPLETE rows: {0}" -f ($incomplete -join ', '))
-    exit 1
-}
-exit 0
+exit $exitCode

@@ -8,10 +8,18 @@ line, over 20% black pixels). Rows that are not valid results stay in their
 own section: TIMEOUT, FAILED and NOISY rows never count as the sweep's
 overall numbers.
 
+A row is a valid result only with its full evidence: the frame numbers, the
+devshot sidecar state and the snapshot PNG. A row missing any of them is
+listed as incomplete evidence and counts nowhere.
+
 The black share is computed from the row's snapshot PNG (pixels whose
 brightest channel is under 8 in 0..255); a row without a readable snapshot
 says n/a instead of a made-up number. All rows must carry the same
-exe_sha256: a table mixing builds lies about the game, so it refuses.
+exe_sha256 and the same commit: a table mixing builds or relabeling a
+journal with another commit lies about the game, so it refuses. With
+--expected (the JSON from tools/map_health_maps.py) the table states its
+coverage exactly and only claims every playable map when the rows cover the
+whole expected list.
 """
 
 import argparse
@@ -45,6 +53,19 @@ def load_rows(path):
             order.append(key)
         rows[key] = row
     return [rows[key] for key in order]
+
+
+def evidence_missing(row):
+    """The evidence a supposedly measured row lacks, empty when complete."""
+    if row.get('status') != 'ok':
+        return []
+    missing = []
+    for field in ('avgFps', 'oneLowFps', 'worstMs', 'loadMs', 'scene_3d_enabled'):
+        if row.get(field) is None:
+            missing.append(field)
+    if not row.get('snapshot'):
+        missing.append('snapshot')
+    return missing
 
 
 def compute_black_share(png_path):
@@ -91,7 +112,7 @@ def sort_key(row, black_share):
     return (1, one_low, -black, -(row.get('loadMs') or 0), row['map'], row['elevation'])
 
 
-def build_table(rows, commit, out):
+def build_table(rows, commit, out, expected=None):
     """The markdown table; returns (valid_rows, flagged_rows) counts."""
     builds = {row.get('exe_sha256') for row in rows}
     if len(builds) > 1:
@@ -99,6 +120,27 @@ def build_table(rows, commit, out):
                          'a table must be one build. Sweep the missing rows '
                          'on the current build and drop the stale ones.')
     exe_sha = builds.pop() if builds else ''
+
+    # 516 P2: the commit is identity too.  Rows recorded without one may only
+    # build a table that says so; a --commit label that contradicts the rows
+    # is refused, not silently stamped over them.
+    row_commits = {row.get('commit') for row in rows}
+    if len(row_commits) > 1:
+        raise SystemExit('the state rows carry more than one commit: a table must be one commit.')
+    rows_commit = row_commits.pop() if row_commits else None
+    if commit and rows_commit and commit != rows_commit:
+        raise SystemExit(f'the rows were measured on commit {rows_commit}, not {commit}: '
+                         'rerun the sweep on the build you mean to name.')
+    if not rows_commit:
+        commit = ''
+
+    # A row without its full evidence is not a valid result, whatever its
+    # status says (516 P2).
+    for row in rows:
+        missing = evidence_missing(row)
+        if missing:
+            row['status'] = 'incomplete'
+            row['error'] = 'no capture evidence: missing ' + ', '.join(missing)
 
     shares = {}
     for row in rows:
@@ -118,8 +160,8 @@ def build_table(rows, commit, out):
     lines = []
     lines.append('# All-map health table (271)')
     lines.append('')
-    lines.append(f'One command (tools/map-health.ps1) walked every playable map and elevation.')
-    lines.append(f'Build: exe sha256 `{exe_sha[:16] if exe_sha else "?"}`, main commit `{commit or "?"}`.')
+    lines.append('One command (tools/map-health.ps1) walked every playable map and elevation.')
+    lines.append(f'Build: exe sha256 `{exe_sha[:16] if exe_sha else "?"}`, main commit `{commit or "not recorded"}`.')
     lines.append('')
     valid_n = len(valid)
     clean = len([row for row in valid if not flags(row, shares.get((row['map'], row['elevation'])))])
@@ -127,6 +169,21 @@ def build_table(rows, commit, out):
     lines.append(f'{valid_n} of {total} rows are valid results '
                  f'(one warmup and one measured run each); {clean} of them breach nothing. '
                  f'{len(invalid)} rows are not valid results and never count in the numbers above a table row.')
+    # Coverage is a claim with a source or not a claim at all (516 P2).
+    if expected is not None:
+        expected_keys = {(m, int(e)) for m, e in expected}
+        covered = expected_keys & {(row['map'], int(row['elevation'])) for row in rows}
+        extra = {(row['map'], int(row['elevation'])) for row in rows} - expected_keys
+        if covered == expected_keys and not extra:
+            lines.append(f'Coverage: every one of the {len(expected_keys)} expected map elevations '
+                         f'(checked against tools/map_health_maps.py) has a row.')
+        else:
+            lines.append(f'Coverage: partial, {len(covered)} of {len(expected_keys)} expected map elevations '
+                         f'({len(extra)} rows sit outside the expected list). This table does not claim '
+                         f'the whole game was walked.')
+    else:
+        lines.append('Coverage: partial. No expected list was given, so this table does not claim '
+                     'the whole game was walked.')
     lines.append('')
     lines.append('Sorted worst first: the weakest 1% low at the top; TIMEOUT, FAILED and NOISY '
                  'rows first of all, because they say nothing about the game.')
@@ -189,9 +246,14 @@ def main(argv=None):
     parser.add_argument('--state', required=True, help='map-health.ps1 state.jsonl')
     parser.add_argument('--out', required=True, help='the markdown table to write')
     parser.add_argument('--commit', default='', help='the main commit the build was made from')
+    parser.add_argument('--expected', default='',
+                        help='JSON from tools/map_health_maps.py: the expected map/elevation list for coverage')
     args = parser.parse_args(argv)
     rows = load_rows(args.state)
-    valid, flagged = build_table(rows, args.commit, Path(args.out))
+    expected = None
+    if args.expected:
+        expected = [(m['map'], m['elevation']) for m in json.loads(Path(args.expected).read_text())['maps']]
+    valid, flagged = build_table(rows, args.commit, Path(args.out), expected)
     print(f'map-health-table: {len(rows)} rows, {valid} valid, {flagged} flagged -> {args.out}')
     return 0
 
