@@ -5,6 +5,7 @@ import base64
 import gzip
 import hashlib
 import json
+import os
 import struct
 import subprocess
 import sys
@@ -323,9 +324,8 @@ class TargetTests(unittest.TestCase):
             self.assertEqual(scene_directory(game, "klatrap", 2), game / "mod-cache" / "scene" / "klatrap" / "2")
 
 
-class CacheCheckTests(unittest.TestCase):
-    """Task 293: --check passes only a complete, current, undamaged cache of every real elevation.
-    Synthetic game: map "two" has elevations 0 and 1, map "upper" 1 and 2 and no 0 (the map loader
+class SyntheticCache(unittest.TestCase):
+    """Synthetic game: map "two" has elevations 0 and 1, map "upper" 1 and 2 and no 0 (the map loader
     reads them from the map header). The cache is made by main with a stand-in export_scene that
     writes what the check reads: scene.json, a PNG, a binary sidecar and the provenance."""
 
@@ -353,13 +353,13 @@ class CacheCheckTests(unittest.TestCase):
         write_dat2(maps, self.game / "master.dat")
 
     @staticmethod
-    def fake_export(gf, game_root, name, elevation, out_dir):
+    def fake_export(gf, game_root, name, elevation, out_dir, color=(10, 20, 30, 255)):
         out_dir.mkdir(parents=True, exist_ok=True)
         export.reset_caches(gf)
         gf._reads = {}
         gf.read(f"maps/{name}.map")
         (out_dir / "scene.json").write_text(json.dumps({"map": name, "elevation": elevation}))
-        Image.new("RGBA", (4, 4), (10, 20, 30, 255)).save(out_dir / "tiles.png")
+        Image.new("RGBA", (4, 4), color).save(out_dir / "tiles.png")
         (out_dir / "walls.bin").write_bytes(b"WALL" + bytes(range(12)))
         artifacts = {p.name: export.sha256_file(p) for p in sorted(out_dir.iterdir()) if p.name != "provenance.json"}
         provenance = {"map": name, "elevation": elevation, "artifacts_sha256": artifacts,
@@ -378,6 +378,10 @@ class CacheCheckTests(unittest.TestCase):
                 code = error.code
         return code, out.getvalue()
 
+
+class CacheCheckTests(SyntheticCache):
+    """Task 293: --check passes only a complete, current, undamaged cache of every real elevation."""
+
     def assert_rejected(self, scene, reason):
         code, out = self.check()
         self.assertEqual(code, 3, out)
@@ -390,7 +394,7 @@ class CacheCheckTests(unittest.TestCase):
         path.write_text(json.dumps(provenance))
 
     def test_a_complete_unchanged_cache_passes_and_needs_no_elevation_0(self):
-        self.assertEqual(sorted(p.relative_to(self.cache).as_posix() for p in self.cache.glob("*/*")),
+        self.assertEqual(sorted(p.relative_to(self.cache).as_posix() for p in self.cache.glob("*/*") if p.is_dir()),
                          ["two/0", "two/1", "upper/1", "upper/2"])
         code, out = self.check()
         self.assertEqual(code, 0, out)
@@ -470,6 +474,167 @@ class CacheCheckTests(unittest.TestCase):
         run = subprocess.run(command, capture_output=True, text=True, timeout=120)
         self.assertEqual(run.returncode, 3, run.stderr)
         self.assertIn("not current: upper e2: tiles.png changed", run.stdout)
+
+
+class Killed(BaseException):
+    """A hard stop (power loss, killed process): no except Exception handler runs."""
+
+
+class PublishTests(SyntheticCache):
+    """Task 294: a rebuild of two e0 goes through staging; a failure or a hard stop at any step keeps
+    the previous complete scene, or leaves it for the next export to restore, and touches nothing else."""
+
+    def setUp(self):
+        super().setUp()
+        self.live = self.cache / "two" / "0"
+        self.before = self.snapshot()
+
+    def snapshot(self):
+        """Every file of the cache, lock files aside (they hold no data)."""
+        return {p.relative_to(self.cache).as_posix(): export.sha256_file(p)
+                for p in sorted(self.cache.rglob("*")) if p.is_file() and p.suffix != ".lock"}
+
+    def publish(self, writer, cache=None):
+        with mock.patch.object(export, "export_scene", side_effect=writer), redirect_stdout(StringIO()):
+            return main(["--game-root", str(self.game), "--map", "two", "--elevation", "0",
+                         "--cache-root", str(cache or self.cache)])
+
+    def new_export(self, *args):
+        self.fake_export(*args, color=(200, 0, 0, 255))
+
+    @staticmethod
+    def broken_export(stop):
+        def writer(gf, game_root, name, elevation, out_dir):
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / "scene.json").write_text("{}")  # one artifact written, then the stop
+            raise stop
+        return writer
+
+    def folders(self):
+        return sorted(p.name for p in (self.cache / "two").iterdir() if p.suffix != ".lock")
+
+    def assert_old_scene(self):
+        self.assertEqual(self.snapshot(), self.before)
+        self.assertEqual(self.folders(), ["0", "1"])
+
+    def assert_new_scene(self):
+        after = self.snapshot()
+        self.assertEqual({k: v for k, v in after.items() if not k.startswith("two/0/")},
+                         {k: v for k, v in self.before.items() if not k.startswith("two/0/")})
+        self.assertNotEqual(after["two/0/tiles.png"], self.before["two/0/tiles.png"])
+        self.assertEqual(self.folders(), ["0", "1"])
+        code, out = self.check()
+        self.assertEqual(code, 0, out)
+
+    def rename_stops(self, call, stop):
+        real, calls = os.rename, []
+
+        def rename(source, target):
+            calls.append((Path(source).name, Path(target).name))
+            if len(calls) == call:
+                raise stop
+            return real(source, target)
+        return mock.patch.object(export.os, "rename", side_effect=rename)
+
+    def test_a_rebuild_replaces_the_scene_whole(self):
+        self.assertEqual(self.publish(self.new_export), 0)
+        self.assert_new_scene()
+
+    def test_a_failed_build_keeps_the_old_scene(self):
+        with self.assertRaises(OSError):
+            self.publish(self.broken_export(OSError("disk full")))
+        self.assert_old_scene()
+
+    def test_an_incomplete_new_scene_is_never_published(self):
+        def incomplete(*args):
+            self.new_export(*args)
+            (args[-1] / "walls.bin").unlink()  # returns normally with a sidecar gone
+        with self.assertRaises(RuntimeError) as stopped:
+            self.publish(incomplete)
+        self.assertIn("the new scene failed its check: scene files missing: walls.bin", str(stopped.exception))
+        self.assert_old_scene()
+
+    def test_a_build_stopped_hard_mid_write_is_cleaned_on_the_next_export(self):
+        with self.assertRaises(Killed):
+            self.publish(self.broken_export(Killed()))
+        self.assertEqual({k: v for k, v in self.snapshot().items() if not k.startswith("two/0.staging/")},
+                         self.before)  # the live scene was never touched
+        self.assertEqual(self.check()[0], 0)
+        with self.assertRaises(OSError):
+            self.publish(self.broken_export(OSError("disk full")))  # the next try fails too: still the old scene
+        self.assert_old_scene()
+        self.publish(self.new_export)
+        self.assert_new_scene()
+
+    def test_a_hard_stop_between_the_renames_restores_the_old_scene(self):
+        with self.rename_stops(2, Killed()), self.assertRaises(Killed):
+            self.publish(self.new_export)
+        self.assertEqual(self.folders(), ["0.old", "0.staging", "1"])
+        code, out = self.check()  # the check stays read-only: no scene there, so the launcher exports
+        self.assertEqual(code, 3)
+        self.assertIn("not current: two e0: no scene yet", out)
+        with self.assertRaises(OSError):
+            self.publish(self.broken_export(OSError("disk full")))
+        self.assert_old_scene()
+
+    def test_a_hard_stop_before_the_backup_is_removed_keeps_the_new_scene(self):
+        real = export.remove_scene_dir
+
+        def remove(path):
+            if path.name.endswith(".old"):
+                raise Killed()
+            return real(path)
+        with mock.patch.object(export, "remove_scene_dir", side_effect=remove), self.assertRaises(Killed):
+            self.publish(self.new_export)
+        self.assertEqual(self.folders(), ["0", "0.old", "1"])
+        new = self.snapshot()["two/0/tiles.png"]
+        with self.assertRaises(OSError):
+            self.publish(self.broken_export(OSError("disk full")))
+        self.assertEqual(self.snapshot()["two/0/tiles.png"], new)
+        self.assert_new_scene()
+
+    def test_a_failed_swap_puts_the_old_scene_back_at_once(self):
+        with self.rename_stops(2, OSError("in use")), self.assertRaises(OSError):
+            self.publish(self.new_export)
+        self.assert_old_scene()
+
+    def test_a_scene_that_cannot_move_is_left_as_it_was(self):
+        with self.rename_stops(1, PermissionError("a file is open")), self.assertRaises(PermissionError):
+            self.publish(self.new_export)
+        self.assert_old_scene()
+
+    def test_a_damaged_scene_with_a_good_backup_gets_the_backup_back(self):
+        backup = self.cache / "two" / "0.old"
+        backup.mkdir()
+        for path in self.live.iterdir():
+            (backup / path.name).write_bytes(path.read_bytes())
+        (self.live / "walls.bin").write_bytes(b"damaged")
+        with self.assertRaises(OSError):
+            self.publish(self.broken_export(OSError("disk full")))
+        self.assert_old_scene()
+
+    def test_a_second_exporter_on_the_same_scene_stops_without_touching_it(self):
+        other = Path(self.cache.parent) / "other-cache"
+        with export.scene_lock(self.live):
+            with self.assertRaises(SystemExit) as stopped:
+                self.publish(self.new_export)
+            self.assertIn("another exporter", str(stopped.exception))
+            self.assert_old_scene()
+            self.publish(self.new_export, cache=other)  # another cache root is its own
+        self.assertIsNone(export.scene_files_problem(other / "two" / "0"))
+        self.publish(self.new_export)  # the lock is free again
+        self.assert_new_scene()
+
+    def test_cleanup_deletes_only_what_the_export_writes(self):
+        staging = self.cache / "two" / "0.staging"
+        staging.mkdir()
+        (staging / "notes.txt").write_text("not ours")
+        with self.assertRaises(SystemExit) as stopped:
+            self.publish(self.new_export)
+        self.assertIn("notes.txt", str(stopped.exception))
+        self.assertEqual((staging / "notes.txt").read_text(), "not ours")
+        self.assertEqual({k: v for k, v in self.snapshot().items() if not k.startswith("two/0.staging/")},
+                         self.before)
 
 
 class OutputSafetyTests(unittest.TestCase):

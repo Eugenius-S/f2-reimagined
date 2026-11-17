@@ -10,7 +10,13 @@ import json
 import os
 import re
 import sys
+from contextlib import contextmanager
 from pathlib import Path
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 from PIL import Image
 
@@ -523,24 +529,9 @@ def stale_reason(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
     try:
         if provenance["map"] != map_name or provenance["elevation"] != elevation:
             return "the scene is another map's"
-        # The files must be the ones export_scene hashed into the table: all of them, none changed.
-        artifacts = provenance["artifacts_sha256"]
-        extra = sorted(p.name for p in out_dir.iterdir() if p.name != "provenance.json" and p.name not in artifacts)
-        if extra:
-            return "files outside the artifacts table: " + ", ".join(extra)
-        required = {"scene.json"} | {entry["file"] for key, entry in provenance.items() if key.endswith("_sidecar")}
-        lacking = sorted(required - set(artifacts))
-        if lacking:
-            return "artifacts table lacks: " + ", ".join(lacking)
-        missing = sorted(name for name in artifacts if not (out_dir / name).is_file())
-        if missing:
-            return "scene files missing: " + ", ".join(missing)
-        for name, digest in sorted(artifacts.items()):
-            try:
-                if sha256_file(out_dir / name) != digest:
-                    return f"{name} changed"
-            except OSError as error:
-                return f"{name} unreadable ({error})"
+        problem = scene_files_problem(out_dir, provenance)
+        if problem:
+            return problem
         recorded = provenance["resources_read"]
         reset_caches(gf)
         gf._reads = {}
@@ -560,8 +551,132 @@ def stale_reason(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
         return f"provenance unreadable ({error})"
 
 
+def scene_files_problem(out_dir: Path, provenance: dict = None) -> str | None:
+    """None when out_dir holds exactly the files export_scene hashed into its provenance, none changed;
+    otherwise what is wrong. Inputs are stale_reason's business: a complete old scene passes here."""
+    try:
+        if provenance is None:
+            provenance = json.loads((out_dir / "provenance.json").read_text(encoding="utf-8"))
+        artifacts = provenance["artifacts_sha256"]
+        extra = sorted(p.name for p in out_dir.iterdir() if p.name != "provenance.json" and p.name not in artifacts)
+        if extra:
+            return "files outside the artifacts table: " + ", ".join(extra)
+        required = {"scene.json"} | {entry["file"] for key, entry in provenance.items() if key.endswith("_sidecar")}
+        lacking = sorted(required - set(artifacts))
+        if lacking:
+            return "artifacts table lacks: " + ", ".join(lacking)
+        missing = sorted(name for name in artifacts if not (out_dir / name).is_file())
+        if missing:
+            return "scene files missing: " + ", ".join(missing)
+        for name, digest in sorted(artifacts.items()):
+            try:
+                if sha256_file(out_dir / name) != digest:
+                    return f"{name} changed"
+            except OSError as error:
+                return f"{name} unreadable ({error})"
+    except (OSError, ValueError):
+        return "no scene yet"
+    except Exception as error:
+        return f"provenance unreadable ({error})"
+    return None
+
+
+@contextmanager
+def scene_lock(out_dir: Path):
+    """One exporter per scene: an OS lock on <elevation>.lock beside it. The OS drops it when the process
+    ends, however it ends, so a crash leaves no stale lock. The lock file itself stays (it holds nothing)."""
+    out_dir.parent.mkdir(parents=True, exist_ok=True)
+    path = out_dir.with_name(out_dir.name + ".lock")
+    with open(path, "a+b") as stream:
+        try:
+            if os.name == "nt":
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise SystemExit(f"another exporter is writing this scene ({path} is locked)") from None
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+def remove_scene_dir(path: Path):
+    """Delete a staging or backup scene folder: only the file names an export writes, never a link or a
+    folder inside; anything else stops the export and stays where it is."""
+    if path.is_symlink() or path.is_junction():
+        raise SystemExit(f"refusing a link in the scene cache: {path}")
+    try:
+        validate_output_contents(path)
+    except ValueError as error:
+        raise SystemExit(f"{path}: {error}") from error
+    for entry in path.iterdir():
+        entry.unlink()
+    path.rmdir()
+
+
+def scene_siblings(out_dir: Path):
+    """(staging, backup) beside a scene: <elevation>.staging and <elevation>.old in the same map folder."""
+    return out_dir.with_name(out_dir.name + ".staging"), out_dir.with_name(out_dir.name + ".old")
+
+
+def recover_scene(out_dir: Path):
+    """Undo or finish what a stopped publish_scene left: its steps are scene -> .old, .staging -> scene,
+    remove .old. The scene lock must be held."""
+    staging, backup = scene_siblings(out_dir)
+    if staging.exists() or staging.is_symlink():
+        remove_scene_dir(staging)  # an unfinished build
+    if not (backup.exists() or backup.is_symlink()):
+        return
+    if not out_dir.exists():
+        if backup.is_symlink() or backup.is_junction():
+            raise SystemExit(f"refusing a link in the scene cache: {backup}")
+        os.rename(backup, out_dir)  # stopped between the two renames: the old scene comes back
+    elif scene_files_problem(out_dir) is None or scene_files_problem(backup) is not None:
+        remove_scene_dir(backup)  # the new scene was published (or the backup is no better)
+    else:
+        remove_scene_dir(out_dir)
+        os.rename(backup, out_dir)
+
+
+def publish_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path):
+    """export_scene into <elevation>.staging, checked whole, then put in place so that a failure or a hard
+    stop at any step keeps the previous complete scene or leaves it for recover_scene to bring back.
+    Windows cannot replace a non-empty folder in one step: the scene goes to .old, staging becomes the
+    scene, .old is removed. Between the two renames there is no scene; the next export restores it."""
+    staging, backup = scene_siblings(out_dir)
+    with scene_lock(out_dir):
+        recover_scene(out_dir)
+        try:
+            export_scene(gf, game_root, map_name, elevation, staging)
+            problem = scene_files_problem(staging)
+            if problem:
+                raise RuntimeError(f"the new scene failed its check: {problem}")
+            had_scene = out_dir.exists()
+            if had_scene:
+                os.rename(out_dir, backup)
+            try:
+                os.rename(staging, out_dir)
+            except OSError:
+                if had_scene:
+                    os.rename(backup, out_dir)
+                raise
+        except Exception:
+            if staging.exists():
+                remove_scene_dir(staging)
+            raise
+        if had_scene:
+            try:
+                remove_scene_dir(backup)
+            except OSError:
+                pass  # the new scene is in place; recover_scene removes the backup next time
+
+
 def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path):
-    """One map elevation into its cache directory (scene_directory)."""
+    """One map elevation into out_dir (publish_scene gives it the staging folder beside the scene)."""
     out_dir.mkdir(parents=True, exist_ok=True)
     reset_caches(gf)
     gf._reads = {}  # provenance lists what this scene read
@@ -675,7 +790,7 @@ def main(argv=None):
                                  sort_keys=True), flush=True)
         for name, elevation, out_dir in targets:
             if not args.maps and not args.check:
-                export_scene(gf, game_root, name, elevation, out_dir)
+                publish_scene(gf, game_root, name, elevation, out_dir)
                 continue
             try:
                 reason = "--force" if args.force else stale_reason(gf, game_root, name, elevation, out_dir)
@@ -688,7 +803,7 @@ def main(argv=None):
                     print(f"not current: {name} e{elevation}: {reason}", flush=True)
                     continue
                 print(f"rebuilding {name} e{elevation}: {reason}", flush=True)  # the launcher log shows it as is
-                export_scene(gf, game_root, name, elevation, out_dir)
+                publish_scene(gf, game_root, name, elevation, out_dir)
             except (Exception, SystemExit) as error:  # one bad map must not stop the others
                 failed.append(f"{name} e{elevation}: {error}")
                 print(f"FAILED {failed[-1]}", file=sys.stderr, flush=True)  # at once: the launcher counts it
