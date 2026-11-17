@@ -77,7 +77,12 @@ int main()
     std::string blocked;
     check(restoreSavedBuild(root, backup, files, trees, &blocked), "the restore succeeds");
     check(blocked.empty(), "nothing is blocked");
-    check(readMarker(root).empty() && readCopied(root).empty(), "the restore leaves no interrupted state to redo");
+    // restoreSavedBuild repairs the files only: the caller decides when the
+    // interrupted state (marker and journal) may go, so a failed caller can
+    // still retry; the recovery clears it after a whole restore.
+    check(readMarker(root) == "v1", "the restore itself leaves the marker standing");
+    clearMarker(root);
+    check(readMarker(root).empty() && readCopied(root).empty(), "the recovery's clear removes the whole state");
     check(get(root / "fallout2-ce.exe") == "old-exe", "the overwritten exe comes back whole");
     check(get(root / "ce.dat") == "old-dat", "the untouched file stays");
     check(get(root / "version.txt") == "v1\n", "the version stays old");
