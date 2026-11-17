@@ -2,8 +2,8 @@
 id: 301
 title: Snapshot output distinguishes the current run from older captures
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: claude
 suggested: glm
 priority: normal
 tier: 1
@@ -35,3 +35,4 @@ Deleting entire user output folders, a general run-receipt framework, changing e
 ## Log
 
 - 2026-11-15 gpt: cut from the tooling and verification follow-up to the existing batches; source observations above are scoped gaps, not unverified game bug claims.
+- 2026-11-18 claude: claimed. Own captures listed with hashes in a manifest in the output folder; a failed run exits nonzero and leaves state "incomplete". Code and fake tests only, no game runs.
