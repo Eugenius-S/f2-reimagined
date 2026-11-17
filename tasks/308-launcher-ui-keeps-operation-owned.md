@@ -50,3 +50,18 @@ Window redesign, a new UI framework, immediate cancellation of writes, worker ro
     - `WM_RELEASE_INFO` carries the generation it was asked under and does nothing while busy;
     - `WM_CLOSE` while busy defers, says so in the status and the log, and `WM_OPERATION_DONE` then closes.
   - **Still missing:** the scratch-folder fixture, CTest, and the outcome images, all in the heavy slot.
+- 2026-11-18 claude: part 2 of 2, `launcher_ui.cc` wired after GLM handed over the 307/309 heads (307 `8e8ea2df`, 309 `215cf0da`, 309 contains 307, both on main `de6d5267`). Code done, **not accepted**: the heavy slot is still owed.
+  - **Wired.**
+    - One `refreshControls()` feeds `launcher_ui_state::controls()` and replaces every scattered `EnableWindow`. It covers startup, the folder dialog, `EN_CHANGE`, the release reply and the end of an operation.
+    - While busy, the folder field is read-only, Browse is off and `chosenRoot()` returns the worker's folder.
+    - An idle folder change runs `refreshRootState()`. It bumps the generation, reloads installed, RP and translation state, and clears the old success. A bare new folder no longer keeps the old translation box.
+    - `WM_RELEASE_INFO` carries the generation it was asked under. While busy it updates only the labels. A reply asked for another folder only refreshes the status: no update starts and no "up to date" for the new folder.
+    - The status says nothing about GitHub before the first reply (`g_releaseAnswered`).
+    - `WM_CLOSE` while busy defers and says so in the status and the log. `WM_OPERATION_DONE` then closes the window. The worker is never killed and never left without a window.
+  - **Stack with 307/309.** This branch stays on main and carries none of their changes.
+    - A trial merge of `215cf0da` onto this head, in a throwaway worktree, conflicts only in `launcher_ui.cc`. Every other file of theirs, including `CMakeLists.txt`, merges unchanged.
+    - **Resolution:** keep 308's side in each of the four hunks. 307's scattered `EnableWindow(g_play, ...)` lines all become `refreshControls()`. Then pass `rpRecoveryPending() || updatePending()` as `playBlocked` in `refreshControls()`.
+    - The include of `launcher_update.h`, `updatePending()`, `updatePendingStatus()` and the `launchGame` guard merge automatically and stay.
+    - Checked: `git diff --check` is clean, and no `g_busy` or `setBusy` is left.
+  - **Checks.** Not compiled locally: there is no compiler outside the heavy slot. CI builds the launcher and runs `launcher_ui_state_tests`.
+  - **Still missing (heavy slot):** the scratch-folder sequences (a delayed release reply during a slow install, an idle root change, a busy close), the full CTest, and at most four EN/RU images.
