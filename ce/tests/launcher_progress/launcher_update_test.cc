@@ -4,6 +4,7 @@
 
 #include "launcher_update.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -78,6 +79,14 @@ int main()
     check(readIntendedSet(root).size() == 2 && readIntendedSet(root)[0].existed
         && !readIntendedSet(root)[1].existed, "the intended set keeps its marks");
     check(!fs::exists(backupsRoot(root) / "update-manifest.txt.tmp"), "no manifest temp file is left");
+    // A damaged journal says the touched set is unknown, not empty.
+    check(!intendedSetCorrupt(root), "a good journal is not corruption");
+    put(backupsRoot(root) / "update-manifest.txt", "Y a.png\ngarbage\n");
+    check(intendedSetCorrupt(root), "a corrupt journal blocks the restore");
+    put(backupsRoot(root) / "update-manifest.txt", "");
+    check(intendedSetCorrupt(root), "an empty journal file is an unknown set, not an empty transaction");
+    fs::remove_all(backupsRoot(root) / "update-manifest.txt", error);
+    check(!intendedSetCorrupt(root), "a missing journal is the pre-copy phase, not corruption");
     check(clearMarker(root), "the clear takes the journal with it");
     check(readIntendedSet(root).empty(), "the journal is gone");
 
@@ -90,8 +99,11 @@ int main()
     put(backup / "fallout2-ce.exe", "old-exe");
     put(backup / "ce.dat", "old-dat");
     put(backup / "version.txt", "v1\n");
+    put(backup / "Fallout 2 Reimagined.exe", "old-launcher");
     put(backup / "user-assets/fullscreen-20261028/wallpapers/art.png", "old-art");
-    check(writeBackupReceipt(backup, stubHash, nullptr), "the receipt is written");
+    std::vector<std::string> files = {"fallout2-ce.exe", "ce.dat", "version.txt", "Fallout 2 Reimagined.exe"};
+    std::vector<std::string> trees = {"user-assets"};
+    check(writeBackupReceipt(backup, files, stubHash, nullptr), "the receipt is written");
     put(root / "fallout2-ce.exe", "new-exe");                                     // replaced (Y)
     put(root / "Fallout 2 Reimagined.exe", "old-launcher");                       // replaced (Y)
     put(root / "ce.dat", "old-dat");                                              // not reached yet
@@ -106,11 +118,9 @@ int main()
 
     // The receipt holds: the backup is known-good before any destructive step.
     std::string bad;
-    check(validateBackup(backup, {"fallout2-ce.exe", "ce.dat", "version.txt"}, stubHash, &bad),
+    check(validateBackup(backup, files, stubHash, &bad),
         "the fresh backup validates against its receipt");
 
-    std::vector<std::string> files = {"fallout2-ce.exe", "ce.dat", "version.txt", "Fallout 2 Reimagined.exe"};
-    std::vector<std::string> trees = {"user-assets"};
     std::string blocked;
     check(restoreSavedBuild(root, backup, files, trees, &blocked), "the restore succeeds");
     check(blocked.empty(), "nothing is blocked");
@@ -143,6 +153,7 @@ int main()
     check(readMarker(root) == "v1", "the marker stays so the next start retries");
     fs::remove_all(root / "ce.dat", error);
     check(restoreSavedBuild(root, backup, files, trees, &blocked), "the retry finishes the restore");
+    clearMarker(root);  // the repair is done; the selection tests below start clean
 
     // A corrupted backup is refused before any destructive step: the receipt
     // names the first file whose bytes no longer match, and the caller never
@@ -155,20 +166,46 @@ int main()
     put(backup / "ce.dat", "old-dat");
     check(validateBackup(backup, files, stubHash, &bad), "the restored bytes validate again");
 
-    // A legacy backup (no receipt) only promises its version stamp.
+    // A backup from before this contract carries no receipt and promises
+    // nothing about completeness: refused, never presented as known-good.
     fs::path legacy = root / "v0";
     put(legacy / "version.txt", "v0\n");
-    check(validateBackup(legacy, files, stubHash, &bad), "a legacy backup with its stamp is accepted");
-    fs::remove_all(legacy / "version.txt", error);
-    check(!validateBackup(legacy, files, stubHash, &bad) && bad == "version.txt",
-        "a legacy backup without its stamp is refused");
+    check(!validateBackup(legacy, files, stubHash, &bad) && bad == "f2r-backup-receipt.txt",
+        "a receipt-less backup is refused, not trusted on its stamp");
+
+    // A receipt that does not account for every required file is refused:
+    // hashing listed bytes is not completeness.
+    fs::path partial = root / "v2";
+    put(partial / "version.txt", "v2\n");
+    put(partial / "ce.dat", "old-dat");
+    std::vector<std::string> partialFiles = {"version.txt", "ce.dat"};
+    check(writeBackupReceipt(partial, partialFiles, stubHash, nullptr), "the partial receipt is written");
+    check(!validateBackup(partial, files, stubHash, &bad) && bad == "fallout2-ce.exe",
+        "a receipt that skips a required file is refused");
+    // An unlisted extra file in the folder makes the receipt's promise wrong.
+    put(partial / "fallout2-ce.exe", "old-exe");
+    check(writeBackupReceipt(partial, files, stubHash, nullptr), "the full receipt is rewritten");
+    put(partial / "unlisted.dat", "sneaky");
+    check(!validateBackup(partial, files, stubHash, &bad) && bad == "unlisted.dat",
+        "an unlisted file breaks the receipt's promise");
+    // A truncated or empty receipt promises an unknown inventory.
+    put(partial / "f2r-backup-receipt.txt", "abc123");
+    check(!validateBackup(partial, files, stubHash, &bad) && bad == "f2r-backup-receipt.txt",
+        "a truncated receipt is refused");
+    put(partial / "f2r-backup-receipt.txt", "");
+    check(!validateBackup(partial, files, stubHash, &bad), "an empty receipt is refused");
 
     // Repair selection (B1): without a marker, a backup whose version equals
     // the installed stamp is skipped; with the marker, exactly the named
-    // backup wins even over a newer one.
+    // backup wins even over a newer one.  The mtimes are set explicitly so
+    // the newest-wins rule never rides on directory creation order.
     fs::path backups = root / "f2reimagined-backups";
     put(backups / "v1" / "version.txt", "v1\n");
     put(backups / "v0" / "version.txt", "v0\n");
+    auto now = fs::file_time_type::clock::now();
+    std::error_code timeError;
+    fs::last_write_time(backups / "v1", now - std::chrono::hours(2), timeError);
+    fs::last_write_time(backups / "v0", now - std::chrono::hours(1), timeError);
     std::string version;
     check(repairBackup(root, "v1", &version).filename() == "v0" && version == "v0",
         "no marker: the same-version backup is skipped, the different one is taken");

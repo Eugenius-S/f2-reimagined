@@ -177,6 +177,34 @@ inline std::vector<PendingPath> readIntendedSet(const fs::path& gameRoot)
     return paths;
 }
 
+// True when the intended set stands but does not parse whole: a malformed
+// line, an unreadable file, or a file without a single valid entry (the
+// worker always journals at least one path).  The touched set is then
+// unknown, not empty, and recovery must block instead of restoring over
+// paths it cannot see.  A missing manifest is not corruption: it is written
+// whole before the first copy, so its absence means the update died before
+// touching anything.
+inline bool intendedSetCorrupt(const fs::path& gameRoot)
+{
+    std::error_code error;
+    fs::path manifest = backupsRoot(gameRoot) / kManifestName;
+    if (!fs::exists(manifest, error) || error) return false;
+    std::ifstream in(manifest, std::ios::binary);
+    if (!in) return true;  // exists but unreadable: the set is unknown
+    bool sawEntry = false;
+    std::string line;
+    while (std::getline(in, line)) {
+        while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
+        if (line.empty()) continue;
+        if (line.size() < 3 || (line[0] != 'Y' && line[0] != 'N') || line[1] != ' '
+            || line.substr(2).find_first_not_of(' ') == std::string::npos) {
+            return true;
+        }
+        sawEntry = true;
+    }
+    return !sawEntry || !in.eof();
+}
+
 // A running exe cannot be overwritten but can be renamed: the old copy moves
 // aside (deleted on the next run) and the new one takes its name.
 inline bool copyLauncherFile(const fs::path& source, const fs::path& target)
@@ -233,13 +261,17 @@ inline bool restoreBuildTree(const fs::path& backupFolder, const fs::path& gameR
     return true;
 }
 
-// The receipt: one line per file of a finished backup, "sha256 size path"
-// (forward slashes), written after the last copy so a partial backup never
-// carries one.  `hash` is the worker's whole-file sha256 (or a test stub).
+// The receipt: the backup's checked inventory.  One "sha256 size path" line
+// per carried file (forward slashes), then one "absent path" line per
+// required build file the machine did not have when the backup was taken.
+// Written after the last copy, so a partial backup never carries one; its
+// completeness check is what makes a restore refuse a truncated or
+// hand-made backup instead of restoring "what little exists".
+// `hash` is the worker's whole-file sha256 (or a test stub).
 using HashFn = std::function<bool(const fs::path&, std::string*)>;
 
-inline bool writeBackupReceipt(const fs::path& backupFolder, const HashFn& hash,
-    std::string* blockedFile)
+inline bool writeBackupReceipt(const fs::path& backupFolder, const std::vector<std::string>& requiredFiles,
+    const HashFn& hash, std::string* blockedFile)
 {
     std::vector<fs::path> files;
     std::error_code error;
@@ -273,6 +305,19 @@ inline bool writeBackupReceipt(const fs::path& backupFolder, const HashFn& hash,
             out << hex << " " << static_cast<unsigned long long>(fs::file_size(file)) << " "
                 << fs::relative(file, backupFolder).generic_string() << "\n";
         }
+        // The required inventory: a build file the machine did not have is
+        // recorded absent, so validation can tell a whole snapshot from a
+        // truncated one.
+        std::vector<std::string> listed;
+        for (const fs::path& file : files) {
+            listed.push_back(fs::relative(file, backupFolder).generic_string());
+        }
+        std::sort(listed.begin(), listed.end());
+        for (const std::string& required : requiredFiles) {
+            if (!std::binary_search(listed.begin(), listed.end(), required)) {
+                out << "absent " << required << "\n";
+            }
+        }
         out.flush();
         out.close();
         if (!out) {
@@ -290,51 +335,96 @@ inline bool writeBackupReceipt(const fs::path& backupFolder, const HashFn& hash,
     return true;
 }
 
-// Is this backup known-good?  A receipt must exist and every one of its
-// files must still match byte for byte; a legacy backup without a receipt
-// (an older launcher's) only has to carry every build file.  False names the
-// first bad path; the caller refuses to restore and keeps the material.
-inline bool validateBackup(const fs::path& backupFolder, const std::vector<std::string>& buildFiles,
+// Is this backup known-good?  A receipt must exist, be readable to its last
+// line, list every file the backup carries with matching bytes, and account
+// for every required build file (carried and checked, or recorded absent
+// when the machine did not have it).  A backup from before this contract
+// has no receipt and promises nothing: it is refused, never presented as
+// known-good.  False names the first bad path; the caller refuses to
+// restore and keeps the material.
+inline bool validateBackup(const fs::path& backupFolder, const std::vector<std::string>& requiredFiles,
     const HashFn& hash, std::string* blockedFile)
 {
     std::error_code error;
     fs::path receipt = backupFolder / kReceiptName;
     if (!fs::is_regular_file(receipt, error)) {
-        // A legacy backup from an older launcher promised no hashes; only
-        // the version stamp it is selected by must stand.
-        if (!fs::is_regular_file(backupFolder / "version.txt", error)) {
-            if (blockedFile != nullptr) *blockedFile = "version.txt";
-            return false;
-        }
-        return true;
+        if (blockedFile != nullptr) *blockedFile = kReceiptName;
+        return false;
     }
     std::ifstream in(receipt, std::ios::binary);
+    if (!in) {
+        if (blockedFile != nullptr) *blockedFile = kReceiptName;
+        return false;
+    }
+    std::vector<std::string> listed;
+    std::vector<std::string> absent;
+    bool corruptLine = false;
     std::string line;
     while (std::getline(in, line)) {
         while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
         if (line.empty()) continue;
+        if (line.rfind("absent ", 0) == 0) {
+            if (line.size() <= 7) { corruptLine = true; break; }
+            absent.push_back(line.substr(7));
+            continue;
+        }
         size_t firstSpace = line.find(' ');
         size_t secondSpace = line.find(' ', firstSpace + 1);
         if (firstSpace == std::string::npos || secondSpace == std::string::npos) {
-            if (blockedFile != nullptr) *blockedFile = kReceiptName;
-            return false;
+            corruptLine = true;
+            break;
         }
         std::string hex = line.substr(0, firstSpace);
         unsigned long long size = 0;
         try { size = std::stoull(line.substr(firstSpace + 1, secondSpace - firstSpace - 1)); }
         catch (...) {
-            if (blockedFile != nullptr) *blockedFile = kReceiptName;
-            return false;
+            corruptLine = true;
+            break;
         }
-        fs::path file = backupFolder / fs::u8path(line.substr(secondSpace + 1));
+        std::string relative = line.substr(secondSpace + 1);
+        fs::path file = backupFolder / fs::u8path(relative);
         if (!fs::is_regular_file(file, error)
             || static_cast<unsigned long long>(fs::file_size(file, error)) != size || error) {
-            if (blockedFile != nullptr) *blockedFile = line.substr(secondSpace + 1);
+            if (blockedFile != nullptr) *blockedFile = relative;
             return false;
         }
         std::string actual;
         if (!hash(file, &actual) || actual != hex) {
-            if (blockedFile != nullptr) *blockedFile = line.substr(secondSpace + 1);
+            if (blockedFile != nullptr) *blockedFile = relative;
+            return false;
+        }
+        listed.push_back(relative);
+    }
+    if (corruptLine || !in.eof()) {
+        // A truncated or malformed receipt promises an unknown inventory.
+        if (blockedFile != nullptr) *blockedFile = kReceiptName;
+        return false;
+    }
+    // Completeness: every file the backup carries must stand in the receipt.
+    // A receipt that misses files promises less than the folder holds, so a
+    // restore could copy unvalidated bytes.
+    std::sort(listed.begin(), listed.end());
+    for (fs::recursive_directory_iterator it(backupFolder, fs::directory_options::skip_permission_denied, error), end;
+         !error && it != end; it.increment(error)) {
+        if (!it->is_regular_file(error)) continue;
+        if (it->path().filename().string() == kReceiptName) continue;
+        std::string relative = fs::relative(it->path(), backupFolder).generic_string();
+        if (!std::binary_search(listed.begin(), listed.end(), relative)) {
+            if (blockedFile != nullptr) *blockedFile = relative;
+            return false;
+        }
+    }
+    if (error) {
+        if (blockedFile != nullptr) *blockedFile = kReceiptName;
+        return false;
+    }
+    // Every required build file must be accounted for: carried and checked,
+    // or recorded absent when the machine did not have it.
+    for (const std::string& required : requiredFiles) {
+        bool carried = std::binary_search(listed.begin(), listed.end(), required);
+        bool wasAbsent = std::find(absent.begin(), absent.end(), required) != absent.end();
+        if (!carried && !wasAbsent) {
+            if (blockedFile != nullptr) *blockedFile = required;
             return false;
         }
     }

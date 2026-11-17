@@ -725,7 +725,8 @@ const std::vector<std::string>& buildTrees()
     return names;
 }
 
-bool backupInstalledBuild(const fs::path& root, const std::string& version, std::string* folderName)
+bool backupInstalledBuild(const fs::path& root, const std::string& version, std::string* folderName,
+    bool createIfMissing = true)
 {
     std::string backupVersion = version.empty() ? "manual" : version;
     for (char& ch : backupVersion) {
@@ -745,6 +746,7 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version, std:
         logf("backup %s already stands complete, kept", backupVersion.c_str());
         return true;
     }
+    if (!createIfMissing) return false;  // a reuse-only caller creates nothing
     fs::remove_all(backup, error);
     fs::create_directories(backup, error);
     if (error) {
@@ -783,7 +785,7 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version, std:
     }
     // The receipt is the last write: from here the backup is known-good.
     std::string receiptBlocked;
-    if (!launcher_update::writeBackupReceipt(backup, sha256File, &receiptBlocked)) {
+    if (!launcher_update::writeBackupReceipt(backup, buildFiles(), sha256File, &receiptBlocked)) {
         logf("cannot write the backup receipt (%s)", receiptBlocked.c_str());
         return false;
     }
@@ -841,6 +843,11 @@ bool rollbackInstalledBuild(const fs::path& root)
     // A known-good backup only: a damaged or partial one is refused before
     // any destructive step, and its material stays for the next attempt.
     std::string bad;
+    if (launcher_update::intendedSetCorrupt(root)) {
+        log("rollback blocked: the update journal is damaged, so the touched set is unknown; "
+            "delete f2reimagined-backups/update-manifest.txt only when you understand what it means");
+        return false;
+    }
     if (!launcher_update::validateBackup(selected, buildFiles(), sha256File, &bad)) {
         logf("rollback refused: the backup %s is not known-good (%s)",
             selected.filename().string().c_str(), bad.c_str());
@@ -891,6 +898,17 @@ bool recoverInterruptedUpdate(const fs::path& root)
         return false;
     }
     std::string bad;
+    if (launcher_update::intendedSetCorrupt(root)) {
+        log("recovery blocked: the update journal is damaged, so the touched set is unknown; the marker and the backup stay. "
+            "delete f2reimagined-backups/update-manifest.txt only when you understand what it means");
+        return false;
+    }
+    if (!fs::exists(root / launcher_update::kBackupsFolder / launcher_update::kManifestName, error)) {
+        // The journal is written whole right after the marker and before the
+        // first copy: its absence means the update died before touching
+        // anything.  The restore still runs, stated as what it is.
+        log("the update died before its first copy (no journal); restoring the saved build to be sure");
+    }
     if (!launcher_update::validateBackup(backup, buildFiles(), sha256File, &bad)) {
         logf("recovery blocked: the backup %s is not known-good (%s); the marker and the backup stay",
             backupFolder.c_str(), bad.c_str());
@@ -2030,13 +2048,27 @@ int runConsole(Options options)
         versionFile.close();
 
         std::string keptBackup;
-        // A refill of the wide art at the same version still overwrites
-        // files: it backs up and journals the same way, so a failed refill
-        // restores the same way (307).
-        if (installedGamePresent && !backupInstalledBuild(root,
-            installedVersion.empty() ? std::string("manual") : installedVersion, &keptBackup)) {
+        if (installedGamePresent && packageVersion != installedVersion
+            && !backupInstalledBuild(root,
+                installedVersion.empty() ? std::string("manual") : installedVersion, &keptBackup)) {
             fs::remove_all(work, error);
             die("could not save the current build before updating; nothing was changed");
+        }
+        // A same-version wide-art refill still overwrites files, so it
+        // journals and recovers the same way when a complete backup of this
+        // version stands; without one it stays unjournaled and says so, and
+        // it never replaces the older rollback backup with itself.
+        bool refill = false;
+        if (installedGamePresent && packageVersion == installedVersion) {
+            refill = true;
+            std::string reused;
+            if (backupInstalledBuild(root,
+                    installedVersion.empty() ? std::string("manual") : installedVersion, &reused, false)) {
+                keptBackup = reused;
+            } else {
+                log("this refill has no complete backup of the current version to restore from; "
+                    "a failed refill leaves the files it has already copied");
+            }
         }
         // 307: from here to the version stamp the game folder may hold a
         // half-installed build.  The marker names the backup a recovery
@@ -2087,6 +2119,13 @@ int runConsole(Options options)
                 fs::path backup = root / launcher_update::kBackupsFolder / fs::u8path(keptBackup);
                 std::string bad;
                 std::string blocked;
+                if (launcher_update::intendedSetCorrupt(root)) {
+                    // The touched set is unknown, so an immediate restore
+                    // could leave introduced files behind; the next start
+                    // blocks on the damaged journal instead.
+                    die("the update could not be installed and its journal is damaged (see the lines above); "
+                        "the next start blocks on the journal before it touches anything");
+                }
                 if (launcher_update::validateBackup(backup, buildFiles(), sha256File, &bad)
                     && launcher_update::restoreSavedBuild(root, backup, buildFiles(), buildTrees(), &blocked)
                     && launcher_update::clearMarker(root)) {
@@ -2124,7 +2163,9 @@ int runConsole(Options options)
                 "restart the game; remove the marker once the program holding it is closed", keptBackup.c_str());
         }
         fs::remove_all(work, error);
-        cleanOlderBuildLeftovers(root, keptBackup);
+        // A refill keeps every backup there was: it changed no version, so
+        // no older rollback point becomes stale because of it.
+        if (!refill) cleanOlderBuildLeftovers(root, keptBackup);
         updated = true;
         installedVersion = packageVersion;
     } else if (!remoteVersion.empty()) {

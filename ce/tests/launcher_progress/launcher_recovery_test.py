@@ -5,6 +5,7 @@ Covers the audit matrix's I2 (blocked restore, retry finishes it), the
 empty-marker block (an unreadable marker is a pending state) and the
 repair-in-one-step rule (no second rollback past the repaired build)."""
 
+import hashlib
 import os
 import subprocess
 import sys
@@ -20,6 +21,26 @@ sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 BACKUPS = "f2reimagined-backups"
 MARKER = "update-in-progress.txt"
 MANIFEST = "update-manifest.txt"
+RECEIPT = "f2r-backup-receipt.txt"
+# The worker's required build files (ce/src/launcher_main.cc buildFiles()).
+BUILD_FILES = ("fallout2-ce.exe", "ce.dat", "scene-exporter.exe", "version.txt", "Fallout 2 Reimagined.exe")
+
+
+def write_receipt(backup):
+    # The worker's receipt contract: one "sha256 size path" line per carried
+    # file, then "absent path" for every required build file the backup does
+    # not carry.  A backup without a receipt is refused, not trusted.
+    lines = []
+    for path in sorted(backup.rglob("*")):
+        if path.is_file() and path.name != RECEIPT:
+            data = path.read_bytes()
+            lines.append(f"{hashlib.sha256(data).hexdigest()} {len(data)} "
+                         f"{path.relative_to(backup).as_posix()}")
+    carried = {line.split(" ", 2)[2] for line in lines}
+    for name in BUILD_FILES:
+        if name not in carried:
+            lines.append(f"absent {name}")
+    (backup / RECEIPT).write_text("\n".join(lines) + "\n", encoding="ascii")
 
 
 def run_launcher(args):
@@ -46,8 +67,9 @@ class RecoveryFixture(unittest.TestCase):
         (self.backup / "fallout2-ce.exe").write_bytes(b"old-exe")
         (self.backup / "ce.dat").write_bytes(b"old-dat")
         (self.backup / "version.txt").write_bytes(b"v1")
-        # The legacy receipt contract: a backup without a receipt promises its
-        # version stamp, which is what the repair selects it by.
+        write_receipt(self.backup)
+        # The worker's receipt contract makes the backup known-good; the
+        # journal names every path the update replaced (Y) or introduced (N).
         (self.root / BACKUPS / MARKER).write_text("v1\n", encoding="ascii")
         (self.root / BACKUPS / MANIFEST).write_text(
             "Y fallout2-ce.exe\nY ce.dat\nY version.txt\n", encoding="ascii")
@@ -85,6 +107,28 @@ class RecoveryTests(RecoveryFixture):
         code, output = self.run_rollback()
         self.assertNotEqual(code, 0, output)
         self.assertIn("marker", output)
+        self.assertEqual({p.name: p.read_bytes() for p in self.root.iterdir() if p.is_file()}, before)
+        self.assertTrue((self.root / BACKUPS / MARKER).exists())
+
+    def test_tampered_backup_is_refused_not_installed(self):
+        # The receipt's hash catches tampered bytes: recovery is blocked, the
+        # mixed files stand untouched, and the material stays.
+        (self.backup / "ce.dat").write_bytes(b"tampered")
+        before = {p.name: p.read_bytes() for p in self.root.iterdir() if p.is_file()}
+        code, output = self.run_rollback()
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("ce.dat", output)
+        self.assertTrue((self.root / BACKUPS / MARKER).exists())
+        self.assertEqual({p.name: p.read_bytes() for p in self.root.iterdir() if p.is_file()}, before)
+
+    def test_corrupt_journal_is_blocked_not_empty(self):
+        # A damaged journal means the touched set is unknown: recovery blocks
+        # instead of restoring over paths it cannot see.
+        (self.root / BACKUPS / MANIFEST).write_text("Y fallout2-ce.exe\ngarbage\n", encoding="ascii")
+        before = {p.name: p.read_bytes() for p in self.root.iterdir() if p.is_file()}
+        code, output = self.run_rollback()
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("journal", output)
         self.assertEqual({p.name: p.read_bytes() for p in self.root.iterdir() if p.is_file()}, before)
         self.assertTrue((self.root / BACKUPS / MARKER).exists())
 
