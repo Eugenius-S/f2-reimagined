@@ -2,8 +2,8 @@
 id: 306
 title: The baked ground keeps its floor texture
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: claude
 suggested: gpt
 priority: high
 tier: 2
