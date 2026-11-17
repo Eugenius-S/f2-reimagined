@@ -34,12 +34,14 @@ FIXED_CARD_FRMS = frozenset(
         (Path(__file__).resolve().parent / "shapes" / "fixed_cards.json").read_text(encoding="utf-8"))["frms"])
 from baked_sidecar import baked_objects, decode_baked_sidecar, encode_baked_sidecar  # noqa: E402
 from floor_sidecar import VERSION as FLOOR_SIDECAR_VERSION  # noqa: E402
-from floor_sidecar import encode_floor_sidecar  # noqa: E402
+from floor_sidecar import decode_floor_sidecar, encode_floor_sidecar  # noqa: E402
 from roof_fringe import belt_art, wall_body, write_fringe_art  # noqa: E402
 from projection_sidecar import VERSION as PROJECTION_SIDECAR_VERSION  # noqa: E402
 from projection_sidecar import decode_projection_sidecar, encode_projection_sidecar  # noqa: E402
 from wall_sidecar import VERSION as WALL_SIDECAR_VERSION  # noqa: E402
 from wall_sidecar import decode_wall_sidecar, encode_wall_sidecar, wall_slabs  # noqa: E402
+from wall_sidecar import BATCH as WALL_BATCH, HEADER as WALL_HEADER, MAGIC as WALL_MAGIC  # noqa: E402
+from wall_sidecar import VERTEX as WALL_VERTEX  # noqa: E402
 from shadow_sidecar import VERSION as SHADOW_SIDECAR_VERSION  # noqa: E402
 from shadow_sidecar import decode_shadow_sidecar, encode_shadow_sidecar  # noqa: E402
 
@@ -107,6 +109,10 @@ MAP_GROUPS = {
 # --maps rp: the maps only the Restoration Project ships (its restored areas and the
 # original maps it brings back). Not part of "all": a vanilla game has none of them.
 RP_MAPS = ("abbasem", "abbey", "abundgr", "easter", "epamain1", "epamain2", "epasl", "epax", "gammovie", "gcenclen", "hubstash", "merchant", "safehs1", "safehs2", "safehs3", "sfsheng", "sfsub", "slvcamp", "tribe01", "tribe02", "v13_orig", "v15_orig", "vill", "vilmerch")
+# What every export writes whatever the map holds (SceneBuilder.export and export_scene); the scene's own
+# files name the rest (scene_references). A cache is complete only with all of them (task 293).
+REQUIRED_OUTPUT_FILES = frozenset({"scene.json", "tiles.png", "light.png", "floor.bin", "walls.bin", "baked.bin",
+                                   "projection.bin", "shadows.bin"})
 EXPECTED_OUTPUT_FILES = {"scene.json", "provenance.json", "floor.bin", "walls.bin", "projection.bin", "baked.bin",
                          "shadows.bin", "tiles.png", "light.png", "rock.png", "roof_fringe.png"}
 
@@ -561,8 +567,7 @@ def scene_files_problem(out_dir: Path, provenance: dict = None) -> str | None:
         extra = sorted(p.name for p in out_dir.iterdir() if p.name != "provenance.json" and p.name not in artifacts)
         if extra:
             return "files outside the artifacts table: " + ", ".join(extra)
-        required = {"scene.json"} | {entry["file"] for key, entry in provenance.items() if key.endswith("_sidecar")}
-        lacking = sorted(required - set(artifacts))
+        lacking = sorted(REQUIRED_OUTPUT_FILES - set(artifacts))
         if lacking:
             return "artifacts table lacks: " + ", ".join(lacking)
         missing = sorted(name for name in artifacts if not (out_dir / name).is_file())
@@ -574,11 +579,57 @@ def scene_files_problem(out_dir: Path, provenance: dict = None) -> str | None:
                     return f"{name} changed"
             except OSError as error:
                 return f"{name} unreadable ({error})"
+        try:
+            referenced = scene_references(out_dir, provenance)
+        except Exception as error:
+            return f"scene malformed ({error})"
+        missing = sorted(referenced - set(artifacts))
+        if missing:
+            return "scene files missing: " + ", ".join(missing)
+        for name in sorted(name for name in artifacts if name.endswith(".png")):
+            try:
+                with Image.open(out_dir / name) as image:
+                    if image.format != "PNG":
+                        raise ValueError(f"a {image.format} image")
+                    image.verify()  # every chunk and its CRC up to IEND; the pixels are not decoded
+            except Exception as error:
+                return f"{name} is not a valid PNG ({error})"
     except (OSError, ValueError):
         return "no scene yet"
     except Exception as error:
         return f"provenance unreadable ({error})"
     return None
+
+
+def scene_references(out_dir: Path, provenance: dict) -> set[str]:
+    """The files the renderer opens for this scene, read from the scene itself, never from its provenance:
+    the images scene.json names, the sprites page of every walls.bin batch, roof_fringe.png when floor.bin
+    lists roof runs or patches. Raises on a scene.json that is malformed or another scene's."""
+    scene = json.loads((out_dir / "scene.json").read_text(encoding="utf-8"))
+    if not isinstance(scene, dict) or (scene.get("map"), scene.get("elevation")) != (provenance["map"],
+                                                                                   provenance["elevation"]):
+        raise ValueError("scene.json is not this scene's")
+    names = {page["image"] for page in scene["pages"]}
+    names |= {scene[key]["image"] for key in ("tiles", "light", "rock") if scene.get(key)}
+    names |= wall_pages((out_dir / "walls.bin").read_bytes())
+    floor = decode_floor_sidecar((out_dir / "floor.bin").read_bytes())
+    if floor["fringe"] or floor["patches"]:
+        names.add("roof_fringe.png")
+    return names
+
+
+def wall_pages(data: bytes) -> set[str]:
+    """sprites<n>.png of every page a walls.bin batch draws from (walls.cc opens these names), read from the
+    batch headers alone: decode_wall_sidecar checks every vertex, too slow over every cached scene."""
+    magic, version, header_size, _, batch_count, _, _ = WALL_HEADER.unpack_from(data)
+    if magic != WALL_MAGIC or version != WALL_SIDECAR_VERSION or header_size != WALL_HEADER.size:
+        raise ValueError("walls.bin is not a wall sidecar of this version")
+    pages, offset = set(), WALL_HEADER.size
+    for _ in range(batch_count):
+        page, _, _, count, _ = WALL_BATCH.unpack_from(data, offset)
+        pages.add(f"sprites{page}.png")
+        offset += WALL_BATCH.size + count * 3 * WALL_VERTEX.size
+    return pages
 
 
 @contextmanager

@@ -3,14 +3,14 @@
 import unittest
 import base64
 import gzip
-import hashlib
 import json
 import os
+import shutil
 import struct
 import subprocess
 import sys
 from contextlib import redirect_stderr, redirect_stdout
-from io import StringIO
+from io import BytesIO, StringIO
 from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -49,6 +49,26 @@ class ArchiveFixture:
 
     def has(self, key):
         return key in self.names
+
+
+def write_scene_artifacts(out_dir, name, elevation, color=(10, 20, 30, 255)):
+    """Every file an export writes, tiny and synthetic: scene.json naming its images, one wall batch on the
+    back page sprites1.png, a floor with one roof run (so roof_fringe.png), the other sidecars as plain
+    bytes (only hashed). Returns the artifacts table export_scene would record."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    scene = {"map": name, "elevation": elevation, "pages": [{"image": "sprites0.png"}],
+             "tiles": {"image": "tiles.png"}, "light": {"image": "light.png"}, "rock": False}
+    (out_dir / "scene.json").write_text(json.dumps(scene))
+    for image in ("tiles.png", "light.png", "sprites0.png", "sprites1.png", "roof_fringe.png"):
+        Image.new("RGBA", (4, 4), color).save(out_dir / image)
+    vertex = VERTEX.pack(0, 0, 0, 0, 0, 0, 0, 0, -1.0)
+    (out_dir / "walls.bin").write_bytes(WALL_HEADER.pack(WALL_MAGIC, WALL_VERSION, WALL_HEADER.size, 2, 1, 1, 0)
+                                        + BATCH.pack(1, 4, 4, 1, 0) + vertex * 3)
+    run = (1, 20, 10, 3, 1, 37, 144, 40, 20.125, 1.875, 10.0, 13.0)
+    (out_dir / "floor.bin").write_bytes(encode_floor_sidecar(FloorSidecarTests.sample_scene(), [run]))
+    for sidecar in ("baked.bin", "projection.bin", "shadows.bin"):
+        (out_dir / sidecar).write_bytes(sidecar.encode())
+    return {p.name: export.sha256_file(p) for p in sorted(out_dir.iterdir()) if p.name != "provenance.json"}
 
 
 class SourcePriorityTests(unittest.TestCase):
@@ -236,14 +256,16 @@ class TargetTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             out = Path(tmp)
             self.assertEqual(stale_reason(FakeGf(), out, "m", 0, out), "no scene yet")
-            provenance = {"map": "m", "elevation": 0,
-                          "artifacts_sha256": {"scene.json": hashlib.sha256(b"{}").hexdigest()},
+            artifacts = write_scene_artifacts(out, "m", 0)
+            scene_bytes = (out / "scene.json").read_bytes()
+            (out / "scene.json").unlink()
+            provenance = {"map": "m", "elevation": 0, "artifacts_sha256": artifacts,
                           "resources_read": {}, "fingerprint_sha256": "abc"}
             without_field = dict(provenance)
             provenance["inputs_sha256"] = "abc"
             (out / "provenance.json").write_text(json.dumps(provenance))
             self.assertFalse(scene_current(FakeGf(), out, "m", 0, out))  # scene.json is missing
-            (out / "scene.json").write_text("{}")
+            (out / "scene.json").write_bytes(scene_bytes)
             (out / "provenance.json").write_text(json.dumps(without_field))
             export.input_fingerprint = lambda *args: ("abc", None, None, None)
             try:
@@ -273,9 +295,8 @@ class TargetTests(unittest.TestCase):
             gf.read(f"maps/{name}.map")
             if name == "b":
                 gf.exists("art/tiles/extra.frm")
-            (out_dir / "scene.json").write_text("{}")
             provenance = {"map": name, "elevation": elevation,
-                          "artifacts_sha256": {"scene.json": export.sha256_file(out_dir / "scene.json")},
+                          "artifacts_sha256": write_scene_artifacts(out_dir, name, elevation),
                           "resources_read": gf._reads,
                           "inputs_sha256": export.input_fingerprint(gf, game_root, name, elevation)[0]}
             (out_dir / "provenance.json").write_text(json.dumps(provenance))
@@ -358,10 +379,7 @@ class SyntheticCache(unittest.TestCase):
         export.reset_caches(gf)
         gf._reads = {}
         gf.read(f"maps/{name}.map")
-        (out_dir / "scene.json").write_text(json.dumps({"map": name, "elevation": elevation}))
-        Image.new("RGBA", (4, 4), color).save(out_dir / "tiles.png")
-        (out_dir / "walls.bin").write_bytes(b"WALL" + bytes(range(12)))
-        artifacts = {p.name: export.sha256_file(p) for p in sorted(out_dir.iterdir()) if p.name != "provenance.json"}
+        artifacts = write_scene_artifacts(out_dir, name, elevation, color)
         provenance = {"map": name, "elevation": elevation, "artifacts_sha256": artifacts,
                       "wall_sidecar": {"file": "walls.bin", "sha256": artifacts["walls.bin"]},
                       "resources_read": gf._reads,
@@ -401,9 +419,7 @@ class CacheCheckTests(SyntheticCache):
         self.assertIn("scenes present: two, upper", out)
 
     def test_a_missing_elevation(self):
-        for name in ("scene.json", "tiles.png", "walls.bin", "provenance.json"):
-            (self.cache / "upper" / "2" / name).unlink()
-        self.cache.joinpath("upper", "2").rmdir()
+        shutil.rmtree(self.cache / "upper" / "2")
         self.assert_rejected("upper e2", "no scene yet")
 
     def test_broken_scene_json(self):
@@ -442,7 +458,8 @@ class CacheCheckTests(SyntheticCache):
 
     def test_an_empty_artifacts_table(self):
         self.edit_provenance("two/1", lambda p: p.update(artifacts_sha256={}))
-        self.assert_rejected("two e1", "files outside the artifacts table: scene.json, tiles.png, walls.bin")
+        self.assert_rejected("two e1", "files outside the artifacts table: baked.bin, floor.bin, light.png, projection.bin, "
+                             "roof_fringe.png, scene.json, shadows.bin, sprites0.png, sprites1.png, tiles.png, walls.bin")
 
     def test_an_incomplete_artifacts_table(self):
         self.edit_provenance("two/1", lambda p: p["artifacts_sha256"].pop("tiles.png"))
@@ -456,6 +473,69 @@ class CacheCheckTests(SyntheticCache):
         self.edit_provenance("upper/1", lambda p: p["artifacts_sha256"].pop("scene.json"))
         code, out = self.check()
         self.assertIn("not current: upper e1: artifacts table lacks: scene.json", out)
+
+    def forget(self, scene, name, declaration=None):
+        """The file gone together with its artifacts entry (and its sidecar declaration): the provenance
+        alone no longer says it was there (Sol's review of #523)."""
+        (self.cache / scene / name).unlink()
+
+        def change(provenance):
+            provenance["artifacts_sha256"].pop(name)
+            provenance.pop(declaration, None)
+        self.edit_provenance(scene, change)
+
+    def test_a_file_every_export_writes_cannot_be_forgotten(self):
+        self.forget("two/0", "tiles.png")
+        self.forget("two/1", "walls.bin", "wall_sidecar")
+        self.forget("upper/1", "light.png")
+        self.forget("upper/2", "shadows.bin")
+        code, out = self.check()
+        self.assertEqual(code, 3, out)
+        for line in ("two e0: artifacts table lacks: tiles.png", "two e1: artifacts table lacks: walls.bin",
+                     "upper e1: artifacts table lacks: light.png", "upper e2: artifacts table lacks: shadows.bin"):
+            self.assertIn("not current: " + line, out)
+
+    def test_a_file_the_scene_names_cannot_be_forgotten(self):
+        self.forget("two/0", "sprites0.png")      # a page scene.json lists
+        self.forget("two/1", "sprites1.png")      # the back page a walls.bin batch draws from
+        self.forget("upper/1", "roof_fringe.png")  # floor.bin lists a roof run
+        code, out = self.check()
+        self.assertEqual(code, 3, out)
+        for line in ("two e0: scene files missing: sprites0.png", "two e1: scene files missing: sprites1.png",
+                     "upper e1: scene files missing: roof_fringe.png"):
+            self.assertIn("not current: " + line, out)
+
+    def rewrite(self, scene, name, data):
+        """A changed file with its recorded hash changed to match: only a format check can tell."""
+        (self.cache / scene / name).write_bytes(data)
+        self.edit_provenance(scene, lambda p: p["artifacts_sha256"].update(
+            {name: export.sha256_file(self.cache / scene / name)}))
+
+    def test_malformed_files_with_matching_hashes(self):
+        self.rewrite("two/0", "scene.json", b"{")
+        self.rewrite("two/1", "scene.json", json.dumps({"map": "upper", "elevation": 1, "pages": []}).encode())
+        self.rewrite("upper/1", "tiles.png", b"not a png")
+        good = (self.cache / "upper" / "2" / "light.png").read_bytes()
+        self.rewrite("upper/2", "light.png", good[:-12])  # IEND cut off
+        code, out = self.check()
+        self.assertEqual(code, 3, out)
+        self.assertIn("not current: two e0: scene malformed (", out)
+        self.assertIn("not current: two e1: scene malformed (scene.json is not this scene's)", out)
+        self.assertIn("not current: upper e1: tiles.png is not a valid PNG (", out)
+        self.assertIn("not current: upper e2: light.png is not a valid PNG (", out)
+
+    def test_another_image_format_under_a_png_name(self):
+        gif = BytesIO()
+        Image.new("RGB", (4, 4)).save(gif, "GIF")
+        self.rewrite("two/0", "sprites1.png", gif.getvalue())
+        self.assert_rejected("two e0", "sprites1.png is not a valid PNG (a GIF image)")
+
+    def test_a_malformed_wall_or_floor_sidecar_with_a_matching_hash(self):
+        self.rewrite("two/0", "walls.bin", b"F2WL")
+        self.rewrite("two/1", "floor.bin", b"F2FL")
+        code, out = self.check()
+        self.assertIn("not current: two e0: scene malformed (", out)
+        self.assertIn("not current: two e1: scene malformed (truncated floor sidecar)", out)
 
     def test_outdated_inputs(self):
         self.write_maps(darkness=2)
