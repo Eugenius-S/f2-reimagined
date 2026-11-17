@@ -173,6 +173,40 @@ class InstallTests(LauncherFixture):
         for name in ("fallout2.cfg", "master.dat", "critter.dat"):
             self.assertEqual((self.root / name).read_bytes(), b"old-build", name)
 
+    def test_failed_refill_never_restores_an_older_manual_backup(self):
+        # The real path to an old manual backup: a stamp-less install
+        # (bytes old-build) updates to new-build and keeps "manual".  A later
+        # new-build refill fails on a held version.txt; its rollback must
+        # bring back the current new-build bytes, not the older manual
+        # backup, and that backup stays as it was (313).
+        (self.root / "version.txt").unlink()
+        code, output = self.run_launcher()
+        self.assertEqual(code, 0, output)
+        backups = self.root / "f2reimagined-backups"
+        manual = backups / "manual"
+        self.assertTrue((manual / "f2r-backup-receipt.txt").is_file())
+        manualBefore = {p.relative_to(manual): p.read_bytes() for p in manual.rglob("*") if p.is_file()}
+        current = {p.relative_to(self.root): p.read_bytes()
+                   for p in self.root.rglob("*") if p.is_file() and backups not in p.parents}
+        with read_lock(self.root / "version.txt"):
+            code, output = self.run_launcher()
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("installing into the game folder:", output)
+        self.assertIn("the restore could not finish", output)
+        self.assertNotEqual((backups / "update-in-progress.txt").read_text(encoding="ascii").strip(), "manual")
+
+        result = subprocess.run([str(LAUNCHER), "--game-root", str(self.root), "--rollback"],
+                                capture_output=True, timeout=90)
+        output = result.stdout.decode("utf-8", errors="replace") + result.stderr.decode("utf-8", errors="replace")
+        print(f"\n{self.id()} rollback: exit {result.returncode}\n{output}", flush=True)
+        self.assertEqual(result.returncode, 0, output)
+        after = {p.relative_to(self.root): p.read_bytes()
+                 for p in self.root.rglob("*") if p.is_file() and backups not in p.parents}
+        self.assertEqual(after, current)
+        self.assertEqual({p.relative_to(manual): p.read_bytes() for p in manual.rglob("*") if p.is_file()},
+                         manualBefore)
+        self.assertFalse((backups / "update-in-progress.txt").exists())
+
     def test_invalid_zip_version_changes_nothing(self):
         for invalid in (None, b"", b" \t\r\n", b"first\nsecond", b"first\n\n",
                         b"\nsecond", b"first\rsecond", b"bad\x00version", b".", b".."):
