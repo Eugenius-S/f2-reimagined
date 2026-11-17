@@ -38,6 +38,7 @@
 #include "launcher_rp.h"
 #include "launcher_ru.h"
 #include "launcher_uninstall.h"
+#include "launcher_update.h"
 
 namespace fs = std::filesystem;
 
@@ -628,7 +629,7 @@ bool unpackZip(const fs::path& zip, const fs::path& stage)
 }
 
 bool copyIfPresent(const fs::path& stage, const char* name, const fs::path& destination, bool overwrite,
-    const char* note)
+    const char* note, const fs::path* journal = nullptr)
 {
     fs::path source = stage / name;
     std::error_code error;
@@ -643,6 +644,8 @@ bool copyIfPresent(const fs::path& stage, const char* name, const fs::path& dest
         logf("  %s: copy failed (%s)", name, error.message().c_str());
         return false;
     }
+    // The interrupted-update journal (307): one line per file the update touched.
+    if (journal != nullptr) launcher_update::appendCopied(*journal, name);
     logf("  %s: %s", name, tr(note));
     return true;
 }
@@ -670,7 +673,8 @@ bool copyLauncher(const fs::path& source, const fs::path& target)
 }
 
 // The wide menu, death and loading art ships as folders next to the exe.
-bool copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& destination)
+bool copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& destination,
+    const fs::path* journal = nullptr)
 {
     fs::path source = stage / name;
     std::error_code error;
@@ -681,8 +685,24 @@ bool copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& 
     }
     if (!error && !fs::is_directory(source, error)) error = std::make_error_code(std::errc::not_a_directory);
     if (!error) fs::create_directories(destination / name, error);
-    if (!error) fs::copy(source, destination / name,
-        fs::copy_options::recursive | fs::copy_options::overwrite_existing, error);
+    if (!error) {
+        // File by file, so the interrupted-update journal (307) knows exactly
+        // which paths the update touched and a restore can remove the ones
+        // the package introduced without touching the player's own files.
+        fs::path target = destination / name;
+        for (fs::recursive_directory_iterator it(source, fs::directory_options::skip_permission_denied, error), end;
+             !error && it != end; it.increment(error)) {
+            if (!it->is_regular_file(error)) continue;
+            std::string relative = name + std::string("/")
+                + wideToUtf8(fs::relative(it->path(), source).generic_wstring());
+            fs::path targetFile = target / fs::relative(it->path(), source);
+            fs::create_directories(targetFile.parent_path(), error);
+            if (error) break;
+            fs::copy_file(it->path(), targetFile, fs::copy_options::overwrite_existing, error);
+            if (error) break;
+            if (journal != nullptr) launcher_update::appendCopied(*journal, relative);
+        }
+    }
     if (error) {
         logf("  %s: copy failed (%s)", name, error.message().c_str());
         return false;
@@ -716,6 +736,14 @@ const std::vector<std::string>& buildFiles()
     return names;
 }
 
+// The release-owned asset trees the update overwrites whole; the backup
+// carries them now too, so a restore can put every replaced file back (307).
+const std::vector<std::string>& buildTrees()
+{
+    static const std::vector<std::string> names = {"user-assets", "data/art/splash", "data/art/russian/splash"};
+    return names;
+}
+
 bool backupInstalledBuild(const fs::path& root, const std::string& version, std::string* folderName)
 {
     std::string backupVersion = version.empty() ? "manual" : version;
@@ -745,6 +773,16 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version, std:
     if (!savedAny) {
         log("no installed build files were available to back up");
         return false;
+    }
+    for (const std::string& name : buildTrees()) {
+        fs::path source = root / fs::u8path(name);
+        if (!fs::is_directory(source, error)) continue;
+        fs::copy(source, backup / fs::u8path(name),
+            fs::copy_options::recursive | fs::copy_options::overwrite_existing, error);
+        if (error) {
+            logf("cannot back up %s: %s", name.c_str(), error.message().c_str());
+            return false;
+        }
     }
     if (!fs::exists(backup / kVersionTxt)) {
         std::ofstream versionFile(backup / kVersionTxt, std::ios::binary | std::ios::trunc);
@@ -798,13 +836,18 @@ bool rollbackInstalledBuild(const fs::path& root)
         log("no previous build backup is available");
         return false;
     }
+    // 307: an interrupted update's marker names the backup that repairs the
+    // half-installed state, even when its version equals the installed stamp.
+    std::string interruptedBackup = launcher_update::readMarker(root);
     for (fs::directory_iterator it(backupRoot, error), end; !error && it != end; it.increment(error)) {
         if (!it->is_directory(error)) continue;
         std::ifstream versionFile(it->path() / kVersionTxt);
         if (!versionFile) continue;
         std::string version = trim(std::string((std::istreambuf_iterator<char>(versionFile)),
             std::istreambuf_iterator<char>()));
-        if (version.empty() || version == currentVersion) continue;
+        if (version.empty()) continue;
+        // Backup folder names are sanitized ASCII (backupInstalledBuild).
+        if (version == currentVersion && it->path().filename().string() != interruptedBackup) continue;
         fs::file_time_type time = fs::last_write_time(it->path(), error);
         if (error) { error.clear(); continue; }
         if (selected.empty() || time > selectedTime) {
@@ -817,23 +860,46 @@ bool rollbackInstalledBuild(const fs::path& root)
         log("no build different from the installed version is available for rollback");
         return false;
     }
-    for (const std::string& name : buildFiles()) {
-        fs::path source = selected / name;
-        if (!fs::is_regular_file(source, error)) continue;
-        if (name == kRootLauncher) {
-            if (!copyLauncher(source, root / name)) {
-                logf("rollback failed for %s", name.c_str());
-                return false;
-            }
-            continue;
-        }
-        fs::copy_file(source, root / name, fs::copy_options::overwrite_existing, error);
-        if (error) {
-            logf("rollback failed for %s: %s", name.c_str(), error.message().c_str());
-            return false;
-        }
+    std::string blocked;
+    if (!launcher_update::restoreSavedBuild(root, selected, buildFiles(), buildTrees(), &blocked)) {
+        logf("rollback failed: %s could not be restored; the backup stays as it is", blocked.c_str());
+        return false;
+    }
+    // The repaired interrupted update needs no marker any more: the saved
+    // build stands, and a later launch must not restore it a second time.
+    if (!interruptedBackup.empty() && selected.filename().string() == interruptedBackup) {
+        launcher_update::clearMarker(root);
     }
     logf("restored previous build %s", selectedVersion.c_str());
+    return true;
+}
+
+// 307: an update that died between replacement steps leaves newer files mixed
+// with old ones.  The marker written before the first copy survives it; the
+// next start restores the saved build before anything can launch or mutate
+// the half-installed state.  False: the restore is blocked, the marker and
+// the backup stay so nothing pretends the game is whole.
+bool recoverInterruptedUpdate(const fs::path& root)
+{
+    std::string backupFolder = launcher_update::readMarker(root);
+    if (backupFolder.empty()) return true;
+    logf("an update was interrupted; restoring the saved build from f2reimagined-backups/%s",
+        backupFolder.c_str());
+    std::error_code error;
+    fs::path backup = root / launcher_update::kBackupsFolder / fs::u8path(backupFolder);
+    if (!fs::is_regular_file(backup / kVersionTxt, error)) {
+        logf("recovery blocked: the backup f2reimagined-backups/%s has no version.txt",
+            backupFolder.c_str());
+        return false;
+    }
+    std::string blocked;
+    if (!launcher_update::restoreSavedBuild(root, backup, buildFiles(), buildTrees(), &blocked)) {
+        logf("recovery blocked: %s could not be restored; the f2reimagined-backups folder is kept as it is",
+            blocked.c_str());
+        return false;
+    }
+    launcher_update::clearMarker(root);
+    logf("the interrupted update was rolled back; the saved build %s stands", backupFolder.c_str());
     return true;
 }
 
@@ -1842,6 +1908,12 @@ int runConsole(Options options)
         fs::remove(old, ignored);
     }
 
+    // 307: an interrupted update is repaired before anything can launch or mutate the half-installed build.
+    if (!recoverInterruptedUpdate(root)) {
+        die("the interrupted update could not be rolled back (see the lines above); remove the "
+            "obstruction, or delete f2reimagined-backups/update-in-progress.txt only when you understand what it means");
+    }
+
     if (options.removeRp) return removeRestorationProject(root, true) ? 0 : 1;
     if (options.uninstall) return uninstallMod(root) ? 0 : 1;
     if (options.removeRussian) {
@@ -1942,33 +2014,48 @@ int runConsole(Options options)
             fs::remove_all(work, error);
             die("could not save the current build before updating; nothing was changed");
         }
+        // 307: from here to the version stamp the game folder may hold a
+        // half-installed build; the marker names the backup a recovery
+        // restores from, and the journal lists every file the update touches.
+        bool journaling = !keptBackup.empty();
+        if (journaling && !launcher_update::writeMarker(root, keptBackup)) {
+            fs::remove_all(work, error);
+            die("could not write the update recovery marker; nothing was changed");
+        }
 
         // --- into the game folder; the player's things stay theirs ---
         log("installing into the game folder:");
         auto stopUpdate = [&]() {
             fs::remove_all(work, error);
+            if (journaling) {
+                die("the update could not be installed (see the lines above); the game folder may hold "
+                    "part of the new build, and the next start restores the saved build from "
+                    "f2reimagined-backups before it does anything else");
+            }
             die("the update could not be installed (see the lines above); the build version was not changed");
         };
-        if (!copyIfPresent(stage, kGameExe, root, true, "installed")
-            || !copyIfPresent(stage, "ce.dat", root, true, "installed")
-            || !copyIfPresent(stage, kExporterExe, root, true, "installed")) stopUpdate();
+        if (!copyIfPresent(stage, kGameExe, root, true, "installed", journaling ? &root : nullptr)
+            || !copyIfPresent(stage, "ce.dat", root, true, "installed", journaling ? &root : nullptr)
+            || !copyIfPresent(stage, kExporterExe, root, true, "installed", journaling ? &root : nullptr)) stopUpdate();
         if (!fs::exists(stage / kZipLauncher)) {
             logf("  %s: not in the package, skipped", kRootLauncher);
         } else if (copyLauncher(stage / kZipLauncher, root / kRootLauncher)) {
+            if (journaling) launcher_update::appendCopied(root, kRootLauncher);
             logf("  %s: installed", kRootLauncher);
         } else {
             stopUpdate();
         }
-        if (!copyTreeIfPresent(stage, "user-assets", root)
-            || !copyTreeIfPresent(stage, "data/art/splash", root)
-            || !copyTreeIfPresent(stage, "data/art/russian/splash", root)) stopUpdate();
+        if (!copyTreeIfPresent(stage, "user-assets", root, journaling ? &root : nullptr)
+            || !copyTreeIfPresent(stage, "data/art/splash", root, journaling ? &root : nullptr)
+            || !copyTreeIfPresent(stage, "data/art/russian/splash", root, journaling ? &root : nullptr)) stopUpdate();
         if (fs::exists(root / kCfg)) {
             log("  fallout2.cfg: kept (the player's file is never overwritten)");
         } else {
-            if (!copyIfPresent(stage, kCfg, root, false, "installed (default)")) stopUpdate();
+            if (!copyIfPresent(stage, kCfg, root, false, "installed (default)", journaling ? &root : nullptr)) stopUpdate();
         }
         if (!writeBuildVersion(root, packageVersion)) stopUpdate();
         logf("  version.txt: %s", packageVersion.c_str());
+        if (journaling) launcher_update::clearMarker(root);  // the update is committed whole now
         fs::remove_all(work, error);
         cleanOlderBuildLeftovers(root, keptBackup);
         updated = true;
