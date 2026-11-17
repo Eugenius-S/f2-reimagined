@@ -1900,22 +1900,27 @@ int runLauncherUi(int argc, char** argv);
 // it.
 struct RootLock {
     HANDLE handle = nullptr;
+    DWORD error = 0;
     explicit RootLock(const fs::path& root)
     {
         std::wstring path = (root / L"f2reimagined.lock").wstring();
         handle = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
             0 /* no sharing: a second opener is a second writer */,
             nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+        // CreateFileW fails with INVALID_HANDLE_VALUE, not nullptr: without
+        // this check a refused second writer walked past the guard (522).
+        if (handle == INVALID_HANDLE_VALUE) {
+            handle = nullptr;
+            error = GetLastError();
+        }
     }
     ~RootLock() {
         if (handle != nullptr) CloseHandle(handle);  // DELETE_ON_CLOSE removes the file
     }
     bool held() const { return handle != nullptr; }
-    // The reason the folder is not ours to write: another live worker (a
-    // sharing violation) or the folder refusing the lock file itself.
+    // The reason the folder is not ours to write, captured at acquisition.
     const char* refusedWhy() const
     {
-        DWORD error = GetLastError();
         if (error == ERROR_SHARING_VIOLATION) return "another installer for this game folder is already running";
         if (error == ERROR_ACCESS_DENIED) return "the game folder refuses the lock file (access denied)";
         return "the game folder could not be locked";
