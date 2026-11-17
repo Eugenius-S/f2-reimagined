@@ -416,8 +416,10 @@ def parse_args(argv=None):
                         help="where the scenes go instead of <game>/mod-cache/scene (a worktree's own cache, "
                              "read by the test game through F2CE_SCENE_CACHE, so a running game keeps its own)")
     parser.add_argument("--check", action="store_true",
-                        help="report whether every requested map's base scene exists and exit: 0 all present, "
-                             "3 some missing (the 091 launcher asks before spending minutes on an export)")
+                        help="report whether every elevation of every requested map has its complete, current "
+                             "scene (the files its provenance hashed, from the same inputs) and exit: 0 all "
+                             "present, 3 any missing, damaged, outdated or unreadable (the 091 launcher asks "
+                             "before spending minutes on an export)")
     parser.add_argument("--force", action="store_true",
                         help="rebuild every requested scene even if it is current")
     args = parser.parse_args(argv)
@@ -445,13 +447,6 @@ def expand_maps(spec: str) -> list[str]:
             if name not in names:
                 names.append(name)
     return names
-
-
-def check_scenes(game_root: Path, map_names: list[str], cache_root: Path = None) -> list[str]:
-    """The requested maps with no scene in the cache yet: a map counts as present when any of its
-    elevation folders holds a scene.json (some maps have no elevation 0)."""
-    scenes = cache_root if cache_root is not None else game_root / "mod-cache" / "scene"
-    return [name for name in map_names if not any(scenes.glob(f"{name}/*/scene.json"))]
 
 
 def scene_directory(game_root: Path, map_name: str, elevation: int, cache_root: Path = None) -> Path:
@@ -528,8 +523,24 @@ def stale_reason(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
     try:
         if provenance["map"] != map_name or provenance["elevation"] != elevation:
             return "the scene is another map's"
-        if not all((out_dir / name).is_file() for name in provenance["artifacts_sha256"]):
-            return "scene files missing"
+        # The files must be the ones export_scene hashed into the table: all of them, none changed.
+        artifacts = provenance["artifacts_sha256"]
+        extra = sorted(p.name for p in out_dir.iterdir() if p.name != "provenance.json" and p.name not in artifacts)
+        if extra:
+            return "files outside the artifacts table: " + ", ".join(extra)
+        required = {"scene.json"} | {entry["file"] for key, entry in provenance.items() if key.endswith("_sidecar")}
+        lacking = sorted(required - set(artifacts))
+        if lacking:
+            return "artifacts table lacks: " + ", ".join(lacking)
+        missing = sorted(name for name in artifacts if not (out_dir / name).is_file())
+        if missing:
+            return "scene files missing: " + ", ".join(missing)
+        for name, digest in sorted(artifacts.items()):
+            try:
+                if sha256_file(out_dir / name) != digest:
+                    return f"{name} changed"
+            except OSError as error:
+                return f"{name} unreadable ({error})"
         recorded = provenance["resources_read"]
         reset_caches(gf)
         gf._reads = {}
@@ -640,13 +651,6 @@ def main(argv=None):
     if not game_root.is_dir():
         raise SystemExit(f"game root not found: {game_root}")
     cache_root = args.cache_root.resolve() if args.cache_root else None
-    if args.check:
-        missing = check_scenes(game_root, args.map_names, cache_root)
-        if missing:
-            print("scenes missing: " + ", ".join(missing))
-            raise SystemExit(3)
-        print("scenes present: " + ", ".join(args.map_names))
-        return 0
     if not args.maps:
         # One scene: its directory is checked before the game data is opened.
         targets = [(args.map_names[0], args.elevation, scene_directory(game_root, args.map_names[0], args.elevation,
@@ -666,16 +670,22 @@ def main(argv=None):
                 targets.extend((name, elevation, scene_directory(game_root, name, elevation, cache_root))
                                for elevation in elevations)
             # The launcher counts the scene lines against this one for its progress bar.
-            print(json.dumps({"maps_total": len({name for name, _, _ in targets}), "scenes_total": len(targets)},
-                             sort_keys=True), flush=True)
+            if not args.check:
+                print(json.dumps({"maps_total": len({name for name, _, _ in targets}), "scenes_total": len(targets)},
+                                 sort_keys=True), flush=True)
         for name, elevation, out_dir in targets:
-            if not args.maps:
+            if not args.maps and not args.check:
                 export_scene(gf, game_root, name, elevation, out_dir)
                 continue
             try:
                 reason = "--force" if args.force else stale_reason(gf, game_root, name, elevation, out_dir)
                 if reason is None:
-                    print(json.dumps({"output": str(out_dir), "current": True}, sort_keys=True), flush=True)
+                    if not args.check:
+                        print(json.dumps({"output": str(out_dir), "current": True}, sort_keys=True), flush=True)
+                    continue
+                if args.check:
+                    failed.append(f"{name} e{elevation}")
+                    print(f"not current: {name} e{elevation}: {reason}", flush=True)
                     continue
                 print(f"rebuilding {name} e{elevation}: {reason}", flush=True)  # the launcher log shows it as is
                 export_scene(gf, game_root, name, elevation, out_dir)
@@ -684,6 +694,11 @@ def main(argv=None):
                 print(f"FAILED {failed[-1]}", file=sys.stderr, flush=True)  # at once: the launcher counts it
     finally:
         gf.close()
+    if args.check:
+        if failed:
+            return 3
+        print("scenes present: " + ", ".join(args.map_names))
+        return 0
     return 1 if failed else 0
 
 

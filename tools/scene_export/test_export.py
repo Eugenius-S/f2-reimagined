@@ -3,8 +3,11 @@
 import unittest
 import base64
 import gzip
+import hashlib
 import json
 import struct
+import subprocess
+import sys
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from unittest import mock
@@ -20,7 +23,7 @@ from baked_sidecar import (ENTRY as BAKED_ENTRY, GL_MAP_OFFSET, HEADER as BAKED_
                            FIXED_CARD as BAKED_FIXED_CARD, FLY_SKIP as BAKED_FLY_SKIP, PLANE as BAKED_PLANE,
                            baked_objects, decode_baked_sidecar, encode_baked_sidecar)
 import export
-from export import MAP_GROUPS, RP_MAPS, ReadOnlyGameFiles, check_scenes, choose_source, main, parse_args, patch_paths, scene_directory, stale_reason, validate_output_contents
+from export import MAP_GROUPS, RP_MAPS, MapFile, ReadOnlyGameFiles, choose_source, main, parse_args, patch_paths, scene_directory, stale_reason, validate_output_contents
 from floor_sidecar import HEADER, MAGIC, VERSION, cell_content_rect, decode_floor_sidecar, encode_floor_sidecar
 from roof_fringe import (boundary_edges, components_of, donor_tiles, inner_edge, cut_to_walls, own_strip, donate, foot_cover, lay_donor, roof_sides, whole_sides, BELT_LAP, BELT_ROWS, EDGE_ROWS, STRIP_ROWS, belt_art, compose_band, is_fringe, outward, resolve_runs, runs_of,
                          split_tile, tidy_cell, unproject_cell, unroll, wall_under, write_fringe_art)
@@ -218,14 +221,6 @@ class TargetTests(unittest.TestCase):
         self.assertFalse(parse_args(["--maps", "all"]).force)
         self.assertTrue(parse_args(["--maps", "all", "--force"]).force)
 
-    def test_check_finds_a_map_whose_only_scene_is_elevation_1(self):
-        with TemporaryDirectory() as tmp:
-            cache = Path(tmp)
-            (cache / "newr1a" / "1").mkdir(parents=True)
-            (cache / "newr1a" / "1" / "scene.json").write_text("{}")
-            (cache / "klatrap" / "0").mkdir(parents=True)
-            self.assertEqual(check_scenes(Path(tmp), ["newr1a", "klatrap", "nomap"], cache), ["klatrap", "nomap"])
-
     def test_stale_reason_needs_provenance_and_artifacts(self):
         class FakeGf:
             _reads = {}
@@ -240,7 +235,8 @@ class TargetTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             out = Path(tmp)
             self.assertEqual(stale_reason(FakeGf(), out, "m", 0, out), "no scene yet")
-            provenance = {"map": "m", "elevation": 0, "artifacts_sha256": {"scene.json": "x"},
+            provenance = {"map": "m", "elevation": 0,
+                          "artifacts_sha256": {"scene.json": hashlib.sha256(b"{}").hexdigest()},
                           "resources_read": {}, "fingerprint_sha256": "abc"}
             without_field = dict(provenance)
             provenance["inputs_sha256"] = "abc"
@@ -277,7 +273,8 @@ class TargetTests(unittest.TestCase):
             if name == "b":
                 gf.exists("art/tiles/extra.frm")
             (out_dir / "scene.json").write_text("{}")
-            provenance = {"map": name, "elevation": elevation, "artifacts_sha256": {"scene.json": ""},
+            provenance = {"map": name, "elevation": elevation,
+                          "artifacts_sha256": {"scene.json": export.sha256_file(out_dir / "scene.json")},
                           "resources_read": gf._reads,
                           "inputs_sha256": export.input_fingerprint(gf, game_root, name, elevation)[0]}
             (out_dir / "provenance.json").write_text(json.dumps(provenance))
@@ -324,6 +321,155 @@ class TargetTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             game = Path(tmp)
             self.assertEqual(scene_directory(game, "klatrap", 2), game / "mod-cache" / "scene" / "klatrap" / "2")
+
+
+class CacheCheckTests(unittest.TestCase):
+    """Task 293: --check passes only a complete, current, undamaged cache of every real elevation.
+    Synthetic game: map "two" has elevations 0 and 1, map "upper" 1 and 2 and no 0 (the map loader
+    reads them from the map header). The cache is made by main with a stand-in export_scene that
+    writes what the check reads: scene.json, a PNG, a binary sidecar and the provenance."""
+
+    def setUp(self):
+        tmp = TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.game, self.cache = Path(tmp.name) / "game", Path(tmp.name) / "cache"
+        self.game.mkdir()
+        (self.game / "fallout2.cfg").write_text("[system]\nmaster_dat=master.dat\ncritter_dat=critter.dat\n")
+        self.write_maps()
+        write_dat2({}, self.game / "critter.dat")
+        with mock.patch.object(export, "export_scene", side_effect=self.fake_export), redirect_stdout(StringIO()):
+            self.assertEqual(main(["--game-root", str(self.game), "--maps", "two,upper",
+                                   "--cache-root", str(self.cache)]), 0)
+
+    def write_maps(self, darkness=1):
+        maps = {}
+        for name, elevations in (("two", (0, 1)), ("upper", (1, 2))):
+            game_map = MapFile.new(name, None)
+            del game_map.tiles[0]
+            for elevation in elevations:
+                game_map.add_elevation(elevation)
+            game_map.darkness = darkness if name == "two" else 1
+            maps[f"maps/{name}.map"] = game_map.to_bytes()
+        write_dat2(maps, self.game / "master.dat")
+
+    @staticmethod
+    def fake_export(gf, game_root, name, elevation, out_dir):
+        out_dir.mkdir(parents=True, exist_ok=True)
+        export.reset_caches(gf)
+        gf._reads = {}
+        gf.read(f"maps/{name}.map")
+        (out_dir / "scene.json").write_text(json.dumps({"map": name, "elevation": elevation}))
+        Image.new("RGBA", (4, 4), (10, 20, 30, 255)).save(out_dir / "tiles.png")
+        (out_dir / "walls.bin").write_bytes(b"WALL" + bytes(range(12)))
+        artifacts = {p.name: export.sha256_file(p) for p in sorted(out_dir.iterdir()) if p.name != "provenance.json"}
+        provenance = {"map": name, "elevation": elevation, "artifacts_sha256": artifacts,
+                      "wall_sidecar": {"file": "walls.bin", "sha256": artifacts["walls.bin"]},
+                      "resources_read": gf._reads,
+                      "inputs_sha256": export.input_fingerprint(gf, game_root, name, elevation)[0]}
+        (out_dir / "provenance.json").write_text(json.dumps(provenance))
+
+    def check(self):
+        out = StringIO()
+        with redirect_stdout(out), redirect_stderr(out):
+            try:
+                code = main(["--game-root", str(self.game), "--maps", "two,upper",
+                             "--cache-root", str(self.cache), "--check"])
+            except SystemExit as error:
+                code = error.code
+        return code, out.getvalue()
+
+    def assert_rejected(self, scene, reason):
+        code, out = self.check()
+        self.assertEqual(code, 3, out)
+        self.assertIn(f"not current: {scene}: {reason}", out)
+
+    def edit_provenance(self, scene, change):
+        path = self.cache / scene / "provenance.json"
+        provenance = json.loads(path.read_text())
+        change(provenance)
+        path.write_text(json.dumps(provenance))
+
+    def test_a_complete_unchanged_cache_passes_and_needs_no_elevation_0(self):
+        self.assertEqual(sorted(p.relative_to(self.cache).as_posix() for p in self.cache.glob("*/*")),
+                         ["two/0", "two/1", "upper/1", "upper/2"])
+        code, out = self.check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("scenes present: two, upper", out)
+
+    def test_a_missing_elevation(self):
+        for name in ("scene.json", "tiles.png", "walls.bin", "provenance.json"):
+            (self.cache / "upper" / "2" / name).unlink()
+        self.cache.joinpath("upper", "2").rmdir()
+        self.assert_rejected("upper e2", "no scene yet")
+
+    def test_broken_scene_json(self):
+        (self.cache / "two" / "1" / "scene.json").write_text("{")
+        self.assert_rejected("two e1", "scene.json changed")
+
+    def test_broken_provenance_json(self):
+        (self.cache / "two" / "0" / "provenance.json").write_text('{"map": ')
+        self.assert_rejected("two e0", "no scene yet")
+
+    def test_a_missing_png(self):
+        (self.cache / "upper" / "1" / "tiles.png").unlink()
+        self.assert_rejected("upper e1", "scene files missing: tiles.png")
+
+    def test_a_truncated_png(self):
+        path = self.cache / "two" / "0" / "tiles.png"
+        path.write_bytes(path.read_bytes()[:20])
+        self.assert_rejected("two e0", "tiles.png changed")
+
+    def test_an_unreadable_file_is_not_current(self):
+        real = export.sha256_file
+
+        def unreadable(path):
+            if path.name == "tiles.png":
+                raise PermissionError("locked")
+            return real(path)
+        with mock.patch.object(export, "sha256_file", side_effect=unreadable):
+            self.assert_rejected("two e0", "tiles.png unreadable (locked)")
+
+    def test_a_changed_binary_sidecar(self):
+        path = self.cache / "upper" / "2" / "walls.bin"
+        data = bytearray(path.read_bytes())
+        data[-1] ^= 1
+        path.write_bytes(bytes(data))
+        self.assert_rejected("upper e2", "walls.bin changed")
+
+    def test_an_empty_artifacts_table(self):
+        self.edit_provenance("two/1", lambda p: p.update(artifacts_sha256={}))
+        self.assert_rejected("two e1", "files outside the artifacts table: scene.json, tiles.png, walls.bin")
+
+    def test_an_incomplete_artifacts_table(self):
+        self.edit_provenance("two/1", lambda p: p["artifacts_sha256"].pop("tiles.png"))
+        self.assert_rejected("two e1", "files outside the artifacts table: tiles.png")
+
+    def test_a_table_without_its_scene_or_sidecar_with_the_files_gone(self):
+        (self.cache / "two" / "0" / "walls.bin").unlink()
+        self.edit_provenance("two/0", lambda p: p["artifacts_sha256"].pop("walls.bin"))
+        self.assert_rejected("two e0", "artifacts table lacks: walls.bin")
+        (self.cache / "upper" / "1" / "scene.json").unlink()
+        self.edit_provenance("upper/1", lambda p: p["artifacts_sha256"].pop("scene.json"))
+        code, out = self.check()
+        self.assertIn("not current: upper e1: artifacts table lacks: scene.json", out)
+
+    def test_outdated_inputs(self):
+        self.write_maps(darkness=2)
+        self.assert_rejected("two e0", "game files changed: maps/two.map")
+        code, out = self.check()
+        self.assertIn("not current: two e1: game files changed: maps/two.map", out)
+        self.assertNotIn("upper", out.replace("scenes", ""))
+
+    def test_the_cli_exit_codes(self):
+        # The launcher runs the exporter as a program and exports on any non-zero exit.
+        command = [sys.executable, str(Path(export.__file__)), "--game-root", str(self.game),
+                   "--maps", "two,upper", "--cache-root", str(self.cache), "--check"]
+        run = subprocess.run(command, capture_output=True, text=True, timeout=120)
+        self.assertEqual((run.returncode, run.stdout.strip()), (0, "scenes present: two, upper"), run.stderr)
+        (self.cache / "upper" / "2" / "tiles.png").write_bytes(b"\x89PNG")
+        run = subprocess.run(command, capture_output=True, text=True, timeout=120)
+        self.assertEqual(run.returncode, 3, run.stderr)
+        self.assertIn("not current: upper e2: tiles.png changed", run.stdout)
 
 
 class OutputSafetyTests(unittest.TestCase):
