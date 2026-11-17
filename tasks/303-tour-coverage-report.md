@@ -35,3 +35,16 @@ Before using a tour as geometry evidence, print its selected map/elevation, spot
 
 - 2026-11-15 gpt: cut from the tooling and verification follow-up to the existing batches; source observations above are scoped gaps, not unverified game bug claims.
 - 2026-11-18 claude: claimed. No-capture report and synthetic fixtures only, no game, tour, export or perf runs.
+- 2026-11-18 claude: done in PR 532, code and synthetic fixtures only.
+  - **Report.** `tools/tour/tour.py --coverage [--maps ...] [--expect map:elevation,...]` shoots and needs no sides or game. It prints:
+    - the exact turns and the requested maps;
+    - each covered map elevation, with its count of spots, turns and views and every named spot (tile and name);
+    - then `missing <map>: no configured spots` for each requested map without a spot, and `missing <map> eN: expected, no configured spots` for each `--expect` elevation without one, or `missing: none`.
+  - Without `--expect` it says elevations were not checked. It always adds that a named spot proves only its own view. The same report prints before every tour. The spot selection is now one shared `spot_groups` for the report and the tour.
+  - **Tests.** `test_coverage.py` (6) covers a partly configured two-map request, an unknown map, an elevation gap in an expected selection, a fully covered selection, every map, and the command line without `--before`. All 12 tour tests pass, and all 6 report mutants were killed.
+  - **Real selections.** `runs/303-tour-coverage-report/` holds the reports for re-walks 279-282, with the maps taken from the exporter's region groups. Maps still without spots:
+    - 279: arvill2;
+    - 280: bhrndmtn, newr1a, newr2a;
+    - 281: none at map level;
+    - 282: coast3, 5-9, 11, 12, desert1-4, 6, 8, 9, desrt11, desrt12, cowbomb; RP easter, gammovie, gcenclen, merchant, v13_orig, v15_orig, vill.
+  - **Not verified:** elevations, which need the map headers from the game data and so were not read. Spots, the renderer and the scene set are unchanged. The re-walk cards belong to GLM and were not edited; when a re-walk runs, it can copy its report into its Log.
