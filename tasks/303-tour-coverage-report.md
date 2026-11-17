@@ -2,8 +2,8 @@
 id: 303
 title: The fly tour reports which selected views it covers and misses
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: claude
 suggested: glm
 priority: normal
 tier: 1
@@ -34,3 +34,4 @@ Before using a tour as geometry evidence, print its selected map/elevation, spot
 ## Log
 
 - 2026-11-15 gpt: cut from the tooling and verification follow-up to the existing batches; source observations above are scoped gaps, not unverified game bug claims.
+- 2026-11-18 claude: claimed. No-capture report and synthetic fixtures only, no game, tour, export or perf runs.
