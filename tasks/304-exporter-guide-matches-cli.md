@@ -2,8 +2,8 @@
 id: 304
 title: The exporter guide describes the current all-map and RP workflow
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: claude
 suggested: glm
 priority: low
 tier: 3
@@ -34,3 +34,4 @@ Code changes, changing supported maps or formats, claiming new export/check guar
 ## Log
 
 - 2026-11-15 gpt: cut from the tooling and verification follow-up to the existing batches; source observations above are scoped gaps, not unverified game bug claims.
+- 2026-11-18 claude: Taken. Branch `task/304-exporter-guide-matches-cli`, stacked on 295 (`5fffaae7`), on 294 and 293; none accepted yet, so the guide describes those branches' behavior. Documentation and `--help` only; no export, build or game run.
