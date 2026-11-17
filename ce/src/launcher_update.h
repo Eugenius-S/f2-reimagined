@@ -45,11 +45,36 @@ inline bool writeMarker(const fs::path& gameRoot, const std::string& backupFolde
     std::error_code error;
     fs::create_directories(backupsRoot(gameRoot), error);
     if (error) return false;
-    std::ofstream out(markerPath(gameRoot), std::ios::binary | std::ios::trunc);
-    if (!out) return false;
-    out << backupFolder << "\n";
-    out.close();
-    return static_cast<bool>(out);
+    // Temp file, then rename: a crash mid-write must not leave a truncated
+    // marker naming a wrong backup (same shape as writeBuildVersion).
+    fs::path marker = markerPath(gameRoot);
+    fs::path temp = marker;
+    temp += ".tmp";
+    {
+        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+        if (!out) return false;
+        out << backupFolder << "\n";
+        out.close();
+        if (!out) {
+            std::error_code ignored;
+            fs::remove(temp, ignored);
+            return false;
+        }
+    }
+    fs::rename(temp, marker, error);
+    if (error) {
+        std::error_code ignored;
+        fs::remove(temp, ignored);
+        return false;
+    }
+    return true;
+}
+
+// True while an interrupted update waits for its restore; the UI refuses to
+// launch the game in that state, exactly like the RP recovery pending.
+inline bool hasPendingUpdate(const fs::path& gameRoot)
+{
+    return !readMarker(gameRoot).empty();
 }
 
 inline void clearMarker(const fs::path& gameRoot)
@@ -175,6 +200,54 @@ inline bool restoreSavedBuild(const fs::path& gameRoot, const fs::path& backupFo
         if (!restoreBuildTree(backupFolder, gameRoot, name, blockedFile)) return false;
     }
     return true;
+}
+
+// The backup a repair takes: first the one the interrupted update's marker
+// names (that state is what needs repairing, whatever else sits there),
+// and without a marker the newest backup whose version differs from the
+// installed stamp.  Empty when there is nothing to take.  The version
+// equals the stamp only for the marker's own backup, so an explicit
+// rollback can repair the interrupted state instead of walking two
+// versions back.
+inline fs::path repairBackup(const fs::path& gameRoot, const std::string& currentVersion,
+    std::string* selectedVersion)
+{
+    fs::path backupRoot = backupsRoot(gameRoot);
+    std::string marker = readMarker(gameRoot);
+    if (!marker.empty()) {
+        fs::path named = backupRoot / fs::u8path(marker);
+        std::error_code error;
+        if (fs::is_regular_file(named / "version.txt", error)) {
+            std::ifstream in(named / "version.txt");
+            std::string version;
+            std::getline(in, version);
+            if (selectedVersion != nullptr) *selectedVersion = version;
+            return named;
+        }
+    }
+    std::error_code error;
+    if (!fs::is_directory(backupRoot, error)) return fs::path();
+    fs::path selected;
+    fs::file_time_type selectedTime = fs::file_time_type::min();
+    for (fs::directory_iterator it(backupRoot, error), end; !error && it != end; it.increment(error)) {
+        if (!it->is_directory(error)) continue;
+        std::ifstream versionFile(it->path() / "version.txt");
+        if (!versionFile) continue;
+        std::string version;
+        std::getline(versionFile, version);
+        while (!version.empty() && (version.back() == '\r' || version.back() == '\n'
+            || version.back() == ' ' || version.back() == '\t')) version.pop_back();
+        if (version.empty()) continue;
+        if (version == currentVersion) continue;
+        fs::file_time_type time = fs::last_write_time(it->path(), error);
+        if (error) { error.clear(); continue; }
+        if (selected.empty() || time > selectedTime) {
+            selected = it->path();
+            if (selectedVersion != nullptr) *selectedVersion = version;
+            selectedTime = time;
+        }
+    }
+    return selected;
 }
 
 } // namespace launcher_update

@@ -89,12 +89,48 @@ int main()
         "the player's own file survives the restore byte for byte");
 
     // A restore that is blocked reports the file and keeps the recovery
-    // material, so removing the obstruction lets a retry finish it.
+    // material, so removing the obstruction lets a retry finish it (I2).
     writeMarker(root, "v1");
     fs::create_directories(root / "ce.dat");  // a directory where a file must stand
     check(!restoreSavedBuild(root, backup, files, trees, &blocked), "the restore fails on the blocked path");
     check(blocked == "ce.dat", "the blocked file is named");
     check(readMarker(root) == "v1", "the marker stays so the next start retries");
+    fs::remove_all(root);
+
+    // The marker is atomic: a second write replaces the first whole, and no
+    // temporary file survives either write (Opus audit, marker shape).
+    check(writeMarker(root, "v0") && readMarker(root) == "v0", "the second marker wins");
+    check(!fs::exists(backupsRoot(root) / "update-in-progress.txt.tmp"), "no marker temp file is left");
+    check(hasPendingUpdate(root), "a standing marker says an update is pending");
+    clearMarker(root);
+    check(!hasPendingUpdate(root), "a cleared marker says nothing is pending");
+    fs::remove_all(root / "f2reimagined-backups");
+
+    // Repair selection (B1): without a marker, a backup whose version equals
+    // the installed stamp is skipped; with the marker, exactly the named
+    // backup wins even over a newer one.
+    fs::path backups = root / "f2reimagined-backups";
+    put(backups / "v1" / "version.txt", "v1\n");
+    put(backups / "v0" / "version.txt", "v0\n");
+    std::string version;
+    check(repairBackup(root, "v1", &version).filename() == "v0" && version == "v0",
+        "no marker: the same-version backup is skipped, the different one is taken");
+    writeMarker(root, "v1");
+    check(repairBackup(root, "v1", &version).filename() == "v1" && version == "v1",
+        "a marker names its own backup even against a newer one");
+    check(repairBackup(root, "v0", &version).filename() == "v1",
+        "the marker's backup wins whatever the installed stamp is");
+    clearMarker(root);
+    check(repairBackup(root, "v1", &version).empty() == false, "a plain rollback still finds the older build");
+
+    // R2, the retry trap: the backup bytes never change during a restore.
+    std::string backupExe = get(backups / "v1" / "version.txt");
+    put(root / "fallout2-ce.exe", "new-exe");
+    writeMarker(root, "v1");
+    appendCopied(root, "fallout2-ce.exe");
+    check(restoreSavedBuild(root, backups / "v1", files, trees, &blocked), "the restore succeeds");
+    check(get(backups / "v1" / "version.txt") == backupExe, "the backup stays byte for byte identical");
+
     fs::remove_all(root);
 
     std::printf("launcher_update_tests: ok\n");

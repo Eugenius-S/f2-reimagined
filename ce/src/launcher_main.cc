@@ -827,35 +827,10 @@ bool rollbackInstalledBuild(const fs::path& root)
         if (file) currentVersion = trim(std::string((std::istreambuf_iterator<char>(file)),
             std::istreambuf_iterator<char>()));
     }
-    fs::path backupRoot = root / "f2reimagined-backups";
-    fs::path selected;
-    std::string selectedVersion;
-    fs::file_time_type selectedTime = fs::file_time_type::min();
-    std::error_code error;
-    if (!fs::is_directory(backupRoot, error)) {
-        log("no previous build backup is available");
-        return false;
-    }
-    // 307: an interrupted update's marker names the backup that repairs the
+    // 307: the interrupted update's marker names the backup that repairs the
     // half-installed state, even when its version equals the installed stamp.
-    std::string interruptedBackup = launcher_update::readMarker(root);
-    for (fs::directory_iterator it(backupRoot, error), end; !error && it != end; it.increment(error)) {
-        if (!it->is_directory(error)) continue;
-        std::ifstream versionFile(it->path() / kVersionTxt);
-        if (!versionFile) continue;
-        std::string version = trim(std::string((std::istreambuf_iterator<char>(versionFile)),
-            std::istreambuf_iterator<char>()));
-        if (version.empty()) continue;
-        // Backup folder names are sanitized ASCII (backupInstalledBuild).
-        if (version == currentVersion && it->path().filename().string() != interruptedBackup) continue;
-        fs::file_time_type time = fs::last_write_time(it->path(), error);
-        if (error) { error.clear(); continue; }
-        if (selected.empty() || time > selectedTime) {
-            selected = it->path();
-            selectedVersion = version;
-            selectedTime = time;
-        }
-    }
+    std::string selectedVersion;
+    fs::path selected = launcher_update::repairBackup(root, currentVersion, &selectedVersion);
     if (selected.empty()) {
         log("no build different from the installed version is available for rollback");
         return false;
@@ -867,6 +842,7 @@ bool rollbackInstalledBuild(const fs::path& root)
     }
     // The repaired interrupted update needs no marker any more: the saved
     // build stands, and a later launch must not restore it a second time.
+    std::string interruptedBackup = launcher_update::readMarker(root);
     if (!interruptedBackup.empty() && selected.filename().string() == interruptedBackup) {
         launcher_update::clearMarker(root);
     }
@@ -1901,17 +1877,19 @@ int runConsole(Options options)
         root = fs::canonical(root, error);
         if (error) { log("cannot resolve the game folder"); return 1; }
     }
+    // 307: an interrupted update is repaired before anything can launch or
+    // mutate the half-installed build, before even the stale launcher .old
+    // is removed or any other branch runs.
+    if (!recoverInterruptedUpdate(root)) {
+        die("the interrupted update could not be rolled back (see the lines above); remove the "
+            "obstruction, or delete f2reimagined-backups/update-in-progress.txt only when you understand what it means");
+    }
+
     {
         std::error_code ignored;
         fs::path old = root / kRootLauncher;
         old += ".old";
         fs::remove(old, ignored);
-    }
-
-    // 307: an interrupted update is repaired before anything can launch or mutate the half-installed build.
-    if (!recoverInterruptedUpdate(root)) {
-        die("the interrupted update could not be rolled back (see the lines above); remove the "
-            "obstruction, or delete f2reimagined-backups/update-in-progress.txt only when you understand what it means");
     }
 
     if (options.removeRp) return removeRestorationProject(root, true) ? 0 : 1;
