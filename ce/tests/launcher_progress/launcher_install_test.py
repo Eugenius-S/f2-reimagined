@@ -113,10 +113,10 @@ class InstallTests(LauncherFixture):
         self.assertEqual(code, 0, output)
         self.assertEqual((self.root / "version.txt").read_bytes(), b"old-build")
         # The wide-art refill at the same version journals for its recovery:
-        # its fresh manual snapshot of the current state joins the folder, and
-        # the older rollback point stays (307).
-        self.assertEqual({p.name for p in previous.parent.iterdir()}, {"manual", "previous-build"})
-        self.assertIn("backed up build manual to f2reimagined-backups", output)
+        # its fresh snapshot of the current state joins the folder, and the
+        # older rollback point stays (307, 313).
+        self.assertEqual({p.name for p in previous.parent.iterdir()}, {"refill-snapshot", "previous-build"})
+        self.assertIn("backed up build refill-snapshot to f2reimagined-backups", output)
         self.assertIn("user-assets: installed", output)
 
     def test_refill_without_a_recovery_point_changes_nothing(self):
@@ -135,12 +135,12 @@ class InstallTests(LauncherFixture):
         after = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
         self.assertEqual(before, after)
 
-    def test_failed_refill_rolls_back_from_its_manual_snapshot(self):
-        # The refill snapshots the build as "manual", replaces the build
-        # files, then its stamp write meets a held version.txt.  The in-place
-        # restore meets the same hold, so the marker names the manual
+    def test_failed_refill_rolls_back_from_its_own_snapshot(self):
+        # The refill snapshots the build as "refill-snapshot", replaces the
+        # build files, then its stamp write meets a held version.txt.  The
+        # in-place restore meets the same hold, so the marker names that
         # snapshot; once the hold is gone, --rollback restores from it and
-        # the player's files stand untouched (311).
+        # the player's files stand untouched (311, 313).
         self.payload["version.txt"] = b"old-build"
         self.package()
         save = self.root / "data" / "savegame" / "SLOT01" / "SAVE.DAT"
@@ -150,28 +150,66 @@ class InstallTests(LauncherFixture):
         with read_lock(self.root / "version.txt"):
             code, output = self.run_launcher()
         self.assert_failed(code, output, "version.txt")
-        self.assertIn("backed up build manual to f2reimagined-backups", output)
+        self.assertIn("backed up build refill-snapshot to f2reimagined-backups", output)
         self.assertIn("installing into the game folder:", output)
         self.assertIn("the restore could not finish", output)
-        self.assertEqual((backups / "update-in-progress.txt").read_text(encoding="ascii").strip(), "manual")
-        self.assertTrue((backups / "manual" / "f2r-backup-receipt.txt").is_file())
+        self.assertEqual((backups / "update-in-progress.txt").read_text(encoding="ascii").strip(), "refill-snapshot")
+        self.assertTrue((backups / "refill-snapshot" / "f2r-backup-receipt.txt").is_file())
 
         result = subprocess.run([str(LAUNCHER), "--game-root", str(self.root), "--rollback"],
                                 capture_output=True, timeout=90)
         output = result.stdout.decode("utf-8", errors="replace") + result.stderr.decode("utf-8", errors="replace")
         print(f"\n{self.id()} rollback: exit {result.returncode}\n{output}", flush=True)
         self.assertEqual(result.returncode, 0, output)
-        self.assertIn("restoring the saved build from f2reimagined-backups/manual", output)
-        self.assertIn("the saved build manual stands", output)
+        self.assertIn("restoring the saved build from f2reimagined-backups/refill-snapshot", output)
+        self.assertIn("the saved build refill-snapshot stands", output)
         for name in REQUIRED:
             self.assertEqual((self.root / name).read_bytes(), b"old-build", name)
         self.assertEqual((self.root / "version.txt").read_bytes(), b"old-build")
         self.assertFalse((self.root / ART).exists())
         self.assertFalse((backups / "update-in-progress.txt").exists())
-        self.assertTrue((backups / "manual").is_dir())
+        self.assertTrue((backups / "refill-snapshot").is_dir())
         self.assertEqual(save.read_bytes(), b"player-save")
         for name in ("fallout2.cfg", "master.dat", "critter.dat"):
             self.assertEqual((self.root / name).read_bytes(), b"old-build", name)
+
+    def test_failed_refill_never_restores_an_older_manual_backup(self):
+        # The real path to an old manual backup: a stamp-less install
+        # (bytes old-build) updates to new-build and keeps "manual".  A later
+        # new-build refill fails on a held version.txt; its rollback must
+        # bring back the current new-build bytes, not the older manual
+        # backup, and that backup stays as it was (313).
+        (self.root / "version.txt").unlink()
+        code, output = self.run_launcher()
+        self.assertEqual(code, 0, output)
+        backups = self.root / "f2reimagined-backups"
+        manual = backups / "manual"
+        self.assertTrue((manual / "f2r-backup-receipt.txt").is_file())
+        manualBefore = {p.relative_to(manual): p.read_bytes() for p in manual.rglob("*") if p.is_file()}
+        current = {p.relative_to(self.root): p.read_bytes()
+                   for p in self.root.rglob("*") if p.is_file() and backups not in p.parents}
+        # The release announces another build, so the launcher downloads; the
+        # package inside still says new-build, which makes it a refill.
+        (self.release / "version.txt").write_text("remote-other", encoding="ascii")
+        with read_lock(self.root / "version.txt"):
+            code, output = self.run_launcher()
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("updating: new-build -> remote-other", output)
+        self.assertIn("installing into the game folder:", output)
+        self.assertIn("the restore could not finish", output)
+        self.assertNotEqual((backups / "update-in-progress.txt").read_text(encoding="ascii").strip(), "manual")
+
+        result = subprocess.run([str(LAUNCHER), "--game-root", str(self.root), "--rollback"],
+                                capture_output=True, timeout=90)
+        output = result.stdout.decode("utf-8", errors="replace") + result.stderr.decode("utf-8", errors="replace")
+        print(f"\n{self.id()} rollback: exit {result.returncode}\n{output}", flush=True)
+        self.assertEqual(result.returncode, 0, output)
+        after = {p.relative_to(self.root): p.read_bytes()
+                 for p in self.root.rglob("*") if p.is_file() and backups not in p.parents}
+        self.assertEqual(after, current)
+        self.assertEqual({p.relative_to(manual): p.read_bytes() for p in manual.rglob("*") if p.is_file()},
+                         manualBefore)
+        self.assertFalse((backups / "update-in-progress.txt").exists())
 
     def test_invalid_zip_version_changes_nothing(self):
         for invalid in (None, b"", b" \t\r\n", b"first\nsecond", b"first\n\n",

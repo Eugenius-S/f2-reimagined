@@ -2102,22 +2102,18 @@ int runConsole(Options options)
             die("could not save the current build before updating; nothing was changed");
         }
         // A same-version wide-art refill still overwrites files, so it needs
-        // the same recovery material as any update: the version's own
-        // complete backup when one stands, else the machine's manual backup,
-        // else a fresh manual snapshot of the current state.  None of these
-        // ever replaces an older rollback backup, and the refill's cleanup
-        // keeps every backup there was.  Without any recovery point the
-        // refill refuses before mutating anything (307).
+        // the same recovery material as any update: a snapshot of exactly
+        // the state it is about to change.  A valid older backup is whole but
+        // not current, so the refill never reuses one: it rebuilds its own
+        // folder, which no other backup shares, and keeps every other backup
+        // there was.  Without that snapshot the refill refuses before
+        // mutating anything (307, 313).
         bool refill = false;
         if (installedGamePresent && packageVersion == installedVersion) {
             refill = true;
-            std::string reused;
-            const char* sourceName = installedVersion.empty() ? "manual" : installedVersion.c_str();
-            if (backupInstalledBuild(root, sourceName, &reused, false)) {
-                keptBackup = reused;
-            } else if (backupInstalledBuild(root, std::string("manual"), &reused, true)) {
-                keptBackup = reused;
-            } else {
+            fs::path snapshot = root / launcher_update::kBackupsFolder / "refill-snapshot";
+            fs::remove_all(snapshot, error);  // an earlier refill's snapshot is stale by now
+            if (error || !backupInstalledBuild(root, std::string("refill-snapshot"), &keptBackup, true)) {
                 fs::remove_all(work, error);
                 die("the wide-art refill found no complete backup of this build to restore from, "
                     "and none could be made; nothing was changed");
