@@ -507,7 +507,9 @@ def static_inputs(gf, game_root: Path):
     vendor_hashes = {p.relative_to(HERE / "vendor").as_posix(): sha256_file(p) for p in vendor_files}
     adapter_hashes = {name: sha256_file(HERE / name) for name in
                       ("export.py", "floor_sidecar.py", "roof_fringe.py", "wall_sidecar.py", "projection_sidecar.py", "baked_sidecar.py",
-                       "shadow_sidecar.py", "scene_check.py", "solids.py")}
+                       "shadow_sidecar.py", "scene_check.py", "solids.py",
+                       # the shape rules export.py and vendor/fp/scene.py load (task 295)
+                       "shapes/fixed_cards.json", "shapes/overrides.json")}
     archives = [{"name": name, "path": source.path.relative_to(game_root).as_posix()
                  if source.path.is_relative_to(game_root) else str(source.path),
                  "size": source.path.stat().st_size, "sha256": sha256_file(source.path)}

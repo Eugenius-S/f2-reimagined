@@ -832,6 +832,39 @@ class PublishTests(SyntheticCache):
                 shutil.rmtree(folder)
 
 
+class ShapeRulesFingerprintTests(unittest.TestCase):
+    """Task 295: the shape rule files the exporter reads are inputs of every scene's fingerprint."""
+
+    def fingerprint(self, here):
+        gf = mock.Mock(spec=["sources", "_reads"], sources=[], _reads={})
+        with mock.patch.object(export, "HERE", here):
+            return export.input_fingerprint(gf, here, "m", 0)
+
+    def test_each_rule_file_changes_the_fingerprint_and_a_readme_does_not(self):
+        with TemporaryDirectory() as tmp:
+            here = Path(tmp) / "scene_export"
+            shutil.copytree(export.HERE, here, ignore=shutil.ignore_patterns("__pycache__"))
+            before = self.fingerprint(here)
+            self.assertEqual(self.fingerprint(here), before)
+            with open(here / "README.md", "a", encoding="utf-8") as stream:
+                stream.write("\nan unrelated note\n")
+            self.assertEqual(self.fingerprint(here)[0], before[0])
+            seen = {before[0]}
+            for name in ("fixed_cards.json", "overrides.json"):
+                rules = here / "shapes" / name
+                rules.write_text(rules.read_text(encoding="utf-8") + " ", encoding="utf-8")
+                fingerprint, adapter_hashes = self.fingerprint(here)[:2]
+                self.assertNotIn(fingerprint, seen, name)
+                self.assertEqual(adapter_hashes[f"shapes/{name}"], export.sha256_file(rules))  # in provenance
+                seen.add(fingerprint)
+
+    def test_the_hashed_rule_files_are_the_ones_the_loaders_open(self):
+        import fp.scene  # the module the exporter imports, vendor/ on sys.path
+        self.assertEqual(export.HERE / "shapes" / "overrides.json",
+                         Path(fp.scene.__file__).resolve().parents[2] / "shapes" / "overrides.json")
+        self.assertTrue((export.HERE / "shapes" / "fixed_cards.json").is_file())
+
+
 class OutputSafetyTests(unittest.TestCase):
     def test_accepts_only_known_export_artifact_names(self):
         with TemporaryDirectory() as temp:
