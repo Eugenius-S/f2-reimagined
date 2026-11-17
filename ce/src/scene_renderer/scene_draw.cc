@@ -53,6 +53,13 @@ bool ensureGroundBake(int width, int height)
     destroyGroundBake();
     while (glGetError() != 0) {
     }
+    // 306: made mid-frame, after the floor's art is bound on the active unit
+    // and maybe inside the glow's framebuffer; both stay as found, or the
+    // floor samples this white-cleared buffer as its art.
+    int previousTexture = 0;
+    int previousFbo = 0;
+    glGetIntegerv(0x8069 /* GL_TEXTURE_BINDING_2D */, &previousTexture);
+    glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &previousFbo);
     glGenTextures(1, &gGroundBakeTexture);
     glBindTexture(kTexture2D, gGroundBakeTexture);
     glTexImage2D(kTexture2D, 0, kRgba8, width, height, 0, kRGBA, kUnsignedByte, nullptr);
@@ -65,7 +72,8 @@ bool ensureGroundBake(int width, int height)
     glFramebufferTexture2D(0x8D40 /* GL_FRAMEBUFFER */, 0x8CE0 /* GL_COLOR_ATTACHMENT0 */, kTexture2D, gGroundBakeTexture, 0);
     const bool complete = glGetError() == 0
         && glCheckFramebufferStatus(0x8D40 /* GL_FRAMEBUFFER */) == 0x8CD5 /* GL_FRAMEBUFFER_COMPLETE */;
-    glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, 0);
+    glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, previousFbo);
+    glBindTexture(kTexture2D, previousTexture);
     if (!complete) {
         destroyGroundBake();
         return false;
@@ -188,6 +196,8 @@ void drawStaticPreview(bool withWalls, bool withHero)
         glClear(kColorBufferBit);
         glDepthMask(0);
         glUniform1i(gSceneGroundBakeModeLocation, 1);
+        // 306: the floor's own light mode; 0 bakes full light, no sun shadow.
+        glUniform1i(gSceneLightModeLocation, 1);
         glUniform1f(gSceneCutoffLocation, -1.0f);
         glUniform1i(gSceneTexturedLocation, 1);
         glDrawArrays(kTriangles, 6,
