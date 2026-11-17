@@ -839,6 +839,10 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_recovery_test.py"
             "$<TARGET_FILE:fallout2-ce-3d-launcher>")
         set_tests_properties(launcher_recovery_tests PROPERTIES TIMEOUT 180)
+        add_test(NAME launcher_lock_tests COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_lock_test.py"
+            "$<TARGET_FILE:fallout2-ce-3d-launcher>")
+        set_tests_properties(launcher_lock_tests PROPERTIES TIMEOUT 180)
         add_executable(launcher_rp_exporter_stub "tests/launcher_progress/launcher_rp_exporter_stub.cc")
         add_test(NAME launcher_rp_install_tests COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_rp_install_test.py"

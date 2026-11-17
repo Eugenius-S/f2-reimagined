@@ -1891,6 +1891,37 @@ std::string findGameRootForUi()
 
 int runLauncherUi(int argc, char** argv);
 
+// 309: one writer per game root.  The lock is a file inside the root itself,
+// opened with no sharing and deleted when its handle closes: any alias of the
+// folder (another case, a relative path, a junction) opens the same physical
+// file, a separate root gets its own lock, and a crashed worker's handle
+// closes with its process, so the file disappears and the next worker walks
+// in.  --check-release returns before the root is resolved and never takes
+// it.
+struct RootLock {
+    HANDLE handle = nullptr;
+    explicit RootLock(const fs::path& root)
+    {
+        std::wstring path = (root / L"f2reimagined.lock").wstring();
+        handle = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
+            0 /* no sharing: a second opener is a second writer */,
+            nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+    }
+    ~RootLock() {
+        if (handle != nullptr) CloseHandle(handle);  // DELETE_ON_CLOSE removes the file
+    }
+    bool held() const { return handle != nullptr; }
+    // The reason the folder is not ours to write: another live worker (a
+    // sharing violation) or the folder refusing the lock file itself.
+    const char* refusedWhy() const
+    {
+        DWORD error = GetLastError();
+        if (error == ERROR_SHARING_VIOLATION) return "another installer for this game folder is already running";
+        if (error == ERROR_ACCESS_DENIED) return "the game folder refuses the lock file (access denied)";
+        return "the game folder could not be locked";
+    }
+};
+
 int runConsole(Options options)
 {
     log("fallout2-ce-3d-launcher");
@@ -1929,6 +1960,15 @@ int runConsole(Options options)
         root = fs::canonical(root, error);
         if (error) { log("cannot resolve the game folder"); return 1; }
     }
+
+    // 309: the root lock covers every mutation below, recovery included, so
+    // two workers (two windows, two consoles, two aliases of one folder)
+    // never install, clean backups or restore side by side.
+    RootLock rootLock(root);
+    if (!rootLock.held()) {
+        die(rootLock.refusedWhy());
+    }
+
     // 307: an interrupted update is repaired before anything can launch or
     // mutate the half-installed build, before even the stale launcher .old
     // is removed or any other branch runs.
