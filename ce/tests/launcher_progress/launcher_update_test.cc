@@ -85,7 +85,8 @@ int main()
     check(intendedSetCorrupt(root), "a corrupt journal blocks the restore");
     put(backupsRoot(root) / "update-manifest.txt", "");
     check(intendedSetCorrupt(root), "an empty journal file is an unknown set, not an empty transaction");
-    fs::remove_all(backupsRoot(root) / "update-manifest.txt", error);
+    std::error_code journalError;
+    fs::remove_all(backupsRoot(root) / "update-manifest.txt", journalError);
     check(!intendedSetCorrupt(root), "a missing journal is the pre-copy phase, not corruption");
     check(clearMarker(root), "the clear takes the journal with it");
     check(readIntendedSet(root).empty(), "the journal is gone");
