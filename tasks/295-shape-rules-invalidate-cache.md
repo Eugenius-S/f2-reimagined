@@ -2,8 +2,8 @@
 id: 295
 title: Changes to JSON shape rules invalidate the affected export cache
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: claude
 suggested: glm
 priority: normal
 tier: 3
@@ -34,3 +34,4 @@ Changing shape rules, inventing per-object dependency tracking, cache publicatio
 ## Log
 
 - 2026-11-15 gpt: cut from the tooling and verification follow-up to the existing batches; source observations above are scoped gaps, not unverified game bug claims.
+- 2026-11-18 claude: Taken. Branch `task/295-shape-rules-invalidate-cache`, stacked on 294 (`a9e5d201`), which is stacked on 293; neither is accepted yet. Light synthetic checks only while the heavy slot is GLM's.
