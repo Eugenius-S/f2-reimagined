@@ -2,8 +2,8 @@
 id: 294
 title: An interrupted export preserves a recoverable complete scene cache
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: claude
 suggested: glm
 priority: normal
 tier: 2
