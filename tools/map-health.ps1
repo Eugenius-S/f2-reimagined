@@ -242,18 +242,41 @@ $buildExe = Join-Path $Root 'build\fallout2-ce.exe'
 if (-not (Test-Path -LiteralPath $buildExe)) {
     throw "No build\fallout2-ce.exe in this worktree: build the Release exe first (tools/configure-build.ps1), then run the sweep."
 }
-# 516 P2: the commit is identity, not a free label.  It must name a real
-# commit object, and the sweep measures this worktree's build\ exe, so the
-# recorded commit is this worktree's HEAD: a label pointing anywhere else
-# would misname whatever exe stands in build\.  The exe's own sha256 rides
-# in every row either way.
+# 516 P2: the commit is identity, not a free label, and HEAD equality alone
+# does not bind the exe bytes to that commit (an old binary survives a
+# checkout).  The build receipt, written by configure-build.ps1 after a
+# successful build, binds the exe's sha256 to the commit it was built from;
+# the sweep reads it and marks the row's provenance verified or not.  A
+# -Commit label that contradicts the receipt is refused; without a receipt
+# the label is carried as unverified metadata and the table says so.
+$exeHash = (Get-FileHash -LiteralPath $buildExe -Algorithm SHA256).Hash.ToLower()
+$commitVerified = $false
+$receiptCommit = ''
+$receiptPath = Join-Path $Root 'build\build-receipt.json'
+if (Test-Path -LiteralPath $receiptPath) {
+    try { $receipt = Get-Content -Raw -LiteralPath $receiptPath | ConvertFrom-Json } catch { $receipt = $null }
+    if ($receipt -and $receipt.exe_sha256 -eq $exeHash) {
+        $receiptCommit = $receipt.commit
+        $commitVerified = $true
+    }
+}
 if ($Commit -ne '') {
     git -C $Root cat-file -e ("{0}^{{commit}}" -f $Commit) 2>$null
     if ($LASTEXITCODE -ne 0) { throw "commit '$Commit' does not exist in this repository" }
-    $headCommit = (git -C $Root rev-parse HEAD).Trim()
-    if ($headCommit -ne $Commit) {
-        throw "this worktree stands at $headCommit, not $Commit; the exe in build\ was built here, so only the HEAD commit may be recorded (or move the worktree first)"
+    if ($commitVerified -and $receiptCommit -ne $Commit) {
+        throw "the build receipt binds build\fallout2-ce.exe to commit $receiptCommit, not $Commit: rebuild on the commit you mean to name"
     }
+    if ($commitVerified) {
+        $Commit = $receiptCommit
+    } else {
+        $headCommit = (git -C $Root rev-parse HEAD).Trim()
+        if ($headCommit -ne $Commit) {
+            throw "this worktree stands at $headCommit, not $Commit; without a build receipt only the HEAD commit may be recorded (or rebuild first so the receipt binds the exe)"
+        }
+        Write-Output "map-health: no build receipt binds this exe to $Commit; the row's commit is recorded as an unverified label"
+    }
+} elseif ($commitVerified) {
+    $Commit = $receiptCommit
 }
 $devSnapshot = Join-Path $PSScriptRoot 'dev-snapshot.ps1'
 $mapListScript = Join-Path $PSScriptRoot 'map_health_maps.py'
@@ -281,7 +304,6 @@ if ($targets.Count -eq 0) { throw 'The map list is empty: check -Groups against 
 # journal is rewritten to the current build's rows only, and stale rows move
 # to a sidecar file, so a later table over this journal cannot mix builds
 # with rows that no longer belong.
-$exeHash = (Get-FileHash -LiteralPath $buildExe -Algorithm SHA256).Hash.ToLower()
 $rows = [ordered]@{}
 $staleRows = @()
 $staleKept = @()
@@ -348,7 +370,7 @@ foreach ($t in $pending) {
     $attempts++
     $row = [ordered]@{
         map = $map; elevation = $elevation; exe_sha256 = $exeHash; attempts = $attempts
-        commit = $Commit; status = 'failed'; started = (Get-Date).ToString('o')
+        commit = $Commit; commit_verified = [bool]$commitVerified; status = 'failed'; started = (Get-Date).ToString('o')
         avgFps = $null; oneLowFps = $null; worstMs = $null; loadMs = $null
         cpu = $null; noisy = $false; play = 0; loads = 0
         fallback = @(); snapshot = $null; scene_3d_enabled = $null; renderer = $null

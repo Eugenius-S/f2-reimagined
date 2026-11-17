@@ -127,7 +127,8 @@ def build_table(rows, commit, out, expected=None):
 
     # 516 P2: the commit is identity too.  Rows recorded without one may only
     # build a table that says so; a --commit label that contradicts the rows
-    # is refused, not silently stamped over them.
+    # is refused, not silently stamped over them.  A verified row carries the
+    # build receipt's binding; unverified ones are labelled as such.
     row_commits = {row.get('commit') for row in rows}
     if len(row_commits) > 1:
         raise SystemExit('the state rows carry more than one commit: a table must be one commit.')
@@ -137,6 +138,7 @@ def build_table(rows, commit, out, expected=None):
                          'rerun the sweep on the build you mean to name.')
     if not rows_commit:
         commit = ''
+    unverified = any(not row.get('commit_verified') for row in rows)
 
     # A row without its full evidence is not a valid result, whatever its
     # status says (516 P2).
@@ -177,7 +179,10 @@ def build_table(rows, commit, out, expected=None):
         lines.append('One command (tools/map-health.ps1) walked every playable map and elevation.')
     else:
         lines.append('One command (tools/map-health.ps1) walked the map elevations this table carries.')
-    lines.append(f'Build: exe sha256 `{exe_sha[:16] if exe_sha else "?"}`, main commit `{commit or "not recorded"}`.')
+    lines.append(f'Build: exe sha256 `{exe_sha[:16] if exe_sha else "?"}`, '
+                 f'main commit `{commit or "not recorded"}`'
+                 + ('.' if not commit else (' (verified by the build receipt).' if not unverified
+                                            else ' (unverified label: no build receipt binds it to the exe).')))
     lines.append('')
     valid_n = len(valid)
     clean = len([row for row in valid if not flags(row, shares.get((row['map'], row['elevation'])))])

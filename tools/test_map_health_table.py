@@ -154,6 +154,27 @@ class BuildTableTest(unittest.TestCase):
         self.assertIn('snapshot file', out.read_text(encoding='utf-8'))
 
 
+    def test_commit_verification_is_reported(self):
+        # 516 P2: a build-receipt-verified row says so; a row without the
+        # verification is an unverified label, in the headline.
+        path = write_state([
+            {'map': 'x', 'elevation': 0, 'status': 'ok', 'exe_sha256': 'a', 'oneLowFps': 90.0,
+             'avgFps': 100.0, 'worstMs': 20.0, 'loadMs': 100.0, 'scene_3d_enabled': True,
+             'snapshot': make_snapshot(), 'commit': 'aaa', 'commit_verified': True},
+        ])
+        out = Path(tempfile.gettempdir()) / 'mht-verified.md'
+        mht.build_table(mht.load_rows(path), 'aaa', out)
+        self.assertIn('verified by the build receipt', out.read_text(encoding='utf-8'))
+        path2 = write_state([
+            {'map': 'x', 'elevation': 0, 'status': 'ok', 'exe_sha256': 'a', 'oneLowFps': 90.0,
+             'avgFps': 100.0, 'worstMs': 20.0, 'loadMs': 100.0, 'scene_3d_enabled': True,
+             'snapshot': make_snapshot(), 'commit': 'aaa', 'commit_verified': False},
+        ])
+        out2 = Path(tempfile.gettempdir()) / 'mht-unverified.md'
+        mht.build_table(mht.load_rows(path2), 'aaa', out2)
+        self.assertIn('unverified label', out2.read_text(encoding='utf-8'))
+
+
     def test_coverage_claim_needs_the_expected_list(self):
         # Without --expected the table never claims the whole game was walked.
         path = write_state([
