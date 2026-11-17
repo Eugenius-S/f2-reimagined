@@ -465,13 +465,14 @@ def scene_directory(game_root: Path, map_name: str, elevation: int, cache_root: 
     """The cache directory of one map elevation, checked before anything is written."""
     scenes = cache_root if cache_root is not None else game_root / "mod-cache" / "scene"
     out_dir = scenes / map_name / str(elevation)
-    if out_dir.resolve() != (scenes / map_name / str(elevation)).resolve():
-        raise SystemExit("output path resolution escaped the fixed target")
+    # The scene, its .staging/.old/.lock siblings and everything removed there must stay in this folder.
+    if out_dir.resolve() != scenes.resolve() / map_name / str(elevation):
+        raise SystemExit(f"output path escaped the cache root: {out_dir}")
     parents = (scenes, scenes / map_name, out_dir) if cache_root is not None else (game_root / "mod-cache", scenes,
                                                                                      scenes / map_name, out_dir)
     for parent in parents:
-        if parent.exists() and parent.is_symlink():
-            raise SystemExit(f"refusing symlink in output path: {parent}")
+        if parent.is_symlink() or parent.is_junction():
+            raise SystemExit(f"refusing a link in output path: {parent}")
     try:
         validate_output_contents(out_dir)
     except ValueError as error:
@@ -638,6 +639,8 @@ def scene_lock(out_dir: Path):
     ends, however it ends, so a crash leaves no stale lock. The lock file itself stays (it holds nothing)."""
     out_dir.parent.mkdir(parents=True, exist_ok=True)
     path = out_dir.with_name(out_dir.name + ".lock")
+    if path.is_symlink():
+        raise SystemExit(f"refusing a link in the scene cache: {path}")
     with open(path, "a+b") as stream:
         try:
             if os.name == "nt":
@@ -655,8 +658,22 @@ def scene_lock(out_dir: Path):
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
 
 
-def remove_scene_dir(path: Path):
-    """Delete a staging or backup scene folder: only the file names an export writes, never a link or a
+def made_here(path: Path) -> bool:
+    """A scene folder this exporter made: empty, or holding a provenance.json of this map and elevation
+    (publish_scene writes one into staging before the build; a backup was the scene itself). A name
+    alone proves nothing, and a provenance that cannot be read is not proof either."""
+    if not any(path.iterdir()):
+        return True
+    try:
+        provenance = json.loads((path / "provenance.json").read_text(encoding="utf-8"))
+        return (provenance["map"], provenance["elevation"]) == (path.parent.name, int(path.name.partition(".")[0]))
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def remove_scene_dir(path: Path, ours: bool = False):
+    """Delete a scene folder this exporter made (made_here, or ours: the scene folder itself, which
+    scene_directory checked, or a folder this very publish made under its lock): only the file names an export writes, never a link or a
     folder inside; anything else stops the export and stays where it is."""
     if path.is_symlink() or path.is_junction():
         raise SystemExit(f"refusing a link in the scene cache: {path}")
@@ -664,7 +681,10 @@ def remove_scene_dir(path: Path):
         validate_output_contents(path)
     except ValueError as error:
         raise SystemExit(f"{path}: {error}") from error
-    for entry in path.iterdir():
+    if not ours and not made_here(path):
+        raise SystemExit(f"{path} was not made by this exporter; it stays")
+    # provenance.json last: a removal stopped half way still proves whose folder it is.
+    for entry in sorted(path.iterdir(), key=lambda entry: entry.name == "provenance.json"):
         entry.unlink()
     path.rmdir()
 
@@ -682,28 +702,40 @@ def recover_scene(out_dir: Path):
         remove_scene_dir(staging)  # an unfinished build
     if not (backup.exists() or backup.is_symlink()):
         return
+    if backup.is_symlink() or backup.is_junction() or not made_here(backup):
+        raise SystemExit(f"{backup} was not made by this exporter; it stays")
     if not out_dir.exists():
-        if backup.is_symlink() or backup.is_junction():
-            raise SystemExit(f"refusing a link in the scene cache: {backup}")
         os.rename(backup, out_dir)  # stopped between the two renames: the old scene comes back
-    elif scene_files_problem(out_dir) is None or scene_files_problem(backup) is not None:
-        remove_scene_dir(backup)  # the new scene was published (or the backup is no better)
-    else:
-        remove_scene_dir(out_dir)
-        os.rename(backup, out_dir)
+        return
+    problem = scene_files_problem(out_dir)
+    if problem is None:
+        remove_scene_dir(backup)  # the new scene was published
+        return
+    backup_problem = scene_files_problem(backup)
+    if backup_problem is not None:  # damaged or unreadable, it may still be the last good copy
+        raise SystemExit(f"{out_dir}: {problem}; {backup}: {backup_problem}; both kept")
+    remove_scene_dir(out_dir, ours=True)
+    os.rename(backup, out_dir)
 
 
 def publish_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path):
-    """export_scene into <elevation>.staging, checked whole, then put in place so that a failure or a hard
+    """export_scene into <elevation>.staging, checked by the same rule as a current scene (stale_reason:
+    this map and elevation, every file, the inputs), then put in place so that a failure or a hard
     stop at any step keeps the previous complete scene or leaves it for recover_scene to bring back.
     Windows cannot replace a non-empty folder in one step: the scene goes to .old, staging becomes the
     scene, .old is removed. Between the two renames there is no scene; the next export restores it."""
     staging, backup = scene_siblings(out_dir)
     with scene_lock(out_dir):
         recover_scene(out_dir)
+        made = False
         try:
+            staging.mkdir()
+            made = True
+            # Marks the folder as this export's (made_here) until export_scene writes the real one.
+            (staging / "provenance.json").write_text(json.dumps({"map": map_name, "elevation": elevation}),
+                                                     encoding="utf-8")
             export_scene(gf, game_root, map_name, elevation, staging)
-            problem = scene_files_problem(staging)
+            problem = stale_reason(gf, game_root, map_name, elevation, staging)  # 293's whole current-scene rule
             if problem:
                 raise RuntimeError(f"the new scene failed its check: {problem}")
             had_scene = out_dir.exists()
@@ -716,12 +748,12 @@ def publish_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: P
                     os.rename(backup, out_dir)
                 raise
         except Exception:
-            if staging.exists():
-                remove_scene_dir(staging)
+            if made and staging.exists():
+                remove_scene_dir(staging, ours=True)
             raise
         if had_scene:
             try:
-                remove_scene_dir(backup)
+                remove_scene_dir(backup, ours=True)  # the scene this publish just moved aside
             except OSError:
                 pass  # the new scene is in place; recover_scene removes the backup next time
 
