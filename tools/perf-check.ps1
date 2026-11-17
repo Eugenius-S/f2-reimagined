@@ -113,27 +113,44 @@ function Release-Lock($lock) {
 # localized counter names. 310: Win32_Processor.LoadPercentage read 15-35
 # points over this on a near-idle machine and did not follow a known load
 # (runs/310-perf-noise-reads-real-cpu-load). $null when the read says
-# nothing; Test-NoisyRow counts that as noisy.
-function Read-CpuLoadPercent {
+# nothing, and also when any one sample is missing or not a percent:
+# [double]$null is 0 in PowerShell, so a raw value is checked before it is
+# converted (review of #521). Test-NoisyRow counts $null as noisy.
+# -ReadSample and -SleepMs exist for -SelfTest only.
+function Read-CpuLoadPercent([scriptblock]$ReadSample = {
+        Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction Stop
+    }, [int]$SleepMs = 250) {
     $samples = @()
     foreach ($i in 1..4) {
-        try {
-            $samples += [double](Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor `
-                -Filter "Name='_Total'" -ErrorAction Stop).PercentProcessorTime
-        } catch {
-            return $null
-        }
-        Start-Sleep -Milliseconds 250
+        try { $instance = & $ReadSample } catch { return $null }
+        if ($null -eq $instance -or @($instance).Count -ne 1) { return $null }
+        $property = $instance.PSObject.Properties['PercentProcessorTime']
+        if ($null -eq $property) { return $null }
+        $value = ConvertTo-CpuPercent $property.Value
+        if ($null -eq $value) { return $null }
+        $samples += $value
+        if ($SleepMs -gt 0) { Start-Sleep -Milliseconds $SleepMs }
     }
-    $avg = ($samples | Where-Object { $null -ne $_ } | Measure-Object -Average).Average
-    if ($null -eq $avg) { return $null }
-    return [Math]::Round($avg, 0)
+    return [Math]::Round(($samples | Measure-Object -Average).Average, 0)
+}
+
+# A finite number from 0 to 100, or $null: no missing, empty, text, NaN,
+# infinite or out-of-range value ever becomes a load.
+function ConvertTo-CpuPercent($raw) {
+    if ($null -eq $raw -or $raw -is [bool]) { return $null }
+    $value = 0.0
+    if (-not [double]::TryParse([string]$raw, [Globalization.NumberStyles]::Float,
+            [Globalization.CultureInfo]::InvariantCulture, [ref]$value)) { return $null }
+    if ([double]::IsNaN($value) -or [double]::IsInfinity($value) -or $value -lt 0 -or $value -gt 100) { return $null }
+    return $value
 }
 
 # A map measured over this load is noisy (290); at the limit it is not.
-# An unknown load is noisy (310): no PASS without evidence of a free machine.
+# An unknown or invalid load is noisy (310): no PASS without evidence of a
+# free machine.
 function Test-NoisyRow($loadPercent, [double]$noisyAbove) {
-    return ($null -eq $loadPercent) -or ([double]$loadPercent -gt $noisyAbove)
+    $value = ConvertTo-CpuPercent $loadPercent
+    return ($null -eq $value) -or ($value -gt $noisyAbove)
 }
 
 # 310: FAIL wins, then any noisy row; PASS only with neither.
@@ -194,6 +211,45 @@ if ($SelfTest) {
     Assert-True 'load 30 at 30 is clean' (-not (Test-NoisyRow 30 30))
     Assert-True 'load 31 at 30 is noisy' (Test-NoisyRow 31 30)
     Assert-True 'an unread load is noisy' (Test-NoisyRow $null 30)
+    Assert-True 'a NaN load is noisy' (Test-NoisyRow ([double]::NaN) 30)
+    Assert-True 'a negative load is noisy' (Test-NoisyRow -5 30)
+    # 310 (review of #521): the reader end to end on fake counter answers.
+    # Every missing or invalid sample makes the whole read unknown.
+    function Read-Fake([object[]]$answers, [int]$throwAt = 0) {
+        $calls = @{ n = 0 }
+        $reader = {
+            $calls.n++
+            if ($calls.n -eq $throwAt) { throw 'injected counter failure' }
+            $answers[[Math]::Min($calls.n - 1, $answers.Count - 1)]
+        }.GetNewClosure()
+        return Read-CpuLoadPercent -ReadSample $reader -SleepMs 0
+    }
+    function Pct($v) { [pscustomobject]@{ PercentProcessorTime = $v } }
+    $unknown = [ordered]@{
+        'no instance' = @(, $null)
+        'no property' = @([pscustomobject]@{ Name = '_Total' })
+        'null value' = @(Pct $null)
+        'empty value' = @(Pct '')
+        'text value' = @(Pct 'bad')
+        'negative value' = @(Pct -10)
+        'over 100' = @(Pct 110)
+        'NaN value' = @(Pct ([double]::NaN))
+        'infinite value' = @(Pct ([double]::PositiveInfinity))
+        'two instances' = @(, @((Pct 5), (Pct 5)))
+        'one missing among valid' = @((Pct 5), (Pct 5), (Pct 5), $null)
+    }
+    foreach ($case in $unknown.Keys) {
+        $read = Read-Fake $unknown[$case]
+        Assert-True "read with $case is unknown" ($null -eq $read)
+        Assert-True "read with $case is noisy" (Test-NoisyRow $read 30)
+    }
+    Assert-True 'a counter that throws first is unknown' ($null -eq (Read-Fake @(Pct 5) 1))
+    Assert-True 'a counter that throws third is unknown' ($null -eq (Read-Fake @(Pct 5) 3))
+    Assert-Equal 'a steady 29 reads 29' (Read-Fake @(Pct 29)) 29
+    Assert-True 'a read of 30 at 30 is clean' (-not (Test-NoisyRow (Read-Fake @(Pct 30)) 30))
+    Assert-True 'a read of 31 at 30 is noisy' (Test-NoisyRow (Read-Fake @(Pct 31)) 30)
+    Assert-Equal 'a UInt64 counter value reads' (Read-Fake @(Pct ([uint64]12))) 12
+    Assert-Equal 'samples 0,0,0,100 average to 25' (Read-Fake @((Pct 0), (Pct 0), (Pct 0), (Pct 100))) 25
     Assert-True 'a clean breach fails' ((Get-RunVerdict 1 0) -eq 'FAIL')
     Assert-True 'a clean breach fails beside a noisy row' ((Get-RunVerdict 1 2) -eq 'FAIL')
     Assert-True 'a noisy row without a breach is no PASS' ((Get-RunVerdict 0 1) -eq 'NOISY')
@@ -201,7 +257,7 @@ if ($SelfTest) {
     # The CPU read itself: a number within 0..100 on a live machine, or an
     # honest $null where the counter says nothing.
     $cpu = Read-CpuLoadPercent
-    if ($null -ne $cpu -and ($cpu -lt 0 -or $cpu -gt 100)) {
+    if ($null -ne $cpu -and $null -eq (ConvertTo-CpuPercent $cpu)) {
         Write-Output ("selftest: FAIL cpu read out of range: {0}" -f $cpu)
         $failed = $true
     }

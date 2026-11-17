@@ -1,3 +1,9 @@
+SUPERSEDED as acceptance evidence (review of #521, 2026-11-18): the probe that made these
+runs started ONE busy worker in every k=0 phase (PowerShell `1..0` is 1,0), so the rows
+labelled k=0 had 1 worker and k=2/4/8 had 2/4/8; it also recorded no per-sample worker
+liveness or elapsed time. Kept as the investigation trail only. A fresh run of the fixed
+probe.ps1 (exact k, liveness column, -RawCsv) is pending a free slot and a re-review.
+
 probe.ps1, AMD Ryzen 7 5800X, 16 logical cores, 1 socket, 2026-11-17 ~23:35-23:41 local.
 Columns: k busy processes, added = 100*k/16, load = Win32_Processor.LoadPercentage,
 time = PerfOS_Processor _Total PercentProcessorTime, util/perf = ProcessorInformation _Total
