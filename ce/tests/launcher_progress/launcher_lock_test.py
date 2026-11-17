@@ -21,6 +21,16 @@ from launcher_install_test import ART, LAUNCHER, LauncherFixture, QuietHandler, 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 LOCK = "f2reimagined.lock"
+# A separate process that holds the lock file: READY only after it owns it.
+HOLDER = (
+    "import ctypes, sys, time\n"
+    "k = ctypes.WinDLL('kernel32', use_last_error=True)\n"
+    "k.CreateFileW.restype = ctypes.c_void_p\n"
+    "h = k.CreateFileW(sys.argv[1], 0xC0000000, 0, None, 3, 0x400, None)\n"
+    "if not h: sys.stdout.write('FAIL'); sys.stdout.flush(); sys.exit(1)\n"
+    "sys.stdout.write('READY'); sys.stdout.flush()\n"
+    "time.sleep(60)\n"
+)
 
 
 class GatedHandler(QuietHandler):
@@ -163,16 +173,7 @@ class LockTests(LauncherFixture):
         # parent proves a contender cannot enter before the kill; when the
         # holder's process dies, the OS closes the handle, the file goes
         # away, and the next worker walks in.
-        holderScript = (
-            "import ctypes, sys, time\n"
-            "k = ctypes.WinDLL('kernel32', use_last_error=True)\n"
-            "k.CreateFileW.restype = ctypes.c_void_p\n"
-            "h = k.CreateFileW(sys.argv[1], 0xC0000000, 0, None, 3, 0x400, None)\n"
-            "if not h: sys.stdout.write('FAIL'); sys.stdout.flush(); sys.exit(1)\n"
-            "sys.stdout.write('READY'); sys.stdout.flush()\n"
-            "time.sleep(60)\n"
-        )
-        holder = subprocess.Popen([sys.executable, "-c", holderScript, str(self.root / LOCK)],
+        holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(self.root / LOCK)],
                                   stdout=subprocess.PIPE)
         self.addCleanup(holder.kill)
         (self.root / LOCK).write_bytes(b"")  # the child opens with OPEN_EXISTING
@@ -194,6 +195,15 @@ class LockTests(LauncherFixture):
         self.assertEqual(code, 0, output)
         self.assertEqual((self.root / "version.txt").read_bytes(), b"new-build")
         self.assertFalse((self.root / LOCK).exists())
+
+    def test_holder_without_the_lock_never_says_ready(self):
+        # A failed open must read as FAIL, never READY: otherwise the killed
+        # holder test could pass without any holder owning the lock (312).
+        missing = self.base / "no-such-folder" / LOCK
+        result = subprocess.run([sys.executable, "-c", HOLDER, str(missing)], capture_output=True, timeout=30)
+        self.assertNotIn(b"READY", result.stdout)
+        self.assertTrue(result.stdout.startswith(b"FAIL"), result.stdout)
+        self.assertNotEqual(result.returncode, 0)
 
     def test_release_check_never_takes_the_lock(self):
         with hold_lock(self.root / LOCK):
