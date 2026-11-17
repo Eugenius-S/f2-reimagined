@@ -2,7 +2,7 @@
 id: 306
 title: The baked ground keeps its floor texture
 milestone: M1
-status: done
+status: doing
 owner: claude
 suggested: gpt
 priority: high
@@ -10,7 +10,7 @@ tier: 2
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: yes
+reviewed: no
 ---
 
 ## Goal
@@ -40,7 +40,7 @@ Floor geometry/exporter changes, a blanket bake-disable workaround, new performa
 ## Log
 
 - 2026-11-15 gpt: split the missing renderer prerequisite from PR #504's blocked Log. The exact renderer cause still needs reproduction and diagnosis.
-- 2026-11-17 claude: Done. Two causes in `scene_draw.cc`, both on the bake path only (bake on = lights and shadows on).
+- 2026-11-17 claude: Fix and evidence in PR #517; performance gate pending, not merged. Two causes in `scene_draw.cc`, both on the bake path only (bake on = lights and shadows on).
   1. Tested cause of the white floor: `ensureGroundBake` runs mid-frame, after the floor's art is bound on unit 0, and left its own white-cleared target bound there, so the floor sampled the bake buffer as its art. With glow on it also unbound the glow framebuffer, so the frame came out black. Variant test: restoring only the framebuffer keeps 62.4% white; restoring the texture binding removes it. Shared rule: `ensureGroundBake` leaves the texture and framebuffer bindings as it found them.
   2. Found while checking shadows: the bake pass inherited light mode 0 from the frame start, and mode 0 bakes full light without the sun shadow, so the baked floor lost ground shadows and point lights. Rule: the bake pass uses the floor's own light mode (1). After the fix the baked floor matches the unbaked one: mean |d| 1.17 (KLAMALL) and 1.53 (ARVILLAG) per channel, pixels off by more than 16 at 0.00% and 0.01% (were 1.44% and 10.04% with fix 1 only).
   - Near-white share, bake on, before -> after (`F2CE_NO_BAKE=1` mean in brackets): KLAMALL 1920x1080 62.4% -> 0.0%, mean 53.7 (54.1); KLAMALL glow on black frame -> 0.0%, mean 53.7 (54.1); ARVILLAG 73.7% -> 0.0%, mean 80.0 lower band (81.2); KLAMALL 1366x767 51.4% -> 0.0%, mean 45.2. Sheet: `runs/306-ground-bake-keeps-floor-texture/before-after.jpg` (before, after, no-bake per row).
@@ -48,4 +48,5 @@ Floor geometry/exporter changes, a blanket bake-disable workaround, new performa
   - Focused check: not added. No GL-context test exists in `ce/tests`, and the regression, the tour and perf-check all run without `-Shadows`, so none of them reaches the bake. That is why this broke unnoticed since 157. Next: one regression spot with shadows on would guard the bake path.
   - Perf, shadows on, paired main/306 runs at the same machine load (owner's other game running, CPU 35-85%, so indicative only): KLAMALL avg 137.3/138.9 and 138.8/139.9 fps, 1% low 90.5/107.1 and 112.6/124.5; ARVILLAG avg 138.7/139.2 and 139.9/139.5, 1% low 90.0/89.3 and 94.4/90.8. No visible cost.
   - Untested observation, not changed: the bake viewport keeps the full viewport's x, y origin while halving its size; a non-zero origin would misplace the bake.
-  - perf-check, main then 306, owner's other game closed, real CPU busy time 10-28% (`Win32_PerfFormattedData_PerfOS_Processor`): PASS both. 1% low main/306: kladwtwn 85.4/80.9, newr1 66.1/91.3, vctyctyd 128.4/125.6, klatoxcv 121.7/118.5; loads 1295/1213, 1583/1587, 960/928, 534/533 ms. perf-check runs without shadows, so it does not reach the bake; the spread is noise. Every row still printed `noisy`: perf-check's `Win32_Processor.LoadPercentage` reads 40-55% while the real busy time is 10-14% (it follows the turbo-scaled processor utility), so its noisy rule (290) cannot pass on this machine. Next: read `PercentProcessorTime` instead.
+  - Performance gate: PENDING. perf-check, main then 306, owner's other game closed: both runs print the threshold PASS line, but every row is marked `noisy`, so by 290's rule they are no verdict. 1% low main/306: kladwtwn 85.4/80.9, newr1 66.1/91.3, vctyctyd 128.4/125.6, klatoxcv 121.7/118.5; loads 1295/1213, 1583/1587, 960/928, 534/533 ms. perf-check runs without shadows, so it does not reach the bake.
+  - CPU-counter discrepancy, under investigation: `Win32_Processor.LoadPercentage` (perf-check's noise input) read 40-55% while `Win32_PerfFormattedData_PerfOS_Processor` `PercentProcessorTime` read 10-28% at the same moments, and per-process CPU time summed to about 1.5 of 16 cores. The gap alone does not show the machine was free (GPU, interrupts and other load are not covered). Next: reproducible validation of the right counter and noise rule, an independent review of it, then a repeat measurement in a free slot. Thresholds stay as they are.
