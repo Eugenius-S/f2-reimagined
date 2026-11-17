@@ -2,8 +2,8 @@
 id: 296
 title: A reused fly tour passes the same capture checks as a fresh tour
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: claude
 suggested: glm
 priority: normal
 tier: 1
@@ -36,3 +36,4 @@ New tour spots (303), changing screenshots or renderer settings, and replacing t
 ## Log
 
 - 2026-11-15 gpt: cut from the tooling and verification follow-up to the existing batches; source observations above are scoped gaps, not unverified game bug claims.
+- 2026-11-18 claude: claimed. Small synthetic fixtures and unit tests only, no game, tour, export or perf runs.
