@@ -188,9 +188,13 @@ class InstallTests(LauncherFixture):
         manualBefore = {p.relative_to(manual): p.read_bytes() for p in manual.rglob("*") if p.is_file()}
         current = {p.relative_to(self.root): p.read_bytes()
                    for p in self.root.rglob("*") if p.is_file() and backups not in p.parents}
+        # The release announces another build, so the launcher downloads; the
+        # package inside still says new-build, which makes it a refill.
+        (self.release / "version.txt").write_text("remote-other", encoding="ascii")
         with read_lock(self.root / "version.txt"):
             code, output = self.run_launcher()
         self.assertNotEqual(code, 0, output)
+        self.assertIn("updating: new-build -> remote-other", output)
         self.assertIn("installing into the game folder:", output)
         self.assertIn("the restore could not finish", output)
         self.assertNotEqual((backups / "update-in-progress.txt").read_text(encoding="ascii").strip(), "manual")
