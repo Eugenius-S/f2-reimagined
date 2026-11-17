@@ -79,17 +79,26 @@ int main()
     check(readIntendedSet(root).size() == 2 && readIntendedSet(root)[0].existed
         && !readIntendedSet(root)[1].existed, "the intended set keeps its marks");
     check(!fs::exists(backupsRoot(root) / "update-manifest.txt.tmp"), "no manifest temp file is left");
-    // A damaged journal says the touched set is unknown, not empty.
+    // A damaged or absent journal says the touched set is unknown, not
+    // empty: with a marker standing, recovery blocks on all of these.
+    writeMarker(root, "v1");  // corruption only matters while an update pends
     check(!intendedSetCorrupt(root), "a good journal is not corruption");
     put(backupsRoot(root) / "update-manifest.txt", "Y a.png\ngarbage\n");
     check(intendedSetCorrupt(root), "a corrupt journal blocks the restore");
     put(backupsRoot(root) / "update-manifest.txt", "");
     check(intendedSetCorrupt(root), "an empty journal file is an unknown set, not an empty transaction");
+    put(backupsRoot(root) / "update-manifest.txt", "Y a.png\n");
+    check(intendedSetCorrupt(root), "a valid prefix cut at EOF has no END count");
+    put(backupsRoot(root) / "update-manifest.txt", "Y a.png\nEND 2\n");
+    check(intendedSetCorrupt(root), "an END count that disagrees with the entries");
+    put(backupsRoot(root) / "update-manifest.txt", "Y a.png\nEND 1\njunk\n");
+    check(intendedSetCorrupt(root), "anything after the END line breaks the transaction");
     std::error_code journalError;
     fs::remove_all(backupsRoot(root) / "update-manifest.txt", journalError);
-    check(!intendedSetCorrupt(root), "a missing journal is the pre-copy phase, not corruption");
+    check(intendedSetCorrupt(root), "a missing journal under a standing marker is an unknown set");
     check(clearMarker(root), "the clear takes the journal with it");
     check(readIntendedSet(root).empty(), "the journal is gone");
+    check(!intendedSetCorrupt(root), "no marker, no journal, nothing pending");
 
     // An interrupted update: the marker and the intended set stand, the game
     // folder holds new and old files mixed, and the restore puts the saved

@@ -132,7 +132,8 @@ struct PendingPath {
 };
 
 // The intended set goes down whole, through temp+rename, before the first
-// copy: a crash can no longer fall between a mutation and its bookkeeping.
+// copy, and ends with an "END count" line: a valid Y/N prefix that stops at
+// EOF is a truncation, not a complete transaction.
 inline bool writeIntendedSet(const fs::path& gameRoot, const std::vector<PendingPath>& paths)
 {
     std::error_code error;
@@ -147,6 +148,7 @@ inline bool writeIntendedSet(const fs::path& gameRoot, const std::vector<Pending
         for (const PendingPath& path : paths) {
             out << (path.existed ? "Y " : "N ") << path.relative << "\n";
         }
+        out << "END " << paths.size() << "\n";
         out.flush();
         out.close();
         if (!out) {
@@ -171,38 +173,60 @@ inline std::vector<PendingPath> readIntendedSet(const fs::path& gameRoot)
     std::string line;
     while (std::getline(in, line)) {
         while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
+        if (line.rfind("END ", 0) == 0) break;
         if (line.size() < 3 || (line[0] != 'Y' && line[0] != 'N') || line[1] != ' ') continue;
         paths.push_back({line.substr(2), line[0] == 'Y'});
     }
     return paths;
 }
 
-// True when the intended set stands but does not parse whole: a malformed
-// line, an unreadable file, or a file without a single valid entry (the
-// worker always journals at least one path).  The touched set is then
-// unknown, not empty, and recovery must block instead of restoring over
-// paths it cannot see.  A missing manifest is not corruption: it is written
-// whole before the first copy, so its absence means the update died before
-// touching anything.
+// True when the intended set cannot be established: the manifest is missing,
+// unreadable, malformed, carries no END count, or its count disagrees with
+// the entries it lists.  While the marker stands, a missing manifest is an
+// unknown touched set (the update died somewhere between the marker and its
+// journal, or the journal was lost), and recovery must block instead of
+// guessing.  The worker journals at least one path, so an entry-less
+// manifest is corruption too.
 inline bool intendedSetCorrupt(const fs::path& gameRoot)
 {
+    if (!markerExists(gameRoot)) return false;  // nothing pending, nothing to establish
     std::error_code error;
     fs::path manifest = backupsRoot(gameRoot) / kManifestName;
-    if (!fs::exists(manifest, error) || error) return false;
+    if (!fs::exists(manifest, error) || error) return true;
     std::ifstream in(manifest, std::ios::binary);
     if (!in) return true;  // exists but unreadable: the set is unknown
-    bool sawEntry = false;
+    size_t entries = 0;
+    bool endSeen = false;
+    size_t endCount = 0;
+    bool endCountOk = false;
+    bool trailing = false;
     std::string line;
     while (std::getline(in, line)) {
         while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
         if (line.empty()) continue;
+        if (endSeen) {
+            // Nothing may follow the END line but blank padding.
+            trailing = true;
+            break;
+        }
+        if (line.rfind("END ", 0) == 0) {
+            endSeen = true;
+            try {
+                endCount = static_cast<size_t>(std::stoull(line.substr(4)));
+                endCountOk = true;
+            } catch (...) {
+                endCountOk = false;
+            }
+            continue;
+        }
         if (line.size() < 3 || (line[0] != 'Y' && line[0] != 'N') || line[1] != ' '
             || line.substr(2).find_first_not_of(' ') == std::string::npos) {
             return true;
         }
-        sawEntry = true;
+        entries++;
     }
-    return !sawEntry || !in.eof();
+    if (!endSeen || !endCountOk || trailing || entries != endCount || entries == 0) return true;
+    return false;
 }
 
 // A running exe cannot be overwritten but can be renamed: the old copy moves

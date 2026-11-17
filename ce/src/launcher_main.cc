@@ -783,16 +783,19 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version, std:
             return false;
         }
     }
+    // The synthetic stamp for a stamp-less install goes in before the
+    // receipt: the receipt's inventory must cover every file the backup
+    // finally carries, including this one.
+    if (!fs::exists(backup / kVersionTxt)) {
+        std::ofstream versionFile(backup / kVersionTxt, std::ios::binary | std::ios::trunc);
+        versionFile << backupVersion;
+        if (!versionFile) return false;
+    }
     // The receipt is the last write: from here the backup is known-good.
     std::string receiptBlocked;
     if (!launcher_update::writeBackupReceipt(backup, buildFiles(), sha256File, &receiptBlocked)) {
         logf("cannot write the backup receipt (%s)", receiptBlocked.c_str());
         return false;
-    }
-    if (!fs::exists(backup / kVersionTxt)) {
-        std::ofstream versionFile(backup / kVersionTxt, std::ios::binary | std::ios::trunc);
-        versionFile << backupVersion;
-        if (!versionFile) return false;
     }
     logf("backed up build %s to f2reimagined-backups", version.c_str());
     return true;
@@ -899,15 +902,14 @@ bool recoverInterruptedUpdate(const fs::path& root)
     }
     std::string bad;
     if (launcher_update::intendedSetCorrupt(root)) {
-        log("recovery blocked: the update journal is damaged, so the touched set is unknown; the marker and the backup stay. "
-            "delete f2reimagined-backups/update-manifest.txt only when you understand what it means");
+        // A missing manifest with a standing marker is an unknown touched
+        // set too: the update died somewhere between the marker and its
+        // journal, or the journal was lost.  Block; the marker and the
+        // backup stay, and the user decides with full information.
+        log("recovery blocked: the update journal is missing, damaged or incomplete, so the touched set is unknown; "
+            "the marker and the backup stay. delete f2reimagined-backups/update-in-progress.txt "
+            "and update-manifest.txt only when you understand what they mean");
         return false;
-    }
-    if (!fs::exists(root / launcher_update::kBackupsFolder / launcher_update::kManifestName, error)) {
-        // The journal is written whole right after the marker and before the
-        // first copy: its absence means the update died before touching
-        // anything.  The restore still runs, stated as what it is.
-        log("the update died before its first copy (no journal); restoring the saved build to be sure");
     }
     if (!launcher_update::validateBackup(backup, buildFiles(), sha256File, &bad)) {
         logf("recovery blocked: the backup %s is not known-good (%s); the marker and the backup stay",
@@ -2054,20 +2056,26 @@ int runConsole(Options options)
             fs::remove_all(work, error);
             die("could not save the current build before updating; nothing was changed");
         }
-        // A same-version wide-art refill still overwrites files, so it
-        // journals and recovers the same way when a complete backup of this
-        // version stands; without one it stays unjournaled and says so, and
-        // it never replaces the older rollback backup with itself.
+        // A same-version wide-art refill still overwrites files, so it needs
+        // the same recovery material as any update: the version's own
+        // complete backup when one stands, else the machine's manual backup,
+        // else a fresh manual snapshot of the current state.  None of these
+        // ever replaces an older rollback backup, and the refill's cleanup
+        // keeps every backup there was.  Without any recovery point the
+        // refill refuses before mutating anything (307).
         bool refill = false;
         if (installedGamePresent && packageVersion == installedVersion) {
             refill = true;
             std::string reused;
-            if (backupInstalledBuild(root,
-                    installedVersion.empty() ? std::string("manual") : installedVersion, &reused, false)) {
+            const char* sourceName = installedVersion.empty() ? "manual" : installedVersion.c_str();
+            if (backupInstalledBuild(root, sourceName, &reused, false)) {
+                keptBackup = reused;
+            } else if (backupInstalledBuild(root, std::string("manual"), &reused, true)) {
                 keptBackup = reused;
             } else {
-                log("this refill has no complete backup of the current version to restore from; "
-                    "a failed refill leaves the files it has already copied");
+                fs::remove_all(work, error);
+                die("the wide-art refill found no complete backup of this build to restore from, "
+                    "and none could be made; nothing was changed");
             }
         }
         // 307: from here to the version stamp the game folder may hold a

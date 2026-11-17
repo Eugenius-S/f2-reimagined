@@ -112,7 +112,12 @@ class InstallTests(LauncherFixture):
         code, output = self.run_launcher()
         self.assertEqual(code, 0, output)
         self.assertEqual((self.root / "version.txt").read_bytes(), b"old-build")
-        self.assertEqual(list(previous.parent.iterdir()), [previous])
+        # The wide-art refill at the same version journals for its recovery:
+        # its fresh manual snapshot of the current state joins the folder, and
+        # the older rollback point stays (307).
+        self.assertEqual({p.name for p in previous.parent.iterdir()}, {"manual", "previous-build"})
+        self.assertIn("backed up build manual to f2reimagined-backups", output)
+        self.assertIn("user-assets: installed", output)
 
     def test_invalid_zip_version_changes_nothing(self):
         for invalid in (None, b"", b" \t\r\n", b"first\nsecond", b"first\n\n",

@@ -72,7 +72,7 @@ class RecoveryFixture(unittest.TestCase):
         # journal names every path the update replaced (Y) or introduced (N).
         (self.root / BACKUPS / MARKER).write_text("v1\n", encoding="ascii")
         (self.root / BACKUPS / MANIFEST).write_text(
-            "Y fallout2-ce.exe\nY ce.dat\nY version.txt\n", encoding="ascii")
+            "Y fallout2-ce.exe\nY ce.dat\nY version.txt\nEND 3\n", encoding="ascii")
 
     def run_rollback(self):
         code, output = run_launcher([str(LAUNCHER), "--game-root", str(self.root), "--rollback"])
@@ -125,6 +125,18 @@ class RecoveryTests(RecoveryFixture):
         # A damaged journal means the touched set is unknown: recovery blocks
         # instead of restoring over paths it cannot see.
         (self.root / BACKUPS / MANIFEST).write_text("Y fallout2-ce.exe\ngarbage\n", encoding="ascii")
+        before = {p.name: p.read_bytes() for p in self.root.iterdir() if p.is_file()}
+        code, output = self.run_rollback()
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("journal", output)
+        self.assertEqual({p.name: p.read_bytes() for p in self.root.iterdir() if p.is_file()}, before)
+        self.assertTrue((self.root / BACKUPS / MARKER).exists())
+
+    def test_truncated_journal_is_blocked_not_partial(self):
+        # A valid Y prefix that stops at EOF has no END count: it is a
+        # truncation, not a complete transaction, and recovery blocks on it.
+        (self.root / BACKUPS / MANIFEST).write_text(
+            "Y fallout2-ce.exe\nY ce.dat\nY version.txt\n", encoding="ascii")
         before = {p.name: p.read_bytes() for p in self.root.iterdir() if p.is_file()}
         code, output = self.run_rollback()
         self.assertNotEqual(code, 0, output)
