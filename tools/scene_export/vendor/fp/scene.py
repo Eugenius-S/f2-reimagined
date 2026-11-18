@@ -83,6 +83,15 @@ def _round(values, digits=4):
     return [round(float(v), digits) for v in values]
 
 
+def mesh_face(rgba):
+    """276: a picture that is mostly see-through is a mesh (the Den's
+    chain-link: 42-58% of the texels are the wire, a solid wall's picture is
+    90%+ opaque). Its holes are the point - filling them turned the fence
+    into the black wall with specks the owner's find names - so a mesh face
+    keeps them and the alpha cut-out shows what is behind."""
+    return (rgba[..., 3] != 0).mean() < 0.7
+
+
 def renderable_map_objects(objects):
     """Return placed objects with prototypes; PID -1 records are engine-only script helpers."""
     return [obj for obj in sorted(objects, key=lambda item: item.tile)
@@ -458,8 +467,10 @@ class SceneBuilder:
                 # texels fill with the edge colours, so a wall does not sparkle
                 # with the room behind it (115). The backs and ends take their
                 # material from this picture, and the openings of doors stay:
-                # they open at the picture's border.
-                cut = cut and (props.fill_holes(cut[0]),) + cut[1:]
+                # they open at the picture's border. A mesh face (276) keeps
+                # its holes instead: filling them made the Den's chain-link a
+                # black wall with specks.
+                cut = cut and ((props.fill_holes(cut[0]) if not mesh_face(cut[0]) else cut[0]),) + cut[1:]
                 textures[key] = cut and (self.sprite(cut[0]),) + cut[1:]
             if textures[key] is not None:
                 sprite, x0, x1, y_top = textures[key]           # the floor line is un-sheared y = c
