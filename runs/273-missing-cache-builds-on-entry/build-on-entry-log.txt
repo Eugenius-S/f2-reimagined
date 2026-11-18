@@ -1,11 +1,11 @@
-scene: cache E:\Projects\fallout2-ce-3d-273-glm\build\273-run\kladwtwn\0
+scene: cache <repo>\build\273-run\kladwtwn\0
 
-scene: cache E:\Projects\fallout2-ce-3d-273-glm\build\273-run\kladwtwn\0
+scene: cache <repo>\build\273-run\kladwtwn\0
 
 scene: kladwtwn elevation 0 has no scene data (floor preview unavailable: floor.bin is missing or unreadable); building it with the shipped exporter
 
 scene: kladwtwn scene data built in 26873 ms; loading it
 
-scene: cache E:\Projects\fallout2-ce-3d-273-glm\build\273-run\kladwtwn\0
+scene: cache <repo>\build\273-run\kladwtwn\0
 
 scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
