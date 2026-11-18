@@ -15,3 +15,4 @@ denbus1: scene: preview policy=available
 arvillag (empty cache): scene: arvillag elevation 0 has no scene data (floor preview unavailable: floor.bin is missing or unreadable); building it with the shipped exporter
 arvillag: scene: arvillag scene data built in 8615 ms; loading it
 arvillag: scene: preview policy=available
+waiting state (kladwtwn, empty cache): build started on entry; the 3D view stayed up with the map's 2D art lying on the ground plane (see waiting-plane-kladwtwn.jpg), built in 29402 ms, then the real scene loaded and the plane yielded; full dev-snapshot pipeline passed with -StepTimeoutSeconds 90

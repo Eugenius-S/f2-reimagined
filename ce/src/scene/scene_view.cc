@@ -40,6 +40,7 @@
 #include "../scene_renderer/camera.h"
 #include "../scene_renderer/live_objects.h"
 #include "../scene_renderer/map_clip.h"
+#include "../scene_renderer/build_wait.h"
 #include "../scene_renderer/static_scene.h"
 #include "../scene_renderer/sprite_card.h"
 #include "../settings.h"
@@ -438,9 +439,22 @@ PreviewBlockReason currentBlockReason()
 
 } // namespace
 
+// 273: the one on-entry exporter run. The game keeps drawing while it works.
+scene_build::SceneBuild gSceneBuild;
+// The map whose scene cache is being built on entry; the 3D view stays up
+// and the map's 2D art lies on the ground plane until it finishes.
+std::string gBuildWaitingMap;
+
 bool showsCurrentMap()
 {
     return !gLoadedMap.empty() && gLoadedMap == currentMapName() && gLoadedElevation == static_cast<int>(gElevation);
+}
+
+// 273: the current map's cache is being built and the waiting state (its 2D
+// art on the ground plane) stands in for the scene.
+bool buildWaiting()
+{
+    return !gBuildWaitingMap.empty() && gBuildWaitingMap == currentMapName();
 }
 
 bool bottomViewHasDrawnGround(int tile)
@@ -530,9 +544,6 @@ bool bottomViewHasDrawnGround(int tile)
     return true;
 }
 
-// 273: the one on-entry exporter run. The game keeps drawing while it works.
-scene_build::SceneBuild gSceneBuild;
-
 // One line to the console and scene.log, the way the load fallback lines go.
 static void logSceneLine(const std::string& line)
 {
@@ -558,14 +569,28 @@ void syncToMap()
                 + std::to_string(gSceneBuild.elapsedMs()) + " ms; loading it");
             gFailedMap.clear();
             gFailedElevation = -1;
+            // The waiting plane yields to the real scene this frame; if the
+            // fresh cache still fails to load below, the rebuild that starts
+            // then puts it back up.
+            gBuildWaitingMap.clear();
+            scene_renderer::setWaitPlane(false);
         } else if (built == scene_build::SceneBuild::Status::Failed) {
             logSceneLine("scene: " + gSceneBuild.map() + " scene data could not be built; it stays 2D");
+            gBuildWaitingMap.clear();
+            scene_renderer::setWaitPlane(false);
         }
     }
     if (!gLoadedMap.empty() && (gLoadedMap != map || gLoadedElevation != elevation)) {
         scene_renderer::unloadStaticScene();
         gLoadedMap.clear();
         gLoadedElevation = -1;
+    }
+    if (!gBuildWaitingMap.empty() && gBuildWaitingMap != map) {
+        // The player went elsewhere mid-build: the waiting state belongs to
+        // the map it was started for. The run itself keeps going; entering
+        // that map again finds the cache ready.
+        gBuildWaitingMap.clear();
+        scene_renderer::setWaitPlane(false);
     }
     if (gFailedMap != map || gFailedElevation != elevation) {
         gFailedMap.clear();
@@ -641,6 +666,10 @@ void syncToMap()
                     gFailedMap = map;
                     gFailedElevation = elevation;
                     gFailure = message;
+                    // 273: the 3D view stays up; the map's 2D art lies on the
+                    // ground plane until the build finishes.
+                    gBuildWaitingMap = map;
+                    scene_renderer::setWaitPlane(true);
                 } else {
                     gLoadedMap.clear();
                     gLoadedElevation = -1;
@@ -690,10 +719,14 @@ bool enable(View view, std::string* message)
     }
     gView = view;
     gOriginalShown = false;
-    gFailedMap.clear();
-    gFailedElevation = -1;
+    // 273: a running build keeps its failure bookkeeping; a re-enable while
+    // it works must not log a bogus stays-2D line or refuse the toggle.
+    if (!buildWaiting()) {
+        gFailedMap.clear();
+        gFailedElevation = -1;
+    }
     syncToMap();
-    if (!showsCurrentMap()) {
+    if (!showsCurrentMap() && !buildWaiting()) {
         *message = gFailure.empty() ? "no map is loaded" : gFailure;
         reportToggleRefusal(*message);
         return false;
@@ -733,7 +766,9 @@ View requestedView()
 
 View activeView()
 {
-    return settings.scene3d.enabled && gView != View::Off && showsCurrentMap() ? gLoadedView : View::Off;
+    if (!settings.scene3d.enabled || gView == View::Off) return View::Off;
+    if (buildWaiting()) return gView; // 273: the waiting plane stands in for the scene
+    return showsCurrentMap() ? gLoadedView : View::Off;
 }
 
 bool shouldPresent()
@@ -917,6 +952,9 @@ double shownZoom()
 RefreshResult refreshForPresent()
 {
     if (activeView() != View::Full) return { false, 0.0 };
+    // 273: while the cache builds there is no scene to refresh; the waiting
+    // plane draws the game's own picture instead of the hero and the walls.
+    if (buildWaiting()) return { false, 0.0 };
     const Uint64 start = SDL_GetPerformanceCounter();
     // Follow the stored zoom every frame, so a changed setting applies live;
     // a wheel step glides there instead (see adjustZoom).

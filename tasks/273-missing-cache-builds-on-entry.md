@@ -57,13 +57,23 @@ Making the export itself faster.
   is detected and force-rebuilt (26340 ms), provenance rewritten to 1.13.0,
   no loop (the exporter's own staleness reads fingerprints, so a stale
   version needs --force; caught live, fixed). Full ctest 29/29. Known gaps,
-  honest: during the build the game draws its normal 2D view, not the 2D
-  art on the 3D ground plane the Goal names (that projection is a renderer
-  feature of its own); the fixture's fixed 30 s step budget is smaller than
-  a cold build, so the first run's snapshot step reports a timeout after the
-  scene already came up; the enable refusal line ("no 3D scene") stays in
-  the message log from before the build finished. Two more maps on an empty
+  honest: the fixture's fixed 30 s step budget is smaller than a cold
+  build, so the first run's snapshot step reports a timeout after the scene
+  already came up; the enable refusal line ("no 3D scene") stays in the
+  message log from before the build finished. Two more maps on an empty
   cache are not run yet (exporter only proven on kladwtwn live).
+- 2026-11-19 glm, later: the ground-plane waiting state is in, the Goal's
+  last missing piece. While the cache builds, the 3D view stays up and the
+  map's 2D art lies on the ground plane: the game's iso window buffer is
+  repainted (`mapRenderWholeIsoWindow`, map.cc) and uploaded once to a
+  textured quad on the plane with the sky, the interface drawn over it
+  (`ce/src/scene_renderer/build_wait.{h,cc}`; the tick leaves the iso
+  buffer empty while the 3D presents, so the upload repaints until the map
+  art really shows, then freezes it; the plane keeps the frame's aspect).
+  When the build finishes the plane yields to the real scene the same
+  frame. Frame: runs/273-missing-cache-builds-on-entry/
+  waiting-plane-kladwtwn.jpg; the full dev-snapshot pipeline passed with
+  -StepTimeoutSeconds 90 (build 29.4 s, then loaded). ctest 29/29.
 - 2026-11-19 glm: the two other maps are live-run on the same empty cache:
   denbus1 built in 23797 ms and arvillag in 8615 ms, both then
   "preview policy=available" (3D). Evidence lines appended to

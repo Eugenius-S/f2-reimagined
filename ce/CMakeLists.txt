@@ -340,6 +340,8 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/scene/scene_build.h"
     "src/scene/scene_view.cc"
     "src/scene/scene_view.h"
+    "src/scene_renderer/build_wait.cc"
+    "src/scene_renderer/build_wait.h"
     "src/scene/camera_turn.h"
     "src/scene/scene_settings.cc"
     "src/scene/menu_text.cc"
