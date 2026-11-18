@@ -16,6 +16,7 @@
 #include <SDL.h>
 
 #include "preview_policy.h"
+#include "scene_build.h"
 #include "scene_settings.h"
 #include "scene_lights.h"
 #include "scene_objects.h"
@@ -273,15 +274,20 @@ bool readDaylight(const std::filesystem::path& cacheDirectory)
 
 // The map's scene cache directory: the dev cache override when the dev
 // tools run, the game's mod-cache otherwise.
-static std::filesystem::path sceneCacheDirectory(const std::string& map, int elevation)
+static std::filesystem::path scenesRootPath()
 {
     // F2CE_SCENE_CACHE (dev tools only): a worktree's own scene cache, so a test
     // run of a new exporter leaves the cache of a game running alongside alone.
     const char* devCache = devtools::isEnabled() ? SDL_getenv("F2CE_SCENE_CACHE") : nullptr;
-    const std::filesystem::path scenes = devCache != nullptr && devCache[0] != '\0'
-        ? std::filesystem::path(devCache)
-        : gameRootPath() / "mod-cache" / "scene";
-    return scenes / map / std::to_string(elevation);
+    if (devCache != nullptr && devCache[0] != '\0') {
+        return std::filesystem::path(devCache);
+    }
+    return gameRootPath() / "mod-cache" / "scene";
+}
+
+static std::filesystem::path sceneCacheDirectory(const std::string& map, int elevation)
+{
+    return scenesRootPath() / map / std::to_string(elevation);
 }
 
 // The 3D toggle's refusal (211) goes to the game's status line, in the
@@ -524,10 +530,38 @@ bool bottomViewHasDrawnGround(int tile)
     return true;
 }
 
+// 273: the one on-entry exporter run. The game keeps drawing while it works.
+scene_build::SceneBuild gSceneBuild;
+
+// One line to the console and scene.log, the way the load fallback lines go.
+static void logSceneLine(const std::string& line)
+{
+    printf("%s\n", line.c_str());
+    fflush(stdout);
+    // A file too: the Windows build has no console.
+    if (FILE* log = fopen((dev_output::outputDirectory("logs") / "scene.log").string().c_str(), "a")) {
+        fprintf(log, "%s\n", line.c_str());
+        fclose(log);
+    }
+}
+
 void syncToMap()
 {
     const std::string map = currentMapName();
     const int elevation = static_cast<int>(gElevation);
+    // 273: an on-entry build that finished clears the failure so the load
+    // below retries with the fresh cache in the same frame.
+    if (gSceneBuild.status() == scene_build::SceneBuild::Status::Running) {
+        const scene_build::SceneBuild::Status built = gSceneBuild.poll();
+        if (built == scene_build::SceneBuild::Status::Succeeded) {
+            logSceneLine("scene: " + gSceneBuild.map() + " scene data built in "
+                + std::to_string(gSceneBuild.elapsedMs()) + " ms; loading it");
+            gFailedMap.clear();
+            gFailedElevation = -1;
+        } else if (built == scene_build::SceneBuild::Status::Failed) {
+            logSceneLine("scene: " + gSceneBuild.map() + " scene data could not be built; it stays 2D");
+        }
+    }
     if (!gLoadedMap.empty() && (gLoadedMap != map || gLoadedElevation != elevation)) {
         scene_renderer::unloadStaticScene();
         gLoadedMap.clear();
@@ -568,17 +602,39 @@ void syncToMap()
                     fclose(log);
                 }
             } else {
-                gLoadedMap.clear();
-                gLoadedElevation = -1;
-                gFailedMap = map;
-                gFailedElevation = elevation;
-                gFailure = message;
-                printf("scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
-                fflush(stdout);
-                // A file too: the Windows build has no console.
-                if (FILE* log = fopen((dev_output::outputDirectory("logs") / "scene.log").string().c_str(), "a")) {
-                    fprintf(log, "scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
-                    fclose(log);
+                // 273: with the shipped exporter beside the game, a missing
+                // or stale cache is built on entry instead of staying 2D. A
+                // cache whose provenance still matches but whose files do
+                // not load is damaged: only --force rewrites it. While the
+                // build runs the map keeps drawing as it does now; the
+                // waiting state on the 3D ground plane is the visual step.
+                const scene_build::CacheState state = scene_build::cacheState(sceneCacheDirectory(map, elevation));
+                const bool damaged = state == scene_build::CacheState::Current;
+                const char* why = state == scene_build::CacheState::Missing ? "has no scene data"
+                    : state == scene_build::CacheState::StaleVersion ? "has scene data from another exporter version"
+                    : "has damaged scene data";
+                if (gSceneBuild.start(map, scene_build::exporterPath(), gameRootPath(),
+                        scenesRootPath(), damaged)) {
+                    logSceneLine("scene: " + map + " elevation " + std::to_string(elevation) + " "
+                        + why + " (" + message + "); building it with the shipped exporter");
+                    gLoadedMap.clear();
+                    gLoadedElevation = -1;
+                    gFailedMap = map;
+                    gFailedElevation = elevation;
+                    gFailure = message;
+                } else {
+                    gLoadedMap.clear();
+                    gLoadedElevation = -1;
+                    gFailedMap = map;
+                    gFailedElevation = elevation;
+                    gFailure = message;
+                    printf("scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
+                    fflush(stdout);
+                    // A file too: the Windows build has no console.
+                    if (FILE* log = fopen((dev_output::outputDirectory("logs") / "scene.log").string().c_str(), "a")) {
+                        fprintf(log, "scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
+                        fclose(log);
+                    }
                 }
             }
         }

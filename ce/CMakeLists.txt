@@ -336,6 +336,8 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/scene/scene_objects.h"
     "src/scene/scene_overlay.cc"
     "src/scene/scene_overlay.h"
+    "src/scene/scene_build.cc"
+    "src/scene/scene_build.h"
     "src/scene/scene_view.cc"
     "src/scene/scene_view.h"
     "src/scene/camera_turn.h"

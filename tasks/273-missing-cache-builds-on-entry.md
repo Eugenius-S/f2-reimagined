@@ -35,3 +35,16 @@ Making the export itself faster.
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+- 2026-11-19 glm: entering a map whose cache is missing, stale or damaged now
+  starts the shipped scene-exporter.exe for that map on entry
+  (`ce/src/scene/scene_build.{h,cc}`); provenance.json's `exporter_version`
+  decides (anything unknown reads stale: fail-closed), a cache whose
+  provenance matches but whose files do not load is rebuilt with `--force`,
+  and a finished build clears the failure so the scene loads in the same
+  frame. With no exporter beside the exe the honest stays-2D line stays.
+  `kExpectedExporterVersion` is pinned to export.py's `EXPORTER_VERSION` by
+  `tools/test_exporter_version_sync.py`; new suite `ce/tests/scene_build` in
+  the scene matrix. Check: full Release build + ctest 29/29 locally.
+  Next: the waiting state on the 3D ground plane (the map's 2D art while the
+  build runs) and the runtime frames in `runs/273-missing-cache-builds-on-entry/`
+  need a game-run slot; the wait in seconds per map goes here then.
