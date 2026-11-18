@@ -17,6 +17,8 @@ struct SpriteCardProjection;
 // pages and baked.bin.
 bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* error);
 bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* error);
+// 274: the ground-plane rectangle the loaded walls cover; false without walls.
+bool staticWallExtent(double rect[4]);
 // Drops the loaded scene (floor, walls, projection, live objects, the hero)
 // so another map's can be loaded.
 void unloadStaticScene();

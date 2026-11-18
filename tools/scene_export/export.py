@@ -562,7 +562,7 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
         raise RuntimeError("SceneBuilder returned an unexpected map/elevation")
     live_boards, skip_props, skip_rests = live_solids(builder, scene)
     wall_back_pages = []
-    wall_payload = encode_wall_sidecar(scene, skip_props, skip_rests, builder.map.objects[elevation],
+    wall_payload = encode_wall_sidecar(scene, skip_props, skip_rests, builder.everything,
                                        builder.atlas.pages, builder.tile_sheet[..., 3],
                                        wall_back_pages=wall_back_pages, water=builder.water)
     for index, page in enumerate(wall_back_pages, start=len(builder.atlas.pages)):

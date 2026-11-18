@@ -123,7 +123,8 @@ std::string currentMapName()
     return name;
 }
 
-scene_renderer::MapClip authoredMapClip()
+// The authored clip of this elevation's own data (floor hull, EDG zones).
+static scene_renderer::MapClip authoredMapClipBase()
 {
     using namespace scene_renderer;
     const MapClip floorClip = staticFloorMapClip();
@@ -187,6 +188,26 @@ scene_renderer::MapClip authoredMapClip()
     }
     const MapClip authored = makeMapClip(points, MapClipSource::Authored);
     return authored.enabled ? authored : floorClip;
+}
+
+scene_renderer::MapClip authoredMapClip()
+{
+    scene_renderer::MapClip clip = authoredMapClipBase();
+    // 274: the walls the scene carries (an upper floor's walls from the
+    // elevation below) stand outside this floor's own hull; the map clip
+    // widens to them, or the fragment clip would hide walls the original
+    // 2D view draws. An authored EDG clip already bounds what the 2D shows,
+    // so only the floor-hull fallback widens.
+    double rect[4];
+    if (clip.enabled && clip.source != scene_renderer::MapClipSource::Authored
+        && scene_renderer::staticWallExtent(rect)) {
+        const double left = std::min(clip.left, rect[0]);
+        const double top = std::min(clip.top, rect[1]);
+        const double right = std::max(clip.right, rect[2]);
+        const double bottom = std::max(clip.bottom, rect[3]);
+        clip = scene_renderer::makeMapClipRect(left, top, right, bottom, clip.source);
+    }
+    return clip;
 }
 
 // Keep the lower viewport edge on drawn floor. EDG clips are authored in the

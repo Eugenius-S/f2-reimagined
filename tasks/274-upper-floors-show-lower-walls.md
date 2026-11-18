@@ -53,3 +53,15 @@ Roofs (190) and the floors' own tiles.
   version constant rides PR 540 and needs the rebase after 540 lands).
   Tests: tools/scene_export/test_lower_walls.py (3), scene_export suite
   151/151.
+- 2026-11-19 glm, later: the renderer half - walls.bin's rows must NAME
+  their object (the sidecar takes the combined list) or the game view skips
+  them; and the loaded walls' ground rectangle unions into the map clip
+  (walls.cc staticWallExtent, scene_view.cc authoredMapClip) so a tight
+  floor hull never hides a carried wall. Proof: denbus2 e1 -ViewTile 16497
+  shows the lower walls over the void (before: only the strips). Evidence
+  pairs for denbus2/denres1/ncrent e1 (same -ViewTile camera, classic left,
+  3D right) in runs/274-upper-floors-show-lower-walls/; ctest 29/29.
+  Honest limits in the README: the 3D shows the walls everywhere, the 2D's
+  band was not traced to its code path (a zone-limited rule is the possible
+  refinement); the lower walls take the upper floor's ambient, not the lower
+  scene's light.
