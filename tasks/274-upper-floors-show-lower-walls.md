@@ -2,7 +2,7 @@
 id: 274
 title: An upper floor shows the tall walls of the floor below, as the original does
 milestone: M1
-status: todo
+status: doing
 owner: glm
 suggested: glm
 priority: normal
