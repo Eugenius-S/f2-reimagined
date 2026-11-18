@@ -9,3 +9,9 @@ scene: kladwtwn scene data built in 26873 ms; loading it
 scene: cache <repo>\build\273-run\kladwtwn\0
 
 scene: preview policy=available gameState=0 gameMode=0x0 uiDisabled=0 isoDisabled=0 combat=0 dialog=0 movie=0
+denbus1 (empty cache): scene: denbus1 elevation 0 has no scene data (floor preview unavailable: floor.bin is missing or unreadable); building it with the shipped exporter
+denbus1: scene: denbus1 scene data built in 23797 ms; loading it
+denbus1: scene: preview policy=available
+arvillag (empty cache): scene: arvillag elevation 0 has no scene data (floor preview unavailable: floor.bin is missing or unreadable); building it with the shipped exporter
+arvillag: scene: arvillag scene data built in 8615 ms; loading it
+arvillag: scene: preview policy=available

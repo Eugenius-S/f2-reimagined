@@ -64,3 +64,8 @@ Making the export itself faster.
   scene already came up; the enable refusal line ("no 3D scene") stays in
   the message log from before the build finished. Two more maps on an empty
   cache are not run yet (exporter only proven on kladwtwn live).
+- 2026-11-19 glm: the two other maps are live-run on the same empty cache:
+  denbus1 built in 23797 ms and arvillag in 8615 ms, both then
+  "preview policy=available" (3D). Evidence lines appended to
+  runs/273-missing-cache-builds-on-entry/build-on-entry-log.txt. Waiting
+  per map, cold: kladwtwn 26.9 s, denbus1 23.8 s, arvillag 8.6 s.
