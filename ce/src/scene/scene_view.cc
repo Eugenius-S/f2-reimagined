@@ -620,21 +620,32 @@ void syncToMap()
             // 275: a nearly-empty upper floor (the encounter maps' tops carry
             // a handful of squares at the map edge, the real scene is the
             // elevation below) would show a black void with the camera on
-            // the hero. The ground plane shows the elevation below's own 2D
-            // render instead - 173's rule, never black.
+            // the hero. The view shows the ELEVATION BELOW's scene instead -
+            // its cache exists (the export builds every elevation), the hexes
+            // are shared so the camera lands on the same spot, and the live
+            // hero draws over it at his own hex. 173's rule: never black.
             const int drawn = scene_renderer::staticFloorDrawnSquares();
             if (gElevation > ELEVATION_FIRST && drawn < 100) {
+                const MapElevation below = static_cast<MapElevation>(gElevation - 1);
+                std::string belowMessage;
                 scene_renderer::unloadStaticScene();
                 gLoadedMap.clear();
                 gLoadedElevation = -1;
-                gFailedMap = map;              // no load retries while the plane stands
-                gFailedElevation = elevation;
-                gFailure = message;
-                gBuildWaitingMap = map;        // the waiting state keeps the view up
-                scene_renderer::setWaitPlaneAt(true, static_cast<int>(gElevation) - 1);
-                logSceneLine("scene: " + map + " elevation " + std::to_string(elevation)
-                    + " has " + std::to_string(drawn) + " drawn squares; showing the elevation "
-                    + std::to_string(static_cast<int>(gElevation) - 1) + " on the ground plane");
+                if (loadScene(gView, map, static_cast<int>(below), &belowMessage)) {
+                    gLoadedMap = map;
+                    gLoadedElevation = elevation;   // the game's elevation: the state stays consistent
+                    gLoadedView = gView;
+                    gFailure.clear();
+                    logSceneLine("scene: " + map + " elevation " + std::to_string(elevation)
+                        + " has " + std::to_string(drawn) + " drawn squares; showing the scene of elevation "
+                        + std::to_string(below) + " below");
+                } else {
+                    gFailedMap = map;
+                    gFailedElevation = elevation;
+                    gFailure = belowMessage;
+                    logSceneLine("scene: " + map + " elevation " + std::to_string(elevation)
+                        + " stays 2D: the elevation below's scene is unavailable: " + belowMessage);
+                }
             }
         } else {
             scene_renderer::unloadStaticScene();

@@ -107,8 +107,8 @@ void uploadWaitFrame(SDL_Surface* indexed)
     const int pitch = rectGetWidth(&isoRect);
     // The tick leaves the buffer empty while the 3D view presents, and the
     // build can start while the map data is still loading: paint the map
-    // again until it really shows up, and only then freeze it.
-        mapRenderWholeIsoWindowAt(gWaitArtElevation >= 0 ? static_cast<MapElevation>(gWaitArtElevation) : gElevation);
+    // again until it really shows up.
+    mapRenderWholeIsoWindowAt(gWaitArtElevation >= 0 ? static_cast<MapElevation>(gWaitArtElevation) : gElevation);
     // A loading screen or a not-yet-rendered map leaves the buffer uniform:
     // keep waiting for the real map art instead of freezing that.
     size_t artPixels = 0;
@@ -116,6 +116,7 @@ void uploadWaitFrame(SDL_Surface* indexed)
         if (isoBuffer[at] != 0) artPixels++;
     }
     if (artPixels * 7 < static_cast<size_t>(width) * height / 20) return;
+
 
     // 275: the colours come from the engine's own current palette. The
     // screen surface's copy only updates on the 2D present path - under the

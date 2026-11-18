@@ -70,3 +70,16 @@ Cave lighting levels (262, 263).
   write failed with error 84 even on an absolute path - write it from the
   debug build differently) and compare against the classic frame's pixels.
   The PR stays a draft; no acceptance is claimed.
+- 2026-11-19 glm, later: the raw dump (960x440 indices + the 768-byte
+  palette, saved via plain ofstream - the lodepng path failed) settled the
+  plane detour: the repainted buffer decodes to a dark wedge (the darkened
+  strip/void), NOT the classic's bright band - the 2D band comes from the
+  damage-rect accumulation (see above), which a fresh repaint cannot
+  reproduce. The plane approach is abandoned. The fix now loads the
+  ELEVATION BELOW's scene from its cache (the hexes are shared, the camera
+  lands on the same spot, the hero draws over it): desert5 e1 and desert6
+  e1 both show the world below - never black (the Log's defect above is
+  closed by the design change; the brightness still trails the 2D
+  artifact's, honestly: the below-scene carries the desert's own dim baked
+  light, the artifact carried the fires' local light). Evidence:
+  runs/275-encounter-upper-floors-not-black/. ctest 29/29.
