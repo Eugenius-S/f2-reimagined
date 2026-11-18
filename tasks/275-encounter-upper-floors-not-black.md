@@ -2,7 +2,7 @@
 id: 275
 title: Encounter maps' upper floors are not black in 3D
 milestone: M1
-status: todo
+status: doing
 owner: glm
 suggested: glm
 priority: normal
