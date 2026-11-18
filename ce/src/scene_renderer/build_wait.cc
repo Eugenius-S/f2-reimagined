@@ -11,6 +11,8 @@
 
 #include "../geometry.h"
 #include "../map.h"
+#include "../svga.h"
+#include <lodepng.h>
 #include "../window_manager.h"
 
 namespace fallout {
@@ -21,7 +23,7 @@ using namespace internal;
 namespace {
 
 bool gWaitOn = false;
-bool gWaitCaptured = false;
+int gWaitArtElevation = -1; // -1: the map's current elevation (273); else the asked one (275)
 float gPlaneDepth = 75.0f;
 unsigned int gWaitTexture = 0;
 unsigned int gWaitVao = 0;
@@ -70,20 +72,25 @@ bool waitPlaneActive()
 
 void setWaitPlane(bool on)
 {
+    setWaitPlaneAt(on, -1);
+}
+
+void setWaitPlaneAt(bool on, int artElevation)
+{
     gWaitOn = on;
-    if (on) {
-        // The first frame after the build starts still holds the game's full
-        // 2D map picture (the game stops redrawing it once the 3D view
-        // presents); it is frozen as the waiting art.
-        gWaitCaptured = false;
-    } else {
+    gWaitArtElevation = artElevation;
+    if (!on) {
         gWaitFrameWidth = gWaitFrameHeight = 0;
     }
 }
 
 void uploadWaitFrame(SDL_Surface* indexed)
 {
-    if (!gWaitOn || gWaitCaptured || indexed == nullptr || indexed->format == nullptr
+    // Every waiting frame re-uploads: the map's palette settles only when the
+    // map has loaded (a capture during the loading screen would freeze the
+    // art through the wrong palette, dark), and the plane is the view for as
+    // long as it stands (275), not a one-frame picture.
+    if (!gWaitOn || indexed == nullptr || indexed->format == nullptr
         || indexed->format->palette == nullptr || indexed->pixels == nullptr) {
         return;
     }
@@ -101,7 +108,7 @@ void uploadWaitFrame(SDL_Surface* indexed)
     // The tick leaves the buffer empty while the 3D view presents, and the
     // build can start while the map data is still loading: paint the map
     // again until it really shows up, and only then freeze it.
-    mapRenderWholeIsoWindow();
+        mapRenderWholeIsoWindowAt(gWaitArtElevation >= 0 ? static_cast<MapElevation>(gWaitArtElevation) : gElevation);
     // A loading screen or a not-yet-rendered map leaves the buffer uniform:
     // keep waiting for the real map art instead of freezing that.
     size_t artPixels = 0;
@@ -110,18 +117,23 @@ void uploadWaitFrame(SDL_Surface* indexed)
     }
     if (artPixels * 7 < static_cast<size_t>(width) * height / 20) return;
 
+    // 275: the colours come from the engine's own current palette. The
+    // screen surface's copy only updates on the 2D present path - under the
+    // 3D view it can still be the loading screen's, and the map's art
+    // decoded through that was the dark plane.
+    const unsigned char* enginePalette = directDrawGetPalette();
+    if (enginePalette == nullptr) return;
     std::vector<unsigned char> rgba(static_cast<size_t>(width) * height * 4);
-    const SDL_Palette* palette = indexed->format->palette;
     for (int y = 0; y < height; y++) {
         const unsigned char* row = isoBuffer + static_cast<size_t>(y) * pitch;
         unsigned char* out = rgba.data() + static_cast<size_t>(y) * width * 4;
         for (int x = 0; x < width; x++) {
             const unsigned char index = row[x];
-            if (index >= palette->ncolors) continue;
-            const SDL_Color& color = palette->colors[index];
-            out[x * 4 + 0] = color.r;
-            out[x * 4 + 1] = color.g;
-            out[x * 4 + 2] = color.b;
+            const unsigned char* color = enginePalette + static_cast<size_t>(index) * 3;
+            // the engine palette holds 6-bit VGA values; the picture is 8-bit
+            out[x * 4 + 0] = color[0] << 2;
+            out[x * 4 + 1] = color[1] << 2;
+            out[x * 4 + 2] = color[2] << 2;
             out[x * 4 + 3] = 255;
         }
     }
@@ -154,7 +166,6 @@ void uploadWaitFrame(SDL_Surface* indexed)
         glBufferData(kArrayBuffer, static_cast<long long>(sizeof(quad)), quad, kStaticDraw);
         glBindVertexArray(0);
     }
-    gWaitCaptured = true;
 }
 
 void drawWaitPlane()

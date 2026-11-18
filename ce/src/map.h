@@ -83,6 +83,9 @@ extern int gIsoWindow;
 // 273: repaint the whole map into its window buffer; the tick leaves it
 // empty while the 3D view presents.
 void mapRenderWholeIsoWindow();
+// 275: the same, for a given elevation (a nearly-empty upper floor shows the
+// elevation below on the ground plane).
+void mapRenderWholeIsoWindowAt(MapElevation elevation);
 
 int isoInit();
 void isoReset();

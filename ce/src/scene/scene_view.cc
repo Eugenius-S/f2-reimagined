@@ -617,6 +617,25 @@ void syncToMap()
             gLoadedElevation = elevation;
             gLoadedView = gView;
             gFailure.clear();
+            // 275: a nearly-empty upper floor (the encounter maps' tops carry
+            // a handful of squares at the map edge, the real scene is the
+            // elevation below) would show a black void with the camera on
+            // the hero. The ground plane shows the elevation below's own 2D
+            // render instead - 173's rule, never black.
+            const int drawn = scene_renderer::staticFloorDrawnSquares();
+            if (gElevation > ELEVATION_FIRST && drawn < 100) {
+                scene_renderer::unloadStaticScene();
+                gLoadedMap.clear();
+                gLoadedElevation = -1;
+                gFailedMap = map;              // no load retries while the plane stands
+                gFailedElevation = elevation;
+                gFailure = message;
+                gBuildWaitingMap = map;        // the waiting state keeps the view up
+                scene_renderer::setWaitPlaneAt(true, static_cast<int>(gElevation) - 1);
+                logSceneLine("scene: " + map + " elevation " + std::to_string(elevation)
+                    + " has " + std::to_string(drawn) + " drawn squares; showing the elevation "
+                    + std::to_string(static_cast<int>(gElevation) - 1) + " on the ground plane");
+            }
         } else {
             scene_renderer::unloadStaticScene();
             std::string floorError;

@@ -1642,11 +1642,35 @@ static void isoWindowRefreshRect(Rect* rect)
 
 // 273: the whole map painted back into its window buffer, for the scene's
 // waiting state to show while a map's scene cache builds (the tick leaves
-// the buffer empty while the 3D view presents).
-void mapRenderWholeIsoWindow()
+// the buffer empty while the 3D view presents). 275: the elevation comes
+// from the caller - a nearly-empty upper floor shows the elevation below,
+// whose scene the ground plane carries.
+void mapRenderWholeIsoWindowAt(MapElevation elevation)
 {
     if (gIsoWindow == -1) return;
-    _map_scroll_refresh(&gIsoWindowRect);
+    // The refresh helpers read gElevation; paint the asked elevation's tiles
+    // and objects directly, the way isoWindowRefreshRectGame lays a frame out.
+    // 275: the plane is a picture of the scene below, painted the way the
+    // classic 2D view of THAT elevation would draw it. The tile renderers
+    // take their per-hex light from gElevation's grid, so the repaint swaps
+    // the elevation for the span of the paint; the map's own ambient stays.
+    const MapElevation saved = gElevation;
+    gElevation = elevation;
+    Rect rect = gIsoWindowRect;
+    bufferFill(gIsoWindowBuffer + rect.top * rectGetWidth(&rect) + rect.left,
+        rectGetWidth(&rect),
+        rectGetHeight(&rect),
+        rectGetWidth(&rect),
+        COLOR_FIRST);
+    tileRenderFloorsInRect(&rect, elevation);
+    _obj_render_pre_roof(&rect, elevation);
+    tileRenderRoofsInRect(&rect, elevation);
+    _obj_render_post_roof(&rect, elevation);
+}
+
+void mapRenderWholeIsoWindow()
+{
+    mapRenderWholeIsoWindowAt(gElevation);
 }
 
 // 0x483EE4 map_scroll_refresh_game

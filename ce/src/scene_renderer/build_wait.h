@@ -16,6 +16,9 @@ bool waitPlaneActive();
 // map changed). The GL calls run on the present thread, where the scene
 // state also changes.
 void setWaitPlane(bool on);
+// 275: the same, with the plane's picture taken from the given elevation's
+// own 2D render (a nearly-empty upper floor shows the elevation below).
+void setWaitPlaneAt(bool on, int artElevation);
 // The game's current indexed frame as the plane's texture, uploaded before
 // the scene draw while waiting. Cheap no-op when the wait is not on.
 void uploadWaitFrame(SDL_Surface* indexed);
