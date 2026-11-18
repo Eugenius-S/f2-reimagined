@@ -83,13 +83,13 @@ std::filesystem::path exporterPath()
     const DWORD length = GetModuleFileNameW(nullptr, module, MAX_PATH);
     if (length == 0 || length >= MAX_PATH) return {};
     std::filesystem::path self(module);
+    std::error_code error;
+    return self.parent_path() / "scene-exporter.exe";
 #else
     // The exporter ships with the Windows install layout; other platforms
     // have none beside the binary and the caller keeps its fallback.
     return {};
 #endif
-    std::error_code error;
-    return self.parent_path() / "scene-exporter.exe";
 }
 
 std::string exporterCommand(const std::filesystem::path& exporter,
