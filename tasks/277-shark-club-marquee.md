@@ -2,7 +2,7 @@
 id: 277
 title: The Shark Club marquee stands right in 3D
 milestone: M1
-status: todo
+status: doing
 owner: glm
 suggested: glm
 priority: normal
