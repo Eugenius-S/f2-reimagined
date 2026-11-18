@@ -575,7 +575,19 @@ void syncToMap()
     const bool loaded = !gLoadedMap.empty() && static_cast<int>(gLoadedView) >= static_cast<int>(gView);
     if (gView != View::Off && !map.empty() && gFailedMap.empty() && !loaded) {
         std::string message;
-        if (loadScene(gView, map, elevation, &message)) {
+        // 273: a cache written by another exporter version is rebuilt, not
+        // loaded: the load attempts are skipped for one, so its old floor
+        // never shows while the fresh scene is built.
+        const bool staleVersion = scene_build::cacheState(sceneCacheDirectory(map, elevation))
+            == scene_build::CacheState::StaleVersion;
+        if (staleVersion) {
+            message = "scene data is from another exporter version";
+        }
+        bool sceneLoaded = false;
+        if (!staleVersion) {
+            sceneLoaded = loadScene(gView, map, elevation, &message);
+        }
+        if (sceneLoaded) {
             gLoadedMap = map;
             gLoadedElevation = elevation;
             gLoadedView = gView;
@@ -586,7 +598,9 @@ void syncToMap()
             // Keep a usable 3D ground plane when a map's wall or projection
             // sidecar is missing or damaged. This is also the fallback for
             // incomplete exports; it must not silently turn the whole map 2D.
-            if (gView != View::Floor && loadScene(View::Floor, map, elevation, &floorError)) {
+            // A stale-version cache takes neither: it is rebuilt whole.
+            if (!staleVersion && gView != View::Floor
+                && loadScene(View::Floor, map, elevation, &floorError)) {
                 gLoadedMap = map;
                 gLoadedElevation = elevation;
                 gLoadedView = View::Floor;
@@ -609,7 +623,12 @@ void syncToMap()
                 // build runs the map keeps drawing as it does now; the
                 // waiting state on the 3D ground plane is the visual step.
                 const scene_build::CacheState state = scene_build::cacheState(sceneCacheDirectory(map, elevation));
-                const bool damaged = state == scene_build::CacheState::Current;
+                // Stale-version caches need --force too: the exporter's own
+                // staleness reads fingerprints, not the version field, so a
+                // cache whose files match its tampered provenance would come
+                // back "current" and never rewrite the version (a rebuild
+                // loop).
+                const bool damaged = state != scene_build::CacheState::Missing;
                 const char* why = state == scene_build::CacheState::Missing ? "has no scene data"
                     : state == scene_build::CacheState::StaleVersion ? "has scene data from another exporter version"
                     : "has damaged scene data";
