@@ -37,7 +37,7 @@ from wall_sidecar import decode_wall_sidecar, encode_wall_sidecar, wall_slabs  #
 from shadow_sidecar import VERSION as SHADOW_SIDECAR_VERSION  # noqa: E402
 from shadow_sidecar import decode_shadow_sidecar, encode_shadow_sidecar  # noqa: E402
 
-EXPORTER_VERSION = "1.13.0"
+EXPORTER_VERSION = "1.14.0"
 DONOR_REVISION = "0da1cd449f1dc7f2f6986ff7e8728a4b6ae20584"
 DEFAULT_MAP = "kladwtwn"
 # Map groups for --maps: every elevation each map has.
@@ -569,14 +569,16 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
         Image.fromarray(page, "RGBA").save(out_dir / f"sprites{index}.png", optimize=True)
     (out_dir / "walls.bin").write_bytes(wall_payload)
     wall_data = decode_wall_sidecar(wall_payload)
-    baked_payload = encode_baked_sidecar(baked_objects(scene, builder.map.objects[elevation], live_boards,
-                                                     FIXED_CARD_FRMS, gf.art.name))
+    # 274: the rows' serials name the builder's combined object list (this
+    # elevation's objects, then the walls below).
+    baked_payload = encode_baked_sidecar(baked_objects(scene, builder.everything, live_boards,
+                                                       FIXED_CARD_FRMS, gf.art.name))
     (out_dir / "baked.bin").write_bytes(baked_payload)
     baked_count = len(decode_baked_sidecar(baked_payload))
     projection_payload = encode_projection_sidecar(scene)
     (out_dir / "projection.bin").write_bytes(projection_payload)
     decode_projection_sidecar(projection_payload)
-    shadow_payload = encode_shadow_sidecar(scene, builder.atlas.images, builder.map.objects[elevation])
+    shadow_payload = encode_shadow_sidecar(scene, builder.atlas.images, builder.everything)
     (out_dir / "shadows.bin").write_bytes(shadow_payload)
     shadow_count = len(decode_shadow_sidecar(shadow_payload))
 
