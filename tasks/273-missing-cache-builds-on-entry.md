@@ -2,7 +2,7 @@
 id: 273
 title: A map with no scene cache still opens in 3D
 milestone: M1
-status: todo
+status: doing
 owner: glm
 suggested: glm
 priority: high
