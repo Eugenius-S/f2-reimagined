@@ -48,4 +48,5 @@ A modelled 3D sign (229's reference views come first).
   the roof plane (hide) from what stands IN FRONT of it at the same squares
   (the marquee - keep); that is roof/wall-hole class surgery (190's
   territory), not a one-line change - the next session or 190's owner.
-  Evidence: the fresh frame rides with this branch's push.
+  Evidence: the fresh frame rides with this branch's push (recompressed to
+  JPEG after the runs-size 1 MB cap flagged the PNG).
