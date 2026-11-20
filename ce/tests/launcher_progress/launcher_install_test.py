@@ -21,6 +21,8 @@ LAUNCHER = Path(sys.argv.pop(1)).resolve()
 REQUIRED = ("fallout2-ce.exe", "ce.dat", "scene-exporter.exe")
 ZIP = "fallout2-ce-3d-win64.zip"
 ART = "user-assets/fullscreen-20261028/wallpapers-selected/hires/menu/art__intrface__hr_mainmenu__d0_f0_21-9.png"
+PUBLISHED_BOOTSTRAP = os.environ.get("F2R_PUBLISHED_BOOTSTRAP_FIXTURE")
+PUBLISHED_BOOTSTRAP_HASH = "9aa8c65b3b8054fa168f3d599bb2f3b5c92550bba4ac8644e9c7be4694bc0b4d"
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -92,7 +94,8 @@ class LauncherFixture(unittest.TestCase):
     def run_launcher(self, language="en", launcher=LAUNCHER, extra_args=(), env=None):
         result = subprocess.run([str(launcher), "--game-root", str(self.root),
             "--update-url", self.url, "--mirror-url", self.url, "--ui-language", language,
-            "--no-start", *extra_args], capture_output=True, timeout=90, env=env)
+            "--no-start", *extra_args], capture_output=True, timeout=90, env=env,
+            creationflags=subprocess.CREATE_NO_WINDOW)
         output = result.stdout.decode("utf-8", errors="replace") + result.stderr.decode("utf-8", errors="replace")
         print(f"\n{self.id()}: exit {result.returncode}\n{output}", flush=True)
         return result.returncode, output
@@ -290,6 +293,20 @@ class InstallTests(LauncherFixture):
             finally:
                 self.server.release_image.set()
                 holder.terminate()
+
+    @unittest.skipUnless(PUBLISHED_BOOTSTRAP, "exact published bootstrap fixture not provided")
+    def test_published_launcher_can_move_to_fixed_package_in_console_mode(self):
+        launcher = self.root / "Fallout 2 Reimagined.exe"
+        legacy = Path(PUBLISHED_BOOTSTRAP).read_bytes()
+        self.assertEqual(hashlib.sha256(legacy).hexdigest(), PUBLISHED_BOOTSTRAP_HASH)
+        launcher.write_bytes(legacy)
+        code, output = self.run_launcher(launcher=launcher)
+        self.assertEqual(code, 0, output)
+        self.assertEqual(launcher.read_bytes(), self.payload["fallout2-ce-3d-launcher.exe"])
+        self.assertEqual((self.root / "version.txt").read_bytes(), b"new-build")
+        code, output = self.run_launcher(launcher=launcher)
+        self.assertEqual(code, 0, output)
+        self.assertIn("matches the release: nothing to pull", output)
 
     def test_uninstall_locked_orphan_is_reported_then_removed_on_retry(self):
         orphan = self.root / "Fallout 2 Reimagined.exe.old"
