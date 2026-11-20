@@ -45,9 +45,10 @@ int main()
     for (const std::string& name : installedFolders()) check(name != "data", "saves live in data and stay");
 
     namespace fs = std::filesystem;
-    check(samePath(fs::path(L"C:/Games/Fallout 2"), fs::path(L"c:\\games\\fallout 2")),
+    auto sampleRoot = fs::temp_directory_path() / L"Games";
+    check(samePath(sampleRoot / L"Fallout 2", sampleRoot / L"fallout 2"),
         "game roots compare case-insensitively after path normalization");
-    check(!samePath(fs::path(L"C:/Games/A"), fs::path(L"C:/Games/B")), "different game roots stay distinct");
+    check(!samePath(sampleRoot / L"A", sampleRoot / L"B"), "different game roots stay distinct");
     fs::path backups = fs::temp_directory_path() / "f2r-stale-backups-test";
     fs::remove_all(backups);
     for (const char* name : {"v1", "v2", "v3"}) fs::create_directories(backups / name);

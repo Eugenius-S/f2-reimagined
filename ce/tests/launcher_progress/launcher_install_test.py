@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import zipfile
 
@@ -34,7 +35,22 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
             self.server.image_ready.set()
             self.server.release_image.wait(30)
             self.path = "/version.txt"
-        super().do_GET()
+        with contextlib.suppress(ConnectionResetError, ConnectionAbortedError):
+            super().do_GET()
+
+
+def hash_during_removal(path):
+    import msvcrt
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.CreateFileW.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
+                                  wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+    kernel.CreateFileW.restype = wintypes.HANDLE
+    # The helper holds DELETE access, so the reader must share delete too.
+    handle = kernel.CreateFileW(str(path), 0x80000000, 7, None, 3, 0, None)
+    if handle == wintypes.HANDLE(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    with os.fdopen(msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY), "rb") as stream:
+        return hashlib.sha256(stream.read()).hexdigest()
 
 
 @contextlib.contextmanager
@@ -103,6 +119,29 @@ class LauncherFixture(unittest.TestCase):
 
 
 class InstallTests(LauncherFixture):
+    def tombstones(self):
+        return set(self.root.glob("f2r*.tmp"))
+
+    def wait_for_tombstones(self, expected):
+        deadline = time.monotonic() + 10
+        while self.tombstones() != expected and time.monotonic() < deadline:
+            time.sleep(0.1)
+        self.assertEqual(self.tombstones(), expected)
+
+    @contextlib.contextmanager
+    def held_image(self, launcher):
+        self.server.image_ready = ready = threading.Event()
+        self.server.release_image = release = threading.Event()
+        with subprocess.Popen([str(launcher), "--check-release", "--game-root", str(self.root),
+                "--update-url", self.url + "/held", "--mirror-url", self.url + "/held", "--release-info-url", ""],
+                creationflags=subprocess.CREATE_NO_WINDOW, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as holder:
+            try:
+                self.assertTrue(ready.wait(8))
+                yield holder
+            finally:
+                holder.terminate()
+                release.set()
+
     def assert_failed(self, code, output, filename):
         self.assertNotEqual(code, 0, output)
         self.assertIn(filename, output)
@@ -126,6 +165,7 @@ class InstallTests(LauncherFixture):
         self.assertEqual(code, 0, output)
         self.assertIn("installed build: new-build", output)
         self.assertIn("matches the release", output)
+        self.wait_for_tombstones(set())
         self.assertFalse((self.root / "Fallout 2 Reimagined.exe.old").exists())
 
     def test_same_game_version_still_refills_a_stale_launcher(self):
@@ -261,7 +301,10 @@ class InstallTests(LauncherFixture):
         launcher = self.root / "Fallout 2 Reimagined.exe"
         launcher.write_bytes(LAUNCHER.read_bytes() + b"previous generation")
         (self.root / "other-mod.dat").write_bytes(b"keep")
-        snapshot = lambda: {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        sentinel = launcher.with_suffix(".exe.old")
+        sentinel.write_bytes(b"pre-existing file, not owned by this launcher")
+        snapshot = lambda: {p.relative_to(self.root): hashlib.sha256(p.read_bytes()).hexdigest()
+                            for p in self.root.rglob("*") if p.is_file()}
         before = snapshot()
         with read_lock(launcher):
             code, output = self.run_launcher()
@@ -271,28 +314,21 @@ class InstallTests(LauncherFixture):
         self.assertEqual(code, 0, output)
         self.assertEqual(launcher.read_bytes(), self.payload["fallout2-ce-3d-launcher.exe"])
         self.assertEqual((self.root / "other-mod.dat").read_bytes(), b"keep")
+        self.assertEqual(hashlib.sha256(sentinel.read_bytes()).hexdigest(), before[sentinel.relative_to(self.root)])
 
     def test_two_live_launcher_images_can_be_replaced(self):
         launcher = self.root / "Fallout 2 Reimagined.exe"
         previous = LAUNCHER.read_bytes() + b"previous generation"
         launcher.write_bytes(previous)
-        self.server.image_ready = threading.Event()
-        self.server.release_image = threading.Event()
         # Keeps a second copy of the installed image mapped while its worker
         # runs, like the GUI does, but never creates a window.
-        with subprocess.Popen([str(launcher), "--check-release", "--game-root", str(self.root),
-                "--update-url", self.url + "/held", "--mirror-url", self.url + "/held"],
-                creationflags=subprocess.CREATE_NO_WINDOW, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as holder:
-            try:
-                self.assertTrue(self.server.image_ready.wait(8))
-                code, output = self.run_launcher(launcher=launcher)
-                self.assertEqual(code, 0, output)
-                self.assertIsNone(holder.poll(), "old image must still be running during replacement")
-                self.assertEqual(launcher.read_bytes(), self.payload["fallout2-ce-3d-launcher.exe"])
-                self.assertEqual(launcher.with_suffix(".exe.old").read_bytes(), previous)
-            finally:
-                self.server.release_image.set()
-                holder.terminate()
+        with self.held_image(launcher) as holder:
+            code, output = self.run_launcher(launcher=launcher)
+            self.assertEqual(code, 0, output)
+            self.assertIsNone(holder.poll(), "old image must still be running during replacement")
+            self.assertEqual(launcher.read_bytes(), self.payload["fallout2-ce-3d-launcher.exe"])
+            self.assertEqual([hash_during_removal(p) for p in self.tombstones()], [hashlib.sha256(previous).hexdigest()])
+        self.wait_for_tombstones(set())
 
     @unittest.skipUnless(PUBLISHED_BOOTSTRAP, "exact published bootstrap fixture not provided")
     def test_published_launcher_can_move_to_fixed_package_in_console_mode(self):
@@ -308,7 +344,7 @@ class InstallTests(LauncherFixture):
         self.assertEqual(code, 0, output)
         self.assertIn("matches the release: nothing to pull", output)
 
-    def test_uninstall_locked_orphan_is_reported_then_removed_on_retry(self):
+    def test_uninstall_leaves_unidentified_legacy_orphan_untouched(self):
         orphan = self.root / "Fallout 2 Reimagined.exe.old"
         orphan.write_bytes(LAUNCHER.read_bytes())
         keep = self.root / "other.old"
@@ -316,13 +352,37 @@ class InstallTests(LauncherFixture):
         env = dict(os.environ, APPDATA=str(self.base / "appdata"))
         with read_lock(orphan):
             code, output = self.run_launcher(extra_args=("--uninstall",), env=env)
-        self.assertNotEqual(code, 0, output)
-        self.assertIn(orphan.name, output)
+        self.assertEqual(code, 0, output)
         self.assertTrue(orphan.is_file())
         code, output = self.run_launcher(extra_args=("--uninstall",), env=env)
         self.assertEqual(code, 0, output)
-        self.assertFalse(orphan.exists())
+        self.assertEqual(orphan.read_bytes(), LAUNCHER.read_bytes())
         self.assertEqual(keep.read_bytes(), b"not a launcher artifact")
+
+    def test_reinstall_and_uninstall_while_first_cleanup_is_pending(self):
+        launcher = self.root / "Fallout 2 Reimagined.exe"
+        launcher.write_bytes(LAUNCHER.read_bytes() + b"old generation")
+        previous = hashlib.sha256(launcher.read_bytes()).hexdigest()
+        env = dict(os.environ, APPDATA=str(self.base / "appdata"))
+        with self.held_image(launcher) as first:
+            code, output = self.run_launcher(extra_args=("--uninstall",), env=env)
+            self.assertEqual(code, 0, output)
+            self.assertIn("launcher removal is pending", output)
+            self.assertEqual([hash_during_removal(p) for p in self.tombstones()], [previous])
+            code, output = self.run_launcher()
+            self.assertEqual(code, 0, output)
+            replacement = hashlib.sha256(launcher.read_bytes()).hexdigest()
+            self.assertEqual(replacement, hashlib.sha256(self.payload["fallout2-ce-3d-launcher.exe"]).hexdigest())
+            with self.held_image(launcher):
+                code, output = self.run_launcher(extra_args=("--uninstall",), env=env)
+                self.assertEqual(code, 0, output)
+                artifacts = {hash_during_removal(p): p for p in self.tombstones()}
+                self.assertEqual(set(artifacts), {previous, replacement})
+                first.terminate()
+                first.wait(timeout=10)
+                self.wait_for_tombstones({artifacts[replacement]})
+                self.assertEqual(hash_during_removal(artifacts[replacement]), replacement)
+        self.wait_for_tombstones(set())
 
     def test_uninstall_removes_only_mod_files_settings_and_delayed_launcher(self):
         launcher = self.root / "Fallout 2 Reimagined.exe"
@@ -361,9 +421,7 @@ class InstallTests(LauncherFixture):
 
         code, output = self.run_launcher(launcher=launcher, extra_args=("--uninstall",), env=env)
         self.assertEqual(code, 0, output)
-        deadline = __import__("time").monotonic() + 10
-        while (self.root / "Fallout 2 Reimagined.exe.old").exists() and __import__("time").monotonic() < deadline:
-            __import__("time").sleep(0.1)
+        self.wait_for_tombstones(set())
         self.assertFalse(launcher.exists())
         self.assertFalse((self.root / "Fallout 2 Reimagined.exe.old").exists())
         for name in ("fallout2-ce.exe", "ce.dat", "scene-exporter.exe", "version.txt", "mod-cache", "f2reimagined-backups"):
