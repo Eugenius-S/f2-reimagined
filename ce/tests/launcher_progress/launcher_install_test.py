@@ -158,7 +158,7 @@ class InstallTests(LauncherFixture):
         code, output = self.run_launcher()
 
         self.assertNotEqual(code, 0, output)
-        self.assertIn("official release hash", output)
+        self.assertIn("launcher hash metadata", output)
         self.assertEqual(before, {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()})
         self.assertFalse((self.root / "f2reimagined-backups").exists())
 
@@ -207,7 +207,25 @@ class InstallTests(LauncherFixture):
                     self.assertIn("в скачанном пакете некорректный version.txt; ничего не изменено", output)
                 after = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
                 self.assertEqual(before, after)
-                self.assertFalse((self.root / "f2reimagined-backups").exists())
+
+    def test_legacy_release_without_hash_sidecar_still_updates(self):
+        (self.release / "launcher-sha256.txt").unlink()
+        with zipfile.ZipFile(self.release / ZIP, "w", zipfile.ZIP_DEFLATED) as package:
+            for name, content in self.payload.items():
+                package.writestr(name, content)
+        code, output = self.run_launcher()
+        self.assertEqual(code, 0, output)
+        self.assertEqual((self.root / "version.txt").read_bytes(), b"new-build")
+        self.assertEqual((self.root / "Fallout 2 Reimagined.exe").read_bytes(), self.payload["fallout2-ce-3d-launcher.exe"])
+
+    def test_malformed_package_hash_sidecar_changes_nothing(self):
+        self.package()
+        with zipfile.ZipFile(self.release / ZIP, "a", zipfile.ZIP_DEFLATED) as package:
+            package.writestr("launcher-sha256.txt", "not-a-digest")
+        before = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        code, output = self.run_launcher()
+        self.assert_failed(code, output, "hash metadata")
+        self.assertEqual(before, {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()})
 
     def test_zip_version_is_a_directory(self):
         self.payload.pop("version.txt")

@@ -2066,13 +2066,20 @@ int runConsole(Options options)
             die("the downloaded package has an invalid version.txt; nothing was changed");
         }
         versionFile.close();
-        if (!remoteLauncherHash.empty()) {
-            std::string packagedLauncherHash;
-            if (!sha256File(stage / kZipLauncher, &packagedLauncherHash)
-                || packagedLauncherHash != remoteLauncherHash) {
+        std::string packageLauncherHash;
+        fs::path packageHashPath = stage / kLauncherHashTxt;
+        if (fs::exists(packageHashPath, error)) {
+            std::ifstream hashFile(packageHashPath, std::ios::binary);
+            std::string packagedHash((std::istreambuf_iterator<char>(hashFile)), std::istreambuf_iterator<char>());
+            packagedHash = trim(packagedHash);
+            if (!validSha256(packagedHash) || !sha256File(stage / kZipLauncher, &packageLauncherHash)
+                || packageLauncherHash != packagedHash || (!remoteLauncherHash.empty() && remoteLauncherHash != packagedHash)) {
                 fs::remove_all(work, error);
-                die("the downloaded launcher does not match the official release hash; nothing was changed");
+                die("the downloaded launcher hash metadata is invalid or does not match the official release; nothing was changed");
             }
+        } else if (!remoteLauncherHash.empty()) {
+            fs::remove_all(work, error);
+            die("the downloaded package is missing its official launcher hash metadata; nothing was changed");
         }
 
         std::string keptBackup;

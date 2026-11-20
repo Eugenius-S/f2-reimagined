@@ -1191,7 +1191,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         // After a removal the launcher may be gone: nothing is left to run the release check or an install.
         const bool launcherLeft = fs::exists(exePath());
         EnableWindow(g_install, launcherLeft && GetWindowTextLengthW(g_root) != 0);
-        if ((result == 0 || g_translationFailed) && launcherLeft) checkReleaseAsync();
+        if (!g_closeAfterUninstall && (result == 0 || g_translationFailed) && launcherLeft) checkReleaseAsync();
         if (g_closeAfterUninstall) PostMessageW(window, WM_CLOSE, 0, 0);
         return 0;
     }
