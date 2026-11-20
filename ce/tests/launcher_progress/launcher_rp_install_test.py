@@ -99,6 +99,9 @@ class RpInstallTests(LauncherFixture):
     def setUp(self):
         super().setUp()
         (self.root / "version.txt").write_bytes(b"new-build")
+        # This suite exercises only RP changes. The base installation is
+        # current, including its launcher, so it does not need a refill.
+        (self.root / "Fallout 2 Reimagined.exe").write_bytes(self.payload["fallout2-ce-3d-launcher.exe"])
         art = self.root / ART
         art.parent.mkdir(parents=True, exist_ok=True)
         art.write_bytes(b"art")
@@ -176,7 +179,7 @@ class RpInstallTests(LauncherFixture):
 
     def test_fresh_install_then_full_uninstall(self):
         import shutil
-        for name in ("fallout2-ce.exe", "ce.dat", "scene-exporter.exe", "version.txt"):
+        for name in ("fallout2-ce.exe", "ce.dat", "scene-exporter.exe", "version.txt", "Fallout 2 Reimagined.exe"):
             (self.root / name).unlink()
         shutil.rmtree(self.root / "user-assets")
         before = snapshot(self.root)
