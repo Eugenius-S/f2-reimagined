@@ -21,7 +21,9 @@ function Reset-Remote {
         marker = $null; latest = 'legacy'; dist = 'legacy'; release = $true
         fail = ''; malformedTree = $false; malformedTreeEntry = $false; malformedBlob = $false
         legacyAsset = $true; writes = 0; calls = @(); rpuFallback = $false
-        stagedDist = $null; stagedMarker = $null; committedDist = $null; committedMarker = $null
+        stagedDist = $null; stagedMarker = $null; stagedLauncherHash = $null
+        committedDist = $null; committedMarker = $null; committedLauncherHash = $null
+        latestLauncherHash = $null; distLauncherHash = $null
     }
 }
 function gh {
@@ -85,8 +87,16 @@ function gh {
             try {
                 $reader = New-Object IO.StreamReader($zip.GetEntry('version.txt').Open())
                 try { $global:publishFixture.latest = $reader.ReadToEnd() } finally { $reader.Dispose() }
+                $hashEntry = $zip.GetEntry('launcher-sha256.txt')
+                Check ($null -ne $hashEntry) 'ZIP does not contain the launcher identity'
+                $reader = New-Object IO.StreamReader($hashEntry.Open())
+                try { $zipLauncherHash = $reader.ReadToEnd() } finally { $reader.Dispose() }
             } finally { $zip.Dispose() }
             Check ($global:publishFixture.latest -eq [IO.File]::ReadAllText((Join-Path (Get-Location) 'staging/version.txt'))) 'ZIP and release version differ'
+            Check ($args -contains 'staging/launcher-sha256.txt') 'Release does not upload the launcher identity'
+            $expectedLauncherHash = (Get-FileHash -LiteralPath (Join-Path (Get-Location) 'staging/fallout2-ce-3d-launcher.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+            Check ($zipLauncherHash -eq $expectedLauncherHash) 'ZIP launcher identity differs from its executable'
+            $global:publishFixture.latestLauncherHash = [IO.File]::ReadAllText((Join-Path (Get-Location) 'staging/launcher-sha256.txt'))
         }
         'delete-asset' { $global:publishFixture.legacyAsset = $false }
         'edit' { }
@@ -102,15 +112,18 @@ function git {
     if ($args[0] -eq 'add') {
         $global:publishFixture.stagedDist = [IO.File]::ReadAllText((Join-Path (Get-Location) 'version.txt'))
         $global:publishFixture.stagedMarker = [IO.File]::ReadAllText((Join-Path (Get-Location) 'publish-run-number.txt'))
+        $global:publishFixture.stagedLauncherHash = [IO.File]::ReadAllText((Join-Path (Get-Location) 'launcher-sha256.txt'))
     }
     if ($args[0] -eq 'commit') {
         $global:publishFixture.committedDist = $global:publishFixture.stagedDist
         $global:publishFixture.committedMarker = $global:publishFixture.stagedMarker
+        $global:publishFixture.committedLauncherHash = $global:publishFixture.stagedLauncherHash
     }
     if ($args[0] -eq 'push') {
         # A successful push atomically exposes both dist payload and watermark.
         $global:publishFixture.dist = $global:publishFixture.committedDist
         $global:publishFixture.marker = $global:publishFixture.committedMarker
+        $global:publishFixture.distLauncherHash = $global:publishFixture.committedLauncherHash
         $global:publishFixture.writes++
     }
 }
@@ -138,6 +151,7 @@ function Check-Published([string]$number, [string]$commit) {
     Check ($global:publishFixture.marker -eq $number) 'Wrong persisted watermark'
     Check ($global:publishFixture.latest -eq $commit) 'Wrong latest version'
     Check ($global:publishFixture.dist -eq $commit) 'Wrong dist version'
+    Check ($global:publishFixture.latestLauncherHash -eq $global:publishFixture.distLauncherHash) 'Release and mirror launcher identities differ'
 }
 
 try {

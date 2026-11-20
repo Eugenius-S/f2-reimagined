@@ -7,10 +7,42 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <cwctype>
 #include <string>
 #include <vector>
 
 namespace launcher_uninstall {
+
+inline std::wstring normalizedPath(const std::filesystem::path& path)
+{
+    std::wstring value = path.lexically_normal().wstring();
+    std::transform(value.begin(), value.end(), value.begin(), [](wchar_t ch) { return static_cast<wchar_t>(std::towlower(ch)); });
+    return value;
+}
+
+inline bool samePath(const std::filesystem::path& left, const std::filesystem::path& right)
+{
+    return !left.empty() && !right.empty() && normalizedPath(left) == normalizedPath(right);
+}
+
+inline std::filesystem::path settingsDirectory(const std::filesystem::path& roamingAppData)
+{
+    return roamingAppData / "Fallout2Reimagined";
+}
+
+inline bool removeLauncherSettings(const std::filesystem::path& roamingAppData, bool* removed,
+    std::error_code* error)
+{
+    if (removed != nullptr) *removed = false;
+    error->clear();
+    std::filesystem::path directory = settingsDirectory(roamingAppData);
+    if (std::filesystem::remove(directory / "launcher.ini", *error) && removed != nullptr) *removed = true;
+    if (*error) return false;
+    error->clear();
+    std::filesystem::remove(directory, *error); // Empty only; preserve any unrelated settings.
+    if (*error == std::errc::directory_not_empty) error->clear();
+    return !*error;
+}
 
 // Files the installer put in the game folder, besides the launcher itself
 // (that one goes last, it may be the running program).

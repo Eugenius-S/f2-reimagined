@@ -82,10 +82,10 @@ class LauncherFixture(unittest.TestCase):
                 package.writestr(name, content)
             package.writestr("launcher-sha256.txt", launcher_hash)
 
-    def run_launcher(self, language="en", launcher=LAUNCHER):
+    def run_launcher(self, language="en", launcher=LAUNCHER, extra_args=(), env=None):
         result = subprocess.run([str(launcher), "--game-root", str(self.root),
             "--update-url", self.url, "--mirror-url", self.url, "--ui-language", language,
-            "--no-start"], capture_output=True, timeout=90)
+            "--no-start", *extra_args], capture_output=True, timeout=90, env=env)
         output = result.stdout.decode("utf-8", errors="replace") + result.stderr.decode("utf-8", errors="replace")
         print(f"\n{self.id()}: exit {result.returncode}\n{output}", flush=True)
         return result.returncode, output
@@ -138,6 +138,29 @@ class InstallTests(LauncherFixture):
         self.assertEqual(code, 0, output)
         self.assertIn("installed build: new-build", output)
         self.assertEqual(launcher.read_bytes(), self.published_launcher)
+
+    def test_release_check_reports_remote_and_installed_launcher_identity(self):
+        launcher = self.root / "Fallout 2 Reimagined.exe"
+        launcher.write_bytes(LAUNCHER.read_bytes())
+        expected = hashlib.sha256(self.payload["fallout2-ce-3d-launcher.exe"]).hexdigest()
+        result = subprocess.run([str(LAUNCHER), "--check-release", "--game-root", str(self.root),
+            "--update-url", self.url, "--mirror-url", self.url, "--release-info-url", ""],
+            capture_output=True, timeout=30)
+        output = result.stdout.decode("utf-8", errors="replace") + result.stderr.decode("utf-8", errors="replace")
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn(f"RELEASE_LAUNCHER_SHA256:{expected}", output)
+        self.assertIn(f"RELEASE_INSTALLED_LAUNCHER_SHA256:{hashlib.sha256(launcher.read_bytes()).hexdigest()}", output)
+
+    def test_launcher_hash_mismatch_changes_nothing(self):
+        (self.release / "launcher-sha256.txt").write_text("0" * 64, encoding="ascii")
+        before = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+
+        code, output = self.run_launcher()
+
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("official release hash", output)
+        self.assertEqual(before, {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()})
+        self.assertFalse((self.root / "f2reimagined-backups").exists())
 
     def test_missing_launcher_asset_does_not_stamp_success(self):
         self.payload.pop("fallout2-ce-3d-launcher.exe", None)
@@ -205,6 +228,74 @@ class InstallTests(LauncherFixture):
         self.assertEqual((self.root / REQUIRED[0]).read_bytes(), b"new-build")
         self.assertEqual((self.root / "version.txt").read_bytes(), b"new-build")
         self.assertEqual((self.root / "fallout2.cfg").read_bytes(), b"old-build")
+
+    def test_uninstall_removes_only_mod_files_settings_and_delayed_launcher(self):
+        launcher = self.root / "Fallout 2 Reimagined.exe"
+        launcher.write_bytes(LAUNCHER.read_bytes())
+        originals = {
+            "master.dat": b"original master",
+            "critter.dat": b"original critters",
+            "fallout2.exe": b"original executable",
+            "fallout2.cfg": b"[system]\nlanguage=english\n",
+        }
+        for name, content in originals.items():
+            (self.root / name).write_bytes(content)
+        save = self.root / "data" / "savegame" / "slot01.sav"
+        save.parent.mkdir(parents=True)
+        save.write_bytes(b"player save")
+        (self.root / "mods").mkdir()
+        (self.root / "mods" / "other-mod.dat").write_bytes(b"another mod")
+        (self.root / "mod-cache").mkdir()
+        (self.root / "mod-cache" / "scene.bin").write_bytes(b"mod cache")
+        (self.root / "f2reimagined-backups" / "old-build").mkdir(parents=True)
+        (self.root / "f2reimagined-backups" / "old-build" / "version.txt").write_bytes(b"old")
+        art = self.root / ART
+        art.parent.mkdir(parents=True)
+        art.write_bytes(b"mod menu art")
+        custom_art = self.root / "user-assets" / "player-custom" / "keep.png"
+        custom_art.parent.mkdir(parents=True)
+        custom_art.write_bytes(b"player art")
+        appdata = self.base / "appdata"
+        settings = appdata / "Fallout2Reimagined" / "launcher.ini"
+        settings.parent.mkdir(parents=True)
+        settings.write_text(f"[launcher]\nauto_updates=1\ngame_root={self.root}\n", encoding="utf-8")
+        keep_settings = settings.with_name("other.ini")
+        keep_settings.write_text("keep", encoding="utf-8")
+        env = os.environ.copy()
+        env["APPDATA"] = str(appdata)
+
+        code, output = self.run_launcher(launcher=launcher, extra_args=("--uninstall",), env=env)
+        self.assertEqual(code, 0, output)
+        deadline = __import__("time").monotonic() + 10
+        while (self.root / "Fallout 2 Reimagined.exe.old").exists() and __import__("time").monotonic() < deadline:
+            __import__("time").sleep(0.1)
+        self.assertFalse(launcher.exists())
+        self.assertFalse((self.root / "Fallout 2 Reimagined.exe.old").exists())
+        for name in ("fallout2-ce.exe", "ce.dat", "scene-exporter.exe", "version.txt", "mod-cache", "f2reimagined-backups"):
+            self.assertFalse((self.root / name).exists(), name)
+        self.assertFalse((self.root / ART).exists())
+        self.assertFalse(settings.exists())
+        self.assertTrue(keep_settings.exists())
+        self.assertEqual(save.read_bytes(), b"player save")
+        self.assertEqual((self.root / "mods" / "other-mod.dat").read_bytes(), b"another mod")
+        self.assertEqual(custom_art.read_bytes(), b"player art")
+        for name, content in originals.items():
+            self.assertEqual((self.root / name).read_bytes(), content, name)
+
+    def test_uninstall_root_a_preserves_settings_configured_for_root_b(self):
+        launcher = self.root / "Fallout 2 Reimagined.exe"
+        launcher.write_bytes(LAUNCHER.read_bytes())
+        root_b = self.base / "game-b"
+        root_b.mkdir()
+        settings = self.base / "appdata" / "Fallout2Reimagined" / "launcher.ini"
+        settings.parent.mkdir(parents=True)
+        settings.write_text(f"[launcher]\ngame_root={root_b}\nauto_updates=1\n", encoding="utf-8")
+        env = os.environ.copy()
+        env["APPDATA"] = str(settings.parents[1])
+        code, output = self.run_launcher(launcher=launcher, extra_args=("--uninstall",), env=env)
+        self.assertEqual(code, 0, output)
+        self.assertTrue(settings.exists())
+        self.assertIn(str(root_b), settings.read_text(encoding="utf-8"))
 
     def test_corrupt_zip_tries_fallback(self):
         (self.release / ZIP).write_bytes(b"this is not a zip")

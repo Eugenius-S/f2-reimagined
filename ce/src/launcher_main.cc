@@ -55,6 +55,7 @@ constexpr const char* kRpuLatestUrl =
 constexpr const char* kGameExe = "fallout2-ce.exe";
 constexpr const char* kCfg = "fallout2.cfg";
 constexpr const char* kVersionTxt = "version.txt";
+constexpr const char* kLauncherHashTxt = "launcher-sha256.txt";
 constexpr const char* kExporterExe = "scene-exporter.exe";
 // The launcher as the player sees it in the game folder; the release zip carries it under kZipLauncher.
 constexpr const char* kRootLauncher = "Fallout 2 Reimagined.exe";
@@ -1618,6 +1619,30 @@ bool removeRussianTranslation(const fs::path& root)
 // Gives the game back as it was before the mod.  Saves (data/), the original game files
 // and fallout2.cfg are never touched.  The folder f2reimagined-backups only holds older
 // mod builds, so it goes with the mod.
+bool removeLauncherSettings(const fs::path& root)
+{
+    wchar_t appData[32768] = {};
+    DWORD size = GetEnvironmentVariableW(L"APPDATA", appData, static_cast<DWORD>(std::size(appData)));
+    if (size == 0 || size >= std::size(appData)) return true;
+    const fs::path settings = launcher_uninstall::settingsDirectory(fs::path(appData)) / "launcher.ini";
+    wchar_t configuredRoot[32768] = {};
+    GetPrivateProfileStringW(L"launcher", L"game_root", L"", configuredRoot,
+        static_cast<DWORD>(std::size(configuredRoot)), settings.c_str());
+    if (configuredRoot[0] != L'\0' && !launcher_uninstall::samePath(root, fs::path(configuredRoot))) {
+        log("  preserving launcher settings because they point to a different game folder");
+        return true;
+    }
+    bool removed = false;
+    std::error_code error;
+    if (!launcher_uninstall::removeLauncherSettings(fs::path(appData), &removed, &error)) {
+        logf("  cannot remove launcher settings at %s (%s)",
+            wideToUtf8(launcher_uninstall::settingsDirectory(fs::path(appData)).wstring()).c_str(), error.message().c_str());
+        return false;
+    }
+    if (removed) log("  launcher settings removed");
+    return true;
+}
+
 bool uninstallMod(const fs::path& root)
 {
     if (!removeRestorationProject(root)) return false;
@@ -1672,11 +1697,15 @@ bool uninstallMod(const fs::path& root)
                         nullptr, root.c_str(), &startup, &process)) {
                     CloseHandle(process.hThread);
                     CloseHandle(process.hProcess);
+                    logf("  %s: scheduled for removal when the launcher closes", kRootLauncher);
+                } else {
+                    logf("  cannot remove the running launcher after it closes (%lu)", GetLastError());
+                    ok = false;
                 }
-                logf("  %s: removed (the last file goes when this window closes)", kRootLauncher);
             }
         }
     }
+    if (ok && !removeLauncherSettings(root)) ok = false;
     log(ok ? "the mod is removed; your saves and the original Fallout 2 files were not touched"
            : "the mod is only partly removed; see the lines above");
     return ok;
@@ -1744,14 +1773,34 @@ std::string shortNotes(const std::string& body)
     return result;
 }
 
+bool validSha256(const std::string& value)
+{
+    return value.size() == 64 && std::all_of(value.begin(), value.end(), [](unsigned char ch) {
+        return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
+    });
+}
+
+bool fetchLauncherHash(const std::string& updateBase, std::string* hash)
+{
+    std::string body;
+    std::string error;
+    hash->clear();
+    if (!fetchRoutes(releaseRoutes(updateBase, kLauncherHashTxt), &body, nullptr, &error)) return false;
+    body = trim(body);
+    if (!validSha256(body)) return false;
+    *hash = body;
+    return true;
+}
+
 bool fetchReleaseInfo(const std::string& updateBase, const std::string& releaseInfoUrl,
-    std::string* version, std::string* notes, std::string* routeError)
+    std::string* version, std::string* notes, std::string* launcherHash, std::string* routeError)
 {
     const char* error = nullptr;
     std::string versionBody;
     if (!fetchRoutes(releaseRoutes(updateBase, kVersionTxt), &versionBody, nullptr, routeError)) return false;
     *version = trim(versionBody);
     notes->clear();
+    fetchLauncherHash(updateBase, launcherHash);
     if (!releaseInfoUrl.empty()) {
         std::string response;
         if (httpGet(releaseInfoUrl, &response, &error)) {
@@ -1876,14 +1925,20 @@ int runConsole(Options options)
     if (options.checkRelease) {
         std::string version;
         std::string notes;
+        std::string launcherHash;
         std::string routeError;
-        if (!fetchReleaseInfo(options.updateBase, options.releaseInfoUrl, &version, &notes, &routeError)) {
+        if (!fetchReleaseInfo(options.updateBase, options.releaseInfoUrl, &version, &notes, &launcherHash, &routeError)) {
             logf("RELEASE_ERROR:%s", routeError.c_str());
             log("release check failed: GitHub does not answer");
             return 1;
         }
         logf("RELEASE_VERSION:%s", version.c_str());
         logf("RELEASE_NOTES:%s", notes.c_str());
+        logf("RELEASE_LAUNCHER_SHA256:%s", launcherHash.c_str());
+        fs::path checkRoot = options.gameRoot.empty() ? fs::path(utf8ToWide(ownGameRoot())) : fs::path(utf8ToWide(options.gameRoot));
+        std::string installedLauncherHash;
+        if (!checkRoot.empty()) sha256File(checkRoot / kRootLauncher, &installedLauncherHash);
+        logf("RELEASE_INSTALLED_LAUNCHER_SHA256:%s", installedLauncherHash.c_str());
         return 0;
     }
 
@@ -1946,6 +2001,12 @@ int runConsole(Options options)
         remoteVersion = trim(remoteVersion);
         logf("release build: %s", remoteVersion.c_str());
     }
+    std::string remoteLauncherHash;
+    fetchLauncherHash(options.updateBase, &remoteLauncherHash);
+    std::string installedLauncherHash;
+    bool installedLauncherReadable = sha256File(root / kRootLauncher, &installedLauncherHash);
+    bool launcherNeedsUpdate = !remoteLauncherHash.empty()
+        && (!installedLauncherReadable || installedLauncherHash != remoteLauncherHash);
 
     if (remoteVersion.empty()) {
         if (installedVersion.empty() && !installedGamePresent) {
@@ -1960,7 +2021,7 @@ int runConsole(Options options)
     // The picture itself, not its folder: an install over an older build left the folders empty.
     std::error_code artError;
     bool wideArtMissing = fs::file_size(root / launcher_uninstall::kWideMenuArt, artError) == 0 || artError;
-    if (!remoteVersion.empty() && (remoteVersion != installedVersion || wideArtMissing)) {
+    if (!remoteVersion.empty() && (remoteVersion != installedVersion || wideArtMissing || launcherNeedsUpdate)) {
         // --- download and unpack ---
         if (installedVersion.empty()) logf("installing: none -> %s", remoteVersion.c_str());
         else logf("updating: %s -> %s", installedVersion.c_str(), remoteVersion.c_str());
@@ -1985,7 +2046,7 @@ int runConsole(Options options)
             fs::remove_all(work, error);
             die("the downloaded file could not be unpacked; try the install again");
         }
-        for (const char* name : { kGameExe, "ce.dat", kExporterExe, kVersionTxt }) {
+        for (const char* name : { kGameExe, "ce.dat", kExporterExe, kVersionTxt, kZipLauncher }) {
             if (!fs::is_regular_file(stage / name, error)) {
                 fs::remove_all(work, error);
                 die("the downloaded package is damaged (required file %s is missing); nothing was changed", name);
@@ -2005,6 +2066,14 @@ int runConsole(Options options)
             die("the downloaded package has an invalid version.txt; nothing was changed");
         }
         versionFile.close();
+        if (!remoteLauncherHash.empty()) {
+            std::string packagedLauncherHash;
+            if (!sha256File(stage / kZipLauncher, &packagedLauncherHash)
+                || packagedLauncherHash != remoteLauncherHash) {
+                fs::remove_all(work, error);
+                die("the downloaded launcher does not match the official release hash; nothing was changed");
+            }
+        }
 
         std::string keptBackup;
         // A refill of the wide art at the same version is no update: the older build stays the one to roll back to.
