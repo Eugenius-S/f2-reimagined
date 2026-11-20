@@ -4,6 +4,7 @@ import contextlib
 import ctypes
 from ctypes import wintypes
 import functools
+import hashlib
 import http.server
 import os
 from pathlib import Path
@@ -55,6 +56,7 @@ class LauncherFixture(unittest.TestCase):
         for name in ("master.dat", "critter.dat", *REQUIRED, "version.txt", "fallout2.cfg"):
             (self.root / name).write_bytes(b"old-build")
         self.payload = {name: b"new-build" for name in REQUIRED}
+        self.payload["fallout2-ce-3d-launcher.exe"] = LAUNCHER.read_bytes()
         # A tiny existing console test stands in for the exporter; the game never runs.
         self.payload["scene-exporter.exe"] = LAUNCHER.with_name("launcher_routes_tests.exe").read_bytes()
         self.payload.update({"version.txt": b"new-build", ART: b"art", "fallout2.cfg": b"default-config"})
@@ -72,12 +74,16 @@ class LauncherFixture(unittest.TestCase):
         self.url = f"http://127.0.0.1:{self.server.server_port}"
 
     def package(self):
+        launcher = self.payload.get("fallout2-ce-3d-launcher.exe", LAUNCHER.read_bytes())
+        launcher_hash = hashlib.sha256(launcher).hexdigest()
+        (self.release / "launcher-sha256.txt").write_text(launcher_hash, encoding="ascii")
         with zipfile.ZipFile(self.release / ZIP, "w", zipfile.ZIP_DEFLATED) as package:
             for name, content in self.payload.items():
                 package.writestr(name, content)
+            package.writestr("launcher-sha256.txt", launcher_hash)
 
-    def run_launcher(self, language="en"):
-        result = subprocess.run([str(LAUNCHER), "--game-root", str(self.root),
+    def run_launcher(self, language="en", launcher=LAUNCHER):
+        result = subprocess.run([str(launcher), "--game-root", str(self.root),
             "--update-url", self.url, "--mirror-url", self.url, "--ui-language", language,
             "--no-start"], capture_output=True, timeout=90)
         output = result.stdout.decode("utf-8", errors="replace") + result.stderr.decode("utf-8", errors="replace")
@@ -92,6 +98,55 @@ class InstallTests(LauncherFixture):
         self.assertIn(filename, output)
         self.assertEqual((self.root / "version.txt").read_bytes(), b"old-build")
         self.assertNotIn("done (--no-start)", output)
+
+    def test_launcher_can_update_itself_and_start_the_installed_version(self):
+        launcher = self.root / "Fallout 2 Reimagined.exe"
+        launcher.write_bytes(LAUNCHER.read_bytes())
+        self.published_launcher = LAUNCHER.read_bytes() + b"F2R launcher release identity: new-build"
+        self.payload["fallout2-ce-3d-launcher.exe"] = self.published_launcher
+        self.package()
+
+        code, output = self.run_launcher(launcher=launcher)
+        self.assertEqual(code, 0, output)
+        self.assertEqual((self.root / "version.txt").read_bytes(), b"new-build")
+        self.assertTrue(launcher.is_file())
+        self.assertEqual(launcher.read_bytes(), self.published_launcher)
+
+        code, output = self.run_launcher(launcher=launcher)
+        self.assertEqual(code, 0, output)
+        self.assertIn("installed build: new-build", output)
+        self.assertIn("matches the release", output)
+        self.assertFalse((self.root / "Fallout 2 Reimagined.exe.old").exists())
+
+    def test_same_game_version_still_refills_a_stale_launcher(self):
+        launcher = self.root / "Fallout 2 Reimagined.exe"
+        launcher.write_bytes(LAUNCHER.read_bytes())
+        (self.root / "version.txt").write_bytes(b"new-build")
+        art = self.root / ART
+        art.parent.mkdir(parents=True, exist_ok=True)
+        art.write_bytes(b"existing art")
+        self.published_launcher = LAUNCHER.read_bytes() + b"F2R launcher release identity: new-build"
+        self.payload["version.txt"] = b"new-build"
+        self.payload["fallout2-ce-3d-launcher.exe"] = self.published_launcher
+        self.package()
+
+        code, output = self.run_launcher()
+        self.assertEqual(code, 0, output)
+        self.assertEqual(launcher.read_bytes(), self.published_launcher)
+
+        code, output = self.run_launcher(launcher=launcher)
+        self.assertEqual(code, 0, output)
+        self.assertIn("installed build: new-build", output)
+        self.assertEqual(launcher.read_bytes(), self.published_launcher)
+
+    def test_missing_launcher_asset_does_not_stamp_success(self):
+        self.payload.pop("fallout2-ce-3d-launcher.exe", None)
+        self.package()
+
+        code, output = self.run_launcher()
+
+        self.assert_failed(code, output, "fallout2-ce-3d-launcher.exe")
+        self.assertFalse((self.root / "f2reimagined-backups").exists())
 
     def test_zip_version_wins_over_remote_version(self):
         (self.release / "version.txt").write_text("remote-build-A", encoding="ascii")
