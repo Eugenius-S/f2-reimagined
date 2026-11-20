@@ -27,6 +27,13 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *_args):
         pass
 
+    def do_GET(self):
+        if self.path == "/held/version.txt":
+            self.server.image_ready.set()
+            self.server.release_image.wait(30)
+            self.path = "/version.txt"
+        super().do_GET()
+
 
 @contextlib.contextmanager
 def read_lock(path):
@@ -246,6 +253,59 @@ class InstallTests(LauncherFixture):
         self.assertEqual((self.root / REQUIRED[0]).read_bytes(), b"new-build")
         self.assertEqual((self.root / "version.txt").read_bytes(), b"new-build")
         self.assertEqual((self.root / "fallout2.cfg").read_bytes(), b"old-build")
+
+    def test_locked_launcher_preserves_build_then_updates_on_retry(self):
+        launcher = self.root / "Fallout 2 Reimagined.exe"
+        launcher.write_bytes(LAUNCHER.read_bytes() + b"previous generation")
+        (self.root / "other-mod.dat").write_bytes(b"keep")
+        snapshot = lambda: {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        before = snapshot()
+        with read_lock(launcher):
+            code, output = self.run_launcher()
+        self.assert_failed(code, output, launcher.name)
+        self.assertEqual(before, snapshot())
+        code, output = self.run_launcher()
+        self.assertEqual(code, 0, output)
+        self.assertEqual(launcher.read_bytes(), self.payload["fallout2-ce-3d-launcher.exe"])
+        self.assertEqual((self.root / "other-mod.dat").read_bytes(), b"keep")
+
+    def test_two_live_launcher_images_can_be_replaced(self):
+        launcher = self.root / "Fallout 2 Reimagined.exe"
+        previous = LAUNCHER.read_bytes() + b"previous generation"
+        launcher.write_bytes(previous)
+        self.server.image_ready = threading.Event()
+        self.server.release_image = threading.Event()
+        # Keeps a second copy of the installed image mapped while its worker
+        # runs, like the GUI does, but never creates a window.
+        with subprocess.Popen([str(launcher), "--check-release", "--game-root", str(self.root),
+                "--update-url", self.url + "/held", "--mirror-url", self.url + "/held"],
+                creationflags=subprocess.CREATE_NO_WINDOW, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as holder:
+            try:
+                self.assertTrue(self.server.image_ready.wait(8))
+                code, output = self.run_launcher(launcher=launcher)
+                self.assertEqual(code, 0, output)
+                self.assertIsNone(holder.poll(), "old image must still be running during replacement")
+                self.assertEqual(launcher.read_bytes(), self.payload["fallout2-ce-3d-launcher.exe"])
+                self.assertEqual(launcher.with_suffix(".exe.old").read_bytes(), previous)
+            finally:
+                self.server.release_image.set()
+                holder.terminate()
+
+    def test_uninstall_locked_orphan_is_reported_then_removed_on_retry(self):
+        orphan = self.root / "Fallout 2 Reimagined.exe.old"
+        orphan.write_bytes(LAUNCHER.read_bytes())
+        keep = self.root / "other.old"
+        keep.write_bytes(b"not a launcher artifact")
+        env = dict(os.environ, APPDATA=str(self.base / "appdata"))
+        with read_lock(orphan):
+            code, output = self.run_launcher(extra_args=("--uninstall",), env=env)
+        self.assertNotEqual(code, 0, output)
+        self.assertIn(orphan.name, output)
+        self.assertTrue(orphan.is_file())
+        code, output = self.run_launcher(extra_args=("--uninstall",), env=env)
+        self.assertEqual(code, 0, output)
+        self.assertFalse(orphan.exists())
+        self.assertEqual(keep.read_bytes(), b"not a launcher artifact")
 
     def test_uninstall_removes_only_mod_files_settings_and_delayed_launcher(self):
         launcher = self.root / "Fallout 2 Reimagined.exe"

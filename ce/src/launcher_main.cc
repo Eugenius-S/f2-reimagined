@@ -722,24 +722,55 @@ bool copyIfPresent(const fs::path& stage, const char* name, const fs::path& dest
     return true;
 }
 
-// A running exe cannot be overwritten but can be renamed: the old copy moves aside
-// (deleted on the next run) and the new one takes its name.
+// A loaded image can normally be renamed, but an outside handle that denies
+// sharing deletes blocks it. Refuse that case before mutating the game.
+bool canReplaceLauncher(const fs::path& target)
+{
+    HANDLE file = CreateFileW(target.c_str(), DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        const DWORD error = GetLastError();
+        if (error == ERROR_FILE_NOT_FOUND) return true;
+        logf("  %s: cannot replace (%lu); close other launcher instances and retry",
+            wideToUtf8(target.filename().wstring()).c_str(), error);
+        return false;
+    }
+    BY_HANDLE_FILE_INFORMATION info = {};
+    bool regular = GetFileInformationByHandle(file, &info)
+        && !(info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT));
+    CloseHandle(file);
+    if (!regular) logf("  %s: not an ordinary file; refusing to replace it", kRootLauncher);
+    return regular;
+}
+
+// Copy in full next to the destination before changing its name. Never copy
+// into the running image, including after a failed move-aside.
 bool copyLauncher(const fs::path& source, const fs::path& target)
 {
     std::error_code error;
     fs::path aside = target;
     aside += ".old";
-    fs::remove(aside, error);
-    bool moved = false;
-    if (fs::exists(target, error)) {
-        fs::rename(target, aside, error);
-        moved = !error;
+    wchar_t temporaryPath[MAX_PATH] = {};
+    if (GetTempFileNameW(target.parent_path().c_str(), L"f2r", 0, temporaryPath) == 0) {
+        logf("  %s: cannot stage update (%lu)", kRootLauncher, GetLastError());
+        return false;
     }
-    fs::copy_file(source, target, fs::copy_options::overwrite_existing, error);
-    if (error) logf("  %s: copy failed (%s)", kRootLauncher, error.message().c_str());
-    if (error && moved) {
+    const fs::path temporary = temporaryPath;
+    fs::copy_file(source, temporary, fs::copy_options::overwrite_existing, error);
+    bool moved = false;
+    if (!error && fs::exists(target, error)) {
+        if (!MoveFileExW(target.c_str(), aside.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            error = std::error_code(GetLastError(), std::system_category());
+        else moved = true;
+    }
+    if (!error && !MoveFileExW(temporary.c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH))
+        error = std::error_code(GetLastError(), std::system_category());
+    if (error) {
+        logf("  %s: staged replacement failed (%s)", kRootLauncher, error.message().c_str());
+        if (moved && !MoveFileExW(aside.c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH))
+            logf("  %s: could not restore the previous executable; it remains at %s.old", kRootLauncher, kRootLauncher);
         std::error_code ignored;
-        fs::rename(aside, target, ignored);
+        fs::remove(temporary, ignored);
     }
     return !error;
 }
@@ -1674,39 +1705,59 @@ bool uninstallMod(const fs::path& root)
 
     // The launcher itself, last: if it is the running program, it moves aside and a helper deletes it after we close.
     fs::path launcher = root / kRootLauncher;
-    if (fs::exists(launcher, error)) {
+    fs::path aside = launcher;
+    aside += ".old";
+    bool deferredLauncherRemoval = false;
+    error.clear();
+    fs::remove(aside, error);
+    if (error) {
+        logf("  cannot remove %s.old (%s); close all launcher instances and retry", kRootLauncher, error.message().c_str());
+        ok = false;
+    } else if (fs::exists(launcher, error)) {
         fs::remove(launcher, error);
         if (!error) {
             logf("  removed %s", kRootLauncher);
         } else {
-            fs::path aside = launcher;
-            aside += ".old";
-            fs::remove(aside, error);
             fs::rename(launcher, aside, error);
             if (error) {
                 logf("  cannot remove %s (%s)", kRootLauncher, error.message().c_str());
                 ok = false;
             } else {
                 // cmd repeats the delete until the running copy is closed; it stops by itself at the latest after ten minutes.
-                std::wstring command = L"cmd.exe /c \"for /l %i in (1,1,600) do @(del /f /q \"" + aside.wstring()
-                    + L"\" 2>nul & if not exist \"" + aside.wstring() + L"\" exit & ping -n 2 127.0.0.1 >nul)\"";
+                // Constant basename in the selected working directory. Never
+                // interpolate a user-selected path into a command shell.
+                std::wstring command = L"cmd.exe /d /c \"for /l %i in (1,1,600) do @(del /a:-d /f /q \"Fallout 2 Reimagined.exe.old\""
+                    L" 2>nul & if not exist \"Fallout 2 Reimagined.exe.old\" exit & ping -n 2 127.0.0.1 >nul)\"";
+                wchar_t system[MAX_PATH] = {};
+                UINT systemLength = GetSystemDirectoryW(system, MAX_PATH);
+                fs::path cmd = fs::path(system) / L"cmd.exe";
                 STARTUPINFOW startup = {};
                 startup.cb = sizeof(startup);
                 PROCESS_INFORMATION process = {};
-                if (CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW | DETACHED_PROCESS,
+                if (systemLength > 0 && systemLength < MAX_PATH
+                    && CreateProcessW(cmd.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW | DETACHED_PROCESS,
                         nullptr, root.c_str(), &startup, &process)) {
                     CloseHandle(process.hThread);
                     CloseHandle(process.hProcess);
                     logf("  %s: scheduled for removal when the launcher closes", kRootLauncher);
+                    deferredLauncherRemoval = true;
                 } else {
                     logf("  cannot remove the running launcher after it closes (%lu)", GetLastError());
+                    std::error_code restoreError;
+                    fs::rename(aside, launcher, restoreError);
+                    if (restoreError) logf("  the previous launcher remains at %s.old", kRootLauncher);
                     ok = false;
                 }
             }
         }
+    } else if (error) {
+        logf("  cannot find %s (%s)", kRootLauncher, error.message().c_str());
+        ok = false;
     }
     if (ok && !removeLauncherSettings(root)) ok = false;
-    log(ok ? "the mod is removed; your saves and the original Fallout 2 files were not touched"
+    log(ok ? (deferredLauncherRemoval
+            ? "mod files removed; launcher removal is pending until the launcher closes"
+            : "the mod is removed; your saves and the original Fallout 2 files were not touched")
            : "the mod is only partly removed; see the lines above");
     return ok;
 }
@@ -1961,11 +2012,16 @@ int runConsole(Options options)
         root = fs::canonical(root, error);
         if (error) { log("cannot resolve the game folder"); return 1; }
     }
-    {
+    if (!options.uninstall) {
         std::error_code ignored;
-        fs::path old = root / kRootLauncher;
-        old += ".old";
-        fs::remove(old, ignored);
+        const fs::path installedLauncher = root / kRootLauncher;
+        // A missing primary may mean an earlier replacement could not restore
+        // its move-aside. Keep that previous executable for recovery.
+        if (fs::is_regular_file(installedLauncher, ignored)) {
+            fs::path old = installedLauncher;
+            old += ".old";
+            fs::remove(old, ignored);
+        }
     }
 
     if (options.removeRp) return removeRestorationProject(root, true) ? 0 : 1;
@@ -2080,6 +2136,15 @@ int runConsole(Options options)
         } else if (!remoteLauncherHash.empty()) {
             fs::remove_all(work, error);
             die("the downloaded package is missing its official launcher hash metadata; nothing was changed");
+        }
+
+        const fs::path targetLauncher = root / kRootLauncher;
+        fs::path previousLauncher = targetLauncher;
+        previousLauncher += ".old";
+        if (!canReplaceLauncher(targetLauncher)
+            || (fs::exists(targetLauncher, error) && !canReplaceLauncher(previousLauncher))) {
+            fs::remove_all(work, error);
+            die("the launcher could not be replaced; nothing was changed");
         }
 
         std::string keptBackup;

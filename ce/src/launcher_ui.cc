@@ -411,10 +411,21 @@ void syncRpFromDisk()
     }
 }
 
+bool launcherCleanupPending()
+{
+    const fs::path root = chosenRoot();
+    std::error_code error;
+    return !root.empty() && fs::exists(root / L"Fallout 2 Reimagined.exe.old", error);
+}
+
 std::wstring doneStatus(Operation operation)
 {
     switch (operation) {
     case Operation::Uninstall:
+        if (launcherCleanupPending()) {
+            return tr(L"The mod files are removed. Launcher cleanup is pending until it closes.",
+                L"Файлы мода удалены. Удаление лаунчера ожидает его закрытия.");
+        }
         return tr(L"The mod is removed. The game is as it was before, your saves are kept.",
             L"Мод удалён. Игра такая, как была до него, ваши сохранения целы.");
     case Operation::RemoveRp:
@@ -512,7 +523,7 @@ void setBusy(bool busy)
     EnableWindow(g_russian, !busy);
     EnableWindow(g_rp, !busy);
     EnableWindow(g_autoUpdate, !busy);
-    EnableWindow(g_remove, !busy && g_installed);
+    EnableWindow(g_remove, !busy && (g_installed || launcherCleanupPending()));
     EnableWindow(g_play, !busy && g_installed && !rpRecoveryPending());
     if (busy) {
         g_tracker = launcher_progress::Tracker();
@@ -776,7 +787,7 @@ void chooseGameFolder()
                 std::wstring exe = (selected / L"fallout2-ce.exe").wstring();
                 g_installed = fs::exists(exe);
                 EnableWindow(g_play, g_installed && !rpRecoveryPending());
-                EnableWindow(g_remove, g_installed);
+                EnableWindow(g_remove, g_installed || launcherCleanupPending());
                 syncRussianFromDisk();
                 syncRpFromDisk();
                 setStatus(tr(L"Fallout 2 folder selected.", L"Папка Fallout 2 выбрана."));
@@ -1121,7 +1132,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             fs::path gameRoot(root);
             g_installed = fs::exists(gameRoot / L"fallout2-ce.exe");
             EnableWindow(g_play, g_installed && !rpRecoveryPending());
-            EnableWindow(g_remove, g_installed);
+            EnableWindow(g_remove, g_installed || launcherCleanupPending());
             EnableWindow(g_install, true);
             syncRussianFromDisk();
             syncRpFromDisk();
@@ -1296,7 +1307,7 @@ int runLauncherUi(int argc, char** argv)
         SetWindowTextW(g_root, g_args.gameRoot.c_str());
         g_installed = fs::exists(fs::path(g_args.gameRoot) / L"fallout2-ce.exe");
         EnableWindow(g_play, g_installed && !rpRecoveryPending());
-        EnableWindow(g_remove, g_installed);
+        EnableWindow(g_remove, g_installed || launcherCleanupPending());
         syncRussianFromDisk();
         syncRpFromDisk();
     }
