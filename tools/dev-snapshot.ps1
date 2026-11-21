@@ -59,7 +59,7 @@ param(
     [switch]$DialogLayoutCheck,
     # 186: capture the main menu and quit; 'plain' leaves the wide picture out.
     [ValidateSet('', 'wide', 'plain')][string]$MainMenu,
-    [ValidateSet('inventory', 'pipboy', 'character', 'barter', 'log', 'bark')]
+    [ValidateSet('inventory', 'pipboy', 'character', 'creation', 'barter', 'log', 'bark')]
     [string]$UiFixture,
     [ValidateSet('1.00', '1.08', '1.15', '1.22', '1.29')]
     [string]$Font101PreviewScale,

@@ -40,6 +40,7 @@
 #include "proto.h"
 #include "scripts.h"
 #include "scene/text_capture.h"
+#include "scene/scene_view.h"
 #include "settings.h"
 #include "skill.h"
 #include "stat.h"
@@ -5269,8 +5270,8 @@ static void characterEditorDrawOptionalTraits()
     Trait selectedTrait = TRAIT_INVALID;
     Color color;
     const char* traitName;
-    double step;
-    double y;
+    int step;
+    int y;
 
     if (!gCharacterEditorIsCreationMode) {
         return;
@@ -5280,14 +5281,21 @@ static void characterEditorDrawOptionalTraits()
         selectedTrait = static_cast<Trait>(characterEditorSelectedItem - EDITOR_FIRST_TRAIT);
     }
 
-    blitBufferToBuffer(_editorBackgroundFrmImage.getData() + 640 * 353 + 47, 245, 100, 640, gCharacterEditorWindowBuffer + 640 * 353 + 47, 640);
-
     fontSetCurrent(101);
+    const int buttonHeight = _editorFrmImages[EDITOR_GRAPHIC_TAG_SKILL_BUTTON_ON].getHeight();
+    const int textHeight = scene::sharpTextWanted()
+        ? scene::font101PreviewCoverageHeight(fontGetLineHeight(), gCharacterEditorWindow)
+        : fontGetLineHeight();
+    step = buttonHeight + OPTIONAL_TRAITS_BTN_SPACE;
+    const int firstY = OPTIONAL_TRAITS_BTN_Y + (buttonHeight - textHeight) / 2;
+    const int clearTop = std::min(353, firstY);
+    const int clearBottom = std::max(453, firstY + (TRAIT_COUNT / 2 - 1) * step + textHeight);
+    blitBufferToBuffer(_editorBackgroundFrmImage.getData() + 640 * clearTop + 41,
+        257, clearBottom - clearTop, 640, gCharacterEditorWindowBuffer + 640 * clearTop + 41, 640);
 
     traitsSetSelected(gCharacterEditorTempTraits[0], gCharacterEditorTempTraits[1]);
 
-    step = fontGetLineHeight() + 3 + 0.56;
-    y = 353;
+    y = firstY;
     for (Trait trait = TRAIT_FIRST; trait < TRAIT_BLOODY_MESS; trait++) {
         if (trait == selectedTrait) {
             if (trait != gCharacterEditorTempTraits[0] && trait != gCharacterEditorTempTraits[1]) {
@@ -5309,11 +5317,11 @@ static void characterEditorDrawOptionalTraits()
         }
 
         traitName = traitGetName(trait);
-        fontDrawText(gCharacterEditorWindowBuffer + 640 * (int)y + 47, traitName, 640, 640, color);
+        fontDrawText(gCharacterEditorWindowBuffer + 640 * (int)y + 41, traitName, 640, 640, color);
         y += step;
     }
 
-    y = 353;
+    y = firstY;
     for (Trait trait = TRAIT_BLOODY_MESS; trait < TRAIT_COUNT; trait++) {
         if (trait == selectedTrait) {
             if (trait != gCharacterEditorTempTraits[0] && trait != gCharacterEditorTempTraits[1]) {
@@ -5335,7 +5343,7 @@ static void characterEditorDrawOptionalTraits()
         }
 
         traitName = traitGetName(trait);
-        fontDrawText(gCharacterEditorWindowBuffer + 640 * (int)y + 199, traitName, 640, 640, color);
+        fontDrawText(gCharacterEditorWindowBuffer + 640 * (int)y + 192, traitName, 640, 640, color);
         y += step;
     }
 }
