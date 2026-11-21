@@ -719,7 +719,8 @@ float shadowDarken(float light) {
             // runs off the floor onto a card without a step; the feet
             // verdict keeps 0.3, a whole body darkens lighter than the
             // ground and keeps its read (109).
-            float density = uShadowFeet > 0.5 && uShadowGround.x <= 0.5 && !cardTurned() ? 0.3 : 0.35;
+            // A composite uses the same attenuation for every part, including baked panels.
+            float density = uShadowGroup < 0 && uShadowFeet > 0.5 && uShadowGround.x <= 0.5 && !cardTurned() ? 0.3 : 0.35;
             solarFactor = 1.0 - uShadowStrength * uShadowDensity * density * sunShadowCard(selfId);
             light *= solarFactor;
         }
