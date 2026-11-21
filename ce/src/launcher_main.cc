@@ -4,9 +4,10 @@
 // or a plain copy).  First run: find the game, install our build from the
 // rolling `latest` GitHub release and make the 3D scene data with the packed
 // exporter.  Later runs: pull a newer build when the release moved, then
-// start the game.  The player's fallout2.cfg, saves and the original
-// fallout2.exe are never touched.  No network: the installed game starts as
-// it is.
+// start the game.  The player's saves and the original fallout2.exe are
+// never touched; fallout2.cfg is only rewritten by the language switch, and
+// through a temporary file renamed over it, never truncated in place (292).
+// No network: the installed game starts as it is.
 //
 // Only Windows system libraries are used (winhttp, bcrypt, advapi32, shell).
 
@@ -197,52 +198,6 @@ bool sha256File(const fs::path& path, std::string* hex)
     return ok;
 }
 
-// One hash over every file under the directory (paths and contents); saves
-// the player has are caught whatever their names.
-bool sha256Tree(const fs::path& root, std::string* hex)
-{
-    std::vector<fs::path> files;
-    std::error_code error;
-    for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, error), end;
-         !error && it != end; it.increment(error)) {
-        if (it->is_regular_file(error)) files.push_back(it->path());
-    }
-    std::sort(files.begin(), files.end());
-    unsigned char digest[32];
-    BCRYPT_ALG_HANDLE algorithm = nullptr;
-    if (BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) != 0) return false;
-    BCRYPT_HASH_HANDLE hash = nullptr;
-    bool ok = BCryptCreateHash(algorithm, &hash, nullptr, 0, nullptr, 0, 0) == 0;
-    auto feed = [&hash, &ok](const void* data, size_t size) {
-        if (ok) ok = BCryptHashData(hash, const_cast<PUCHAR>(static_cast<const unsigned char*>(data)),
-                        static_cast<ULONG>(size), 0) == 0;
-    };
-    char none = 0;
-    if (files.empty()) feed(&none, 1);
-    for (const fs::path& file : files) {
-        std::string relative = wideToUtf8(fs::relative(file, root).generic_wstring());
-        feed(relative.data(), relative.size());
-        feed(&none, 1);
-        std::ifstream in(file, std::ios::binary);
-        if (!in) {
-            ok = false;
-            break;
-        }
-        char block[65536];
-        while (in.read(block, sizeof(block)) || in.gcount() > 0) {
-            feed(block, static_cast<size_t>(in.gcount()));
-            if (!in) break;
-        }
-        feed(&none, 1);
-    }
-    if (ok) ok = BCryptFinishHash(hash, digest, 32, 0) == 0;
-    if (hash != nullptr) BCryptDestroyHash(hash);
-    BCryptCloseAlgorithmProvider(algorithm, 0);
-    if (!ok) return false;
-    *hex = hashToHex(digest);
-    return true;
-}
-
 // --- HTTP ----------------------------------------------------------------
 
 struct Url {
@@ -282,179 +237,154 @@ DWORD proxyFor(const Url& url)
     return WINHTTP_ACCESS_TYPE_DEFAULT_PROXY;
 }
 
-// GET one url; the failure reason lands in errorText when set.
-bool httpGet(const std::string& urlString, std::string* body, const char** errorText,
-    const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS)
-{
+// One opened GET request: the session, connect and request setup the three
+// http functions shared, and the handles that must close in order.
+struct HttpGet {
     Url url;
-    if (!crackUrlWide(utf8ToWide(urlString), &url)) {
+    HINTERNET session = nullptr;
+    HINTERNET connect = nullptr;
+    HINTERNET request = nullptr;
+    ~HttpGet() {
+        if (request != nullptr) WinHttpCloseHandle(request);
+        if (connect != nullptr) WinHttpCloseHandle(connect);
+        if (session != nullptr) WinHttpCloseHandle(session);
+    }
+};
+
+// The one opener behind httpGet, httpRedirectLocation and httpDownload:
+// crack the url, open the session with the shared timeouts, connect, open
+// and send the request, and receive the answer. False carries the failure
+// reason in *errorText. disableRedirects keeps the answer's Location for
+// httpRedirectLocation; the status code is the caller's to judge.
+bool httpOpenAndReceive(const std::string& urlString, const wchar_t* headers, bool disableRedirects,
+    HttpGet* http, const char** errorText)
+{
+    if (!crackUrlWide(utf8ToWide(urlString), &http->url)) {
         *errorText = "cannot parse url";
         return false;
     }
     *errorText = nullptr;
-    HINTERNET session = WinHttpOpen(L"fallout2-ce-3d-launcher", proxyFor(url),
+    http->session = WinHttpOpen(L"fallout2-ce-3d-launcher", proxyFor(http->url),
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (session == nullptr) {
+    if (http->session == nullptr) {
         *errorText = "WinHttpOpen failed";
         return false;
     }
-    WinHttpSetTimeouts(session, 10000, 15000, 30000, 300000);
-    HINTERNET connect = WinHttpConnect(session, url.host.c_str(), url.port, 0);
-    if (connect == nullptr) {
+    WinHttpSetTimeouts(http->session, 10000, 15000, 30000, 300000);
+    http->connect = WinHttpConnect(http->session, http->url.host.c_str(), http->url.port, 0);
+    if (http->connect == nullptr) {
         *errorText = "cannot connect";
-        WinHttpCloseHandle(session);
         return false;
     }
-    HINTERNET request = WinHttpOpenRequest(connect, L"GET", url.path.c_str(), nullptr, WINHTTP_NO_REFERER,
-        WINHTTP_DEFAULT_ACCEPT_TYPES, url.https ? WINHTTP_FLAG_SECURE : 0);
-    bool ok = request != nullptr;
-    if (!ok) {
+    http->request = WinHttpOpenRequest(http->connect, L"GET", http->url.path.c_str(), nullptr,
+        WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, http->url.https ? WINHTTP_FLAG_SECURE : 0);
+    if (http->request == nullptr) {
         *errorText = "cannot open request";
-    } else {
-        ok = WinHttpSendRequest(request, headers, headers == WINHTTP_NO_ADDITIONAL_HEADERS ? 0 : static_cast<DWORD>(-1L), WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
-        if (!ok) *errorText = "send failed";
+        return false;
     }
-    if (ok) {
-        ok = WinHttpReceiveResponse(request, nullptr);
-        if (!ok) *errorText = "receive failed";
+    if (disableRedirects) {
+        DWORD disable = WINHTTP_DISABLE_REDIRECTS;
+        WinHttpSetOption(http->request, WINHTTP_OPTION_DISABLE_FEATURE, &disable, sizeof(disable));
     }
+    if (!WinHttpSendRequest(http->request, headers,
+            headers == WINHTTP_NO_ADDITIONAL_HEADERS ? 0 : static_cast<DWORD>(-1L),
+            WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
+        *errorText = "send failed";
+        return false;
+    }
+    if (!WinHttpReceiveResponse(http->request, nullptr)) {
+        *errorText = "receive failed";
+        return false;
+    }
+    return true;
+}
+
+// The answer's status must be 200; anything else carries its reason.
+bool httpResponseOk(HINTERNET request, const char** errorText)
+{
     DWORD status = 0;
     DWORD statusSize = sizeof(status);
-    if (ok) {
-        WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-            WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX);
-        ok = status == 200;
-        if (!ok) *errorText = "http status is not 200";
+    WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+        WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX);
+    if (status != 200) {
+        *errorText = "http status is not 200";
+        return false;
     }
-    if (ok) {
-        DWORD available = 0;
-        while (WinHttpQueryDataAvailable(request, &available) && available > 0) {
-            std::vector<char> chunk(available);
-            DWORD read = 0;
-            if (!WinHttpReadData(request, chunk.data(), available, &read) || read == 0) break;
-            body->append(chunk.data(), read);
-        }
-        ok = !body->empty();
-        if (!ok) *errorText = "empty response";
+    return true;
+}
+
+// GET one url; the failure reason lands in errorText when set. An answer
+// shorter than its Content-Length is a dropped connection, not a body: the
+// same cut-short check #473 gave httpDownload (292).
+bool httpGet(const std::string& urlString, std::string* body, const char** errorText,
+    const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS)
+{
+    HttpGet http;
+    if (!httpOpenAndReceive(urlString, headers, false, &http, errorText)) return false;
+    if (!httpResponseOk(http.request, errorText)) return false;
+    size_t total = 0;
+    DWORD contentLength = 0;
+    DWORD lengthSize = sizeof(contentLength);
+    if (!WinHttpQueryHeaders(http.request, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+            WINHTTP_HEADER_NAME_BY_INDEX, &contentLength, &lengthSize, WINHTTP_NO_HEADER_INDEX)) {
+        contentLength = 0;
     }
-    if (request != nullptr) WinHttpCloseHandle(request);
-    if (connect != nullptr) WinHttpCloseHandle(connect);
-    WinHttpCloseHandle(session);
-    return ok;
+    DWORD available = 0;
+    while (WinHttpQueryDataAvailable(http.request, &available) && available > 0) {
+        std::vector<char> chunk(available);
+        DWORD read = 0;
+        if (!WinHttpReadData(http.request, chunk.data(), available, &read) || read == 0) break;
+        body->append(chunk.data(), read);
+        total += read;
+    }
+    if (!launcher_routes::downloadComplete(total, contentLength)) {
+        *errorText = total == 0 ? "empty response" : "the response was cut short";
+        return false;
+    }
+    return true;
 }
 
 // GET one url without following redirects and return the Location header of the answer.
 bool httpRedirectLocation(const std::string& urlString, std::string* location, const char** errorText)
 {
-    Url url;
-    if (!crackUrlWide(utf8ToWide(urlString), &url)) {
-        *errorText = "cannot parse url";
+    HttpGet http;
+    if (!httpOpenAndReceive(urlString, WINHTTP_NO_ADDITIONAL_HEADERS, true, &http, errorText)) return false;
+    wchar_t buffer[2048] = {};
+    DWORD size = sizeof(buffer) - sizeof(wchar_t);
+    if (!WinHttpQueryHeaders(http.request, WINHTTP_QUERY_LOCATION, WINHTTP_HEADER_NAME_BY_INDEX,
+            buffer, &size, WINHTTP_NO_HEADER_INDEX)) {
+        *errorText = "no redirect from the release page";
         return false;
     }
-    *errorText = nullptr;
-    HINTERNET session = WinHttpOpen(L"fallout2-ce-3d-launcher", proxyFor(url),
-        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (session == nullptr) {
-        *errorText = "WinHttpOpen failed";
-        return false;
-    }
-    WinHttpSetTimeouts(session, 10000, 15000, 30000, 300000);
-    HINTERNET connect = WinHttpConnect(session, url.host.c_str(), url.port, 0);
-    if (connect == nullptr) {
-        *errorText = "cannot connect";
-        WinHttpCloseHandle(session);
-        return false;
-    }
-    HINTERNET request = WinHttpOpenRequest(connect, L"GET", url.path.c_str(), nullptr, WINHTTP_NO_REFERER,
-        WINHTTP_DEFAULT_ACCEPT_TYPES, url.https ? WINHTTP_FLAG_SECURE : 0);
-    bool ok = request != nullptr;
-    if (!ok) {
-        *errorText = "cannot open request";
-    } else {
-        DWORD disable = WINHTTP_DISABLE_REDIRECTS;
-        WinHttpSetOption(request, WINHTTP_OPTION_DISABLE_FEATURE, &disable, sizeof(disable));
-        ok = WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
-        if (!ok) *errorText = "send failed";
-    }
-    if (ok) {
-        ok = WinHttpReceiveResponse(request, nullptr);
-        if (!ok) *errorText = "receive failed";
-    }
-    if (ok) {
-        wchar_t buffer[2048] = {};
-        DWORD size = sizeof(buffer) - sizeof(wchar_t);
-        ok = WinHttpQueryHeaders(request, WINHTTP_QUERY_LOCATION, WINHTTP_HEADER_NAME_BY_INDEX,
-                 buffer, &size, WINHTTP_NO_HEADER_INDEX)
-            != FALSE;
-        if (ok) *location = wideToUtf8(buffer);
-        else *errorText = "no redirect from the release page";
-    }
-    if (request != nullptr) WinHttpCloseHandle(request);
-    if (connect != nullptr) WinHttpCloseHandle(connect);
-    WinHttpCloseHandle(session);
-    return ok;
+    *location = wideToUtf8(buffer);
+    return true;
 }
 
 bool httpDownload(const std::string& urlString, const fs::path& destination, const char** errorText,
     const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS)
 {
-    Url url;
-    if (!crackUrlWide(utf8ToWide(urlString), &url)) {
-        *errorText = "cannot parse url";
-        return false;
-    }
-    *errorText = nullptr;
-    HINTERNET session = WinHttpOpen(L"fallout2-ce-3d-launcher", proxyFor(url),
-        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (session == nullptr) {
-        *errorText = "WinHttpOpen failed";
-        return false;
-    }
-    WinHttpSetTimeouts(session, 10000, 15000, 30000, 300000);
-    HINTERNET connect = WinHttpConnect(session, url.host.c_str(), url.port, 0);
-    HINTERNET request = nullptr;
-    bool ok = connect != nullptr;
-    if (ok) {
-        request = WinHttpOpenRequest(connect, L"GET", url.path.c_str(), nullptr, WINHTTP_NO_REFERER,
-            WINHTTP_DEFAULT_ACCEPT_TYPES, url.https ? WINHTTP_FLAG_SECURE : 0);
-        ok = request != nullptr;
-        if (!ok) *errorText = "cannot open request";
-    }
-    if (ok) {
-        ok = WinHttpSendRequest(request, headers, headers == WINHTTP_NO_ADDITIONAL_HEADERS ? 0 : static_cast<DWORD>(-1L), WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
-        if (!ok) *errorText = "send failed";
-    }
-    if (ok) {
-        ok = WinHttpReceiveResponse(request, nullptr);
-        if (!ok) *errorText = "receive failed";
-    }
-    DWORD status = 0;
-    DWORD statusSize = sizeof(status);
-    if (ok) {
-        WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-            WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX);
-        ok = status == 200;
-        if (!ok) *errorText = "http status is not 200";
-    }
+    HttpGet http;
+    if (!httpOpenAndReceive(urlString, headers, false, &http, errorText)) return false;
+    if (!httpResponseOk(http.request, errorText)) return false;
     std::ofstream out;
-    if (ok) {
-        out.open(destination, std::ios::binary | std::ios::trunc);
-        ok = static_cast<bool>(out);
-        if (!ok) *errorText = "cannot open the destination file";
+    out.open(destination, std::ios::binary | std::ios::trunc);
+    if (!static_cast<bool>(out)) {
+        *errorText = "cannot open the destination file";
+        return false;
     }
-    if (ok) {
+    {
         DWORD available = 0;
         size_t total = 0;
         DWORD contentLength = 0;
         DWORD lengthSize = sizeof(contentLength);
-        if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+        if (!WinHttpQueryHeaders(http.request, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
                 WINHTTP_HEADER_NAME_BY_INDEX, &contentLength, &lengthSize, WINHTTP_NO_HEADER_INDEX)) {
             contentLength = 0;
         }
-        while (WinHttpQueryDataAvailable(request, &available) && available > 0) {
+        while (WinHttpQueryDataAvailable(http.request, &available) && available > 0) {
             std::vector<char> chunk(available);
             DWORD read = 0;
-            if (!WinHttpReadData(request, chunk.data(), available, &read) || read == 0) break;
+            if (!WinHttpReadData(http.request, chunk.data(), available, &read) || read == 0) break;
             out.write(chunk.data(), read);
             total += read;
             if (total / (1024 * 1024) != (total - read) / (1024 * 1024)) {
@@ -463,20 +393,16 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
             }
         }
         out.close();
-        ok = launcher_routes::downloadComplete(total, contentLength);
-        if (ok) {
-            logf("  downloaded %zu bytes", total);
-        } else {
+        if (!launcher_routes::downloadComplete(total, contentLength)) {
             *errorText = total == 0 ? "empty download" : "the download was cut short";
             // A stump left in place would be taken for the whole file by the next run.
             std::error_code ignored;
             fs::remove(destination, ignored);
+            return false;
         }
+        logf("  downloaded %zu bytes", total);
     }
-    if (request != nullptr) WinHttpCloseHandle(request);
-    if (connect != nullptr) WinHttpCloseHandle(connect);
-    WinHttpCloseHandle(session);
-    return ok;
+    return true;
 }
 
 std::string joinUrl(const std::string& base, const char* name);
@@ -927,10 +853,11 @@ bool setLanguage(const fs::path& root, const char* language)
         log("cannot set the game language: [system].language was not found");
         return false;
     }
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out.write(output.data(), static_cast<std::streamsize>(output.size()));
-    if (!out) {
-        log("cannot write fallout2.cfg");
+    // The cfg is the player's file: a truncated in-place write would lose it,
+    // so the new text lands in a temporary file renamed over the old one (292).
+    std::string error;
+    if (!launcher_uninstall::writeFileAtomic(path, output, &error)) {
+        logf("cannot write fallout2.cfg: %s", error.c_str());
         return false;
     }
     return true;
@@ -1615,8 +1542,10 @@ bool removeRussianTranslation(const fs::path& root)
     return ok;
 }
 
-// Gives the game back as it was before the mod.  Saves (data/), the original game files
-// and fallout2.cfg are never touched.  The folder f2reimagined-backups only holds older
+// Gives the game back as it was before the mod.  Saves (data/) and the original
+// game files are never touched; fallout2.cfg only has its [system] language
+// switched back to English, through a temporary file renamed over it (292).
+// The folder f2reimagined-backups only holds older
 // mod builds, so it goes with the mod.
 bool uninstallMod(const fs::path& root)
 {
@@ -2106,15 +2035,9 @@ int runConsole(Options options)
         return 0;
     }
 
-    // --- hashes of the player's things, before the run ---
-    std::string cfgBefore = "<missing>";
-    std::string savesBefore;
-    if (fs::exists(root / kCfg)) sha256File(root / kCfg, &cfgBefore);
-    sha256Tree(root / "data" / "savegame", &savesBefore);
-    logf("fallout2.cfg sha256 before: %s", cfgBefore.c_str());
-    logf("data/savegame sha256 before: %s", savesBefore.c_str());
-
     // --- start the game ---
+    // (292: the 091-acceptance hash check around the run is gone; it printed
+    // CHANGED whenever the player saved, which is what saves are for.)
     fs::path game = root / kGameExe;
     if (!fs::exists(game)) die("the game is not installed yet; press Install first");
     std::string command = "\"" + game.string() + "\"";
@@ -2130,15 +2053,6 @@ int runConsole(Options options)
     }
     logf("the game exited with code %lu", static_cast<unsigned long>(gameExitCode));
 
-    // --- and after: must be byte for byte the same ---
-    std::string cfgAfter = "<missing>";
-    std::string savesAfter;
-    if (fs::exists(root / kCfg)) sha256File(root / kCfg, &cfgAfter);
-    sha256Tree(root / "data" / "savegame", &savesAfter);
-    logf("fallout2.cfg sha256 after:  %s (%s)", cfgAfter.c_str(),
-        cfgAfter == cfgBefore ? "unchanged" : "CHANGED");
-    logf("data/savegame sha256 after:  %s (%s)", savesAfter.c_str(),
-        savesAfter == savesBefore ? "unchanged" : "CHANGED");
     log("bye");
     return 0;
 }
