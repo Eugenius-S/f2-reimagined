@@ -57,6 +57,8 @@ struct UiArgs {
 struct ReleaseInfo {
     std::wstring version;
     std::wstring notes;
+    std::wstring launcherHash;
+    std::wstring installedLauncherHash;
     bool online = false;
     std::wstring error; // why every route failed
 };
@@ -89,6 +91,8 @@ std::wstring g_settingsPath;
 std::wstring g_uiLanguage;
 std::wstring g_releaseVersion;
 std::wstring g_releaseNotes;
+std::wstring g_releaseLauncherHash;
+std::wstring g_installedLauncherHash;
 bool g_autoUpdates = false;
 bool g_russianInstall = false;
 // The player's own wish for the translation (task 238): -1 not chosen yet (the box follows the disk), 0 no, 1 yes.
@@ -104,6 +108,8 @@ bool g_haveRelease = false;
 std::wstring g_releaseError;
 bool g_installed = false;
 bool g_operationCompleted = false;
+bool g_forgetSettings = false;
+bool g_closeAfterUninstall = false;
 Operation g_lastOperation = Operation::Install;
 int g_progressValue = 0;
 launcher_progress::Tracker g_tracker;
@@ -409,8 +415,8 @@ std::wstring doneStatus(Operation operation)
 {
     switch (operation) {
     case Operation::Uninstall:
-        return tr(L"The mod is removed. The game is as it was before, your saves are kept.",
-            L"Мод удалён. Игра такая, как была до него, ваши сохранения целы.");
+        return tr(L"The mod files are removed. If the launcher is still running, its cleanup finishes after it closes.",
+            L"Файлы мода удалены. Если лаунчер ещё открыт, его удаление завершится после закрытия.");
     case Operation::RemoveRp:
         return rpOnDisk()
             ? tr(L"A manual Restoration Project install was left untouched.", L"Ручная установка Restoration Project оставлена без изменений.")
@@ -653,6 +659,12 @@ void startOperation(Operation operation)
 void checkReleaseAsync()
 {
     std::vector<std::wstring> args = {L"--check-release"};
+    wchar_t root[32768] = {};
+    GetWindowTextW(g_root, root, static_cast<int>(std::size(root)));
+    if (root[0] != L'\0') {
+        args.push_back(L"--game-root");
+        args.push_back(root);
+    }
     if (!g_args.updateUrl.empty()) {
         args.push_back(L"--update-url");
         args.push_back(g_args.updateUrl);
@@ -703,6 +715,8 @@ void checkReleaseAsync()
             };
             info->version = utf8ToWide(value("RELEASE_VERSION:"));
             info->notes = utf8ToWide(value("RELEASE_NOTES:"));
+            info->launcherHash = utf8ToWide(value("RELEASE_LAUNCHER_SHA256:"));
+            info->installedLauncherHash = utf8ToWide(value("RELEASE_INSTALLED_LAUNCHER_SHA256:"));
             info->online = code == 0 && !info->version.empty();
             info->error = utf8ToWide(value("RELEASE_ERROR:"));
         }
@@ -1096,6 +1110,8 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         std::unique_ptr<ReleaseInfo> info(reinterpret_cast<ReleaseInfo*>(lParam));
         g_releaseVersion = info->version;
         g_releaseNotes = info->notes;
+        g_releaseLauncherHash = info->launcherHash;
+        g_installedLauncherHash = info->installedLauncherHash;
         g_haveRelease = info->online;
         g_releaseError = info->error;
         updateLabels();
@@ -1118,12 +1134,14 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             } else if (!g_haveRelease) {
                 setStatus(noReleaseStatus());
             } else if (g_autoUpdates && g_installed
-                && (installedVersion != wideToUtf8(g_releaseVersion) || (g_russianInstall && !russianOnDisk())
-                    || (g_rpInstall && !rpOnDisk()))) {
+                && (installedVersion != wideToUtf8(g_releaseVersion)
+                    || (!g_releaseLauncherHash.empty() && g_releaseLauncherHash != g_installedLauncherHash)
+                    || (g_russianInstall && !russianOnDisk()) || (g_rpInstall && !rpOnDisk()))) {
                 startOperation(Operation::Install);
             } else if (!g_installed) {
                 setStatus(tr(L"Press Install / Update. The first install takes about 20 minutes.", L"Нажмите «Установить / обновить». Первая установка идёт около 20 минут."));
-            } else if (installedVersion != wideToUtf8(g_releaseVersion)) {
+            } else if (installedVersion != wideToUtf8(g_releaseVersion)
+                || (!g_releaseLauncherHash.empty() && g_releaseLauncherHash != g_installedLauncherHash)) {
                 setStatus(tr(L"A newer build is available.", L"Доступна новая сборка."));
             } else {
                 setStatus(upToDateStatus());
@@ -1159,15 +1177,33 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         syncRussianFromDisk();
         syncRpFromDisk();
         setStatus(result == 0 || g_translationFailed ? doneStatus(operation) : failedStatus(operation));
-        saveSettings();
+        g_closeAfterUninstall = result == 0 && operation == Operation::Uninstall;
+        if (g_closeAfterUninstall) {
+            wchar_t configuredRoot[32768] = {};
+            wchar_t selectedRoot[32768] = {};
+            GetPrivateProfileStringW(L"launcher", L"game_root", L"", configuredRoot,
+                static_cast<DWORD>(std::size(configuredRoot)), g_settingsPath.c_str());
+            GetWindowTextW(g_root, selectedRoot, static_cast<int>(std::size(selectedRoot)));
+            g_forgetSettings = configuredRoot[0] != L'\0'
+                && launcher_uninstall::samePath(fs::path(configuredRoot), fs::path(selectedRoot));
+        }
+        if (!g_closeAfterUninstall) saveSettings();
         // After a removal the launcher may be gone: nothing is left to run the release check or an install.
         const bool launcherLeft = fs::exists(exePath());
         EnableWindow(g_install, launcherLeft && GetWindowTextLengthW(g_root) != 0);
-        if ((result == 0 || g_translationFailed) && launcherLeft) checkReleaseAsync();
+        if (!g_closeAfterUninstall && (result == 0 || g_translationFailed) && launcherLeft) checkReleaseAsync();
+        if (g_closeAfterUninstall) PostMessageW(window, WM_CLOSE, 0, 0);
         return 0;
     }
     case WM_DESTROY:
-        saveSettings();
+        if (g_forgetSettings) {
+            std::error_code error;
+            fs::remove(g_settingsPath, error);
+            error.clear();
+            fs::remove(fs::path(g_settingsPath).parent_path(), error); // empty only
+        } else if (!g_closeAfterUninstall) {
+            saveSettings();
+        }
         if (g_logo != nullptr) DeleteObject(g_logo);
         if (g_font != nullptr) DeleteObject(g_font);
         if (g_headingFont != nullptr) DeleteObject(g_headingFont);
