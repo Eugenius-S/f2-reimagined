@@ -479,6 +479,15 @@ if(BUILD_TESTING)
     target_include_directories(launcher_uninstall_tests PRIVATE "src")
     add_test(NAME launcher_uninstall_tests COMMAND launcher_uninstall_tests)
 
+    add_executable(launcher_update_tests
+        "tests/launcher_progress/launcher_update_test.cc"
+    )
+    target_include_directories(launcher_update_tests PRIVATE "src")
+    if (MSVC)
+        target_compile_options(launcher_update_tests PRIVATE /utf-8)
+    endif()
+    add_test(NAME launcher_update_tests COMMAND launcher_update_tests)
+
     add_executable(launcher_rp_tests
         "tests/launcher_progress/launcher_rp_test.cc"
     )
@@ -826,6 +835,10 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_install_test.py"
             "$<TARGET_FILE:fallout2-ce-3d-launcher>")
         set_tests_properties(launcher_install_tests PROPERTIES TIMEOUT 180)
+        add_test(NAME launcher_recovery_tests COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_recovery_test.py"
+            "$<TARGET_FILE:fallout2-ce-3d-launcher>")
+        set_tests_properties(launcher_recovery_tests PROPERTIES TIMEOUT 180)
         add_executable(launcher_rp_exporter_stub "tests/launcher_progress/launcher_rp_exporter_stub.cc")
         add_test(NAME launcher_rp_install_tests COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_rp_install_test.py"
