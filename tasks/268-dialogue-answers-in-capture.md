@@ -2,7 +2,7 @@
 id: 268
 title: The dialogue fixture captures the reply list as the player sees it
 milestone: M1
-status: todo
+status: blocked
 owner: gpt
 suggested: gpt
 priority: high
@@ -34,3 +34,8 @@ Renderer and map data changes.
 ## Log
 
 - 2026-11-13 claude: cut from the review of gpt's run of 2026-11-12: the blocked evidence tasks share a few harness gaps.
+
+### 2026-11-13 gpt
+Done: removed the pre-dialogue baseline image from `-DialogFixture`; added logical answer rectangles from `gameDialogGetOptionLayout` to the snapshot sidecar; required every answer layout before capture; added a natural first-choice route when the current English list has no wrapped answer. The initial unmodified x2 English capture at `build/diag-268-before/scr00000.png` visibly contains Kcsulik's NPC line and all seven answers, but no answer wraps. It also exposed the cause of the misleading output: the tool returned a static preview without dialogue before the valid dialogue frame.
+Next: blocked. Kcsulik's first English answer list has seven unwrapped answers. Two modified-source English x2 captures did not find a natural wrapped page: `build/diag-268-after-en-x2/process.stdout.log` ended with `answer-list-did-not-change-after-key-1`; `build/diag-268-after2-en-x2/process.stdout.log` showed six first-choice advances with 7 and 2 options, then `no-wrapped-answer-after-six-natural-first-choice-pages`. No screenshot was produced by either attempt. The latest rectangle-based option-window lookup and sidecar output compile, but they have not been exercised at runtime. Need a reproducible English dialogue page with a naturally wrapped answer before completing the four-frame matrix.
+Check: `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release` passed after the latest source change; `ctest --test-dir build --output-on-failure` passed 27/27. `powershell -NoProfile -ExecutionPolicy Bypass -File tools/regression.ps1` began exporting all maps to `build/scene-cache` but did not reach comparisons or write a summary; stopped only this run's process tree after about four minutes so the next checked build can proceed. Pixel regression remains unverified. No game files or cache outside this worktree were changed.
