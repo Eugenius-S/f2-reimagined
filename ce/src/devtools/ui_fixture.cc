@@ -26,6 +26,7 @@
 #include "../svga.h"
 #include "../text_object.h"
 #include "../tile.h"
+#include "../trait.h"
 #include "../window_manager.h"
 #include "devtools.h"
 
@@ -39,6 +40,7 @@ enum class UiFixtureKind {
     Inventory,
     Pipboy,
     Character,
+    Creation,
     Barter,
     Log,
     Bark,
@@ -64,6 +66,8 @@ int gSpeakerId = -1;
 int gSpeakerTile = -1;
 int gInitialDateLogCount = 0;
 bool gPipboyStatusRequested = false;
+int gCreationStep = 0;
+unsigned int gCreationInitialColor = 0;
 int gLogDiagnosticFrames = 0;
 bool gLogStackSeeded = false;
 bool gFont101PreviewRequested = false;
@@ -86,6 +90,7 @@ const char* fixtureName()
     case UiFixtureKind::Inventory: return "inventory";
     case UiFixtureKind::Pipboy: return "pipboy";
     case UiFixtureKind::Character: return "character";
+    case UiFixtureKind::Creation: return "creation";
     case UiFixtureKind::Barter: return "barter";
     case UiFixtureKind::Log: return "log";
     case UiFixtureKind::Bark: return "bark";
@@ -108,7 +113,8 @@ int expectedWindow()
     case UiFixtureKind::Inventory:
     case UiFixtureKind::Barter: return inventoryGetWindow();
     case UiFixtureKind::Pipboy: return pipboyGetWindow();
-    case UiFixtureKind::Character: return characterEditorGetWindow();
+    case UiFixtureKind::Character:
+    case UiFixtureKind::Creation: return characterEditorGetWindow();
     case UiFixtureKind::Log: return gInterfaceBarWindow;
     default: return -1;
     }
@@ -663,6 +669,7 @@ bool parseUiFixtureOption(const char* arg)
     if (strcmp(value, "inventory") == 0) gKind = UiFixtureKind::Inventory;
     else if (strcmp(value, "pipboy") == 0) gKind = UiFixtureKind::Pipboy;
     else if (strcmp(value, "character") == 0) gKind = UiFixtureKind::Character;
+    else if (strcmp(value, "creation") == 0) gKind = UiFixtureKind::Creation;
     else if (strcmp(value, "barter") == 0) gKind = UiFixtureKind::Barter;
     else if (strcmp(value, "log") == 0) gKind = UiFixtureKind::Log;
     else if (strcmp(value, "bark") == 0) gKind = UiFixtureKind::Bark;
@@ -755,6 +762,13 @@ bool startUiFixtureWhenReady(bool startupReady, bool blockingState)
         return false;
     }
 
+    if (gKind == UiFixtureKind::Creation) {
+        gStage = UiFixtureStage::WaitingForScreen;
+        printf("UI_FIXTURE START screen=creation route=characterEditorShow(true)\n");
+        fflush(stdout);
+        characterEditorShow(true);
+        return false;
+    }
     gStage = UiFixtureStage::WaitingForScreen;
     int key = -1;
     switch (gKind) {
@@ -923,12 +937,76 @@ void uiFixtureVanillaPresented()
         fflush(stdout);
     }
     if (runs.empty()) return;
+    if (gKind == UiFixtureKind::Creation) {
+        Window* editor = windowGetWindow(window.id);
+        int checked = 0;
+        for (Button* button = editor != nullptr ? editor->buttonListHead : nullptr; button != nullptr; button = button->next) {
+            const int trait = button->leftMouseUpEventCode - 555;
+            if (trait < 0 || trait >= TRAIT_COUNT) continue;
+            const int textX = trait < TRAIT_COUNT / 2 ? 41 : 192;
+            const auto record = std::find_if(runs.begin(), runs.end(), [&](const scene::TextRecord& r) {
+                return r.run.x == textX && r.run.text == traitGetName(static_cast<Trait>(trait));
+            });
+            if (record == runs.end()) { fixtureFail("trait-label-missing"); return; }
+            const int height = settings.scene3d.sharp_text
+                ? scene::font101PreviewCoverageHeight(record->run.lineHeight, window.id)
+                : record->run.lineHeight;
+            const double labelCenter = record->run.y + height * 0.5;
+            const double buttonCenter = (button->rect.top + button->rect.bottom + 1) * 0.5;
+            const int right = trait < TRAIT_COUNT / 2 ? 192 : 298;
+            if (std::abs(labelCenter - buttonCenter) > 1.0 || record->run.x + record->run.width > right || (trait < TRAIT_COUNT / 2 && record->run.x <= button->rect.right)) {
+                printf("UI_FIXTURE TRAIT_MISMATCH trait=%d label_y=%d height=%d button=%d..%d label_x=%d width=%d right=%d\n",
+                    trait, record->run.y, height, button->rect.top, button->rect.bottom,
+                    record->run.x, record->run.width, right);
+                fixtureFail("trait-label-outside-button-row");
+                return;
+            }
+            checked++;
+        }
+        if (checked != TRAIT_COUNT) { fixtureFail("trait-button-count"); return; }
+        const auto selected = std::find_if(runs.begin(), runs.end(), [](const scene::TextRecord& r) {
+            return r.run.x == 41 && r.run.text == traitGetName(static_cast<Trait>(6));
+        });
+        if (selected == runs.end()) { fixtureFail("pressed-trait-label-missing"); return; }
+        if (gCreationStep == 0) {
+            if (!takeSnapshot()) { fixtureFail("creation-baseline-snapshot-failed"); return; }
+            gCreationInitialColor = selected->run.colorAndFlags;
+            Button* target = editor->buttonListHead;
+            while (target != nullptr && target->leftMouseUpEventCode != 561) target = target->next;
+            if (target == nullptr) { fixtureFail("pressed-trait-button-missing"); return; }
+            gCreationStep = 1;
+            printf("UI_FIXTURE STEP screen=creation button=561 action=press-release\n");
+            fflush(stdout);
+            if (_win_button_press_and_release(target->id) != 0) fixtureFail("trait-button-press-failed");
+            return;
+        }        if (selected->run.colorAndFlags == gCreationInitialColor) return;
+        if (settings.scene3d.sharp_text) {
+            const ScreenProof proof = screenProof(window, scene_renderer::preparedSharpTextFrame());
+            for (int trait = 0; trait < TRAIT_COUNT; trait++) {
+                const int x = trait < TRAIT_COUNT / 2 ? 41 : 192;
+                if (std::none_of(proof.overlayRecords.begin(), proof.overlayRecords.end(), [&](const scene::TextRecord& r) {
+                        return r.run.x == window.x + x && r.run.text == traitGetName(static_cast<Trait>(trait));
+                    })) {
+                    printf("UI_FIXTURE LOST trait=%d x=%d records=%zu visible=%zu overlay=%zu active=%d drawn=%d\n",
+                        trait, x, proof.records.size(), proof.visibleRecords.size(), proof.overlayRecords.size(),
+                        scene_renderer::preparedSharpTextFrame().active ? 1 : 0,
+                        scene_renderer::preparedSharpTextFrame().drawn ? 1 : 0);
+                    takeSnapshot();
+                    fixtureFail("trait-sharp-overlay-lost-after-press"); return;
+                }
+            }
+        }
+    }
     captureWindow(window, runs);
 }
 
 void uiFixtureScenePresented()
 {
-    if (gKind == UiFixtureKind::Bark && !gBarkCallbackSuppressed) runBarkFixtureFrame();
+    if (gKind == UiFixtureKind::Bark) {
+        if (!gBarkCallbackSuppressed) runBarkFixtureFrame();
+    } else {
+        uiFixtureVanillaPresented();
+    }
 }
 
 } // namespace devtools

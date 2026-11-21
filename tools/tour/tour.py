@@ -2,6 +2,11 @@
 
     py -3 tools/tour/tour.py --before SIDE [--after SIDE] [--maps kladwtwn,klamall] [--reuse] [--out DIR]
     py -3 tools/tour/tour.py --before CACHE --rp-game-root RP_GAME [--maps abbey,sfsheng]
+    py -3 tools/tour/tour.py --coverage [--maps ...] [--expect kladwtwn:0,kladwtwn:1] [--rp-game-root RP_GAME]
+
+--coverage shoots nothing: it prints which requested maps, map elevations,
+named spots and turns the spot list covers and which it misses (also printed
+before every tour). --expect adds map elevations the selection must have.
 
 A side is either a checkout (its build/fallout2-ce.exe and the scenes its own
 tools/dev-snapshot.ps1 reads) or a scene cache folder (<map>/<elevation>/
@@ -21,7 +26,8 @@ ROWS_PER_PAGE spots), each row a spot and each turn a before | after pair,
 and changed.jpg (then changed-2.jpg, ...) with only the spots whose views
 differ, a red frame round each changed pair, or a note that none did.
 --reuse keeps a side's shots when the same side, stops, exe and scene
-provenance were shot before. A run whose sidecars show another map, tile or
+provenance were shot before and the shots still pass the view checks below;
+otherwise it shoots them again. The sheets take only shots that pass them. A run whose sidecars show another map, tile or
 no 3D scene, or a spot whose turns are one picture, stops the tour. Judging
 the views stays with the eye.
 """
@@ -57,15 +63,50 @@ def powershell_args(command):
     return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command]
 
 
-def load_spots(maps, path):
-    data = json.loads(path.read_text(encoding="utf-8"))
+def spot_groups(data, maps):
+    """The selected spots by (map, elevation); every map when maps is empty."""
     groups = {}
     for spot in data["spots"]:
         if not maps or spot["map"] in maps:
             groups.setdefault((spot["map"], spot["elevation"]), []).append(spot)
+    return groups
+
+
+def load_spots(maps, path):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    groups = spot_groups(data, maps)
     if not groups:
         raise SystemExit("no spots for those maps")
     return data["turns"], data.get("distance", -1), groups
+
+
+def coverage(data, maps=None, expected=()):
+    """The report lines: requested maps, each covered map elevation with its
+    spots, then every requested map and expected map elevation with no spot."""
+    turns = data["turns"]
+    groups = spot_groups(data, maps)
+    lines = ["turns: " + " ".join(f"{turn:+d}" for turn in turns),
+             "requested maps: " + (", ".join(sorted(maps)) if maps else "every configured map")]
+    for (map_name, elevation), spots in sorted(groups.items()):
+        lines.append(f"covered {map_name} e{elevation}: {len(spots)} spots x {len(turns)} turns "
+                     f"= {len(spots) * len(turns)} views")
+        lines += [f"  tile {spot['tile']} {spot['name']}" for spot in spots]
+    if not groups:
+        lines.append("covered: none")
+    missing = [f"missing {map_name}: no configured spots" for map_name in sorted(maps or ())
+               if not any(key[0] == map_name for key in groups)]
+    missing += [f"missing {map_name} e{elevation}: expected, no configured spots"
+                for map_name, elevation in expected if (map_name, elevation) not in groups]
+    lines += missing or ["missing: none"]
+    if not expected:
+        lines.append("elevations: not checked, no expected map elevations given (--expect)")
+    lines.append("A named spot proves only its own view, not every object of its class.")
+    return lines
+
+
+def map_elevations(text):
+    """'kladwtwn:0,kladwtwn:1' as [('kladwtwn', 0), ('kladwtwn', 1)]."""
+    return [(map_name, int(elevation)) for map_name, _, elevation in (item.partition(":") for item in text.split(","))]
 
 
 def side_kind(side):
@@ -100,29 +141,44 @@ def scene_folder(kind, path, map_name, elevation):
 
 
 def check_views(folder, map_name, elevation, spots, turns):
-    """Each view's sidecar shows the 3D scene of the asked map elevation at
-    the spot, and a spot's turns differ (the fly camera took off): a scene
-    that failed to start falls back to the game's own picture."""
+    """After the start shot, one readable PNG per spot and turn; each view's
+    sidecar shows the 3D scene of the asked map elevation at the spot, and a
+    spot's turns differ (the fly camera took off): a scene that failed to
+    start falls back to the game's own picture. Fresh, reused and sheet
+    shots all pass through here."""
     from PIL import Image, ImageChops
     sidecars = {}
     for path in folder.glob("*.json"):
-        data = json.loads(path.read_text(encoding="utf-8"))
-        sidecars[data.get("image")] = data
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            continue  # its view then has no sidecar
+        if isinstance(data, dict):
+            sidecars[data.get("image")] = data
     shots = sorted(folder.glob("*.png"))[1:]
+    if len(shots) != len(spots) * len(turns):
+        raise SystemExit(f"{map_name} e{elevation}: {len(shots)} views for {len(spots) * len(turns)} stops")
     problems = []
     for index, spot in enumerate(spots):
         part = shots[index * len(turns):(index + 1) * len(turns)]
         for turn, shot in zip(turns, part):
-            data = sidecars.get(shot.name, {})
+            data = sidecars.get(shot.name)
             where = f"{map_name} e{elevation} tile {spot['tile']} turn {turn:+d}"
-            if (str(data.get("map", "")).lower().removesuffix(".map") != map_name
+            if data is None:
+                problems.append(f"{where}: no sidecar for {shot.name}")
+            elif (str(data.get("map", "")).lower().removesuffix(".map") != map_name
                     or data.get("elevation") != elevation or data.get("view_tile") != spot["tile"]):
                 problems.append(f"{where}: shot at {data.get('map')} e{data.get('elevation')} "
                                 f"tile {data.get('view_tile')}")
             elif not (data.get("scene_3d_enabled") and data.get("scene_view") == "full"
                       and data.get("renderer") == "scene-gl"):
                 problems.append(f"{where}: no 3D scene ({data.get('renderer')}, {data.get('scene_view')})")
-        images = [Image.open(shot).convert("RGB") for shot in part]
+        images = []
+        for shot in part:
+            try:
+                images.append(Image.open(shot).convert("RGB"))
+            except OSError:
+                problems.append(f"{map_name} e{elevation} tile {spot['tile']}: {shot.name} is not a readable PNG")
         if len(images) > 1 and all(ImageChops.difference(images[0], other).getbbox() is None
                                    for other in images[1:]):
             problems.append(f"{map_name} e{elevation} tile {spot['tile']}: every turn is the same picture")
@@ -163,10 +219,13 @@ def shoot_group(name, side, kind, path, root, turns, distance, map_name, elevati
              "skip_script_blocking": rp_game_root is not None,
              "rp_mod": file_hash(rp_game_root / "mods" / "rpu.dat") if rp_game_root else None}
     stamp_file = folder / "tour.json"
-    if (reuse and stamp_file.is_file() and json.loads(stamp_file.read_text(encoding="utf-8")) == stamp
-            and len(list(folder.glob("*.png"))) == len(stops) + 1):
-        print(f"{name} {map_name} e{elevation}: reused", flush=True)
-        return
+    if reuse and stamp_file.is_file() and json.loads(stamp_file.read_text(encoding="utf-8")) == stamp:
+        try:
+            check_views(folder, map_name, elevation, spots, turns)
+            print(f"{name} {map_name} e{elevation}: reused", flush=True)
+            return
+        except SystemExit as problem:
+            print(f"{name} {map_name} e{elevation}: saved views unusable, shooting again: {problem}", flush=True)
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
@@ -188,10 +247,6 @@ def shoot_group(name, side, kind, path, root, turns, distance, map_name, elevati
     run = subprocess.run(powershell_args(command), capture_output=True, text=True, errors="replace")
     if run.returncode != 0:
         raise SystemExit(f"{name} {map_name} e{elevation}: dev-snapshot failed: {run.stderr[-600:]}")
-    # The first snapshot is the start, before the tour.
-    shots = sorted(folder.glob("*.png"))
-    if len(shots) != len(stops) + 1:
-        raise SystemExit(f"{name} {map_name} e{elevation}: {len(shots) - 1} views for {len(stops)} stops")
     check_views(folder, map_name, elevation, spots, turns)
     stamp_file.write_text(json.dumps(stamp, indent=1) + "\n", encoding="utf-8")
     print(f"{name} {map_name} e{elevation}: {len(stops)} views", flush=True)
@@ -288,16 +343,16 @@ def sheets(turns, groups, out, skip_failed=False):
     changed_rows = []
     total = changed = skipped = 0
     for (map_name, elevation), spots in groups.items():
-        before, after = views("before", map_name, elevation), views("after", map_name, elevation)
-        expected = len(spots) * len(turns)
-        if len(before) != expected or len(after) != expected:
+        try:
+            for name in ("before", "after"):
+                check_views(OUT / name / f"{map_name}-e{elevation}", map_name, elevation, spots, turns)
+        except SystemExit as problem:
             if not skip_failed:
-                raise SystemExit(f"{map_name} e{elevation}: {len(before)} before and {len(after)} after views, "
-                                 f"{expected} expected; shoot first")
+                raise SystemExit(f"{name}: {problem}; shoot first")
             skipped += 1
-            print(f"{map_name} e{elevation}: skipped in the sheets, "
-                  f"{len(before)} before and {len(after)} after views, {expected} expected", flush=True)
+            print(f"{map_name} e{elevation}: skipped in the sheets, {name}: {problem}", flush=True)
             continue
+        before, after = views("before", map_name, elevation), views("after", map_name, elevation)
         rows = []
         for index, spot in enumerate(spots):
             part = slice(index * len(turns), (index + 1) * len(turns))
@@ -327,7 +382,7 @@ def sheets(turns, groups, out, skip_failed=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--before", required=True, help="a built checkout or a scene cache folder")
+    parser.add_argument("--before", help="a built checkout or a scene cache folder (required unless --coverage)")
     parser.add_argument("--after", default=str(ROOT), help="the same (default: this checkout)")
     parser.add_argument("--maps", help="comma-separated map names (default: every map in spots.json)")
     parser.add_argument("--rp-game-root", type=Path,
@@ -337,15 +392,25 @@ def main():
                         help="keep going when one map elevation fails to shoot; its folder keeps no stamp, "
                              "so a later --reuse run shoots it again")
     parser.add_argument("--out", type=Path, default=OUT / "sheets", help="where the sheets go")
+    parser.add_argument("--coverage", action="store_true", help="print the coverage report and shoot nothing")
+    parser.add_argument("--expect", type=map_elevations, default=[],
+                        help="comma-separated map:elevation pairs the selection must cover")
     args = parser.parse_args()
+    if not args.coverage and not args.before:
+        parser.error("--before is required unless --coverage")
     rp_game_root = args.rp_game_root.resolve() if args.rp_game_root else None
+    spots_path = HERE / ("rp_spots.json" if rp_game_root else "spots.json")
+    maps = set(args.maps.split(",")) if args.maps else None
+    print(f"tour coverage ({spots_path.name}):")
+    print("\n".join(coverage(json.loads(spots_path.read_text(encoding="utf-8")), maps, args.expect)), flush=True)
+    if args.coverage:
+        return 0
     if rp_game_root:
         if not (rp_game_root / "master.dat").is_file() or not (rp_game_root / "critter.dat").is_file():
             raise SystemExit("--rp-game-root must contain master.dat and critter.dat")
         if not (rp_game_root / "mods" / "rpu.dat").is_file():
             raise SystemExit("--rp-game-root must contain mods/rpu.dat")
-    spots_path = HERE / ("rp_spots.json" if rp_game_root else "spots.json")
-    turns, distance, groups = load_spots(set(args.maps.split(",")) if args.maps else None, spots_path)
+    turns, distance, groups = load_spots(maps, spots_path)
     shoot("before", args.before, turns, distance, groups, args.reuse, rp_game_root, args.skip_failed)
     shoot("after", args.after, turns, distance, groups, args.reuse, rp_game_root, args.skip_failed)
     sheets(turns, groups, args.out, args.skip_failed)

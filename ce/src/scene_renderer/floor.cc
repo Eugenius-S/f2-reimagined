@@ -29,6 +29,49 @@ float gFloorSeaColor[3] = {0.04f, 0.04f, 0.045f};
 namespace {
 
 unsigned int gFloorVbo = 0;
+struct FloorReceiver {
+    unsigned int texture = 0;
+    int tile = -1, artFile = -1;
+    float x = 0, y = 0, width = 0, height = 0;
+};
+FloorReceiver gFloorReceiver;
+
+void loadFloorReceiver(const std::filesystem::path& cacheDirectory)
+{
+    // Optional native floor-art ownership, little endian:
+    // F2FR, art file, tile, origin x/y (signed), width/height, coverage bytes.
+    std::vector<unsigned char> bytes;
+    if (!readBinary(cacheDirectory / "floor-receiver.bin", bytes)
+        || bytes.size() < 18 || std::memcmp(bytes.data(), "F2FR", 4) != 0) return;
+    const int tile = readU16(bytes.data() + 8);
+    const unsigned width = readU16(bytes.data() + 14), height = readU16(bytes.data() + 16);
+    if (tile >= 40000 || width == 0 || height == 0 || width > 2048 || height > 2048
+        || bytes.size() != 18 + width * height) return;
+    unsigned int artFile = 0;
+    std::memcpy(&artFile, bytes.data() + 4, sizeof(artFile));
+    if ((artFile & 0x0F000FFF) != artFile) return;
+
+    unsigned int texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(kTexture2D, texture);
+    glPixelStorei(kUnpackRowLength, 0);
+    constexpr unsigned kUnpackAlignment = 0x0CF5;
+    int alignment = 4;
+    glGetIntegerv(kUnpackAlignment, &alignment);
+    glPixelStorei(kUnpackAlignment, 1);
+    glTexImage2D(kTexture2D, 0, 0x8229 /* GL_R8 */, width, height, 0, 0x1903 /* GL_RED */, kUnsignedByte, bytes.data() + 18);
+    glPixelStorei(kUnpackAlignment, alignment);
+    glTexParameteri(kTexture2D, kTextureMinFilter, kLinear);
+    glTexParameteri(kTexture2D, kTextureMagFilter, kLinear);
+    glTexParameteri(kTexture2D, kTextureWrapS, kClampToEdge);
+    glTexParameteri(kTexture2D, kTextureWrapT, kClampToEdge);
+    auto signedWord = [&](int offset) {
+        const int n = readU16(bytes.data() + offset);
+        return static_cast<float>(n > 32767 ? n - 65536 : n);
+    };
+    gFloorReceiver = { texture, tile, static_cast<int>(artFile), signedWord(10), signedWord(12),
+        static_cast<float>(width), static_cast<float>(height) };
+}
 MapClip gFloorMapClip;
 MapClip gActiveMapClip;
 std::vector<unsigned char> gFloorOccupancy;
@@ -39,11 +82,33 @@ bool gFloorTileLess = false;
 
 } // namespace
 
+void bindFloorReceiver(bool enabled)
+{
+    int group = -1;
+    if (enabled && gFloorReceiver.texture != 0) {
+        for (const ObjectDraw& draw : gObjectDraws) {
+            if (draw.tile == gFloorReceiver.tile && draw.artFile == gFloorReceiver.artFile && draw.shadowGroup >= 0) {
+                group = draw.shadowGroup;
+                break;
+            }
+        }
+    }
+    glUniform1i(gSceneFloorReceiverGroupLocation, group);
+    if (group < 0) return;
+    glActiveTexture(kTexture0 + 10);
+    glBindTexture(kTexture2D, gFloorReceiver.texture);
+    glUniform1i(gSceneFloorReceiverMaskLocation, 10);
+    glUniform4f(gSceneFloorReceiverRectLocation, gFloorReceiver.x, gFloorReceiver.y,
+        gFloorReceiver.width, gFloorReceiver.height);
+    glActiveTexture(kTexture0);
+}
+
 void destroyStaticFloor()
 {
     destroySceneSky();
     if (gContext != nullptr) {
         if (gFloorTexture != 0) glDeleteTextures(1, &gFloorTexture);
+        if (gFloorReceiver.texture != 0) glDeleteTextures(1, &gFloorReceiver.texture);
         if (gFloorVbo != 0) glDeleteBuffers(1, &gFloorVbo);
         if (gFloorVao != 0) glDeleteVertexArrays(1, &gFloorVao);
     }
@@ -53,6 +118,7 @@ void destroyStaticFloor()
     gFloorVao = 0;
     gFloorVbo = 0;
     gFloorTexture = 0;
+    gFloorReceiver = {};
     gFloorVertexCount = 0;
     gFloorExtensionFirst = 0;
     gFloorExtensionCount = 0;
@@ -566,6 +632,7 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
         glTexParameteri(kTexture2D, kTextureWrapT, kClampToEdge);
         setRoofFringeTexture(fringeTexture);
     }
+    loadFloorReceiver(cacheDirectory);
     gFloorLoaded = true;
     if (error != nullptr) error->clear();
     return true;

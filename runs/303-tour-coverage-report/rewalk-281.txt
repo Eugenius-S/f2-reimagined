@@ -1,0 +1,115 @@
+py -3 tools/tour/tour.py --coverage --maps depolv1,depolva,depolvb,mbase12,mbase34,mbclose,navarro,ncr1,ncr2,ncr3,ncr4,ncrent,sfchina,sfchina2,sfdock,sfelronb,sfshutl1,sfshutl2,sftanker,v13ent,v15ent,v15sent,vault13,vault15
+tour coverage (spots.json):
+turns: -45 +0 +45
+requested maps: depolv1, depolva, depolvb, mbase12, mbase34, mbclose, navarro, ncr1, ncr2, ncr3, ncr4, ncrent, sfchina, sfchina2, sfdock, sfelronb, sfshutl1, sfshutl2, sftanker, v13ent, v15ent, v15sent, vault13, vault15
+covered depolv1 e0: 1 spots x 3 turns = 3 views
+  tile 27705 the Sierra depot gatehouse
+covered depolv1 e1: 1 spots x 3 turns = 3 views
+  tile 21321 the depot bunker level
+covered depolva e0: 1 spots x 3 turns = 3 views
+  tile 26505 the depot workshop
+covered depolva e1: 1 spots x 3 turns = 3 views
+  tile 26504 the robot storage hall
+covered depolva e2: 1 spots x 3 turns = 3 views
+  tile 26104 the depot top level
+covered depolvb e0: 1 spots x 3 turns = 3 views
+  tile 21910 the robotics bay
+covered mbase12 e0: 1 spots x 3 turns = 3 views
+  tile 16089 the military base corridors
+covered mbase12 e1: 1 spots x 3 turns = 3 views
+  tile 16089 the military base lower level
+covered mbase34 e0: 1 spots x 3 turns = 3 views
+  tile 14141 the base corridor fork
+covered mbase34 e1: 1 spots x 3 turns = 3 views
+  tile 15131 the vat room
+covered mbclose e0: 1 spots x 3 turns = 3 views
+  tile 23939 the military base surface
+covered navarro e0: 1 spots x 3 turns = 3 views
+  tile 28694 Navarro, the base floor
+covered navarro e1: 1 spots x 3 turns = 3 views
+  tile 28694 Navarro, the lower floor
+covered navarro e2: 1 spots x 3 turns = 3 views
+  tile 28694 Navarro, the hangar level
+covered ncr1 e0: 3 spots x 3 turns = 9 views
+  tile 20898 NCR city, elevation 0, overview
+  tile 13915 NCR city, elevation 0, entry
+  tile 13915 the NCR council square
+covered ncr1 e1: 3 spots x 3 turns = 9 views
+  tile 20106 NCR city, elevation 1, overview
+  tile 13915 NCR city, elevation 1, entry
+  tile 16104 the council building top floor
+covered ncr2 e0: 3 spots x 3 turns = 9 views
+  tile 20902 NCR bazaar, elevation 0, overview
+  tile 20100 NCR bazaar, elevation 0, entry
+  tile 13895 the statue plaza
+covered ncr3 e0: 3 spots x 3 turns = 9 views
+  tile 21499 squatters camp, elevation 0, overview
+  tile 23869 squatters camp, elevation 0, entry
+  tile 23669 the west gate street
+covered ncr4 e0: 3 spots x 3 turns = 9 views
+  tile 20481 north NCR, elevation 0, overview
+  tile 17699 north NCR, elevation 0, entry
+  tile 18279 the brahmin pens
+covered ncrent e0: 3 spots x 3 turns = 9 views
+  tile 19112 NCR entrance, elevation 0, overview
+  tile 20877 NCR entrance, elevation 0, entry
+  tile 20274 the NCR entrance
+covered ncrent e1: 2 spots x 3 turns = 6 views
+  tile 22148 NCR entrance, elevation 1, overview
+  tile 19733 the entrance warehouse
+covered sfchina e0: 1 spots x 3 turns = 3 views
+  tile 26504 Chinatown street
+covered sfchina2 e0: 1 spots x 3 turns = 3 views
+  tile 26504 Chinatown, the shaman's floor
+covered sfchina2 e1: 1 spots x 3 turns = 3 views
+  tile 20133 Chinatown, the upper walk
+covered sfchina2 e2: 1 spots x 3 turns = 3 views
+  tile 24722 Chinatown, the top floor
+covered sfdock e0: 1 spots x 3 turns = 3 views
+  tile 20100 the docks pier
+covered sfelronb e0: 1 spots x 3 turns = 3 views
+  tile 23155 the Elronologists' base
+covered sfshutl1 e0: 1 spots x 3 turns = 3 views
+  tile 26311 the shuttle exterior
+covered sfshutl2 e0: 1 spots x 3 turns = 3 views
+  tile 20695 the shuttle interior
+covered sftanker e0: 1 spots x 3 turns = 3 views
+  tile 27701 the tanker deck, bow
+covered sftanker e1: 1 spots x 3 turns = 3 views
+  tile 27701 the tanker deck, midship
+covered sftanker e2: 1 spots x 3 turns = 3 views
+  tile 23490 the tanker, the top level
+covered v13ent e0: 1 spots x 3 turns = 3 views
+  tile 25943 the Vault 13 entrance cave
+covered v15ent e0: 3 spots x 3 turns = 9 views
+  tile 23907 Vault 15 entrance, elevation 0, overview
+  tile 29523 Vault 15 entrance, elevation 0, entry
+  tile 29325 the Vault 15 entrance desert
+covered v15ent e1: 3 spots x 3 turns = 9 views
+  tile 23907 Vault 15 entrance, elevation 1, overview
+  tile 29523 Vault 15 entrance, elevation 1, entry
+  tile 29325 the vault plaza
+covered v15sent e0: 3 spots x 3 turns = 9 views
+  tile 19088 Vault 15 south entrance, elevation 0, overview
+  tile 17700 Vault 15 south entrance, elevation 0, entry
+  tile 18097 the squatters' camp
+covered vault13 e0: 1 spots x 3 turns = 3 views
+  tile 17095 the Vault 13 command centre
+covered vault13 e1: 1 spots x 3 turns = 3 views
+  tile 17095 the Vault 13 living quarters
+covered vault13 e2: 2 spots x 3 turns = 6 views
+  tile 16694 the deathclaw floor
+  tile 14694 the Vault 13 dining hall
+covered vault15 e0: 3 spots x 3 turns = 9 views
+  tile 19094 Vault 15 ruins, elevation 0, overview
+  tile 20100 Vault 15 ruins, elevation 0, entry
+  tile 27103 the vault door cave
+covered vault15 e1: 2 spots x 3 turns = 6 views
+  tile 21907 Vault 15 ruins, elevation 1, overview
+  tile 20100 Vault 15 ruins, elevation 1, entry
+covered vault15 e2: 2 spots x 3 turns = 6 views
+  tile 20897 Vault 15 ruins, elevation 2, overview
+  tile 20100 Vault 15 ruins, elevation 2, entry
+missing: none
+elevations: not checked, no expected map elevations given (--expect)
+A named spot proves only its own view, not every object of its class.

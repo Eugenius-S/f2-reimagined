@@ -376,6 +376,11 @@ bool isoIsDisabled()
     return gIsoEnabled == false;
 }
 
+bool mapIsTransitioning()
+{
+    return mapLoadTimerDepth != 0 || gMapTransition.map != 0;
+}
+
 // 0x482158 map_set_elevation
 int mapSetElevation(MapElevation elevation)
 {

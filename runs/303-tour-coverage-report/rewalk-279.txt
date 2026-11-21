@@ -1,0 +1,146 @@
+py -3 tools/tour/tour.py --coverage --maps arbridge,arcaves,ardead,argarden,artemple,arvill2,arvillag,denbus1,denbus2,denres1,dnslvrun,gstcav1,gstcav2,gstfarm,klacanyn,kladwtwn,klagraz,klamall,klaratcv,klatoxcv,klatrap,modbrah,modgard,modinn,modmain,modshit,modwell
+tour coverage (spots.json):
+turns: -45 +0 +45
+requested maps: arbridge, arcaves, ardead, argarden, artemple, arvill2, arvillag, denbus1, denbus2, denres1, dnslvrun, gstcav1, gstcav2, gstfarm, klacanyn, kladwtwn, klagraz, klamall, klaratcv, klatoxcv, klatrap, modbrah, modgard, modinn, modmain, modshit, modwell
+covered arbridge e0: 2 spots x 3 turns = 6 views
+  tile 16686 bridge entrance
+  tile 20686 the rope bridge over the cliff
+covered arcaves e0: 2 spots x 3 turns = 6 views
+  tile 28706 entrance, the caves mouth
+  tile 26706 the exit gate, torches
+covered arcaves e1: 2 spots x 3 turns = 6 views
+  tile 28706 lower cave, entrance
+  tile 22706 the cave mouth
+covered arcaves e2: 2 spots x 3 turns = 6 views
+  tile 26097 upper cave, entrance
+  tile 22097 the corridor maze
+covered ardead e0: 2 spots x 3 turns = 6 views
+  tile 26719 destroyed bridge entrance
+  tile 24719 cliff and the brahmin pen
+covered argarden e0: 2 spots x 3 turns = 6 views
+  tile 21474 wilderness entrance
+  tile 17474 the forest heart
+covered artemple e0: 2 spots x 3 turns = 6 views
+  tile 17288 temple entrance
+  tile 21288 the camp south of the temple
+covered arvillag e0: 3 spots x 3 turns = 9 views
+  tile 21115 village entrance
+  tile 25115 the stone head plaza
+  tile 19115 north huts
+covered denbus1 e0: 2 spots x 3 turns = 6 views
+  tile 13292 business street entrance
+  tile 17292 the shop block, signs
+covered denbus1 e1: 2 spots x 3 turns = 6 views
+  tile 15070 business street, upper floor
+  tile 19070 the upstairs apartment
+covered denbus1 e2: 2 spots x 3 turns = 6 views
+  tile 19487 business street, top floor
+  tile 23487 the shack interior
+covered denbus2 e0: 2 spots x 3 turns = 6 views
+  tile 27898 brothel entrance
+  tile 25698 the Cat's Paw sign block
+covered denbus2 e1: 2 spots x 3 turns = 6 views
+  tile 1110 brothel, second storey
+  tile 3110 the small second storey
+covered denres1 e0: 2 spots x 3 turns = 6 views
+  tile 11308 residential street entrance
+  tile 15308 the residential block
+covered denres1 e1: 2 spots x 3 turns = 6 views
+  tile 11308 residential street, upper floor
+  tile 15308 the residential block, upper floor
+covered dnslvrun e0: 2 spots x 3 turns = 6 views
+  tile 26905 slave run entrance
+  tile 22905 the fire pit
+covered dnslvrun e1: 2 spots x 3 turns = 6 views
+  tile 26706 slave run, upper floor
+  tile 20706 the slave camp garden
+covered dnslvrun e2: 2 spots x 3 turns = 6 views
+  tile 25910 slave run, top floor
+  tile 21910 the corn field
+covered gstcav1 e0: 2 spots x 3 turns = 6 views
+  tile 14255 the main cavern
+  tile 12255 the hermit camp
+covered gstcav2 e0: 2 spots x 3 turns = 6 views
+  tile 25713 the underground lake
+  tile 23713 the lake shore camp
+covered gstfarm e0: 2 spots x 3 turns = 6 views
+  tile 23345 the ghost farm entrance
+  tile 21345 the massacre in the corn
+covered klacanyn e0: 2 spots x 3 turns = 6 views
+  tile 15909 regression gallery view
+  tile 23869 south of the canyon
+covered kladwtwn e0: 19 spots x 3 turns = 57 views
+  tile 24268 long building, south-west corner (071)
+  tile 24292 long building, south-east corner (071)
+  tile 20268 long building, north-west corner (071)
+  tile 20292 long building, north-east corner (071)
+  tile 20690 corner by the street (071, 083)
+  tile 19265 bathhouse front
+  tile 17467 Vic's shack
+  tile 17104 dark house corner, light stripe (review2, 076)
+  tile 19108 gargoyle corner (083)
+  tile 24678 corner (review2, 076-081)
+  tile 22958 corner (review2, 076-081)
+  tile 24481 corner (review2, 076-081)
+  tile 17666 corner (review2, 076-081)
+  tile 20736 corner (review2, 076-081)
+  tile 14505 corner (review2, 076-081)
+  tile 25075 entrance street, walls
+  tile 23481 corrals, fences
+  tile 22885 western rooms, furniture
+  tile 17699 central doors and rooms
+covered klagraz e0: 2 spots x 3 turns = 6 views
+  tile 24727 building, regression gallery view
+  tile 16333 north fences
+covered klamall e0: 7 spots x 3 turns = 21 views
+  tile 13050 STOP corner (review2 01)
+  tile 12666 corner, light stripe (076)
+  tile 15450 corner (083)
+  tile 21700 mesh fence corner
+  tile 23145 regression gallery view
+  tile 27886 south buildings
+  tile 28493 south-east buildings
+covered klaratcv e0: 2 spots x 3 turns = 6 views
+  tile 21511 cave, regression gallery view
+  tile 13511 cave, north
+covered klaratcv e1: 2 spots x 3 turns = 6 views
+  tile 14701 cave, regression gallery view
+  tile 22661 cave, south
+covered klaratcv e2: 1 spots x 3 turns = 3 views
+  tile 17107 cave, regression gallery view
+covered klatoxcv e0: 2 spots x 3 turns = 6 views
+  tile 15919 cave, regression gallery view
+  tile 23879 cave, south
+covered klatoxcv e1: 2 spots x 3 turns = 6 views
+  tile 19091 cave, regression gallery view
+  tile 22924 cave, south-east
+covered klatoxcv e2: 1 spots x 3 turns = 3 views
+  tile 15065 cave, regression gallery view
+covered klatrap e0: 3 spots x 3 turns = 9 views
+  tile 21913 regression gallery view
+  tile 13913 north
+  tile 20733 building
+covered modbrah e0: 2 spots x 3 turns = 6 views
+  tile 19324 the brahmin pastures
+  tile 17324 the brahmin herd
+covered modgard e0: 2 spots x 3 turns = 6 views
+  tile 18711 Farrel's garden
+  tile 16711 the dead brahmin garden
+covered modinn e0: 2 spots x 3 turns = 6 views
+  tile 25321 the bed and breakfast
+  tile 21321 the inn, the car and the pens
+covered modinn e1: 1 spots x 3 turns = 3 views
+  tile 25321 the bed and breakfast, upper floor
+covered modmain e0: 3 spots x 3 turns = 9 views
+  tile 23333 main street entrance
+  tile 19333 the big barn
+  tile 21333 the farmhouse and pens
+covered modshit e0: 2 spots x 3 turns = 6 views
+  tile 20699 the outhouse corner
+  tile 18699 the lit outhouse pit
+covered modwell e0: 2 spots x 3 turns = 6 views
+  tile 16710 the town well
+  tile 14710 the well shaft and ladder
+missing arvill2: no configured spots
+elevations: not checked, no expected map elevations given (--expect)
+A named spot proves only its own view, not every object of its class.

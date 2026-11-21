@@ -1,4 +1,5 @@
 #include "dialogue_backdrop.h"
+#include "scene_view.h"
 
 #include "../debug.h"
 #include "../svga.h"
@@ -22,13 +23,15 @@ void destroyBackdrop()
 
 int createDialogueBackgroundWindow(int x, int y, int width, int height)
 {
-    // A normal opaque window hides the world in both presentation paths,
+    // In the classic view an opaque window hides the world,
     // leaving all dialogue windows, barter and the cursor above it.
     destroyBackdrop();
-    backdropWindow = windowCreate(0, 0, screenGetWidth(), screenGetHeight(),
-        static_cast<ColorWithFlags>(0), WINDOW_DONT_MOVE_TOP);
-    if (backdropWindow == -1) {
-        debugPrint("Dialogue backdrop disabled: window creation failed.\n");
+    if (activeView() != View::Full) {
+        backdropWindow = windowCreate(0, 0, screenGetWidth(), screenGetHeight(),
+            static_cast<ColorWithFlags>(0), WINDOW_DONT_MOVE_TOP);
+        if (backdropWindow == -1) {
+            debugPrint("Dialogue backdrop disabled: window creation failed.\n");
+        }
     }
 
     const int window = windowCreate(x, y, width, height,

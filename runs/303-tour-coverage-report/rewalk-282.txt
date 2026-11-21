@@ -1,0 +1,228 @@
+py -3 tools/tour/tour.py --coverage --maps cardesrt,cave0,cave1,cave2,cave3,cave4,cave5,cave6,cave7,city1,city2,city3,city4,city5,city6,city7,city8,coast1,coast10,coast11,coast12,coast2,coast3,coast4,coast5,coast6,coast7,coast8,coast9,cowbomb,desert1,desert2,desert3,desert4,desert5,desert6,desert7,desert8,desert9,desrt10,desrt11,desrt12,desrt13,encdet,encdock,encfite,encgd,encpres,encrctr,enctrp,mountn1,mountn2,mountn3,mountn4,mountn5,mountn6,rndbess,rndbhead,rndbridg,rndcafe,rndexcow,rndforvr,rndholy1,rndholy2,rndparih,rndshutl,rndtinwd,rndtoxic,rnduvilg,rndwhale
+tour coverage (spots.json):
+turns: -45 +0 +45
+requested maps: cardesrt, cave0, cave1, cave2, cave3, cave4, cave5, cave6, cave7, city1, city2, city3, city4, city5, city6, city7, city8, coast1, coast10, coast11, coast12, coast2, coast3, coast4, coast5, coast6, coast7, coast8, coast9, cowbomb, desert1, desert2, desert3, desert4, desert5, desert6, desert7, desert8, desert9, desrt10, desrt11, desrt12, desrt13, encdet, encdock, encfite, encgd, encpres, encrctr, enctrp, mountn1, mountn2, mountn3, mountn4, mountn5, mountn6, rndbess, rndbhead, rndbridg, rndcafe, rndexcow, rndforvr, rndholy1, rndholy2, rndparih, rndshutl, rndtinwd, rndtoxic, rnduvilg, rndwhale
+covered cardesrt e0: 1 spots x 3 turns = 3 views
+  tile 20100 the car in the desert
+covered cave0 e0: 1 spots x 3 turns = 3 views
+  tile 18688 the cavern mouth
+covered cave1 e0: 1 spots x 3 turns = 3 views
+  tile 24103 the first gallery
+covered cave1 e1: 1 spots x 3 turns = 3 views
+  tile 24103 the lower gallery
+covered cave2 e0: 1 spots x 3 turns = 3 views
+  tile 21103 the flooded hall
+covered cave2 e1: 1 spots x 3 turns = 3 views
+  tile 21103 the hall's ledge
+covered cave3 e0: 1 spots x 3 turns = 3 views
+  tile 21909 the twist passage
+covered cave3 e1: 1 spots x 3 turns = 3 views
+  tile 21909 the deep passage
+covered cave4 e0: 1 spots x 3 turns = 3 views
+  tile 23112 the stone bridge
+covered cave4 e1: 1 spots x 3 turns = 3 views
+  tile 23112 the lower bridge
+covered cave5 e0: 1 spots x 3 turns = 3 views
+  tile 24103 the great cavern
+covered cave5 e1: 1 spots x 3 turns = 3 views
+  tile 24103 the cavern shelf
+covered cave5 e2: 1 spots x 3 turns = 3 views
+  tile 24103 the cavern floor
+covered cave6 e0: 1 spots x 3 turns = 3 views
+  tile 20100 the narrow cave
+covered cave7 e0: 1 spots x 3 turns = 3 views
+  tile 20100 the dead end cave
+covered city1 e0: 1 spots x 3 turns = 3 views
+  tile 14692 the ruined crossroads
+covered city2 e0: 1 spots x 3 turns = 3 views
+  tile 12501 the south street
+covered city3 e0: 1 spots x 3 turns = 3 views
+  tile 22136 the rubble square
+covered city4 e0: 1 spots x 3 turns = 3 views
+  tile 25892 the west ruin
+covered city5 e0: 1 spots x 3 turns = 3 views
+  tile 18868 the walled yard
+covered city6 e0: 1 spots x 3 turns = 3 views
+  tile 27302 the north street
+covered city7 e0: 1 spots x 3 turns = 3 views
+  tile 19121 the burned block
+covered city8 e0: 1 spots x 3 turns = 3 views
+  tile 19899 the market ruin
+covered coast1 e0: 1 spots x 3 turns = 3 views
+  tile 20100 the coast road and the car
+covered coast10 e0: 1 spots x 3 turns = 3 views
+  tile 19716 the shanty camp by the road
+covered coast2 e0: 1 spots x 3 turns = 3 views
+  tile 20100 the night shore
+covered coast4 e0: 1 spots x 3 turns = 3 views
+  tile 18488 the cliffs and the cave mouth
+covered desert5 e0: 1 spots x 3 turns = 3 views
+  tile 21099 the rock wall and the arch
+covered desert5 e1: 1 spots x 3 turns = 3 views
+  tile 508 the canyon rim
+covered desert7 e0: 1 spots x 3 turns = 3 views
+  tile 20101 the dry trees
+covered desrt10 e0: 1 spots x 3 turns = 3 views
+  tile 21894 the varnish trader camp
+covered desrt13 e0: 1 spots x 3 turns = 3 views
+  tile 20100 the night camp
+covered encdet e0: 1 spots x 3 turns = 3 views
+  tile 20100 the Enclave detention corner
+covered encdock e0: 1 spots x 3 turns = 3 views
+  tile 20100 the Enclave dock
+covered encfite e0: 1 spots x 3 turns = 3 views
+  tile 20100 the Enclave fight room
+covered encgd e0: 1 spots x 3 turns = 3 views
+  tile 20100 the guard barracks
+covered encpres e0: 1 spots x 3 turns = 3 views
+  tile 20100 the presidential hall
+covered encrctr e0: 1 spots x 3 turns = 3 views
+  tile 20100 the reactor hall
+covered enctrp e0: 1 spots x 3 turns = 3 views
+  tile 20100 the trap room
+covered mountn1 e0: 1 spots x 3 turns = 3 views
+  tile 18688 the mountain path
+covered mountn2 e0: 1 spots x 3 turns = 3 views
+  tile 18688 the ridge trail
+covered mountn3 e0: 1 spots x 3 turns = 3 views
+  tile 18688 the switchback
+covered mountn4 e0: 1 spots x 3 turns = 3 views
+  tile 18688 the pass
+covered mountn5 e0: 1 spots x 3 turns = 3 views
+  tile 19683 the scree slope
+covered mountn6 e0: 1 spots x 3 turns = 3 views
+  tile 19683 the summit trail
+covered rndbess e0: 1 spots x 3 turns = 3 views
+  tile 13085 Bess's corral
+covered rndbess e1: 1 spots x 3 turns = 3 views
+  tile 20100 Bess's pen, inside
+covered rndbhead e0: 1 spots x 3 turns = 3 views
+  tile 23323 the giant brahmin head
+covered rndbridg e0: 1 spots x 3 turns = 3 views
+  tile 19298 the broken bridge
+covered rndcafe e0: 1 spots x 3 turns = 3 views
+  tile 21302 the cafe of broken dreams
+covered rndexcow e0: 1 spots x 3 turns = 3 views
+  tile 20100 the mad cow
+covered rndforvr e0: 1 spots x 3 turns = 3 views
+  tile 17095 the guardian's gateway
+covered rndforvr e1: 1 spots x 3 turns = 3 views
+  tile 17095 the guardian's plaza
+covered rndholy1 e0: 1 spots x 3 turns = 3 views
+  tile 18323 the holy hut 1
+covered rndholy2 e0: 1 spots x 3 turns = 3 views
+  tile 19270 the holy hut 2
+covered rndholy2 e1: 1 spots x 3 turns = 3 views
+  tile 19270 the holy hut 2, upstairs
+covered rndparih e0: 1 spots x 3 turns = 3 views
+  tile 20100 the pariahs
+covered rndshutl e0: 1 spots x 3 turns = 3 views
+  tile 17699 the crashed shuttle
+covered rndtinwd e0: 1 spots x 3 turns = 3 views
+  tile 18920 the woodsman's camp
+covered rndtoxic e0: 1 spots x 3 turns = 3 views
+  tile 20512 the toxic dump
+covered rnduvilg e0: 1 spots x 3 turns = 3 views
+  tile 20100 the unwashed village
+covered rndwhale e0: 1 spots x 3 turns = 3 views
+  tile 17705 the whale carcass
+missing coast11: no configured spots
+missing coast12: no configured spots
+missing coast3: no configured spots
+missing coast5: no configured spots
+missing coast6: no configured spots
+missing coast7: no configured spots
+missing coast8: no configured spots
+missing coast9: no configured spots
+missing cowbomb: no configured spots
+missing desert1: no configured spots
+missing desert2: no configured spots
+missing desert3: no configured spots
+missing desert4: no configured spots
+missing desert6: no configured spots
+missing desert8: no configured spots
+missing desert9: no configured spots
+missing desrt11: no configured spots
+missing desrt12: no configured spots
+elevations: not checked, no expected map elevations given (--expect)
+A named spot proves only its own view, not every object of its class.
+
+py -3 tools/tour/tour.py --coverage --maps abbasem,abbey,abundgr,easter,epamain1,epamain2,epasl,epax,gammovie,gcenclen,hubstash,merchant,safehs1,safehs2,safehs3,sfsheng,sfsub,slvcamp,tribe01,tribe02,v13_orig,v15_orig,vill,vilmerch --rp-game-root <RP game>
+tour coverage (rp_spots.json):
+turns: -45 +0 +45
+requested maps: abbasem, abbey, abundgr, easter, epamain1, epamain2, epasl, epax, gammovie, gcenclen, hubstash, merchant, safehs1, safehs2, safehs3, sfsheng, sfsub, slvcamp, tribe01, tribe02, v13_orig, v15_orig, vill, vilmerch
+covered abbasem e0: 1 spots x 3 turns = 3 views
+  tile 20100 Abbey Basement center
+covered abbey e0: 1 spots x 3 turns = 3 views
+  tile 20100 Abbey Entrance center
+covered abbey e1: 1 spots x 3 turns = 3 views
+  tile 20100 Abbey Entrance center
+covered abbey e2: 1 spots x 3 turns = 3 views
+  tile 20100 Abbey Entrance center
+covered abundgr e0: 1 spots x 3 turns = 3 views
+  tile 20100 Abbey Cave center
+covered epamain1 e0: 1 spots x 3 turns = 3 views
+  tile 20100 EPA SubLevels 1 center
+covered epamain1 e1: 1 spots x 3 turns = 3 views
+  tile 20100 EPA SubLevels 1 center
+covered epamain1 e2: 1 spots x 3 turns = 3 views
+  tile 20100 EPA SubLevels 1 center
+covered epamain2 e0: 1 spots x 3 turns = 3 views
+  tile 20100 EPA SubLevels 2 center
+covered epamain2 e2: 1 spots x 3 turns = 3 views
+  tile 20100 EPA SubLevels 2 center
+covered epasl e0: 1 spots x 3 turns = 3 views
+  tile 20100 Secret Level center
+covered epasl e1: 1 spots x 3 turns = 3 views
+  tile 20100 Secret Level center
+covered epasl e2: 1 spots x 3 turns = 3 views
+  tile 20100 Secret Level center
+covered epax e0: 1 spots x 3 turns = 3 views
+  tile 20100 EPA center
+covered epax e1: 1 spots x 3 turns = 3 views
+  tile 20100 EPA center
+covered epax e2: 1 spots x 3 turns = 3 views
+  tile 20100 EPA center
+covered hubstash e0: 1 spots x 3 turns = 3 views
+  tile 20100 Hubologist Stash center
+covered hubstash e1: 1 spots x 3 turns = 3 views
+  tile 20100 Hubologist Stash center
+covered hubstash e2: 1 spots x 3 turns = 3 views
+  tile 20100 Hubologist Stash center
+covered safehs1 e0: 1 spots x 3 turns = 3 views
+  tile 20100 Ranger Safe House 1 center
+covered safehs2 e0: 1 spots x 3 turns = 3 views
+  tile 20100 Ranger Safe House 2 center
+covered safehs3 e0: 1 spots x 3 turns = 3 views
+  tile 20100 Ranger Safe House 3 center
+covered sfsheng e0: 1 spots x 3 turns = 3 views
+  tile 20100 San Fran Dr. Sheng center
+covered sfsheng e1: 1 spots x 3 turns = 3 views
+  tile 20100 San Fran Dr. Sheng center
+covered sfsub e0: 1 spots x 3 turns = 3 views
+  tile 20100 Shi Sub center
+covered sfsub e1: 1 spots x 3 turns = 3 views
+  tile 20100 Shi Sub center
+covered slvcamp e0: 1 spots x 3 turns = 3 views
+  tile 20100 Slaver Camp center
+covered tribe01 e0: 1 spots x 3 turns = 3 views
+  tile 20100 Umbra Tribe center
+covered tribe01 e1: 1 spots x 3 turns = 3 views
+  tile 20100 Umbra Tribe center
+covered tribe01 e2: 1 spots x 3 turns = 3 views
+  tile 20100 Umbra Tribe center
+covered tribe02 e0: 1 spots x 3 turns = 3 views
+  tile 20100 Umbra Tribe Waterside center
+covered tribe02 e1: 1 spots x 3 turns = 3 views
+  tile 20100 Umbra Tribe Waterside center
+covered vilmerch e0: 1 spots x 3 turns = 3 views
+  tile 20100 Vault Village Merchant center
+missing easter: no configured spots
+missing gammovie: no configured spots
+missing gcenclen: no configured spots
+missing merchant: no configured spots
+missing v13_orig: no configured spots
+missing v15_orig: no configured spots
+missing vill: no configured spots
+elevations: not checked, no expected map elevations given (--expect)
+A named spot proves only its own view, not every object of its class.

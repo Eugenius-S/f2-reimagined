@@ -3628,13 +3628,8 @@ void classicClockLadderFrame()
     fflush(stdout);
 }
 
-void vanillaPresented()
+static void runDialogFixtureFrame()
 {
-    observeTransitionFrame("2d");
-    if (gClockLadder && gClassic) classicClockLadderFrame();
-    if (gDialogCursorCheckCursorMoveInProgress) return;
-    if (gCombatFixtureRequested && gCombatFixtureIsClassic) runCombatFixtureFrame();
-    uiFixtureVanillaPresented();
     if (gDialogFixtureRequested && gDialogFixtureStarted && !gDialogFixtureFinished
         && gameDialogWindowActive()) {
         int ownerIds[2] = { -1, -1 };
@@ -4139,6 +4134,16 @@ void vanillaPresented()
             return;
         }
     }
+}
+
+void vanillaPresented()
+{
+    observeTransitionFrame("2d");
+    if (gClockLadder && gClassic) classicClockLadderFrame();
+    if (gDialogCursorCheckCursorMoveInProgress) return;
+    if (gCombatFixtureRequested && gCombatFixtureIsClassic) runCombatFixtureFrame();
+    uiFixtureVanillaPresented();
+    runDialogFixtureFrame();
     if (!gSnapshotOncePending || !gEnabled || !sceneStartupReady() || !gStartupFloorPreviewAttempted
         || scene::activeView() != scene::View::Off) {
         return;
@@ -4154,6 +4159,7 @@ void vanillaPresented()
 void sceneOverlayPresented()
 {
     uiFixtureScenePresented();
+    runDialogFixtureFrame();
 }
 
 void sceneLiveFrameReady()

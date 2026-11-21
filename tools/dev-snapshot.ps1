@@ -59,7 +59,7 @@ param(
     [switch]$DialogLayoutCheck,
     # 186: capture the main menu and quit; 'plain' leaves the wide picture out.
     [ValidateSet('', 'wide', 'plain')][string]$MainMenu,
-    [ValidateSet('inventory', 'pipboy', 'character', 'barter', 'log', 'bark')]
+    [ValidateSet('inventory', 'pipboy', 'character', 'creation', 'barter', 'log', 'bark')]
     [string]$UiFixture,
     [ValidateSet('1.00', '1.08', '1.15', '1.22', '1.29')]
     [string]$Font101PreviewScale,
@@ -218,17 +218,11 @@ param(
     [double]$Scale = 2.0
 )
 
-function Get-Sha256FileHash([string]$Path) {
-    $algorithm = [System.Security.Cryptography.SHA256]::Create()
-    $stream = [System.IO.File]::OpenRead($Path)
-    try {
-        return [System.BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
-    } finally {
-        $stream.Dispose()
-        $algorithm.Dispose()
-    }
-}
 $ErrorActionPreference = 'Stop'
+# The folder's own captures and the run's state (snapshot-output.ps1): from here on a failure,
+# however early, leaves "incomplete" and no earlier capture listed as this run's.
+. (Join-Path $PSScriptRoot 'snapshot-output.ps1')
+if ($OutputDirectory) { Reset-SnapshotOutput $OutputDirectory }
 if ($DevInput -and (-not $Preferences -or -not $ConfiguredDisplay -or -not $ReuseTestConfig -or -not $OutputDirectory -or -not $CaptureConsole)) {
     throw '-DevInput requires -Preferences, -ConfiguredDisplay, -ReuseTestConfig, -OutputDirectory and -CaptureConsole.'
 }
@@ -305,6 +299,7 @@ function Get-SnapshotImage($Snapshot, $Metadata) {
 # Once the results are copied out the run folder goes; without
 # -OutputDirectory it holds them. A failed run's folder stays for a look.
 function Complete-RunFolder {
+    if ($OutputDirectory) { Complete-SnapshotOutput $OutputDirectory }  # every check passed
     if ($OutputDirectory -and -not $KeepRunFolder) {
         Remove-Item -LiteralPath $runDirectory -Recurse -Force
     } else {
@@ -1164,7 +1159,10 @@ if ($PreferencesProbe) {
     if (Test-Path -LiteralPath $shotSource) {
         Get-ChildItem -LiteralPath $shotSource -Recurse -File |
             Where-Object { $_.Extension -in '.png', '.jpg', '.json' } |
-            ForEach-Object { Copy-Item $_.FullName (Join-Path $OutputDirectory $_.Name) -Force }
+            ForEach-Object {
+                Copy-Item $_.FullName (Join-Path $OutputDirectory $_.Name) -Force
+                Add-SnapshotOutput $OutputDirectory $_.Name
+            }
     }
     Complete-RunFolder
     return
@@ -1344,7 +1342,10 @@ foreach ($snapshot in $snapshots) {
     if ($OutputDirectory) {
         $metadata = Get-Content -Raw -LiteralPath $snapshot.FullName | ConvertFrom-Json
         Copy-Item -LiteralPath $snapshot.FullName -Destination $OutputDirectory
-        Copy-Item -LiteralPath (Get-SnapshotImage $snapshot $metadata) -Destination $OutputDirectory
+        Add-SnapshotOutput $OutputDirectory $snapshot.Name
+        $image = Get-SnapshotImage $snapshot $metadata
+        Copy-Item -LiteralPath $image -Destination $OutputDirectory
+        Add-SnapshotOutput $OutputDirectory $image
         $shown = Join-Path $OutputDirectory $snapshot.Name
     }
     Write-Output ("SNAPSHOT: " + $shown)

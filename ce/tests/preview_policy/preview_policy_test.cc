@@ -26,6 +26,22 @@ int main()
     CHECK(previewBlockReason(state) == PreviewBlockReason::IsoDisabled);
 
     state = normal;
+    state.isoEnabled = false;
+    state.mapVisibleUnderModal = true;
+    CHECK(previewMayPresent(state)); // modal pauses simulation, not the 3D view
+    state.gameNormal = false;
+    CHECK(!previewMayPresent(state)); // pending game state still blocks
+    state.gameNormal = true;
+    state.gameModeShowsMap = false;
+    CHECK(!previewMayPresent(state)); // world map still blocks
+    state.gameModeShowsMap = true;
+    state.noMovie = false;
+    CHECK(!previewMayPresent(state)); // movie still blocks
+    state.noMovie = true;
+    state.mapVisibleUnderModal = false;
+    CHECK(!previewMayPresent(state)); // map transition still blocks
+
+    state = normal;
     state.noMovie = false;
     CHECK(!previewMayPresent(state));
     CHECK(previewBlockReason(state) == PreviewBlockReason::Movie);

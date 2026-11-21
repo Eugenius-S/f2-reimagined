@@ -47,9 +47,12 @@ jobs:
           sparse-checkout-cone-mode: false
       - name: Test task board lock decisions
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/tasks.ps1 -SelfTest
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/tasks.ps1 -CheckMetadata
       - run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release
       - run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/perf-check.ps1 -SelfTest
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/rp-check.ps1 -SelfTest
       - run: ./tools/test_publish_latest.ps1
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test_snapshot_output.ps1
       - run: ctest --test-dir build --output-on-failure
       - run: py -3 -m pip install Pillow
       - run: py -3 -m unittest discover -s tools/tour -p 'test*.py' -v
@@ -113,7 +116,7 @@ jobs:
         run: |
           gh release download wide-art --repo $env:GITHUB_REPOSITORY --pattern wide-art.zip --dir .
           Expand-Archive -LiteralPath wide-art.zip -DestinationPath staging -Force
-          if (-not (Test-Path staging/user-assets/fullscreen-20261028/wallpapers-selected/hires/menu/art__intrface__hr_mainmenu__d0_f0_21-9.png)) { throw "wide-art.zip has no menu art" }
+          python tools/check_wide_art.py --payload staging
       - name: Publish the release and dist mirror
         run: ./tools/publish-latest.ps1
   exporter:
@@ -132,18 +135,14 @@ jobs:
       - run: python -m pip install -r tools/scene_export/requirements.txt
       - run: python -m unittest discover -s tools/scene_export -p 'test*.py' -v
       - run: python -m unittest discover -s tools/shapes -p 'test*.py' -v
-      - run: python -m unittest discover -s tools -p 'test_gallery_spots.py' -v
-      - run: python -m unittest discover -s tools -p 'test_gallery_pairs.py' -v
-      - run: python -m unittest discover -s tools -p 'test_crop_box.py' -v
-      - run: python -m unittest discover -s tools -p 'test_check_png_pixel.py' -v
-      - run: python -m unittest discover -s tools -p 'test_patch_pixel.py' -v
-      - run: python -m unittest discover -s tools -p 'test_shadow_stripes.py' -v
+      # 298: one discovery for every top-level tools/test_*.py, so a new
+      # suite runs without another hand-written command. scipy is installed
+      # first: test_shadow_seams imports tools/shadow_seams.py, which needs
+      # it at import time.
       - run: python -m pip install scipy
-      - run: python -m unittest discover -s tools -p 'test_shadow_seams.py' -v
-      - run: python -m unittest discover -s tools -p 'test_generate_options_frame.py' -v
+      - run: python -m unittest discover -s tools -p 'test*.py' -v
       - run: python -m unittest discover -s tools/regression -p 'test*.py' -v
-      - run: python -m unittest discover -s tools -p 'test_image_diff.py' -v
-      - run: python -m unittest discover -s tools -p 'test_check_public_content.py' -v
+      - run: python tools/check_wide_art.py --self-test
   scene:
     runs-on: ubuntu-latest
     strategy:

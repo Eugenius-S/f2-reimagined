@@ -225,11 +225,13 @@ void drawStaticPreview(bool withWalls, bool withHero)
     glUniform1f(gSceneCutoffLocation, 0.01f);
     glUniform1i(gSceneLightModeLocation, lit ? 1 : 0);
     if (bakeGround) glUniform1i(gSceneGroundBakeModeLocation, 2);
+    bindFloorReceiver(lit && shadowed);
     // The sea extensions sit past the tiles in the buffer; an older sidecar
     // without them ends the buffer at the tiles (the count falls back so a
     // version 6 floor.bin keeps its whole draw).
     glDrawArrays(kTriangles, 6,
         (gFloorExtensionFirst > 0 ? gFloorExtensionFirst : gFloorVertexCount) - 6);
+    bindFloorReceiver(false);
     if (bakeGround) {
         glUniform1i(gSceneGroundBakeModeLocation, 0);
         glActiveTexture(kTexture0 + 7);
