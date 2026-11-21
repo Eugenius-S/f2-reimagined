@@ -1,6 +1,6 @@
 # GLM night report, 2026-11-17
 
-Queue: `runs/glm-night-2026-11-17.md`. Heavy-operation slot shared with Opus306
+Queue: the November 17 GLM night run. Heavy-operation slot shared with Opus306
 (PR #517): no local export, build, game run or perf ran tonight; existing
 results, light unit tests and remote CI only. Nothing merged: the night rules
 ask for an independent Sol review before merge, so each PR carries its frozen
@@ -11,11 +11,10 @@ SHA and green CI, ready for review.
 Reconciled, not re-swept. Coverage exactly 223 of 223 map elevations on one
 build (exe sha256 `de20f410dc47a6a9`, main `de6d5267`): 184 valid rows, 106
 clean of every threshold, 23 noisy and 16 never-measured rows listed and
-clean of every threshold, 23 noisy and 16 never-measured rows listed and
 counted nowhere. Worst valid rows: dnslvrun:e2 1% low 12.8 fps; cave2:e1 20.9
 fps and 21.3 percent black; modbrah:e0 26.8 fps; sfchina2:e0 28.6 fps;
 redwan1:e1 28.7 fps and 48 percent black; artemple:e0 and arvill2:e0 over the
-2000 ms load gate. Table: `runs/271-all-map-health-table/README.md`, head
+2000 ms load gate. Table: [table in PR #516](https://github.com/Eugenius-S/f2-reimagined/pull/516), head
 bfe8f01a. The 16 missing rows stalled their warmup on the uncached-map entry
 watchdog (their caches are pre-exported; the rows wait for a free slot, the
 stall itself is data for 272 and 273). The 23 noisy rows need one rerun on a
@@ -57,8 +56,7 @@ from task/292-launcher-cleanup (depends on 292).
 
 ## Next
 
-1. Sol review on #516, #518, #519 in that order; merge the stack in order
-   (516, then 518, then 519).
+1. Review #516 and #518 independently; #519 depends on #518.
 2. Free slot: finish the 39 incomplete 271 rows (resume only), rerun the 23
    noisy rows, then hand 272 its causes table.
 3. 309 after 307 merges, with the two-process fixture in its own worktree.
