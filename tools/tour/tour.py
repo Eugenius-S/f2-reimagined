@@ -21,7 +21,8 @@ ROWS_PER_PAGE spots), each row a spot and each turn a before | after pair,
 and changed.jpg (then changed-2.jpg, ...) with only the spots whose views
 differ, a red frame round each changed pair, or a note that none did.
 --reuse keeps a side's shots when the same side, stops, exe and scene
-provenance were shot before. A run whose sidecars show another map, tile or
+provenance were shot before and the shots still pass the view checks below;
+otherwise it shoots them again. The sheets take only shots that pass them. A run whose sidecars show another map, tile or
 no 3D scene, or a spot whose turns are one picture, stops the tour. Judging
 the views stays with the eye.
 """
@@ -100,29 +101,44 @@ def scene_folder(kind, path, map_name, elevation):
 
 
 def check_views(folder, map_name, elevation, spots, turns):
-    """Each view's sidecar shows the 3D scene of the asked map elevation at
-    the spot, and a spot's turns differ (the fly camera took off): a scene
-    that failed to start falls back to the game's own picture."""
+    """After the start shot, one readable PNG per spot and turn; each view's
+    sidecar shows the 3D scene of the asked map elevation at the spot, and a
+    spot's turns differ (the fly camera took off): a scene that failed to
+    start falls back to the game's own picture. Fresh, reused and sheet
+    shots all pass through here."""
     from PIL import Image, ImageChops
     sidecars = {}
     for path in folder.glob("*.json"):
-        data = json.loads(path.read_text(encoding="utf-8"))
-        sidecars[data.get("image")] = data
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            continue  # its view then has no sidecar
+        if isinstance(data, dict):
+            sidecars[data.get("image")] = data
     shots = sorted(folder.glob("*.png"))[1:]
+    if len(shots) != len(spots) * len(turns):
+        raise SystemExit(f"{map_name} e{elevation}: {len(shots)} views for {len(spots) * len(turns)} stops")
     problems = []
     for index, spot in enumerate(spots):
         part = shots[index * len(turns):(index + 1) * len(turns)]
         for turn, shot in zip(turns, part):
-            data = sidecars.get(shot.name, {})
+            data = sidecars.get(shot.name)
             where = f"{map_name} e{elevation} tile {spot['tile']} turn {turn:+d}"
-            if (str(data.get("map", "")).lower().removesuffix(".map") != map_name
+            if data is None:
+                problems.append(f"{where}: no sidecar for {shot.name}")
+            elif (str(data.get("map", "")).lower().removesuffix(".map") != map_name
                     or data.get("elevation") != elevation or data.get("view_tile") != spot["tile"]):
                 problems.append(f"{where}: shot at {data.get('map')} e{data.get('elevation')} "
                                 f"tile {data.get('view_tile')}")
             elif not (data.get("scene_3d_enabled") and data.get("scene_view") == "full"
                       and data.get("renderer") == "scene-gl"):
                 problems.append(f"{where}: no 3D scene ({data.get('renderer')}, {data.get('scene_view')})")
-        images = [Image.open(shot).convert("RGB") for shot in part]
+        images = []
+        for shot in part:
+            try:
+                images.append(Image.open(shot).convert("RGB"))
+            except OSError:
+                problems.append(f"{map_name} e{elevation} tile {spot['tile']}: {shot.name} is not a readable PNG")
         if len(images) > 1 and all(ImageChops.difference(images[0], other).getbbox() is None
                                    for other in images[1:]):
             problems.append(f"{map_name} e{elevation} tile {spot['tile']}: every turn is the same picture")
@@ -163,10 +179,13 @@ def shoot_group(name, side, kind, path, root, turns, distance, map_name, elevati
              "skip_script_blocking": rp_game_root is not None,
              "rp_mod": file_hash(rp_game_root / "mods" / "rpu.dat") if rp_game_root else None}
     stamp_file = folder / "tour.json"
-    if (reuse and stamp_file.is_file() and json.loads(stamp_file.read_text(encoding="utf-8")) == stamp
-            and len(list(folder.glob("*.png"))) == len(stops) + 1):
-        print(f"{name} {map_name} e{elevation}: reused", flush=True)
-        return
+    if reuse and stamp_file.is_file() and json.loads(stamp_file.read_text(encoding="utf-8")) == stamp:
+        try:
+            check_views(folder, map_name, elevation, spots, turns)
+            print(f"{name} {map_name} e{elevation}: reused", flush=True)
+            return
+        except SystemExit as problem:
+            print(f"{name} {map_name} e{elevation}: saved views unusable, shooting again: {problem}", flush=True)
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
@@ -188,10 +207,6 @@ def shoot_group(name, side, kind, path, root, turns, distance, map_name, elevati
     run = subprocess.run(powershell_args(command), capture_output=True, text=True, errors="replace")
     if run.returncode != 0:
         raise SystemExit(f"{name} {map_name} e{elevation}: dev-snapshot failed: {run.stderr[-600:]}")
-    # The first snapshot is the start, before the tour.
-    shots = sorted(folder.glob("*.png"))
-    if len(shots) != len(stops) + 1:
-        raise SystemExit(f"{name} {map_name} e{elevation}: {len(shots) - 1} views for {len(stops)} stops")
     check_views(folder, map_name, elevation, spots, turns)
     stamp_file.write_text(json.dumps(stamp, indent=1) + "\n", encoding="utf-8")
     print(f"{name} {map_name} e{elevation}: {len(stops)} views", flush=True)
@@ -288,16 +303,16 @@ def sheets(turns, groups, out, skip_failed=False):
     changed_rows = []
     total = changed = skipped = 0
     for (map_name, elevation), spots in groups.items():
-        before, after = views("before", map_name, elevation), views("after", map_name, elevation)
-        expected = len(spots) * len(turns)
-        if len(before) != expected or len(after) != expected:
+        try:
+            for name in ("before", "after"):
+                check_views(OUT / name / f"{map_name}-e{elevation}", map_name, elevation, spots, turns)
+        except SystemExit as problem:
             if not skip_failed:
-                raise SystemExit(f"{map_name} e{elevation}: {len(before)} before and {len(after)} after views, "
-                                 f"{expected} expected; shoot first")
+                raise SystemExit(f"{name}: {problem}; shoot first")
             skipped += 1
-            print(f"{map_name} e{elevation}: skipped in the sheets, "
-                  f"{len(before)} before and {len(after)} after views, {expected} expected", flush=True)
+            print(f"{map_name} e{elevation}: skipped in the sheets, {name}: {problem}", flush=True)
             continue
+        before, after = views("before", map_name, elevation), views("after", map_name, elevation)
         rows = []
         for index, spot in enumerate(spots):
             part = slice(index * len(turns), (index + 1) * len(turns))
