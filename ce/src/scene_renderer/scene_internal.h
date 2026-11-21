@@ -244,6 +244,11 @@ extern int gSceneCloudOffsetLocation;
 // usual per-pixel path for everything else.
 extern int gSceneGroundBakeModeLocation;
 extern int gSceneGroundBakeMapLocation;
+extern int gSceneFloorReceiverGroupLocation;
+extern int gSceneFloorReceiverRectLocation;
+extern int gSceneFloorReceiverMaskLocation;
+// Only the final floor draw uses an authored receiver.
+void bindFloorReceiver(bool enabled);
 
 bool createSceneShader(std::string* error);
 void destroySceneShader();

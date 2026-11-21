@@ -29,6 +29,7 @@ FIXED_CARD_FRMS = frozenset(
 from baked_sidecar import baked_objects, decode_baked_sidecar, encode_baked_sidecar  # noqa: E402
 from floor_sidecar import VERSION as FLOOR_SIDECAR_VERSION  # noqa: E402
 from floor_sidecar import encode_floor_sidecar  # noqa: E402
+from floor_receiver import FILENAME as FLOOR_RECEIVER_FILE, floor_receiver, write_floor_receiver  # noqa: E402
 from roof_fringe import belt_art, wall_body, write_fringe_art  # noqa: E402
 from projection_sidecar import VERSION as PROJECTION_SIDECAR_VERSION  # noqa: E402
 from projection_sidecar import decode_projection_sidecar, encode_projection_sidecar  # noqa: E402
@@ -102,7 +103,7 @@ MAP_GROUPS = {
 # original maps it brings back). Not part of "all": a vanilla game has none of them.
 RP_MAPS = ("abbasem", "abbey", "abundgr", "easter", "epamain1", "epamain2", "epasl", "epax", "gammovie", "gcenclen", "hubstash", "merchant", "safehs1", "safehs2", "safehs3", "sfsheng", "sfsub", "slvcamp", "tribe01", "tribe02", "v13_orig", "v15_orig", "vill", "vilmerch")
 EXPECTED_OUTPUT_FILES = {"scene.json", "provenance.json", "floor.bin", "walls.bin", "projection.bin", "baked.bin",
-                         "shadows.bin", "tiles.png", "light.png", "rock.png", "roof_fringe.png"}
+                         "shadows.bin", "tiles.png", "light.png", "rock.png", "roof_fringe.png", FLOOR_RECEIVER_FILE}
 
 
 def choose_source(key, sources):
@@ -499,7 +500,7 @@ def static_inputs(gf, game_root: Path):
     vendor_hashes = {p.relative_to(HERE / "vendor").as_posix(): sha256_file(p) for p in vendor_files}
     adapter_hashes = {name: sha256_file(HERE / name) for name in
                       ("export.py", "floor_sidecar.py", "roof_fringe.py", "wall_sidecar.py", "projection_sidecar.py", "baked_sidecar.py",
-                       "shadow_sidecar.py", "scene_check.py", "solids.py")}
+                       "shadow_sidecar.py", "scene_check.py", "solids.py", "floor_receiver.py", "floor_receivers.json")}
     archives = [{"name": name, "path": source.path.relative_to(game_root).as_posix()
                  if source.path.is_relative_to(game_root) else str(source.path),
                  "size": source.path.stat().st_size, "sha256": sha256_file(source.path)}
@@ -599,6 +600,9 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
     scene_path.write_text(json.dumps(scene, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     (out_dir / "floor.bin").write_bytes(encode_floor_sidecar(scene, fringe, patches, builder.water,
                                                              builder.water_color))
+    receiver_layout = json.loads((HERE / "floor_receivers.json").read_text(encoding="utf-8"))
+    receiver = floor_receiver(receiver_layout, map_name, elevation, builder.map.objects[elevation], builder.floor_ids)
+    write_floor_receiver(out_dir, receiver)
     artifact_hashes = {p.name: sha256_file(p) for p in sorted(out_dir.iterdir()) if p.name != "provenance.json"}
     provenance = {
         "exporter": "fallout2-sprite-lighting scene_export",

@@ -180,6 +180,9 @@ uniform vec2 uCloudOffset;
 // per-pixel light loop and the 25-tap shadow disk.
 uniform int uGroundBakeMode;
 uniform sampler2D uGroundBakeMap;
+uniform int uFloorReceiverGroup;
+uniform vec4 uFloorReceiverRect;
+uniform sampler2D uFloorReceiverMask;
 out vec4 outColor;
 // What a texel shines by itself for the glow (task 022): the colour a
 // full-bright texel keeps, premultiplied by its shown coverage; black
@@ -662,12 +665,28 @@ float shadowSelfId() {
 // lighter than the ground: a standing figure keeps its read. A face turned
 // from the sun takes the flat shaded value, the painted look (062 round 5,
 // now by the face test instead of its own depth in the map, 082).
+float floorReceiverCoverage() {
+    if (uLightMode != 1 || uFloorReceiverGroup < 0) return 0.0;
+    // The native tile projection, also used by the scene exporter.
+    vec2 uv = vec2(3984.0 - 48.0 * vWorld.x + 32.0 * vWorld.z,
+                   610.0 + 12.0 * vWorld.x + 24.0 * vWorld.z);
+    uv = (uv - uFloorReceiverRect.xy) / uFloorReceiverRect.zw;
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThanEqual(uv, vec2(1.0)))) return 0.0;
+    return texture(uFloorReceiverMask, uv).r;
+}
+float floorSunShadow(float selfId) {
+    float coverage = floorReceiverCoverage();
+    if (coverage >= 1.0) return groupShadow(uFloorReceiverGroup);
+    float localShadow = sunShadow(selfId);
+    if (coverage <= 0.0) return localShadow;
+    return mix(localShadow, groupShadow(uFloorReceiverGroup), coverage);
+}
 float shadowDarken(float light) {
     float selfId = shadowSelfId();
     if (uShadowDebug == 1 && (uLightMode == 1 || uLightMode == 2 || uLightMode == 3)) {
         // The raw factor as the light: a snapshot then shows the algorithm
         // itself, not the composed scene (062 diagnostics).
-        return uLightMode == 3 ? sunShadowCard(selfId) : sunShadow(selfId);
+        return uLightMode == 3 ? sunShadowCard(selfId) : floorSunShadow(selfId);
     }
     if (uShadowDebug == 4 && (uLightMode == 1 || uLightMode == 2 || uLightMode == 3)) {
         // The center tap's signed difference, 0.05 of light per 4*uShadowBias
@@ -708,7 +727,7 @@ float shadowDarken(float light) {
             // the owner's eye (082 round 2): 0.425 read too saturated; the
             // [3d] shadow_density setting scales it, 0 turns the cast
             // shadows off.
-            solarFactor = 1.0 - uShadowStrength * uShadowDensity * 0.35 * sunShadow(selfId);
+            solarFactor = 1.0 - uShadowStrength * uShadowDensity * 0.35 * floorSunShadow(selfId);
             light *= solarFactor;
         } else if (uLightMode == 3) {
             // A sprite darkens whole at its feet (082 round 6): the old
@@ -887,7 +906,8 @@ void main() {
             // _dark_trans_buf_to_buf: the engine darkens a texel by its light in
             // 128 steps, on its 5-bit colour rounded down (setIntensityTableColor).
             vec4 lit;
-            if (uGroundBakeMode == 2) {
+            bool bakedHere = uGroundBakeMode == 2 && floorReceiverCoverage() == 0.0;
+            if (bakedHere) {
                 // The floor tiles (157): the light and shadow baked this frame
                 // at half resolution, alpha already darkened.
                 vec2 bakeUv = (gl_FragCoord.xy - uViewport.xy) / uViewport.zw;
@@ -966,7 +986,7 @@ void main() {
             }
 )" R"(
             float steps = floor(lit.a * 128.0 + 0.0001);
-            if (uShadowOn && uCloudOn && uGroundBakeMode != 2 && (uLightMode == 1 || uLightMode == 2)) {
+            if (uShadowOn && uCloudOn && !bakedHere && (uLightMode == 1 || uLightMode == 2)) {
                 float baseSteps = floor(gUncloudedLight * 128.0 + 0.0001);
                 float cloudSteps = floor(max(gUncloudedLight - gCloudDarkening, 0.0) * 128.0 + 0.0001);
                 float sunSteps = floor(gSunOnlyLight * 128.0 + 0.0001);
@@ -1114,6 +1134,9 @@ int gSceneCloudOnLocation = -1;
 int gSceneCloudOffsetLocation = -1;
 int gSceneGroundBakeModeLocation = -1;
 int gSceneGroundBakeMapLocation = -1;
+int gSceneFloorReceiverGroupLocation = -1;
+int gSceneFloorReceiverRectLocation = -1;
+int gSceneFloorReceiverMaskLocation = -1;
 
 bool createSceneShader(std::string* error)
 {
@@ -1187,6 +1210,9 @@ bool createSceneShader(std::string* error)
     gSceneShadowOnLocation = glGetUniformLocation(gSceneProgram, "uShadowOn");
     gSceneGroundBakeModeLocation = glGetUniformLocation(gSceneProgram, "uGroundBakeMode");
     gSceneGroundBakeMapLocation = glGetUniformLocation(gSceneProgram, "uGroundBakeMap");
+    gSceneFloorReceiverGroupLocation = glGetUniformLocation(gSceneProgram, "uFloorReceiverGroup");
+    gSceneFloorReceiverRectLocation = glGetUniformLocation(gSceneProgram, "uFloorReceiverRect");
+    gSceneFloorReceiverMaskLocation = glGetUniformLocation(gSceneProgram, "uFloorReceiverMask");
     gSceneShadowMatrixLocation = glGetUniformLocation(gSceneProgram, "uShadowMatrix");
     gSceneShadowMapLocation = glGetUniformLocation(gSceneProgram, "uShadowMap");
     gSceneShadowIdsLocation = glGetUniformLocation(gSceneProgram, "uShadowIds");
@@ -1237,6 +1263,7 @@ bool createSceneShader(std::string* error)
     // int uniform starts at 0, group 0).
     glUseProgram(gSceneProgram);
     glUniform1i(gSceneShadowGroupLocation, -1);
+    glUniform1i(gSceneFloorReceiverGroupLocation, -1);
     return true;
 }
 
