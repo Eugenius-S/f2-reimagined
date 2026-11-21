@@ -2,8 +2,8 @@
 id: 260
 title: Verify every Abbey burnt rebar placement stands in flight
 milestone: M1
-status: todo
-owner: any
+status: blocked
+owner: gpt
 suggested: gpt
 priority: low
 tier: 4
@@ -36,6 +36,32 @@ New art, engine changes, unrelated ruin fixes, and rechecking placements already
 
 ## Log
 
+### 2026-11-12 gpt
+
+Blocked: map data identifies Abbey e0 tile 9309 / serial 109 / object 948 /
+WDBEAM04.FRM (baked SKIP), tile 11709 / serial 514 / object 890 /
+WDBEAM01.FRM (accepted fit), and tile 11703 / serial 506 / object 896 /
+WDBEAM01.FRM (accepted fit). This data mapping does not identify the exact
+sprite in the rendered frames. The original comparison captures use Solo 4;
+`tools/dev-snapshot.ps1` documents that Solo removes walls and roofs, so those
+frames cannot establish each rebar's relation to wall and floor. At tile
+9309, turns 180 and 270 show ground and a barrel but no target rebar; turns 0
+and 90 do not identify the target FID. At tiles 11709 and 11703, all four
+turns show multiple similar objects and do not identify the target FID.
+One full-scene, no-Solo diagnostic pass restores wall and roof geometry but
+still leaves the target sprites ambiguous among clutter and occlusion. The
+diagnostic frames and source metadata are in
+`runs/260-abbey-rebar-exceptions-evidence/abbey-e0-full-scene-diagnostic.jpg`
+and `.json`. No placement orientation is confirmed, no geometry defect is
+established, and no fix task is justified from these images.
+Next: obtain a capture that selects or marks each target by map serial/FID
+while retaining wall and floor geometry; then repeat matched before/after
+views at all required turns.
+Check: visually inspected the original comparison sheets and the full-scene
+diagnostic; the no-Solo pass used the background test instance, build
+`5b576c093`, and isolated `build/task260-before-cache`. No matched no-Solo
+after capture or owner game-view evidence was produced.
+
 ### 2026-11-12 gpt review
 
-Follow-up created after reviewing task 123: the saved pairs cover joined rebar but not the three Abbey exceptions reported in its Log. Their actual orientation is unverified; this task makes no claim that they fail.
+Follow-up created after reviewing task 123: the saved pairs cover joined rebar but not the three Abbey exceptions reported in its Log. Their actual orientation remains unverified; this task makes no claim that they fail.
