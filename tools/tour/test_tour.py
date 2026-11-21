@@ -243,14 +243,12 @@ class PowerShellArgsTests(unittest.TestCase):
     def test_snapshot_hashing_works_when_module_autoloading_is_disabled(self):
         snapshot_source = (ROOT / "tools" / "dev-snapshot.ps1").read_text(encoding="utf-8-sig")
         self.assertNotIn("Get-FileHash", snapshot_source)
-        helper = re.search(
-            r"(?ms)^function Get-Sha256FileHash\b.*?^}\s*$", snapshot_source)
-        self.assertIsNotNone(helper, "dev-snapshot SHA256 helper was not found")
+        snapshot_module = ROOT / "tools" / "snapshot-output.ps1"
         with tempfile.TemporaryDirectory() as directory:
             sample = Path(directory) / "sample.txt"
             sample.write_text("tour", encoding="utf-8")
             quote = lambda path: "'" + str(path).replace("'", "''") + "'"
-            command = helper.group(0) + "; Get-Sha256FileHash " + quote(sample)
+            command = ". " + quote(snapshot_module) + "; Get-Sha256FileHash " + quote(sample)
             disable_autoloading = "$PSModuleAutoLoadingPreference = 'None'; "
 
             baseline = subprocess.run(
