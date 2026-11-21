@@ -3714,6 +3714,11 @@ int gameDialogGetBackgroundWindow()
     return windowGetWindow(gameDialogBackgroundWindow) != nullptr ? gameDialogBackgroundWindow : -1;
 }
 
+int gameDialogGetOptionWindow()
+{
+    return windowGetWindow(gameDialogOptionsWindow) != nullptr ? gameDialogOptionsWindow : -1;
+}
+
 int gameDialogGetOptionCount()
 {
     return gameDialogOptionEntriesLength;
