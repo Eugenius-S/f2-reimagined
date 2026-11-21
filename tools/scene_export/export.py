@@ -28,12 +28,14 @@ FIXED_CARD_FRMS = frozenset(
         (Path(__file__).resolve().parent / "shapes" / "fixed_cards.json").read_text(encoding="utf-8"))["frms"])
 from baked_sidecar import baked_objects, decode_baked_sidecar, encode_baked_sidecar  # noqa: E402
 from floor_sidecar import VERSION as FLOOR_SIDECAR_VERSION  # noqa: E402
-from floor_sidecar import encode_floor_sidecar  # noqa: E402
+from floor_sidecar import decode_floor_sidecar, encode_floor_sidecar  # noqa: E402
 from roof_fringe import belt_art, wall_body, write_fringe_art  # noqa: E402
 from projection_sidecar import VERSION as PROJECTION_SIDECAR_VERSION  # noqa: E402
 from projection_sidecar import decode_projection_sidecar, encode_projection_sidecar  # noqa: E402
 from wall_sidecar import VERSION as WALL_SIDECAR_VERSION  # noqa: E402
 from wall_sidecar import decode_wall_sidecar, encode_wall_sidecar, wall_slabs  # noqa: E402
+from wall_sidecar import BATCH as WALL_BATCH, HEADER as WALL_HEADER, MAGIC as WALL_MAGIC  # noqa: E402
+from wall_sidecar import VERTEX as WALL_VERTEX  # noqa: E402
 from shadow_sidecar import VERSION as SHADOW_SIDECAR_VERSION  # noqa: E402
 from shadow_sidecar import decode_shadow_sidecar, encode_shadow_sidecar  # noqa: E402
 
@@ -101,6 +103,10 @@ MAP_GROUPS = {
 # --maps rp: the maps only the Restoration Project ships (its restored areas and the
 # original maps it brings back). Not part of "all": a vanilla game has none of them.
 RP_MAPS = ("abbasem", "abbey", "abundgr", "easter", "epamain1", "epamain2", "epasl", "epax", "gammovie", "gcenclen", "hubstash", "merchant", "safehs1", "safehs2", "safehs3", "sfsheng", "sfsub", "slvcamp", "tribe01", "tribe02", "v13_orig", "v15_orig", "vill", "vilmerch")
+# What every export writes whatever the map holds (SceneBuilder.export and export_scene); the scene's own
+# files name the rest (scene_references). A cache is complete only with all of them (task 293).
+REQUIRED_OUTPUT_FILES = frozenset({"scene.json", "tiles.png", "light.png", "floor.bin", "walls.bin", "baked.bin",
+                                   "projection.bin", "shadows.bin"})
 EXPECTED_OUTPUT_FILES = {"scene.json", "provenance.json", "floor.bin", "walls.bin", "projection.bin", "baked.bin",
                          "shadows.bin", "tiles.png", "light.png", "rock.png", "roof_fringe.png"}
 
@@ -416,8 +422,10 @@ def parse_args(argv=None):
                         help="where the scenes go instead of <game>/mod-cache/scene (a worktree's own cache, "
                              "read by the test game through F2CE_SCENE_CACHE, so a running game keeps its own)")
     parser.add_argument("--check", action="store_true",
-                        help="report whether every requested map's base scene exists and exit: 0 all present, "
-                             "3 some missing (the 091 launcher asks before spending minutes on an export)")
+                        help="report whether every elevation of every requested map has its complete, current "
+                             "scene (the files its provenance hashed, from the same inputs) and exit: 0 all "
+                             "present, 3 any missing, damaged, outdated or unreadable (the 091 launcher asks "
+                             "before spending minutes on an export)")
     parser.add_argument("--force", action="store_true",
                         help="rebuild every requested scene even if it is current")
     args = parser.parse_args(argv)
@@ -445,13 +453,6 @@ def expand_maps(spec: str) -> list[str]:
             if name not in names:
                 names.append(name)
     return names
-
-
-def check_scenes(game_root: Path, map_names: list[str], cache_root: Path = None) -> list[str]:
-    """The requested maps with no scene in the cache yet: a map counts as present when any of its
-    elevation folders holds a scene.json (some maps have no elevation 0)."""
-    scenes = cache_root if cache_root is not None else game_root / "mod-cache" / "scene"
-    return [name for name in map_names if not any(scenes.glob(f"{name}/*/scene.json"))]
 
 
 def scene_directory(game_root: Path, map_name: str, elevation: int, cache_root: Path = None) -> Path:
@@ -528,8 +529,38 @@ def stale_reason(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
     try:
         if provenance["map"] != map_name or provenance["elevation"] != elevation:
             return "the scene is another map's"
-        if not all((out_dir / name).is_file() for name in provenance["artifacts_sha256"]):
-            return "scene files missing"
+        # The files must be the ones export_scene hashed into the table: all of them, none changed.
+        artifacts = provenance["artifacts_sha256"]
+        extra = sorted(p.name for p in out_dir.iterdir() if p.name != "provenance.json" and p.name not in artifacts)
+        if extra:
+            return "files outside the artifacts table: " + ", ".join(extra)
+        lacking = sorted(REQUIRED_OUTPUT_FILES - set(artifacts))
+        if lacking:
+            return "artifacts table lacks: " + ", ".join(lacking)
+        missing = sorted(name for name in artifacts if not (out_dir / name).is_file())
+        if missing:
+            return "scene files missing: " + ", ".join(missing)
+        for name, digest in sorted(artifacts.items()):
+            try:
+                if sha256_file(out_dir / name) != digest:
+                    return f"{name} changed"
+            except OSError as error:
+                return f"{name} unreadable ({error})"
+        try:
+            referenced = scene_references(out_dir, provenance)
+        except Exception as error:
+            return f"scene malformed ({error})"
+        missing = sorted(referenced - set(artifacts))
+        if missing:
+            return "scene files missing: " + ", ".join(missing)
+        for name in sorted(name for name in artifacts if name.endswith(".png")):
+            try:
+                with Image.open(out_dir / name) as image:
+                    if image.format != "PNG":
+                        raise ValueError(f"a {image.format} image")
+                    image.verify()  # every chunk and its CRC up to IEND; the pixels are not decoded
+            except Exception as error:
+                return f"{name} is not a valid PNG ({error})"
         recorded = provenance["resources_read"]
         reset_caches(gf)
         gf._reads = {}
@@ -547,6 +578,37 @@ def stale_reason(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
         return "game files changed: " + ", ".join(changed[:3]) + more
     except Exception as error:
         return f"provenance unreadable ({error})"
+
+
+def scene_references(out_dir: Path, provenance: dict) -> set[str]:
+    """The files the renderer opens for this scene, read from the scene itself, never from its provenance:
+    the images scene.json names, the sprites page of every walls.bin batch, roof_fringe.png when floor.bin
+    lists roof runs or patches. Raises on a scene.json that is malformed or another scene's."""
+    scene = json.loads((out_dir / "scene.json").read_text(encoding="utf-8"))
+    if not isinstance(scene, dict) or (scene.get("map"), scene.get("elevation")) != (provenance["map"],
+                                                                                   provenance["elevation"]):
+        raise ValueError("scene.json is not this scene's")
+    names = {page["image"] for page in scene["pages"]}
+    names |= {scene[key]["image"] for key in ("tiles", "light", "rock") if scene.get(key)}
+    names |= wall_pages((out_dir / "walls.bin").read_bytes())
+    floor = decode_floor_sidecar((out_dir / "floor.bin").read_bytes())
+    if floor["fringe"] or floor["patches"]:
+        names.add("roof_fringe.png")
+    return names
+
+
+def wall_pages(data: bytes) -> set[str]:
+    """sprites<n>.png of every page a walls.bin batch draws from (walls.cc opens these names), read from the
+    batch headers alone: decode_wall_sidecar checks every vertex, too slow over every cached scene."""
+    magic, version, header_size, _, batch_count, _, _ = WALL_HEADER.unpack_from(data)
+    if magic != WALL_MAGIC or version != WALL_SIDECAR_VERSION or header_size != WALL_HEADER.size:
+        raise ValueError("walls.bin is not a wall sidecar of this version")
+    pages, offset = set(), WALL_HEADER.size
+    for _ in range(batch_count):
+        page, _, _, count, _ = WALL_BATCH.unpack_from(data, offset)
+        pages.add(f"sprites{page}.png")
+        offset += WALL_BATCH.size + count * 3 * WALL_VERTEX.size
+    return pages
 
 
 def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Path):
@@ -640,13 +702,6 @@ def main(argv=None):
     if not game_root.is_dir():
         raise SystemExit(f"game root not found: {game_root}")
     cache_root = args.cache_root.resolve() if args.cache_root else None
-    if args.check:
-        missing = check_scenes(game_root, args.map_names, cache_root)
-        if missing:
-            print("scenes missing: " + ", ".join(missing))
-            raise SystemExit(3)
-        print("scenes present: " + ", ".join(args.map_names))
-        return 0
     if not args.maps:
         # One scene: its directory is checked before the game data is opened.
         targets = [(args.map_names[0], args.elevation, scene_directory(game_root, args.map_names[0], args.elevation,
@@ -666,16 +721,22 @@ def main(argv=None):
                 targets.extend((name, elevation, scene_directory(game_root, name, elevation, cache_root))
                                for elevation in elevations)
             # The launcher counts the scene lines against this one for its progress bar.
-            print(json.dumps({"maps_total": len({name for name, _, _ in targets}), "scenes_total": len(targets)},
-                             sort_keys=True), flush=True)
+            if not args.check:
+                print(json.dumps({"maps_total": len({name for name, _, _ in targets}), "scenes_total": len(targets)},
+                                 sort_keys=True), flush=True)
         for name, elevation, out_dir in targets:
-            if not args.maps:
+            if not args.maps and not args.check:
                 export_scene(gf, game_root, name, elevation, out_dir)
                 continue
             try:
                 reason = "--force" if args.force else stale_reason(gf, game_root, name, elevation, out_dir)
                 if reason is None:
-                    print(json.dumps({"output": str(out_dir), "current": True}, sort_keys=True), flush=True)
+                    if not args.check:
+                        print(json.dumps({"output": str(out_dir), "current": True}, sort_keys=True), flush=True)
+                    continue
+                if args.check:
+                    failed.append(f"{name} e{elevation}")
+                    print(f"not current: {name} e{elevation}: {reason}", flush=True)
                     continue
                 print(f"rebuilding {name} e{elevation}: {reason}", flush=True)  # the launcher log shows it as is
                 export_scene(gf, game_root, name, elevation, out_dir)
@@ -684,6 +745,11 @@ def main(argv=None):
                 print(f"FAILED {failed[-1]}", file=sys.stderr, flush=True)  # at once: the launcher counts it
     finally:
         gf.close()
+    if args.check:
+        if failed:
+            return 3
+        print("scenes present: " + ", ".join(args.map_names))
+        return 0
     return 1 if failed else 0
 
 
