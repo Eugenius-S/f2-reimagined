@@ -18,9 +18,10 @@
 # more than -NoisyCpuPercent load is marked noisy: its numbers say nothing
 # about the game, so a threshold breach there is not a FAIL, it is a NOISY
 # line asking for a rerun on a free machine. The thresholds do not move
-# for noise, and a run with a noisy breach never prints PASS. Exit codes:
-# 0 PASS, 1 FAIL (a clean row breached the bar, or an artifact is
-# missing), 2 NOISY (rerun needed, no verdict).
+# for noise. 310: a row whose load could not be read is noisy too, and a
+# run with any noisy row never prints PASS. Exit codes: 0 PASS, 1 FAIL (a
+# clean row breached the bar, or an artifact is missing), 2 NOISY (rerun
+# needed, no verdict).
 #
 # -SelfTest feeds saved samples to the parsing functions and fails on a
 # wrong answer without running the game.
@@ -106,25 +107,57 @@ function Release-Lock($lock) {
     }
 }
 
-# The CPU load at the start of a map (290): Win32_Processor LoadPercentage
-# sampled four times over about a second, so one twitch does not decide.
-# Locale-free, unlike Get-Counter's localized counter names. $null when the
-# read says nothing (then the row stays clean: no verdict without evidence).
-function Read-CpuLoadPercent {
+# The CPU load at the start of a map (290): the kernel's busy time of all
+# cores (PercentProcessorTime of _Total) sampled four times over about a
+# second, so one twitch does not decide. Locale-free, unlike Get-Counter's
+# localized counter names. 310: Win32_Processor.LoadPercentage read 15-35
+# points over this on a near-idle machine and did not follow a known load
+# (runs/310-perf-noise-reads-real-cpu-load). $null when the read says
+# nothing, and also when any one sample is missing or not a percent:
+# [double]$null is 0 in PowerShell, so a raw value is checked before it is
+# converted (review of #521). Test-NoisyRow counts $null as noisy.
+# -ReadSample and -SleepMs exist for -SelfTest only.
+function Read-CpuLoadPercent([scriptblock]$ReadSample = {
+        Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction Stop
+    }, [int]$SleepMs = 250) {
     $samples = @()
     foreach ($i in 1..4) {
-        $samples += (Get-CimInstance Win32_Processor |
-            Measure-Object -Property LoadPercentage -Average).Average
-        Start-Sleep -Milliseconds 250
+        try { $instance = & $ReadSample } catch { return $null }
+        if ($null -eq $instance -or @($instance).Count -ne 1) { return $null }
+        $property = $instance.PSObject.Properties['PercentProcessorTime']
+        if ($null -eq $property) { return $null }
+        $value = ConvertTo-CpuPercent $property.Value
+        if ($null -eq $value) { return $null }
+        $samples += $value
+        if ($SleepMs -gt 0) { Start-Sleep -Milliseconds $SleepMs }
     }
-    $avg = ($samples | Where-Object { $null -ne $_ } | Measure-Object -Average).Average
-    if ($null -eq $avg) { return $null }
-    return [Math]::Round($avg, 0)
+    return [Math]::Round(($samples | Measure-Object -Average).Average, 0)
+}
+
+# A finite number from 0 to 100, or $null: no missing, empty, text, NaN,
+# infinite or out-of-range value ever becomes a load.
+function ConvertTo-CpuPercent($raw) {
+    if ($null -eq $raw -or $raw -is [bool]) { return $null }
+    $value = 0.0
+    if (-not [double]::TryParse([string]$raw, [Globalization.NumberStyles]::Float,
+            [Globalization.CultureInfo]::InvariantCulture, [ref]$value)) { return $null }
+    if ([double]::IsNaN($value) -or [double]::IsInfinity($value) -or $value -lt 0 -or $value -gt 100) { return $null }
+    return $value
 }
 
 # A map measured over this load is noisy (290); at the limit it is not.
-function Test-NoisyRow([double]$loadPercent, [double]$noisyAbove) {
-    return $loadPercent -gt $noisyAbove
+# An unknown or invalid load is noisy (310): no PASS without evidence of a
+# free machine.
+function Test-NoisyRow($loadPercent, [double]$noisyAbove) {
+    $value = ConvertTo-CpuPercent $loadPercent
+    return ($null -eq $value) -or ($value -gt $noisyAbove)
+}
+
+# 310: FAIL wins, then any noisy row; PASS only with neither.
+function Get-RunVerdict([int]$failures, [int]$noisyRows) {
+    if ($failures -gt 0) { return 'FAIL' }
+    if ($noisyRows -gt 0) { return 'NOISY' }
+    return 'PASS'
 }
 
 if ($SelfTest) {
@@ -177,10 +210,54 @@ if ($SelfTest) {
     Assert-True 'load 29 at 30 is clean' (-not (Test-NoisyRow 29 30))
     Assert-True 'load 30 at 30 is clean' (-not (Test-NoisyRow 30 30))
     Assert-True 'load 31 at 30 is noisy' (Test-NoisyRow 31 30)
+    Assert-True 'an unread load is noisy' (Test-NoisyRow $null 30)
+    Assert-True 'a NaN load is noisy' (Test-NoisyRow ([double]::NaN) 30)
+    Assert-True 'a negative load is noisy' (Test-NoisyRow -5 30)
+    # 310 (review of #521): the reader end to end on fake counter answers.
+    # Every missing or invalid sample makes the whole read unknown.
+    function Read-Fake([object[]]$answers, [int]$throwAt = 0) {
+        $calls = @{ n = 0 }
+        $reader = {
+            $calls.n++
+            if ($calls.n -eq $throwAt) { throw 'injected counter failure' }
+            $answers[[Math]::Min($calls.n - 1, $answers.Count - 1)]
+        }.GetNewClosure()
+        return Read-CpuLoadPercent -ReadSample $reader -SleepMs 0
+    }
+    function Pct($v) { [pscustomobject]@{ PercentProcessorTime = $v } }
+    $unknown = [ordered]@{
+        'no instance' = @(, $null)
+        'no property' = @([pscustomobject]@{ Name = '_Total' })
+        'null value' = @(Pct $null)
+        'empty value' = @(Pct '')
+        'text value' = @(Pct 'bad')
+        'negative value' = @(Pct -10)
+        'over 100' = @(Pct 110)
+        'NaN value' = @(Pct ([double]::NaN))
+        'infinite value' = @(Pct ([double]::PositiveInfinity))
+        'two instances' = @(, @((Pct 5), (Pct 5)))
+        'one missing among valid' = @((Pct 5), (Pct 5), (Pct 5), $null)
+    }
+    foreach ($case in $unknown.Keys) {
+        $read = Read-Fake $unknown[$case]
+        Assert-True "read with $case is unknown" ($null -eq $read)
+        Assert-True "read with $case is noisy" (Test-NoisyRow $read 30)
+    }
+    Assert-True 'a counter that throws first is unknown' ($null -eq (Read-Fake @(Pct 5) 1))
+    Assert-True 'a counter that throws third is unknown' ($null -eq (Read-Fake @(Pct 5) 3))
+    Assert-Equal 'a steady 29 reads 29' (Read-Fake @(Pct 29)) 29
+    Assert-True 'a read of 30 at 30 is clean' (-not (Test-NoisyRow (Read-Fake @(Pct 30)) 30))
+    Assert-True 'a read of 31 at 30 is noisy' (Test-NoisyRow (Read-Fake @(Pct 31)) 30)
+    Assert-Equal 'a UInt64 counter value reads' (Read-Fake @(Pct ([uint64]12))) 12
+    Assert-Equal 'samples 0,0,0,100 average to 25' (Read-Fake @((Pct 0), (Pct 0), (Pct 0), (Pct 100))) 25
+    Assert-True 'a clean breach fails' ((Get-RunVerdict 1 0) -eq 'FAIL')
+    Assert-True 'a clean breach fails beside a noisy row' ((Get-RunVerdict 1 2) -eq 'FAIL')
+    Assert-True 'a noisy row without a breach is no PASS' ((Get-RunVerdict 0 1) -eq 'NOISY')
+    Assert-True 'all clean rows pass' ((Get-RunVerdict 0 0) -eq 'PASS')
     # The CPU read itself: a number within 0..100 on a live machine, or an
     # honest $null where the counter says nothing.
     $cpu = Read-CpuLoadPercent
-    if ($null -ne $cpu -and ($cpu -lt 0 -or $cpu -gt 100)) {
+    if ($null -ne $cpu -and $null -eq (ConvertTo-CpuPercent $cpu)) {
         Write-Output ("selftest: FAIL cpu read out of range: {0}" -f $cpu)
         $failed = $true
     }
@@ -249,6 +326,7 @@ New-Item -ItemType Directory -Path $outRoot -Force | Out-Null
 $rows = @()
 $failures = @()
 $reruns = @()
+$noisyRows = 0
 foreach ($m in $maps) {
     $label = ('{0} e{1}' -f $m.map, $m.elevation)
     $outDir = Join-Path $outRoot ('{0}-e{1}' -f $m.map, $m.elevation)
@@ -260,7 +338,8 @@ foreach ($m in $maps) {
     # -NoisyCpuPercent is noisy: a breach there asks for a rerun, it does
     # not judge the game.
     $cpu = Read-CpuLoadPercent
-    $noisy = ($null -ne $cpu) -and (Test-NoisyRow $cpu $NoisyCpuPercent)
+    $noisy = Test-NoisyRow $cpu $NoisyCpuPercent
+    if ($noisy) { $noisyRows++ }
     # Measured run: F2CE_PERF=1 makes the load chain print; the frame log
     # fills the CSV this pass parses. -KeepRunFolder keeps the run folder
     # (dev-snapshot removes it once the -OutputDirectory copies are done),
@@ -316,12 +395,13 @@ Release-PerfLock
 $rows | Format-Table -AutoSize map, avgFps, oneLowFps, worstMs, loadMs, cpu, noisy, play, load
 
 foreach ($r in $reruns) { Write-Output "NOISY $r" }
-if ($failures.Count -gt 0) {
+$verdict = Get-RunVerdict $failures.Count $noisyRows
+if ($verdict -eq 'FAIL') {
     foreach ($f in $failures) { Write-Output "FAIL $f" }
     exit 1
 }
-if ($reruns.Count -gt 0) {
-    Write-Output ("perf-check: NOISY {0} of {1} maps were measured under CPU load over {2} percent: the gate says nothing about them, and this is not a PASS. Rerun perf-check when the machine is free." -f $reruns.Count, $maps.Count, $NoisyCpuPercent)
+if ($verdict -eq 'NOISY') {
+    Write-Output ("perf-check: NOISY {0} of {1} maps were measured under CPU load over {2} percent or an unread load: the gate says nothing about them, and this is not a PASS. Rerun perf-check when the machine is free." -f $noisyRows, $maps.Count, $NoisyCpuPercent)
     exit 2
 }
 Write-Output ("perf-check: PASS all {0} maps (1% low >= {1} fps, load <= {2} ms)" -f $maps.Count, $MinFps, $MaxLoadMs)
