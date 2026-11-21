@@ -928,7 +928,11 @@ void uiFixtureVanillaPresented()
 
 void uiFixtureScenePresented()
 {
-    if (gKind == UiFixtureKind::Bark && !gBarkCallbackSuppressed) runBarkFixtureFrame();
+    if (gKind == UiFixtureKind::Bark) {
+        if (!gBarkCallbackSuppressed) runBarkFixtureFrame();
+    } else {
+        uiFixtureVanillaPresented();
+    }
 }
 
 } // namespace devtools

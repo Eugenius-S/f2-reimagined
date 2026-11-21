@@ -49,7 +49,7 @@ View requestedView();
 View activeView();
 
 // True while the active view may replace the game's picture: not during
-// dialogs, combat, movies and other modal states (it comes back after them).
+// map transitions, movies and other states that hide the local map.
 bool shouldPresent();
 // Project an attached floating-text anchor when camera turn or zoom is active.
 bool floatingTextScreenPosition(int tile, int offsetX, int offsetY, int* screenX, int* screenY);

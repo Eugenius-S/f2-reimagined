@@ -88,6 +88,7 @@ void mapExit();
 void isoEnable();
 bool isoDisable();
 bool isoIsDisabled();
+bool mapIsTransitioning();
 int mapSetElevation(MapElevation elevation);
 int mapSetGlobalVar(int var, ProgramValue& value);
 int mapGetGlobalVar(int var, ProgramValue& value);
