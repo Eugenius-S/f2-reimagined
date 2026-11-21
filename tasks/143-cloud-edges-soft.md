@@ -128,3 +128,14 @@ stays open; nothing changed.
 - 2026-11-12 glm (bookkeeping): status blocked: three hour frames did not
   reproduce the edge (#450); the hunt waits for a controlled clouds-off
   and clouds-on pair at one camera and moment.
+
+
+### 2026-11-12 gpt: controlled toggle evidence still unavailable
+Blocked: Two controlled capture passes at KLADWTWN e0, view tile 24678, did not reproduce the owner's curved road edge. The owner image is a crop without camera/time metadata; the candidate full frame does not establish a reliable match. No shader change was made.
+
+Attempt 1 captured cloud-only, sun-only, and combined using `-CloudShadows`, `-SunShadows`, and `-Shadows`. Attempt 2 repeated the three modes with `-OwnerShot -OwnerShotDelay 2`; it still emitted no owner-shot sidecar. The devshot JSON omits effective `scene3d.shadows` and `scene3d.cloud_shadows`, and process logs do not report those settings. `sun-only` and `combined` emitted `SHADOW PASS`; `cloud-only` did not, as expected with sun shadows disabled, but this does not independently confirm the cloud toggle. Do not treat these as validated toggle-matched evidence.
+
+The devshot sidecars do confirm equal `game_time=288000` (08:00), view tile, fixed camera, 1920x1080, scale 2, and executable SHA-256 across the second pass. No `-CloudPhase` override was used; `shadow.cc` derives cloud offset from game time when no override is supplied. Requested modes, metadata, image comparisons, and limitations are recorded in `runs/143-cloud-edges-soft/controlled-capture-audit.json`; JPEGs are in the `attempt-08-*` folders. These names identify requested parameters only; effective lighting toggles are unconfirmed, so the captures are not validated mode evidence.
+
+Check: `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release` passed; scene export read 1,468 resources to isolated `build/scene-cache`; six background captures completed. No tests or perf-check were run because renderer code did not change. No files under `game/` or `build/` were committed.
+Next: Obtain an owner camera/time sidecar or independent runtime metadata for effective cloud-shadow settings, then repeat the controlled comparison before considering a general shader change.
