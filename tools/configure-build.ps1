@@ -83,4 +83,17 @@ $runtime = 'MultiThreaded$<$<CONFIG:Debug>:Debug>'
 cmake -S $SourceDir -B $buildDir -G Ninja "-DCMAKE_BUILD_TYPE=$BuildType" "-DCMAKE_MSVC_RUNTIME_LIBRARY=$runtime"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 cmake --build $buildDir
-exit $LASTEXITCODE
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# 271: the build receipt binds the exe bytes to the commit they were built
+# from.  map-health reads it to tell a verified provenance from a label.
+$exe = Join-Path $buildDir 'fallout2-ce.exe'
+if (Test-Path -LiteralPath $exe) {
+    $receipt = [ordered]@{
+        commit = (git -C $ProjectRoot rev-parse HEAD).Trim()
+        exe_sha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLower()
+        built = (Get-Date).ToUniversalTime().ToString('o')
+    }
+    $receipt | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $buildDir 'build-receipt.json') -Encoding utf8
+}
+exit 0

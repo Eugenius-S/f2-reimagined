@@ -144,6 +144,7 @@ jobs:
       - run: python -m unittest discover -s tools/regression -p 'test*.py' -v
       - run: python -m unittest discover -s tools -p 'test_image_diff.py' -v
       - run: python -m unittest discover -s tools -p 'test_check_public_content.py' -v
+      - run: python -m unittest discover -s tools -p 'test_map_health_table.py' -v
   scene:
     runs-on: ubuntu-latest
     strategy:
