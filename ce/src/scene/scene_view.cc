@@ -16,6 +16,7 @@
 #include <SDL.h>
 
 #include "preview_policy.h"
+#include "scene_build.h"
 #include "scene_settings.h"
 #include "scene_lights.h"
 #include "scene_objects.h"
@@ -39,6 +40,7 @@
 #include "../scene_renderer/camera.h"
 #include "../scene_renderer/live_objects.h"
 #include "../scene_renderer/map_clip.h"
+#include "../scene_renderer/build_wait.h"
 #include "../scene_renderer/static_scene.h"
 #include "../scene_renderer/sprite_card.h"
 #include "../settings.h"
@@ -273,15 +275,20 @@ bool readDaylight(const std::filesystem::path& cacheDirectory)
 
 // The map's scene cache directory: the dev cache override when the dev
 // tools run, the game's mod-cache otherwise.
-static std::filesystem::path sceneCacheDirectory(const std::string& map, int elevation)
+static std::filesystem::path scenesRootPath()
 {
     // F2CE_SCENE_CACHE (dev tools only): a worktree's own scene cache, so a test
     // run of a new exporter leaves the cache of a game running alongside alone.
     const char* devCache = devtools::isEnabled() ? SDL_getenv("F2CE_SCENE_CACHE") : nullptr;
-    const std::filesystem::path scenes = devCache != nullptr && devCache[0] != '\0'
-        ? std::filesystem::path(devCache)
-        : gameRootPath() / "mod-cache" / "scene";
-    return scenes / map / std::to_string(elevation);
+    if (devCache != nullptr && devCache[0] != '\0') {
+        return std::filesystem::path(devCache);
+    }
+    return gameRootPath() / "mod-cache" / "scene";
+}
+
+static std::filesystem::path sceneCacheDirectory(const std::string& map, int elevation)
+{
+    return scenesRootPath() / map / std::to_string(elevation);
 }
 
 // The 3D toggle's refusal (211) goes to the game's status line, in the
@@ -432,9 +439,22 @@ PreviewBlockReason currentBlockReason()
 
 } // namespace
 
+// 273: the one on-entry exporter run. The game keeps drawing while it works.
+scene_build::SceneBuild gSceneBuild;
+// The map whose scene cache is being built on entry; the 3D view stays up
+// and the map's 2D art lies on the ground plane until it finishes.
+std::string gBuildWaitingMap;
+
 bool showsCurrentMap()
 {
     return !gLoadedMap.empty() && gLoadedMap == currentMapName() && gLoadedElevation == static_cast<int>(gElevation);
+}
+
+// 273: the current map's cache is being built and the waiting state (its 2D
+// art on the ground plane) stands in for the scene.
+bool buildWaiting()
+{
+    return !gBuildWaitingMap.empty() && gBuildWaitingMap == currentMapName();
 }
 
 bool bottomViewHasDrawnGround(int tile)
@@ -524,14 +544,53 @@ bool bottomViewHasDrawnGround(int tile)
     return true;
 }
 
+// One line to the console and scene.log, the way the load fallback lines go.
+static void logSceneLine(const std::string& line)
+{
+    printf("%s\n", line.c_str());
+    fflush(stdout);
+    // A file too: the Windows build has no console.
+    if (FILE* log = fopen((dev_output::outputDirectory("logs") / "scene.log").string().c_str(), "a")) {
+        fprintf(log, "%s\n", line.c_str());
+        fclose(log);
+    }
+}
+
 void syncToMap()
 {
     const std::string map = currentMapName();
     const int elevation = static_cast<int>(gElevation);
+    // 273: an on-entry build that finished clears the failure so the load
+    // below retries with the fresh cache in the same frame.
+    if (gSceneBuild.status() == scene_build::SceneBuild::Status::Running) {
+        const scene_build::SceneBuild::Status built = gSceneBuild.poll();
+        if (built == scene_build::SceneBuild::Status::Succeeded) {
+            logSceneLine("scene: " + gSceneBuild.map() + " scene data built in "
+                + std::to_string(gSceneBuild.elapsedMs()) + " ms; loading it");
+            gFailedMap.clear();
+            gFailedElevation = -1;
+            // The waiting plane yields to the real scene this frame; if the
+            // fresh cache still fails to load below, the rebuild that starts
+            // then puts it back up.
+            gBuildWaitingMap.clear();
+            scene_renderer::setWaitPlane(false);
+        } else if (built == scene_build::SceneBuild::Status::Failed) {
+            logSceneLine("scene: " + gSceneBuild.map() + " scene data could not be built; it stays 2D");
+            gBuildWaitingMap.clear();
+            scene_renderer::setWaitPlane(false);
+        }
+    }
     if (!gLoadedMap.empty() && (gLoadedMap != map || gLoadedElevation != elevation)) {
         scene_renderer::unloadStaticScene();
         gLoadedMap.clear();
         gLoadedElevation = -1;
+    }
+    if (!gBuildWaitingMap.empty() && gBuildWaitingMap != map) {
+        // The player went elsewhere mid-build: the waiting state belongs to
+        // the map it was started for. The run itself keeps going; entering
+        // that map again finds the cache ready.
+        gBuildWaitingMap.clear();
+        scene_renderer::setWaitPlane(false);
     }
     if (gFailedMap != map || gFailedElevation != elevation) {
         gFailedMap.clear();
@@ -541,7 +600,19 @@ void syncToMap()
     const bool loaded = !gLoadedMap.empty() && static_cast<int>(gLoadedView) >= static_cast<int>(gView);
     if (gView != View::Off && !map.empty() && gFailedMap.empty() && !loaded) {
         std::string message;
-        if (loadScene(gView, map, elevation, &message)) {
+        // 273: a cache written by another exporter version is rebuilt, not
+        // loaded: the load attempts are skipped for one, so its old floor
+        // never shows while the fresh scene is built.
+        const bool staleVersion = scene_build::cacheState(sceneCacheDirectory(map, elevation))
+            == scene_build::CacheState::StaleVersion;
+        if (staleVersion) {
+            message = "scene data is from another exporter version";
+        }
+        bool sceneLoaded = false;
+        if (!staleVersion) {
+            sceneLoaded = loadScene(gView, map, elevation, &message);
+        }
+        if (sceneLoaded) {
             gLoadedMap = map;
             gLoadedElevation = elevation;
             gLoadedView = gView;
@@ -552,7 +623,9 @@ void syncToMap()
             // Keep a usable 3D ground plane when a map's wall or projection
             // sidecar is missing or damaged. This is also the fallback for
             // incomplete exports; it must not silently turn the whole map 2D.
-            if (gView != View::Floor && loadScene(View::Floor, map, elevation, &floorError)) {
+            // A stale-version cache takes neither: it is rebuilt whole.
+            if (!staleVersion && gView != View::Floor
+                && loadScene(View::Floor, map, elevation, &floorError)) {
                 gLoadedMap = map;
                 gLoadedElevation = elevation;
                 gLoadedView = View::Floor;
@@ -568,17 +641,48 @@ void syncToMap()
                     fclose(log);
                 }
             } else {
-                gLoadedMap.clear();
-                gLoadedElevation = -1;
-                gFailedMap = map;
-                gFailedElevation = elevation;
-                gFailure = message;
-                printf("scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
-                fflush(stdout);
-                // A file too: the Windows build has no console.
-                if (FILE* log = fopen((dev_output::outputDirectory("logs") / "scene.log").string().c_str(), "a")) {
-                    fprintf(log, "scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
-                    fclose(log);
+                // 273: with the shipped exporter beside the game, a missing
+                // or stale cache is built on entry instead of staying 2D. A
+                // cache whose provenance still matches but whose files do
+                // not load is damaged: only --force rewrites it. While the
+                // build runs the map keeps drawing as it does now; the
+                // waiting state on the 3D ground plane is the visual step.
+                const scene_build::CacheState state = scene_build::cacheState(sceneCacheDirectory(map, elevation));
+                // Stale-version caches need --force too: the exporter's own
+                // staleness reads fingerprints, not the version field, so a
+                // cache whose files match its tampered provenance would come
+                // back "current" and never rewrite the version (a rebuild
+                // loop).
+                const bool damaged = state != scene_build::CacheState::Missing;
+                const char* why = state == scene_build::CacheState::Missing ? "has no scene data"
+                    : state == scene_build::CacheState::StaleVersion ? "has scene data from another exporter version"
+                    : "has damaged scene data";
+                if (gSceneBuild.start(map, scene_build::exporterPath(), gameRootPath(),
+                        scenesRootPath(), damaged)) {
+                    logSceneLine("scene: " + map + " elevation " + std::to_string(elevation) + " "
+                        + why + " (" + message + "); building it with the shipped exporter");
+                    gLoadedMap.clear();
+                    gLoadedElevation = -1;
+                    gFailedMap = map;
+                    gFailedElevation = elevation;
+                    gFailure = message;
+                    // 273: the 3D view stays up; the map's 2D art lies on the
+                    // ground plane until the build finishes.
+                    gBuildWaitingMap = map;
+                    scene_renderer::setWaitPlane(true);
+                } else {
+                    gLoadedMap.clear();
+                    gLoadedElevation = -1;
+                    gFailedMap = map;
+                    gFailedElevation = elevation;
+                    gFailure = message;
+                    printf("scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
+                    fflush(stdout);
+                    // A file too: the Windows build has no console.
+                    if (FILE* log = fopen((dev_output::outputDirectory("logs") / "scene.log").string().c_str(), "a")) {
+                        fprintf(log, "scene: %s elevation %d stays 2D: %s\n", map.c_str(), elevation, message.c_str());
+                        fclose(log);
+                    }
                 }
             }
         }
@@ -615,10 +719,14 @@ bool enable(View view, std::string* message)
     }
     gView = view;
     gOriginalShown = false;
-    gFailedMap.clear();
-    gFailedElevation = -1;
+    // 273: a running build keeps its failure bookkeeping; a re-enable while
+    // it works must not log a bogus stays-2D line or refuse the toggle.
+    if (!buildWaiting()) {
+        gFailedMap.clear();
+        gFailedElevation = -1;
+    }
     syncToMap();
-    if (!showsCurrentMap()) {
+    if (!showsCurrentMap() && !buildWaiting()) {
         *message = gFailure.empty() ? "no map is loaded" : gFailure;
         reportToggleRefusal(*message);
         return false;
@@ -658,7 +766,9 @@ View requestedView()
 
 View activeView()
 {
-    return settings.scene3d.enabled && gView != View::Off && showsCurrentMap() ? gLoadedView : View::Off;
+    if (!settings.scene3d.enabled || gView == View::Off) return View::Off;
+    if (buildWaiting()) return gView; // 273: the waiting plane stands in for the scene
+    return showsCurrentMap() ? gLoadedView : View::Off;
 }
 
 bool shouldPresent()
@@ -842,6 +952,9 @@ double shownZoom()
 RefreshResult refreshForPresent()
 {
     if (activeView() != View::Full) return { false, 0.0 };
+    // 273: while the cache builds there is no scene to refresh; the waiting
+    // plane draws the game's own picture instead of the hero and the walls.
+    if (buildWaiting()) return { false, 0.0 };
     const Uint64 start = SDL_GetPerformanceCounter();
     // Follow the stored zoom every frame, so a changed setting applies live;
     // a wheel step glides there instead (see adjustZoom).
