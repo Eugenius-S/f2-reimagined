@@ -12,6 +12,18 @@
 $SnapshotOutputManifest = 'snapshot-output.json'
 $script:snapshotOutputFiles = [ordered]@{}
 
+# Windows PowerShell children launched by the tour may lack the Utility cmdlet.
+function Get-Sha256FileHash([string]$Path) {
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        return [System.BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
+    } finally {
+        $stream.Dispose()
+        $algorithm.Dispose()
+    }
+}
+
 function Write-SnapshotOutput([string]$Directory, [string]$State) {
     $path = Join-Path $Directory $SnapshotOutputManifest
     $text = [ordered]@{ state = $State; files = $script:snapshotOutputFiles } | ConvertTo-Json
@@ -34,7 +46,7 @@ function Reset-SnapshotOutput([string]$Directory) {
             if ($name -ne [IO.Path]::GetFileName($name)) { continue }
             $file = Join-Path $Directory $name
             if ((Test-Path -LiteralPath $file -PathType Leaf) -and
-                (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash -eq [string]$entry.Value) {
+                (Get-Sha256FileHash $file) -eq [string]$entry.Value) {
                 Remove-Item -LiteralPath $file -Force
             }
         }
@@ -44,7 +56,7 @@ function Reset-SnapshotOutput([string]$Directory) {
 
 function Add-SnapshotOutput([string]$Directory, [string]$Path) {
     $name = Split-Path -Leaf $Path
-    $script:snapshotOutputFiles[$name] = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $Directory $name)).Hash
+    $script:snapshotOutputFiles[$name] = (Get-Sha256FileHash (Join-Path $Directory $name))
     Write-SnapshotOutput $Directory 'incomplete'
 }
 

@@ -18,6 +18,7 @@ function Check([bool]$ok, [string]$message) {
 Set-Content -LiteralPath $fakeRun -Encoding utf8 -Value @"
 param([string]`$Out, [string]`$Run, [int]`$Count, [int]`$FailAt = -1)
 `$ErrorActionPreference = 'Stop'
+function Get-FileHash { throw 'Get-FileHash is absent in the tour host' }
 . '$(Join-Path $PSScriptRoot 'snapshot-output.ps1')'
 Reset-SnapshotOutput `$Out
 for (`$i = 0; `$i -lt `$Count; `$i++) {

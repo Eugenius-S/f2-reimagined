@@ -218,16 +218,6 @@ param(
     [double]$Scale = 2.0
 )
 
-function Get-Sha256FileHash([string]$Path) {
-    $algorithm = [System.Security.Cryptography.SHA256]::Create()
-    $stream = [System.IO.File]::OpenRead($Path)
-    try {
-        return [System.BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
-    } finally {
-        $stream.Dispose()
-        $algorithm.Dispose()
-    }
-}
 $ErrorActionPreference = 'Stop'
 # The folder's own captures and the run's state (snapshot-output.ps1): from here on a failure,
 # however early, leaves "incomplete" and no earlier capture listed as this run's.
