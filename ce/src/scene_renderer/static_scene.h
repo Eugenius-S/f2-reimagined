@@ -22,6 +22,9 @@ bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* e
 void unloadStaticScene();
 void staticWallStats(unsigned int* triangles, unsigned int* pages);
 MapClip staticFloorMapClip();
+// 275: how many squares of this elevation's floor actually draw; a count
+// near zero is a nearly-empty upper floor (the encounter maps' tops).
+int staticFloorDrawnSquares();
 bool staticFloorHasGround(double x, double z);
 bool setStaticFloorMapProjection(const SpriteCardProjection& projection);
 void setStaticMapClip(const MapClip& clip);
