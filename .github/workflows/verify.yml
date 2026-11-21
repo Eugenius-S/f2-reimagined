@@ -102,6 +102,8 @@ jobs:
       - run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/scene_export/build_standalone.ps1
       - name: Smoke-test the standalone exporter
         run: build/exporter-standalone/scene-exporter.exe --help
+      - name: Export the synthetic fixture with the source and packaged exporter
+        run: python tools/scene_export/fixture_smoke.py --staging build/exporter-standalone --work build/fixture-smoke
       - uses: actions/download-artifact@v4
         with:
           name: game-win64
