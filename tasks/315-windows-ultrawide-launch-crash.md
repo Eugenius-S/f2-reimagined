@@ -2,8 +2,8 @@
 id: 315
 title: Fallout 2 starts at 3440 x 1440 after a clean Windows install
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 priority: high
 tier: 0
 claude-only: no
@@ -34,3 +34,4 @@ Launcher self-update, full uninstall and visual cleanup from 314.
 ## Log
 
 - 2026-11-20 gpt: recorded the owner's report as an urgent tier 0 startup blocker. No diagnosis or implementation started.
+- 2026-11-21 gpt: fixed wide viewport object-offset generation by allowing abstract samples outside the map; existing callers still validate tile indices before grid access. Also removed the hires menu panel blit while preserving its label layout bounds, independent button art, hitboxes, and backdrop. Windows Release build and CTest (29/29) pass; scene-export and regression unit suites pass (148 and 12 tests). `tools/dev-snapshot.ps1` reaches the Russian menu at 3440x1440 1x on two consecutive saved-config launches, loads KLADWTWN.MAP at that resolution, and reaches the menu at 1920x1080 1x. Wide and plain menu captures are in `runs/315-menu-wide-3440`, `runs/315-menu-plain-3440`, `runs/315-menu-wide-1920`, and `runs/315-menu-plain-1920`. Full map regression is running.
