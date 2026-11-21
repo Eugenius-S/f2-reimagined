@@ -72,6 +72,9 @@
 #include "../scene_renderer/picking.h"
 #include "../scene_renderer/scene_draw.h"
 #include "../scene_renderer/shadow.h"
+#include "../scene_renderer/post.h"
+#include "../scene_renderer/gl_api.h"
+#include "../scene_renderer/scene_internal.h"
 #include "../scene_renderer/static_scene.h"
 #include "../scene_renderer/text_present.h"
 #include "../settings.h"
@@ -83,6 +86,7 @@
 #include "../worldmap.h"
 
 #include <SDL.h>
+#include <SDL_opengl.h>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -4862,6 +4866,65 @@ bool takeSnapshot()
     // Preview snapshots come before the first frame that would update it.
     scene::updateSunFromGame();
     const scene::Sun& sun = scene::currentSun();
+    // Read the uniforms left by the draw saved above. Cloud shadows only shade
+    // the scene when both uCloudOn and uShadowOn are enabled in the shader.
+    int effectiveSunShadowUniform = 0;
+    int effectiveCloudShadowUniform = 0;
+    int effectivePointLightCount = 0;
+    float effectiveAmbient = 0.0f;
+    const auto getUniformInt = reinterpret_cast<PFNGLGETUNIFORMIVPROC>(SDL_GL_GetProcAddress("glGetUniformiv"));
+    const auto getUniformFloat = reinterpret_cast<PFNGLGETUNIFORMFVPROC>(SDL_GL_GetProcAddress("glGetUniformfv"));
+    bool shadowStateAvailable = preview && scene_renderer::internal::gSceneProgram != 0
+        && scene_renderer::internal::gSceneShadowOnLocation >= 0
+        && scene_renderer::internal::gSceneCloudOnLocation >= 0
+        && getUniformInt != nullptr;
+    const bool lightDrawActive = heroPreview && haveHeroInfo && scene_renderer::internal::lightShown();
+    bool lightStateAvailable = lightDrawActive && scene_renderer::internal::gSceneProgram != 0
+        && scene_renderer::internal::gSceneLightCountLocation >= 0
+        && scene_renderer::internal::gSceneAmbientLocation >= 0
+        && getUniformInt != nullptr && getUniformFloat != nullptr;
+    if (shadowStateAvailable) {
+        getUniformInt(scene_renderer::internal::gSceneProgram, scene_renderer::internal::gSceneShadowOnLocation,
+            &effectiveSunShadowUniform);
+        getUniformInt(scene_renderer::internal::gSceneProgram, scene_renderer::internal::gSceneCloudOnLocation,
+            &effectiveCloudShadowUniform);
+    }
+    if (lightStateAvailable) {
+        getUniformInt(scene_renderer::internal::gSceneProgram, scene_renderer::internal::gSceneLightCountLocation,
+            &effectivePointLightCount);
+        getUniformFloat(scene_renderer::internal::gSceneProgram, scene_renderer::internal::gSceneAmbientLocation,
+            &effectiveAmbient);
+    }
+    // The preview draw has completed before its sidecar is written. A GL error
+    // makes queried uniforms untrustworthy, so report them as unknown.
+    bool uniformQueryError = false;
+    if (scene_renderer::glGetError == nullptr) uniformQueryError = true;
+    else while (scene_renderer::glGetError() != 0) uniformQueryError = true;
+    if (uniformQueryError) {
+        shadowStateAvailable = false;
+        lightStateAvailable = false;
+    }
+    const bool validSunShadow = shadowStateAvailable
+        && (effectiveSunShadowUniform == 0 || effectiveSunShadowUniform == 1);
+    const bool validCloudShadow = validSunShadow
+        && (effectiveCloudShadowUniform == 0 || effectiveCloudShadowUniform == 1);
+    const bool validPointLights = heroPreview && (!lightDrawActive
+        || (lightStateAvailable && effectivePointLightCount >= 0));
+    const bool validAmbient = lightDrawActive && lightStateAvailable && std::isfinite(effectiveAmbient)
+        && effectiveAmbient >= 0.0f && effectiveAmbient <= 1.0f;
+    // glowActive() only reports that the pass is configured. It does not say
+    // whether beginSceneCapture could bind its targets for this captured draw.
+    const bool glowKnownOff = !preview || !scene_renderer::glowActive();
+    char ambientValue[32];
+    if (validAmbient) snprintf(ambientValue, sizeof(ambientValue), "%.6f", effectiveAmbient);
+    else snprintf(ambientValue, sizeof(ambientValue), "null");
+    char effectiveRenderState[256];
+    snprintf(effectiveRenderState, sizeof(effectiveRenderState),
+        "{\"sun_shadows\":%s,\"cloud_shadows\":%s,\"point_lights\":%s,\"glow\":%s,\"ambient\":%s}",
+        validSunShadow ? (effectiveSunShadowUniform != 0 ? "true" : "false") : "null",
+        validCloudShadow ? (effectiveSunShadowUniform != 0 && effectiveCloudShadowUniform != 0 ? "true" : "false") : "null",
+        validPointLights ? (effectivePointLightCount > 0 ? "true" : "false") : "null",
+        glowKnownOff ? "false" : "null", ambientValue);
     char sunMetadata[384];
     snprintf(sunMetadata, sizeof(sunMetadata),
         "{\"setting\":%s,\"daylight\":%s,\"game_time\":%u,\"ambient\":%d,\"up\":%s,\"moon\":%s,\"height\":%.3f,\"azimuth\":%.3f,"
@@ -4911,6 +4974,7 @@ bool takeSnapshot()
         "  \"preview_availability\": \"%s\",\n"
         "  \"renderer\": \"%s\",\n"
         "  \"light\": \"%s\",\n"
+        "  \"effective_render_state\": %s,\n"
         "  \"effect_emission\": %s,\n"
         "  \"glow\": {\"enabled\":%s,\"strength\":%.3f},\n"
         "  \"weapon_effect\": %s,\n"
@@ -4969,6 +5033,7 @@ bool takeSnapshot()
         previewRequested ? (scene_renderer::isActive() ? scene::availability() : "renderer-inactive") : "not-requested",
         activeRendererName(),
         settings.scene3d.lights ? "enabled" : "off",
+        effectiveRenderState,
         scene::gEffectEmissionEnabled ? "true" : "false",
         settings.scene3d.glow ? "true" : "false",
         settings.scene3d.glow_strength,
