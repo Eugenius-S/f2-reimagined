@@ -1,0 +1,346 @@
+{
+  "model": "hmjmps",
+  "source_game_root": "main checkout game directory (read only)",
+  "palette": "master.dat:color.pal",
+  "frame_count": 14,
+  "sequence_rule": "stand direction 0..5, frame 0; then walk direction 0 frames 0..7",
+  "frames": [
+    {
+      "sequence": 1,
+      "label": "stand-dir0",
+      "action": "stand",
+      "direction": 0,
+      "frame_index": 0,
+      "source": "critter.dat:art/critters/hmjmpsaa.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\stand-dir0-original.png",
+      "width": 28,
+      "height": 63,
+      "frame_offset": [
+        0,
+        0
+      ],
+      "direction_shift": [
+        -1,
+        3
+      ],
+      "anchor_local": [
+        14,
+        62
+      ],
+      "anchor_note": "bottom-center pixel; see FRM placement"
+    },
+    {
+      "sequence": 2,
+      "label": "stand-dir1",
+      "action": "stand",
+      "direction": 1,
+      "frame_index": 0,
+      "source": "critter.dat:art/critters/hmjmpsaa.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\stand-dir1-original.png",
+      "width": 13,
+      "height": 65,
+      "frame_offset": [
+        0,
+        0
+      ],
+      "direction_shift": [
+        -1,
+        5
+      ],
+      "anchor_local": [
+        6,
+        64
+      ],
+      "anchor_note": "bottom-center pixel; see FRM placement"
+    },
+    {
+      "sequence": 3,
+      "label": "stand-dir2",
+      "action": "stand",
+      "direction": 2,
+      "frame_index": 0,
+      "source": "critter.dat:art/critters/hmjmpsaa.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\stand-dir2-original.png",
+      "width": 28,
+      "height": 64,
+      "frame_offset": [
+        0,
+        0
+      ],
+      "direction_shift": [
+        -1,
+        4
+      ],
+      "anchor_local": [
+        14,
+        63
+      ],
+      "anchor_note": "bottom-center pixel; see FRM placement"
+    },
+    {
+      "sequence": 4,
+      "label": "stand-dir3",
+      "action": "stand",
+      "direction": 3,
+      "frame_index": 0,
+      "source": "critter.dat:art/critters/hmjmpsaa.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\stand-dir3-original.png",
+      "width": 28,
+      "height": 63,
+      "frame_offset": [
+        0,
+        0
+      ],
+      "direction_shift": [
+        0,
+        3
+      ],
+      "anchor_local": [
+        14,
+        62
+      ],
+      "anchor_note": "bottom-center pixel; see FRM placement"
+    },
+    {
+      "sequence": 5,
+      "label": "stand-dir4",
+      "action": "stand",
+      "direction": 4,
+      "frame_index": 0,
+      "source": "critter.dat:art/critters/hmjmpsaa.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\stand-dir4-original.png",
+      "width": 14,
+      "height": 66,
+      "frame_offset": [
+        0,
+        0
+      ],
+      "direction_shift": [
+        2,
+        5
+      ],
+      "anchor_local": [
+        7,
+        65
+      ],
+      "anchor_note": "bottom-center pixel; see FRM placement"
+    },
+    {
+      "sequence": 6,
+      "label": "stand-dir5",
+      "action": "stand",
+      "direction": 5,
+      "frame_index": 0,
+      "source": "critter.dat:art/critters/hmjmpsaa.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\stand-dir5-original.png",
+      "width": 27,
+      "height": 63,
+      "frame_offset": [
+        0,
+        0
+      ],
+      "direction_shift": [
+        0,
+        3
+      ],
+      "anchor_local": [
+        13,
+        62
+      ],
+      "anchor_note": "bottom-center pixel; see FRM placement"
+    },
+    {
+      "sequence": 7,
+      "label": "walk-dir0-frame00",
+      "action": "walk",
+      "direction": 0,
+      "frame_index": 0,
+      "source": "critter.dat:art/critters/hmjmpsab.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\walk-dir0-frame00-original.png",
+      "width": 25,
+      "height": 63,
+      "frame_offset": [
+        3,
+        -4
+      ],
+      "direction_shift": [
+        -2,
+        4
+      ],
+      "anchor_local": [
+        12,
+        62
+      ],
+      "anchor_note": "bottom-center pixel; animation frame x/y also applies"
+    },
+    {
+      "sequence": 8,
+      "label": "walk-dir0-frame01",
+      "action": "walk",
+      "direction": 0,
+      "frame_index": 1,
+      "source": "critter.dat:art/critters/hmjmpsab.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\walk-dir0-frame01-original.png",
+      "width": 22,
+      "height": 63,
+      "frame_offset": [
+        5,
+        -2
+      ],
+      "direction_shift": [
+        -2,
+        4
+      ],
+      "anchor_local": [
+        11,
+        62
+      ],
+      "anchor_note": "bottom-center pixel; animation frame x/y also applies"
+    },
+    {
+      "sequence": 9,
+      "label": "walk-dir0-frame02",
+      "action": "walk",
+      "direction": 0,
+      "frame_index": 2,
+      "source": "critter.dat:art/critters/hmjmpsab.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\walk-dir0-frame02-original.png",
+      "width": 29,
+      "height": 65,
+      "frame_offset": [
+        5,
+        0
+      ],
+      "direction_shift": [
+        -2,
+        4
+      ],
+      "anchor_local": [
+        14,
+        64
+      ],
+      "anchor_note": "bottom-center pixel; animation frame x/y also applies"
+    },
+    {
+      "sequence": 10,
+      "label": "walk-dir0-frame03",
+      "action": "walk",
+      "direction": 0,
+      "frame_index": 3,
+      "source": "critter.dat:art/critters/hmjmpsab.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\walk-dir0-frame03-original.png",
+      "width": 23,
+      "height": 64,
+      "frame_offset": [
+        3,
+        -7
+      ],
+      "direction_shift": [
+        -2,
+        4
+      ],
+      "anchor_local": [
+        11,
+        63
+      ],
+      "anchor_note": "bottom-center pixel; animation frame x/y also applies"
+    },
+    {
+      "sequence": 11,
+      "label": "walk-dir0-frame04",
+      "action": "walk",
+      "direction": 0,
+      "frame_index": 4,
+      "source": "critter.dat:art/critters/hmjmpsab.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\walk-dir0-frame04-original.png",
+      "width": 23,
+      "height": 64,
+      "frame_offset": [
+        4,
+        -3
+      ],
+      "direction_shift": [
+        -2,
+        4
+      ],
+      "anchor_local": [
+        11,
+        63
+      ],
+      "anchor_note": "bottom-center pixel; animation frame x/y also applies"
+    },
+    {
+      "sequence": 12,
+      "label": "walk-dir0-frame05",
+      "action": "walk",
+      "direction": 0,
+      "frame_index": 5,
+      "source": "critter.dat:art/critters/hmjmpsab.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\walk-dir0-frame05-original.png",
+      "width": 26,
+      "height": 66,
+      "frame_offset": [
+        5,
+        -1
+      ],
+      "direction_shift": [
+        -2,
+        4
+      ],
+      "anchor_local": [
+        13,
+        65
+      ],
+      "anchor_note": "bottom-center pixel; animation frame x/y also applies"
+    },
+    {
+      "sequence": 13,
+      "label": "walk-dir0-frame06",
+      "action": "walk",
+      "direction": 0,
+      "frame_index": 6,
+      "source": "critter.dat:art/critters/hmjmpsab.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\walk-dir0-frame06-original.png",
+      "width": 26,
+      "height": 67,
+      "frame_offset": [
+        5,
+        -1
+      ],
+      "direction_shift": [
+        -2,
+        4
+      ],
+      "anchor_local": [
+        13,
+        66
+      ],
+      "anchor_note": "bottom-center pixel; animation frame x/y also applies"
+    },
+    {
+      "sequence": 14,
+      "label": "walk-dir0-frame07",
+      "action": "walk",
+      "direction": 0,
+      "frame_index": 7,
+      "source": "critter.dat:art/critters/hmjmpsab.frm",
+      "path": "runs\\230-hd-sprite-trial-2\\source\\walk-dir0-frame07-original.png",
+      "width": 27,
+      "height": 66,
+      "frame_offset": [
+        4,
+        -7
+      ],
+      "direction_shift": [
+        -2,
+        4
+      ],
+      "anchor_local": [
+        13,
+        65
+      ],
+      "anchor_note": "bottom-center pixel; animation frame x/y also applies"
+    }
+  ],
+  "source_artifacts_note": "Original game-derived PNG frames are local-only and are intentionally not committed; this metadata records their source paths, dimensions, and offsets."
+}
