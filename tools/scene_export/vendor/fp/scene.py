@@ -105,7 +105,25 @@ class SceneBuilder:
                              f"(present: {sorted(self.map.tiles)})")
         everything = self.map.objects[self.elevation]
         self.serial = {id(o): n for n, o in enumerate(everything)}     # position in the map file: names an object
-        self.objects = [o for o in everything if not o.flags & mapfile.OBJECT_HIDDEN]
+        # 274: on a stacked map the original 2D view of an upper elevation
+        # draws the lower elevation past the upper floor's edge (the edge
+        # system renders the map below through the void squares), so the
+        # lower floors' walls come into this scene: they stand on the same
+        # ground plane and rise into the view. They draw first (the lower
+        # scene is under this floor) and stay visual only: this floor's
+        # blocking and light stay the original's (build_blocking, faces_of).
+        self.below_wall_ids = set()
+        lower_walls = []
+        for below in sorted(e for e in self.map.tiles if e < self.elevation):
+            for o in self.map.objects[below]:
+                if ids.pid_type(o.pid) == ids.OBJ_TYPE_WALL and not o.flags & mapfile.OBJECT_HIDDEN:
+                    self.below_wall_ids.add(id(o))
+                    lower_walls.append(o)
+        # the rows' serial numbers name the object in this combined list: this
+        # elevation's own objects first, the walls below after them
+        self.everything = everything + lower_walls
+        self.serial = {id(o): n for n, o in enumerate(self.everything)}
+        self.objects = lower_walls + [o for o in everything if not o.flags & mapfile.OBJECT_HIDDEN]
         self.atlas = Atlas()
         self.sprites = []               # [atlas id, ox, oy]: offset of the top-left pixel from the anchor
         self._sprite_ids = {}
@@ -332,7 +350,7 @@ class SceneBuilder:
 
     def faces_of(self, obj, art, sprite, faces, trusted, kind, order):
         x, y = proj.hex_px(obj.tile)
-        solid = kind == "wall" and not obj.flags & mapfile.OBJECT_NO_BLOCK
+        solid = kind == "wall" and not obj.flags & mapfile.OBJECT_NO_BLOCK             and id(obj) not in self.below_wall_ids      # 274: seen, but this floor's light and paths keep the original's
         return [walls.Face(obj, art, (x + obj.x, y + obj.y), slope, c, x_from, x_to, trusted, solid, kind, order, sprite)
                 for slope, c, x_from, x_to in faces]
 
@@ -1175,6 +1193,8 @@ class SceneBuilder:
             return np.hypot(*(np.clip(p, rects[:, :2], rects[:, 2:]) - p).T).min() < reach
 
         for obj in self.objects:
+            if id(obj) in self.below_wall_ids:          # 274: the walls below are the view, not this floor's paths
+                continue
             if obj.flags & mapfile.OBJECT_NO_BLOCK or not geometry.is_valid(obj.tile):
                 continue
             if ids.fid_type(obj.fid) not in (ids.OBJ_TYPE_CRITTER, ids.OBJ_TYPE_SCENERY, ids.OBJ_TYPE_WALL):
