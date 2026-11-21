@@ -176,7 +176,6 @@ static bool mainMenuLoadArt();
 static MainMenuLayout mainMenuBuildLayout();
 static void mainMenuDrawBackground(const MainMenuLayout& layout);
 static MainMenuOffsets mainMenuReadOffsets(const MainMenuLayout& layout);
-static void mainMenuDrawPanel(const MainMenuLayout& layout, const MainMenuOffsets& offsets);
 static Point mainMenuTransformPoint(const MainMenuLayout& layout, int x, int y);
 static Size mainMenuTransformSize(const MainMenuLayout& layout, int width, int height);
 static int mainMenuScaleX(const MainMenuLayout& layout, int value);
@@ -492,29 +491,6 @@ static MainMenuOffsets mainMenuReadOffsets(const MainMenuLayout& layout)
     return offsets;
 }
 
-static void mainMenuDrawPanel(const MainMenuLayout& layout, const MainMenuOffsets& offsets)
-{
-    if (layout.art != MenuArt::Hires || !mainMenuButtonPanelFrmImage.isLocked()) {
-        return;
-    }
-
-    int panelOffsetX = MAIN_MENU_PANEL_OFFSET_X;
-    int panelOffsetY = MAIN_MENU_PANEL_OFFSET_Y;
-    configGetInt(&gContentConfig, CONTENT_CONFIG_MAIN_MENU_SECTION, "main_menu_panel_offset_x", &panelOffsetX, MAIN_MENU_PANEL_OFFSET_X);
-    configGetInt(&gContentConfig, CONTENT_CONFIG_MAIN_MENU_SECTION, "main_menu_panel_offset_y", &panelOffsetY, MAIN_MENU_PANEL_OFFSET_Y);
-
-    Size panelSize = mainMenuTransformSize(layout, mainMenuButtonPanelFrmImage.getWidth(), mainMenuButtonPanelFrmImage.getHeight());
-    Point panelOrigin = mainMenuTransformPoint(layout, panelOffsetX, panelOffsetY);
-
-    blitBuffer2DScaledTrans(mainMenuButtonPanelFrmImage.getBuffer(),
-        Buffer2D(gMainMenuWindowBuffer, layout.screenWidth, layout.screenHeight),
-        panelOrigin.x + offsets.menuX,
-        panelOrigin.y + offsets.menuY,
-        panelSize.width,
-        panelSize.height);
-    mainMenuMaskBackground(panelOrigin.x + offsets.menuX, panelOrigin.y + offsets.menuY, panelSize.width, panelSize.height);
-}
-
 static Point mainMenuTransformPoint(const MainMenuLayout& layout, int x, int y)
 {
     return {
@@ -682,9 +658,11 @@ static void mainMenuDrawButtonLabels(const MainMenuLayout& layout, const MainMen
     int panelOffsetY = MAIN_MENU_PANEL_OFFSET_Y;
     configGetInt(&gContentConfig, CONTENT_CONFIG_MAIN_MENU_SECTION, "main_menu_panel_offset_x", &panelOffsetX, MAIN_MENU_PANEL_OFFSET_X);
     configGetInt(&gContentConfig, CONTENT_CONFIG_MAIN_MENU_SECTION, "main_menu_panel_offset_y", &panelOffsetY, MAIN_MENU_PANEL_OFFSET_Y);
-    const bool hasPanelBounds = layout.art == MenuArt::Hires && mainMenuButtonPanelFrmImage.isLocked();
+    // Keep the established hires label column even though the panel artwork
+    // itself is deliberately not drawn over the wallpaper.
+    const bool hasLabelBounds = layout.art == MenuArt::Hires && mainMenuButtonPanelFrmImage.isLocked();
     Point panelOrigin = mainMenuTransformPoint(layout, panelOffsetX, panelOffsetY);
-    Size panelSize = hasPanelBounds
+    Size panelSize = hasLabelBounds
         ? mainMenuTransformSize(layout, mainMenuButtonPanelFrmImage.getWidth(), mainMenuButtonPanelFrmImage.getHeight())
         : Size { 0, 0 };
     const int panelRightInset = mainMenuTransformSize(layout, 14, 1).width;
@@ -697,10 +675,9 @@ static void mainMenuDrawButtonLabels(const MainMenuLayout& layout, const MainMen
 
         int len = fontGetStringWidth(msg.text);
         Point labelPosition = mainMenuTransformPoint(layout, MAIN_MENU_BUTTON_LABEL_X, MAIN_MENU_BUTTON_LABEL_Y + index * MAIN_MENU_BUTTON_Y_STEP);
-        if (hasPanelBounds) {
-            // HR_MENU_BG.FRM keeps its red button and bevel in the left quarter.
-            // Start the shared label column after that artwork, then fit every
-            // translation between the same left and right bounds.
+        if (hasLabelBounds) {
+            // Keep the shared label column to the right of the button art and
+            // fit every translation between the same left and right bounds.
             int rowLeft = panelOrigin.x + offsets.menuX + panelSize.width / 4;
             int rowRight = panelOrigin.x + offsets.menuX + panelSize.width - panelRightInset;
             int availableWidth = rowRight - rowLeft;
@@ -810,8 +787,6 @@ int mainMenuWindowInit()
     MainMenuOffsets offsets = mainMenuReadOffsets(layout);
 
     mainMenuDrawBackground(layout);
-    mainMenuDrawPanel(layout, offsets);
-
     int oldFont = fontGetCurrent();
     fontSetCurrent(100);
     mainMenuDrawBuildInfo(layout, offsets);

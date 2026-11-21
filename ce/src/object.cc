@@ -3542,10 +3542,10 @@ static int _obj_offset_table_init()
             int tileX = originTileX;
             for (int y = 0; y < gObjectsUpdateAreaHexHeight; y++) {
                 for (int x = 0; x < gObjectsUpdateAreaHexWidth; x++) {
-                    int tile = tileFromScreenXY(tileX, originTileY);
-                    if (tile == -1) {
-                        goto err;
-                    }
+                    // This table describes offsets for the full viewport,
+                    // including cells outside the map. Consumers validate
+                    // the resulting tile before indexing the object grid.
+                    int tile = tileFromScreenXY(tileX, originTileY, true);
 
                     tileX += 32;
                     *offsets++ = tile - originTile;
