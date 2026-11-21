@@ -113,7 +113,7 @@ jobs:
         run: |
           gh release download wide-art --repo $env:GITHUB_REPOSITORY --pattern wide-art.zip --dir .
           Expand-Archive -LiteralPath wide-art.zip -DestinationPath staging -Force
-          if (-not (Test-Path staging/user-assets/fullscreen-20261028/wallpapers-selected/hires/menu/art__intrface__hr_mainmenu__d0_f0_21-9.png)) { throw "wide-art.zip has no menu art" }
+          python tools/check_wide_art.py --payload staging
       - name: Publish the release and dist mirror
         run: ./tools/publish-latest.ps1
   exporter:
@@ -144,6 +144,7 @@ jobs:
       - run: python -m unittest discover -s tools/regression -p 'test*.py' -v
       - run: python -m unittest discover -s tools -p 'test_image_diff.py' -v
       - run: python -m unittest discover -s tools -p 'test_check_public_content.py' -v
+      - run: python tools/check_wide_art.py --self-test
   scene:
     runs-on: ubuntu-latest
     strategy:
