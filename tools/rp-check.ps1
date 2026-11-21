@@ -59,11 +59,23 @@ function Invoke-MapRow([string]$map, [string]$candidate, [string]$candidateSha, 
             '-OutputDirectory', $relativeOutput,
             '-TimeoutSeconds', '90', '-WaitMinutes', '0'
         )
-        $snapshotOutput = & powershell.exe @snapshotArgs
-        if ($LASTEXITCODE -ne 0) {
-            # The child's own words survive in the row: a timeout line stays
-            # a timeout, a crash stays a failure.
-            throw ($snapshotOutput | Where-Object { $_ } | Select-Object -Last 1)
+        # Windows PowerShell can promote redirected native stderr under Stop.
+        # Capture both streams without losing the child's exit code or message.
+        $previousErrorAction = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $snapshotOutput = & powershell.exe @snapshotArgs 2>&1
+            $snapshotExit = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousErrorAction
+        }
+        if ($snapshotExit -ne 0) {
+            $reason = $snapshotOutput | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] -and "$_".Trim() } | Select-Object -First 1
+            if (-not $reason) {
+                $reason = $snapshotOutput | Where-Object { "$_".Trim() } | Select-Object -Last 1
+            }
+            if (-not $reason) { $reason = "snapshot exited with code $snapshotExit" }
+            throw "$reason"
         }
 
         $sidecars = @(Get-ChildItem -LiteralPath $mapOutput -Filter 'devshot-*.json' -File -ErrorAction SilentlyContinue)
@@ -125,7 +137,7 @@ if (![IO.Path]::IsPathRooted(`$OutputDirectory)) { `$OutputDirectory = Join-Path
 `$sha = (Get-FileHash -LiteralPath `$BuildExecutable -Algorithm SHA256).Hash.ToLower()
 New-Item -ItemType Directory -Path `$OutputDirectory -Force | Out-Null
 if (`$Map -eq 'broken') { Write-Output 'the fake snapshot exploded'; exit 1 }
-if (`$Map -eq 'hung') { Write-Output 'No snapshot within 90 s.'; exit 1 }
+if (`$Map -eq 'hung') { Write-Output 'starting snapshot'; throw 'No snapshot within 90 s.' }
 `$reported = if (`$Map -eq 'wrongexe') { 'deadbeef' } else { `$sha }
 @{ map = `$Map.ToUpperInvariant() + '.MAP'; exe_sha256 = `$reported } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path `$OutputDirectory 'devshot-0001.json') -Encoding utf8
@@ -147,6 +159,7 @@ exit 0
     Assert-True 'the pass rows passed' (($rows | Where-Object { $_.map -in 'artemple', 'kladwtwn' } | Where-Object { $_.status -eq 'pass' }).Count -eq 2)
     Assert-True 'the failure is a failed row' (($rows | Where-Object map -eq 'broken').status -eq 'fail')
     Assert-True 'the hang is a timeout row' (($rows | Where-Object map -eq 'hung').status -eq 'timeout')
+    Assert-True 'the hang preserves the child stderr reason' (($rows | Where-Object map -eq 'hung').error -match '^No snapshot within 90 s\.')
     Assert-True 'the wrong hash is a failed row' (($rows | Where-Object map -eq 'wrongexe').status -eq 'fail')
     Assert-True 'a failed map did not omit the later rows' (@($rows | Where-Object { $_.map -eq 'kladwtwn' -and $_.status -eq 'pass' }).Count -eq 1)
     $aggregateFail = ($rows | Where-Object status -ne 'pass').Count -gt 0
