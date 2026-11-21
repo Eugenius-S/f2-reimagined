@@ -1,4 +1,5 @@
 #include "../../src/devtools/fixed_screen_options.h"
+#include "../../src/screen_defaults.h"
 
 #include <initializer_list>
 #include <string>
@@ -18,6 +19,12 @@ static bool parse(std::initializer_list<const char*> arguments, FixedScreenOptio
 
 int main()
 {
+    const auto fresh = fallout::freshScreenDefaults(false, 3440, 1440);
+    if (!fresh.apply || fresh.width != 3440 || fresh.height != 1440 || fresh.scale != 2.0) return 91;
+    const auto saved = fallout::freshScreenDefaults(true, 3440, 1440);
+    if (saved.apply) return 92;
+    const auto fallback = fallout::freshScreenDefaults(false, 0, 0);
+    if (!fallback.apply || fallback.width != 640 || fallback.height != 480 || fallback.scale != 2.0) return 93;
     FixedScreenOptions options;
     const char* error = nullptr;
 

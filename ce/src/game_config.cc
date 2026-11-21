@@ -2,6 +2,8 @@
 #include "debug.h"
 #include "game_config_migration.h"
 #include "settings.h"
+#include "screen_defaults.h"
+#include <SDL.h>
 #include "sfall_config.h"
 #include "devtools/devtools.h"
 
@@ -167,6 +169,25 @@ bool gameConfigInit(bool isMapper, int argc, char** argv)
     // whatever was loaded from `fallout2.cfg`.
     configParseCommandLineArguments(&gGameConfig, argc, argv, gameConfigRecordCommandLineOverride);
 
+    // A packaged fresh config has no display choices. Existing and migrated
+    // values always win, including command-line overrides.
+    char* savedValue = nullptr;
+    const bool savedDisplay = configGetString(&gGameConfig, "screen", "resolution_x", &savedValue)
+        || configGetString(&gGameConfig, "screen", "resolution_y", &savedValue)
+        || configGetString(&gGameConfig, "screen", "resolution_mode", &savedValue)
+        || configGetString(&gGameConfig, "screen", "scale", &savedValue)
+        || configGetString(&gGameConfig, "screen", "scale_factor", &savedValue);
+    if (!isMapper && !devtools::fixedScreenOptionsEnabled()) {
+        SDL_DisplayMode current = {};
+        if (!savedDisplay) SDL_GetCurrentDisplayMode(0, &current);
+        const FreshScreenDefaults defaults = freshScreenDefaults(savedDisplay, current.w, current.h);
+        if (defaults.apply) {
+            configSetInt(&gGameConfig, "screen", "resolution_x", defaults.width);
+            configSetInt(&gGameConfig, "screen", "resolution_y", defaults.height);
+            configSetInt(&gGameConfig, "screen", "resolution_mode", defaults.width * 10000 + defaults.height);
+            configSetDouble(&gGameConfig, "screen", "scale_factor", defaults.scale);
+        }
+    }
     // Writes default values to config, skipping keys that were already loaded.
     settingsWriteToConfig(true);
 
