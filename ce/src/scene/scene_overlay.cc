@@ -49,7 +49,7 @@ struct OutlineProjection {
     scene_renderer::SpriteCardVertex corners[4];
 };
 
-bool projectOutlinePixel(double u, double v, int* x, int* y, void* context)
+bool projectOutlinePixel(double u, double v, double* x, double* y, void* context)
 {
     const auto* projection = static_cast<const OutlineProjection*>(context);
     const auto& tl = projection->corners[0];
@@ -66,12 +66,7 @@ bool projectOutlinePixel(double u, double v, int* x, int* y, void* context)
         worldY += weights[index] * corners[index]->y;
         worldZ += weights[index] * corners[index]->z;
     }
-    double screenX = 0.0;
-    double screenY = 0.0;
-    if (!scene_renderer::staticScreenFromWorld(worldX, worldY, worldZ, &screenX, &screenY)) return false;
-    *x = static_cast<int>(std::lround(screenX));
-    *y = static_cast<int>(std::lround(screenY));
-    return true;
+    return scene_renderer::staticScreenFromWorld(worldX, worldY, worldZ, x, y);
 }
 
 bool shownOutlineProjection(Object* object, OutlineProjection* context, int* fid, int* rotation)

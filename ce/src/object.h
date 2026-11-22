@@ -76,7 +76,7 @@ Object* objectFindNextAtElevation();
 // object on an elevation, and the scene's own outline pass, called by
 // _obj_render_scene_overlay before the floating text (null: none).
 void objectDrawOutline(Object* object, Rect* rect);
-using ObjectOutlineProject = bool (*)(double u, double v, int* x, int* y, void* context);
+using ObjectOutlineProject = bool (*)(double u, double v, double* x, double* y, void* context);
 // Draw an outline into the game overlay after mapping its shown-art pixels.
 void objectDrawSceneOutline(Object* object, int fid, int rotation, ObjectOutlineProject project, void* context);
 void objectVisitOutlined(int elevation, void (*visit)(Object* object, void* context), void* context);

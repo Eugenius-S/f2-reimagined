@@ -20,6 +20,7 @@
 #include "draw.h"
 #include "game.h"
 #include "game_mouse.h"
+#include "scene_renderer/outline_mask.h"
 #include "scene_renderer/perf.h"
 #include "item.h"
 #include "light.h"
@@ -5200,18 +5201,6 @@ void objectDrawSceneOutline(Object* object, int fid, int rotation, ObjectOutline
         artUnlock(cacheEntry);
         return;
     }
-    int left = 0;
-    int top = 0;
-    if (object->tile == -1) {
-        left = object->sx;
-        top = object->sy;
-    } else {
-        int tileX = 0;
-        int tileY = 0;
-        tileToScreenXY(object->tile, &tileX, &tileY);
-        left = tileX + 16 + art->xOffsets[rotation] + object->x - width / 2;
-        top = tileY + 8 + art->yOffsets[rotation] + object->y - (height - 1);
-    }
     artUnlock(cacheEntry);
 
     static std::vector<unsigned char> scratch;
@@ -5240,19 +5229,15 @@ void objectDrawSceneOutline(Object* object, int fid, int rotation, ObjectOutline
     gObjectsWindowBufferSize = savedSize;
     gObjectsWindowRect = savedRect;
 
-    for (int sourceY = 0; sourceY < scratchHeight; sourceY++) {
-        for (int sourceX = 0; sourceX < scratchPitch; sourceX++) {
-            const unsigned char color = scratch[static_cast<size_t>(sourceY) * scratchPitch + sourceX];
-            if (color == 0) continue;
-            int targetX = 0;
-            int targetY = 0;
-            const double u = (sourceX + 0.5 - 1.0) / width;
-            const double v = (sourceY + 0.5 - 1.0) / height;
-            if (!project(u, v, &targetX, &targetY, context)
-                || targetX < 0 || targetY < 0 || targetX > savedRect.right || targetY > savedRect.bottom) continue;
-            savedBuffer[static_cast<size_t>(targetY) * savedPitch + targetX] = color;
-        }
-    }
+    scene_renderer::OutlinePoint corners[4];
+    const double left = -1.0 / width, right = 1.0 + 1.0 / width;
+    const double top = -1.0 / height, bottom = 1.0 + 1.0 / height;
+    if (!project(left, top, &corners[0].x, &corners[0].y, context)
+        || !project(right, top, &corners[1].x, &corners[1].y, context)
+        || !project(right, bottom, &corners[2].x, &corners[2].y, context)
+        || !project(left, bottom, &corners[3].x, &corners[3].y, context)) return;
+    scene_renderer::drawProjectedOutlineMask(scratch.data(), scratchPitch, scratchHeight, corners,
+        savedBuffer, savedPitch, savedRect.left, savedRect.top, savedRect.right, savedRect.bottom);
 }
 
 // Whether the game draws `object` see-through inside the egg around the
