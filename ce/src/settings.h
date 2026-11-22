@@ -108,6 +108,7 @@ struct ScreenSettings {
     int resolution_y = 480;
     int resolution_mode = 0;
     WindowMode windowed = WindowMode::Fullscreen;
+    bool vsync = true;
     bool mouse_lock = false;
     int scale = 1;
     double scale_factor = 1.0;

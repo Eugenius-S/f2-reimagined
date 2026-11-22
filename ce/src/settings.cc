@@ -347,6 +347,14 @@ void initSettingsRegistry(bool isMapper)
         { static_cast<int>(WindowMode::WindowedFullscreen), "Borderless" },
     };
     settingsRegistry[settingsRegistry.size() - 4].descriptor = windowModeDescriptor;
+    SETTING(vsync);
+    SettingDescriptor& vsyncDescriptor = settingDescriptors.back();
+    vsyncDescriptor.category = SettingCategory::Screen;
+    vsyncDescriptor.applyPolicy = SettingApplyPolicy::Restart;
+    vsyncDescriptor.subsection = "Display";
+    vsyncDescriptor.fallbackLabel = "Vertical sync";
+    vsyncDescriptor.fallbackDescription = "Synchronize frames with the display to reduce tearing.";
+    settingsRegistry.back().descriptor = vsyncDescriptor;
 #undef SECT
 
 #define SECT ui

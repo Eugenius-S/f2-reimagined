@@ -496,7 +496,12 @@ bool screenIsExclusiveFullscreen()
 
 static bool createRenderer(int width, int height)
 {
-    gSdlRenderer = SDL_CreateRenderer(gSdlWindow, -1, 0);
+    const Uint32 flags = settings.screen.vsync ? SDL_RENDERER_PRESENTVSYNC : 0;
+    gSdlRenderer = SDL_CreateRenderer(gSdlWindow, -1, flags);
+    if (gSdlRenderer == nullptr && flags != 0) {
+        // Do not block startup on a driver without a synchronized renderer.
+        gSdlRenderer = SDL_CreateRenderer(gSdlWindow, -1, 0);
+    }
     if (gSdlRenderer == nullptr) {
         return false;
     }
