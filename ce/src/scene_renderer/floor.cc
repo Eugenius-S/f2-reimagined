@@ -702,6 +702,14 @@ MapClip staticFloorMapClip()
     return gFloorMapClip;
 }
 
+int staticFloorDrawnSquares()
+{
+    if (gFloorOccupancy.size() != 10000) return 0;
+    int drawn = 0;
+    for (unsigned char occupancy : gFloorOccupancy) drawn += occupancy != 0;
+    return drawn;
+}
+
 bool staticFloorHasGround(double x, double z)
 {
     if (gFloorOccupancy.size() != 10000) return false;

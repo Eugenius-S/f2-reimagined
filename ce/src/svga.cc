@@ -35,6 +35,7 @@
 #include "scene_renderer/picking.h"
 #include "scene_renderer/post.h"
 #include "scene_renderer/perf.h"
+#include "scene_renderer/build_wait.h"
 #include "scene_renderer/scene_draw.h"
 #include "scene_renderer/static_scene.h"
 #include "scene_renderer/text_present.h"
@@ -849,6 +850,9 @@ static void renderPresentBody()
                 // ground bake inside it.
                 scene_renderer::perfLoadMark("ff_draw_begin");
                 scene_renderer::perfCpuMark("pre_draw");
+                // 273: while a cache builds on entry, the plane's texture is
+                // the game's own current picture, uploaded before the draw.
+                scene_renderer::uploadWaitFrame(gSdlSurface);
                 scene_renderer::drawStaticHeroPreview();
                 scene_renderer::perfCpuMark("draw");
                 scene_renderer::perfMark("scene");

@@ -7,6 +7,7 @@
 #include <lodepng.h>
 
 #include "context.h"
+#include "build_wait.h"
 #include "gl_api.h"
 #include "perf.h"
 #include "post.h"
@@ -77,7 +78,14 @@ bool ensureGroundBake(int width, int height)
 
 void drawStaticPreview(bool withWalls, bool withHero)
 {
-    if (!gInitialized || !gFloorLoaded || (withWalls && !gWallsLoaded)) return;
+    if (!gInitialized) return;
+    if (!gFloorLoaded) {
+        // 273: the map's 2D art on the ground plane while its scene cache
+        // builds; without a wait in progress this draws nothing.
+        drawWaitPlane();
+        return;
+    }
+    if (withWalls && !gWallsLoaded) return;
     SDL_GL_GetDrawableSize(gWindow, &gWindowWidth, &gWindowHeight);
     glViewport(0, 0, gWindowWidth, gWindowHeight);
     // The engine shows black where there is no floor and beyond the map.

@@ -2,7 +2,7 @@
 id: 273
 title: A map with no scene cache still opens in 3D
 milestone: M1
-status: todo
+status: doing
 owner: glm
 suggested: glm
 priority: high
@@ -35,3 +35,47 @@ Making the export itself faster.
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+- 2026-11-19 glm: entering a map whose cache is missing, stale or damaged now
+  starts the shipped scene-exporter.exe for that map on entry
+  (`ce/src/scene/scene_build.{h,cc}`); provenance.json's `exporter_version`
+  decides (anything unknown reads stale: fail-closed), a cache whose
+  provenance matches but whose files do not load is rebuilt with `--force`,
+  and a finished build clears the failure so the scene loads in the same
+  frame. With no exporter beside the exe the honest stays-2D line stays.
+  `kExpectedExporterVersion` is pinned to export.py's `EXPORTER_VERSION` by
+  `tools/test_exporter_version_sync.py`; new suite `ce/tests/scene_build` in
+  the scene matrix. Check: full Release build + ctest 29/29 locally.
+  Next: the waiting state on the 3D ground plane (the map's 2D art while the
+  build runs) and the runtime frames in `runs/273-missing-cache-builds-on-entry/`
+  need a game-run slot; the wait in seconds per map goes here then.
+- 2026-11-19 glm: runtime checks done (dev-snapshot, scratch cache at
+  build/273-run, scene-exporter.exe from the 297 receipts beside the test
+  exe). Cold kladwtwn entry: "has no scene data ... building it with the
+  shipped exporter", built in 26873 ms, loaded (view=3, frame in
+  runs/273-missing-cache-builds-on-entry/); warm entry passes the watchdog
+  untouched. Negative: provenance.json's exporter_version tampered to 1.0.0
+  is detected and force-rebuilt (26340 ms), provenance rewritten to 1.13.0,
+  no loop (the exporter's own staleness reads fingerprints, so a stale
+  version needs --force; caught live, fixed). Full ctest 29/29. Known gaps,
+  honest: the fixture's fixed 30 s step budget is smaller than a cold
+  build, so the first run's snapshot step reports a timeout after the scene
+  already came up; the enable refusal line ("no 3D scene") stays in the
+  message log from before the build finished. Two more maps on an empty
+  cache are not run yet (exporter only proven on kladwtwn live).
+- 2026-11-19 glm, later: the ground-plane waiting state is in, the Goal's
+  last missing piece. While the cache builds, the 3D view stays up and the
+  map's 2D art lies on the ground plane: the game's iso window buffer is
+  repainted (`mapRenderWholeIsoWindow`, map.cc) and uploaded once to a
+  textured quad on the plane with the sky, the interface drawn over it
+  (`ce/src/scene_renderer/build_wait.{h,cc}`; the tick leaves the iso
+  buffer empty while the 3D presents, so the upload repaints until the map
+  art really shows, then freezes it; the plane keeps the frame's aspect).
+  When the build finishes the plane yields to the real scene the same
+  frame. Frame: runs/273-missing-cache-builds-on-entry/
+  waiting-plane-kladwtwn.jpg; the full dev-snapshot pipeline passed with
+  -StepTimeoutSeconds 90 (build 29.4 s, then loaded). ctest 29/29.
+- 2026-11-19 glm: the two other maps are live-run on the same empty cache:
+  denbus1 built in 23797 ms and arvillag in 8615 ms, both then
+  "preview policy=available" (3D). Evidence lines appended to
+  runs/273-missing-cache-builds-on-entry/build-on-entry-log.txt. Waiting
+  per map, cold: kladwtwn 26.9 s, denbus1 23.8 s, arvillag 8.6 s.
