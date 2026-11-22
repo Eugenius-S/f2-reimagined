@@ -15,7 +15,8 @@ struct SpriteCardProjection;
 // The exported scene of one map elevation, from one cache directory: the
 // versioned floor.bin sidecar with tiles.png, and walls.bin with its atlas
 // pages and baked.bin.
-bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* error);
+// A floor-only recovery view needs no roof cells, strips or patches.
+bool loadStaticFloor(const std::filesystem::path& cacheDirectory, bool withRoof, std::string* error);
 bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* error);
 // Drops the loaded scene (floor, walls, projection, live objects, the hero)
 // so another map's can be loaded.

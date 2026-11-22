@@ -35,3 +35,12 @@ Making the export itself faster.
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+
+
+- 2026-11-23 gpt: the isolated ARTEMPLE-to-ARVILLAG transition revealed a
+  separate cause: a valid destination floor, walls and projection still
+  fell back to 2D when the decorative roof fringe was missing. The narrow
+  recovery keeps full 3D with ordinary flat roof cells. Valid floor-only
+  data can also load without trying to decode unused roof assets. The
+  complete missing-cache and automatic rebuild acceptance remains open.
+  [Native before and after](../runs/273-stock-cache-boundaries/README.md).

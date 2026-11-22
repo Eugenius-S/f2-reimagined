@@ -322,7 +322,7 @@ bool loadScene(View view, const std::string& map, int elevation, std::string* me
     scene_renderer::PerfScope total("scene_total");
     {
         scene_renderer::PerfScope stage("floor");
-        if (!scene_renderer::loadStaticFloor(cacheDirectory, &error)) {
+        if (!scene_renderer::loadStaticFloor(cacheDirectory, view != View::Floor, &error)) {
             *message = "floor preview unavailable: " + error;
             return false;
         }
