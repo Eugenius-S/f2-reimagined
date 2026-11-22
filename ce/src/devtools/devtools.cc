@@ -3925,7 +3925,12 @@ static void runDialogFixtureFrame()
                         gDialogFixtureFinished = true;
                         return;
                     }
-                    printf("DIALOG_CURSOR_CHECK PASS map=%s script=%s speaker=%d speaker_tile=%d hero=%d reply_offset=%d reply_bytes=%zu reply_window=%d reply_y=%d opaque_logical=%d,%d opaque_physical=%d,%d transparent_logical=%d,%d transparent_physical=%d,%d cursor_index=%u expected_rgb=%u,%u,%u opaque_alpha=%u->%u transparent_alpha=%u->%u same_run_ink_pixels=%u->%u\n",
+                    constexpr char snapshotPrefix[] = "snapshot: ";
+                    if (strncmp(gStatus, snapshotPrefix, sizeof(snapshotPrefix) - 1) != 0) {
+                        failCursorCheck("cursor-snapshot-path-unavailable");
+                        return;
+                    }
+                    printf("DIALOG_CURSOR_CHECK PASS map=%s script=%s speaker=%d speaker_tile=%d hero=%d reply_offset=%d reply_bytes=%zu reply_window=%d reply_y=%d opaque_logical=%d,%d opaque_physical=%d,%d transparent_logical=%d,%d transparent_physical=%d,%d cursor_index=%u expected_rgb=%u,%u,%u opaque_alpha=%u->%u transparent_alpha=%u->%u same_run_ink_pixels=%u->%u snapshot=%s\n",
                         gMapHeader.name, gDialogFixtureScript, gDialogFixtureSpeakerId,
                         gDialogFixtureSpeakerTile, gDude != nullptr ? gDude->tile : -1,
                         gameDialogGetReplyTextOffset(), gDialogCursorCheckRecord.run.text.size(), replyOwnerId, replyOwnerY,
@@ -3935,7 +3940,8 @@ static void runDialogFixtureFrame()
                         gDialogCursorCheckTransparentPhysicalX, gDialogCursorCheckTransparentPhysicalY,
                         gDialogCursorCheckCursorIndex,
                         gDialogCursorCheckCursorRed, gDialogCursorCheckCursorGreen, gDialogCursorCheckCursorBlue,
-                        targetBefore, targetAfter, transparentBefore, transparentAfter, beforeInkPixels, afterInkPixels);
+                        targetBefore, targetAfter, transparentBefore, transparentAfter, beforeInkPixels, afterInkPixels,
+                        gStatus + sizeof(snapshotPrefix) - 1);
                     fflush(stdout);
                     gDialogFixtureFinished = true;
                     return;

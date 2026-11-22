@@ -1306,7 +1306,7 @@ if ($DialogPageInspect) {
 }
 if ($DialogCursorCheck) {
     $cursorLog = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
-    $cursorPass = [regex]::Match($cursorLog, '(?m)^DIALOG_CURSOR_CHECK PASS .*opaque_physical=(\d+),(\d+).*transparent_physical=(\d+),(\d+).*cursor_index=\d+ expected_rgb=(\d+),(\d+),(\d+).*opaque_alpha=(\d+)->0 transparent_alpha=(\d+)->(\d+) same_run_ink_pixels=(\d+)->(\d+)')
+    $cursorPass = [regex]::Match($cursorLog, '(?m)^DIALOG_CURSOR_CHECK PASS .*opaque_physical=(\d+),(\d+).*transparent_physical=(\d+),(\d+).*cursor_index=\d+ expected_rgb=(\d+),(\d+),(\d+).*opaque_alpha=(\d+)->0 transparent_alpha=(\d+)->(\d+) same_run_ink_pixels=(\d+)->(\d+) snapshot=(\S+)')
     if ($dialogFixtureFailed -or -not $cursorPass.Success) {
         throw "Dialog cursor check failed or timed out within $TimeoutSeconds s.`n$cursorLog"
     }
@@ -1317,13 +1317,17 @@ if ($DialogCursorCheck) {
         throw 'Dialog cursor check did not preserve sharp text at the transparent cursor cell.'
     }
     if (-not $probeHarnessStoppedProcess) { throw 'Dialog cursor check was not stopped by its isolated helper harness.' }
-    if ($snapshots.Count -lt 1) { throw 'Dialog cursor check passed without a framebuffer snapshot.' }
-    $cursorMetadata = Get-Content -Raw -LiteralPath $snapshots[0].FullName | ConvertFrom-Json
+    # The fixture writes a baseline before the hovered frame. Decode the
+    # exact shot from its PASS line, not the first snapshot in the folder.
+    $hoverSnapshots = @($snapshots | Where-Object { $_.Name -eq $cursorPass.Groups[13].Value })
+    if ($hoverSnapshots.Count -ne 1) { throw 'Dialog cursor check did not produce the named hover framebuffer.' }
+    $cursorSnapshot = $hoverSnapshots[0]
+    $cursorMetadata = Get-Content -Raw -LiteralPath $cursorSnapshot.FullName | ConvertFrom-Json
     if (-not $cursorMetadata.sharp_text.active -or -not $cursorMetadata.sharp_text.drawn -or
         $cursorMetadata.sharp_text.runs -le 0 -or $cursorMetadata.sharp_text.glyphs -le 0) {
         throw 'Dialog cursor snapshot does not prove an active drawn sharp-text pass.'
     }
-    $cursorImagePath = Get-SnapshotImage $snapshots[0] $cursorMetadata
+    $cursorImagePath = Get-SnapshotImage $cursorSnapshot $cursorMetadata
     & py -3 (Join-Path $PSScriptRoot 'check_png_pixel.py') $cursorImagePath $cursorPass.Groups[1].Value $cursorPass.Groups[2].Value `
         $cursorPass.Groups[5].Value $cursorPass.Groups[6].Value $cursorPass.Groups[7].Value
     if ($LASTEXITCODE -ne 0) { throw 'Dialog cursor pixel in the decoded PNG does not match the engine cursor palette color.' }
