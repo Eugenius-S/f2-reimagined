@@ -21,6 +21,12 @@ int main()
     CHECK(!previewMayPresent(state));
     CHECK(previewBlockReason(state) == PreviewBlockReason::GameState);
 
+    CHECK(mapVisibleUnderLocalModal(true, false, false, false));
+    CHECK(!mapVisibleUnderLocalModal(true, true, false, false)); // unclassified special mode
+    CHECK(mapVisibleUnderLocalModal(false, true, false, true)); // explicit dialogue teardown
+    CHECK(!mapVisibleUnderLocalModal(false, true, true, true)); // load/map transition still wins
+    CHECK(!mapVisibleUnderLocalModal(false, true, false, false)); // no dialog, never keep it
+
     state = normal;
     state.gameModeShowsMap = false; // the world map
     CHECK(!previewMayPresent(state));

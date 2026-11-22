@@ -336,6 +336,7 @@ static int gameDialogBackgroundWindow = -1;
 // Dialog sub-window: barter, party control, customization
 // 0x518744 dialogueWindow
 static int gameDialogWindow = -1;
+static bool gGameDialogWindowClosing = false;
 
 static bool gameDialogUseHrArt = false;
 
@@ -843,6 +844,11 @@ bool gameDialogWindowActive()
     return _gdialog_state == GAME_DIALOG_ACTIVE;
 }
 
+bool gameDialogWindowClosing()
+{
+    return gGameDialogWindowClosing;
+}
+
 int gameDialogGetReplyTextOffset()
 {
     return dialogReplyTextOffset;
@@ -1127,11 +1133,15 @@ int _gdialogExitFromScript()
 
     touch_set_touchscreen_mode(false);
 
+    // Closing the panel still presents several frames while the map is paused.
+    // Keep the legacy mode flags for scripts, but identify these local frames.
+    gGameDialogWindowClosing = true;
     GameMode::exitGameMode(GameMode::kDialog);
 
     GameMode::enterGameMode(GameMode::kSpecial);
     _gdDestroyHeadWindow();
     GameMode::exitGameMode(GameMode::kSpecial);
+    gGameDialogWindowClosing = false;
 
     // CE: Fix Barter button.
     fontSetCurrent(_oldFont);
