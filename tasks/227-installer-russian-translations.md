@@ -2,7 +2,7 @@
 id: 227
 title: The installer offers every major Russian translation, not only RPU
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: claude
 priority: high
@@ -10,7 +10,7 @@ tier: 0
 claude-only: no
 user-check: yes
 depends-on: [186]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -140,3 +140,14 @@ binaries, scripts or settings from third-party installers as language assets.
 - 2026-11-22 gpt: configured the 1C and LeftCorp voice package metadata for
   base and RP from the owner's Drive links. Publication and public download
   verification remain pending; owner visual check follows the merge.
+
+- 2026-11-22 gpt: the public #550 build passed independent text and voice
+  switching in base Fallout 2 and RPU 2.4.34, with both voices downloaded
+  from Drive. #551 adds 1C, Fargus and LeftCorp text for the same pinned RP
+  build. It keeps official text for new and changed RP lines and preserves
+  the official font and art layer. The three Drive downloads matched their
+  recorded size and SHA-256.
+- Checked Release CTest 34/34 with the real packages, the actual Russian
+  dropdowns in both modes, and four matched in-game Russian dialogue shots.
+  Checked Play, manual RP, excluded RP, and
+  removal retries after export failure or a locked game config.
