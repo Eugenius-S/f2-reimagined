@@ -4,9 +4,10 @@
 // or a plain copy).  First run: find the game, install our build from the
 // rolling `latest` GitHub release and make the 3D scene data with the packed
 // exporter.  Later runs: pull a newer build when the release moved, then
-// start the game.  The player's fallout2.cfg, saves and the original
-// fallout2.exe are never touched.  No network: the installed game starts as
-// it is.
+// start the game.  The player's saves and the original fallout2.exe are
+// never touched; fallout2.cfg is only rewritten by the language switch, and
+// through a temporary file renamed over it, never truncated in place (292).
+// No network: the installed game starts as it is.
 //
 // Only Windows system libraries are used (winhttp, bcrypt, advapi32, shell).
 
@@ -37,6 +38,7 @@
 #include "launcher_rp.h"
 #include "launcher_ru.h"
 #include "launcher_uninstall.h"
+#include "launcher_update.h"
 
 namespace fs = std::filesystem;
 
@@ -197,52 +199,6 @@ bool sha256File(const fs::path& path, std::string* hex)
     return ok;
 }
 
-// One hash over every file under the directory (paths and contents); saves
-// the player has are caught whatever their names.
-bool sha256Tree(const fs::path& root, std::string* hex)
-{
-    std::vector<fs::path> files;
-    std::error_code error;
-    for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, error), end;
-         !error && it != end; it.increment(error)) {
-        if (it->is_regular_file(error)) files.push_back(it->path());
-    }
-    std::sort(files.begin(), files.end());
-    unsigned char digest[32];
-    BCRYPT_ALG_HANDLE algorithm = nullptr;
-    if (BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) != 0) return false;
-    BCRYPT_HASH_HANDLE hash = nullptr;
-    bool ok = BCryptCreateHash(algorithm, &hash, nullptr, 0, nullptr, 0, 0) == 0;
-    auto feed = [&hash, &ok](const void* data, size_t size) {
-        if (ok) ok = BCryptHashData(hash, const_cast<PUCHAR>(static_cast<const unsigned char*>(data)),
-                        static_cast<ULONG>(size), 0) == 0;
-    };
-    char none = 0;
-    if (files.empty()) feed(&none, 1);
-    for (const fs::path& file : files) {
-        std::string relative = wideToUtf8(fs::relative(file, root).generic_wstring());
-        feed(relative.data(), relative.size());
-        feed(&none, 1);
-        std::ifstream in(file, std::ios::binary);
-        if (!in) {
-            ok = false;
-            break;
-        }
-        char block[65536];
-        while (in.read(block, sizeof(block)) || in.gcount() > 0) {
-            feed(block, static_cast<size_t>(in.gcount()));
-            if (!in) break;
-        }
-        feed(&none, 1);
-    }
-    if (ok) ok = BCryptFinishHash(hash, digest, 32, 0) == 0;
-    if (hash != nullptr) BCryptDestroyHash(hash);
-    BCryptCloseAlgorithmProvider(algorithm, 0);
-    if (!ok) return false;
-    *hex = hashToHex(digest);
-    return true;
-}
-
 // --- HTTP ----------------------------------------------------------------
 
 struct Url {
@@ -282,179 +238,154 @@ DWORD proxyFor(const Url& url)
     return WINHTTP_ACCESS_TYPE_DEFAULT_PROXY;
 }
 
-// GET one url; the failure reason lands in errorText when set.
-bool httpGet(const std::string& urlString, std::string* body, const char** errorText,
-    const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS)
-{
+// One opened GET request: the session, connect and request setup the three
+// http functions shared, and the handles that must close in order.
+struct HttpGet {
     Url url;
-    if (!crackUrlWide(utf8ToWide(urlString), &url)) {
+    HINTERNET session = nullptr;
+    HINTERNET connect = nullptr;
+    HINTERNET request = nullptr;
+    ~HttpGet() {
+        if (request != nullptr) WinHttpCloseHandle(request);
+        if (connect != nullptr) WinHttpCloseHandle(connect);
+        if (session != nullptr) WinHttpCloseHandle(session);
+    }
+};
+
+// The one opener behind httpGet, httpRedirectLocation and httpDownload:
+// crack the url, open the session with the shared timeouts, connect, open
+// and send the request, and receive the answer. False carries the failure
+// reason in *errorText. disableRedirects keeps the answer's Location for
+// httpRedirectLocation; the status code is the caller's to judge.
+bool httpOpenAndReceive(const std::string& urlString, const wchar_t* headers, bool disableRedirects,
+    HttpGet* http, const char** errorText)
+{
+    if (!crackUrlWide(utf8ToWide(urlString), &http->url)) {
         *errorText = "cannot parse url";
         return false;
     }
     *errorText = nullptr;
-    HINTERNET session = WinHttpOpen(L"fallout2-ce-3d-launcher", proxyFor(url),
+    http->session = WinHttpOpen(L"fallout2-ce-3d-launcher", proxyFor(http->url),
         WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (session == nullptr) {
+    if (http->session == nullptr) {
         *errorText = "WinHttpOpen failed";
         return false;
     }
-    WinHttpSetTimeouts(session, 10000, 15000, 30000, 300000);
-    HINTERNET connect = WinHttpConnect(session, url.host.c_str(), url.port, 0);
-    if (connect == nullptr) {
+    WinHttpSetTimeouts(http->session, 10000, 15000, 30000, 300000);
+    http->connect = WinHttpConnect(http->session, http->url.host.c_str(), http->url.port, 0);
+    if (http->connect == nullptr) {
         *errorText = "cannot connect";
-        WinHttpCloseHandle(session);
         return false;
     }
-    HINTERNET request = WinHttpOpenRequest(connect, L"GET", url.path.c_str(), nullptr, WINHTTP_NO_REFERER,
-        WINHTTP_DEFAULT_ACCEPT_TYPES, url.https ? WINHTTP_FLAG_SECURE : 0);
-    bool ok = request != nullptr;
-    if (!ok) {
+    http->request = WinHttpOpenRequest(http->connect, L"GET", http->url.path.c_str(), nullptr,
+        WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, http->url.https ? WINHTTP_FLAG_SECURE : 0);
+    if (http->request == nullptr) {
         *errorText = "cannot open request";
-    } else {
-        ok = WinHttpSendRequest(request, headers, headers == WINHTTP_NO_ADDITIONAL_HEADERS ? 0 : static_cast<DWORD>(-1L), WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
-        if (!ok) *errorText = "send failed";
+        return false;
     }
-    if (ok) {
-        ok = WinHttpReceiveResponse(request, nullptr);
-        if (!ok) *errorText = "receive failed";
+    if (disableRedirects) {
+        DWORD disable = WINHTTP_DISABLE_REDIRECTS;
+        WinHttpSetOption(http->request, WINHTTP_OPTION_DISABLE_FEATURE, &disable, sizeof(disable));
     }
+    if (!WinHttpSendRequest(http->request, headers,
+            headers == WINHTTP_NO_ADDITIONAL_HEADERS ? 0 : static_cast<DWORD>(-1L),
+            WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
+        *errorText = "send failed";
+        return false;
+    }
+    if (!WinHttpReceiveResponse(http->request, nullptr)) {
+        *errorText = "receive failed";
+        return false;
+    }
+    return true;
+}
+
+// The answer's status must be 200; anything else carries its reason.
+bool httpResponseOk(HINTERNET request, const char** errorText)
+{
     DWORD status = 0;
     DWORD statusSize = sizeof(status);
-    if (ok) {
-        WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-            WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX);
-        ok = status == 200;
-        if (!ok) *errorText = "http status is not 200";
+    WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+        WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX);
+    if (status != 200) {
+        *errorText = "http status is not 200";
+        return false;
     }
-    if (ok) {
-        DWORD available = 0;
-        while (WinHttpQueryDataAvailable(request, &available) && available > 0) {
-            std::vector<char> chunk(available);
-            DWORD read = 0;
-            if (!WinHttpReadData(request, chunk.data(), available, &read) || read == 0) break;
-            body->append(chunk.data(), read);
-        }
-        ok = !body->empty();
-        if (!ok) *errorText = "empty response";
+    return true;
+}
+
+// GET one url; the failure reason lands in errorText when set. An answer
+// shorter than its Content-Length is a dropped connection, not a body: the
+// same cut-short check #473 gave httpDownload (292).
+bool httpGet(const std::string& urlString, std::string* body, const char** errorText,
+    const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS)
+{
+    HttpGet http;
+    if (!httpOpenAndReceive(urlString, headers, false, &http, errorText)) return false;
+    if (!httpResponseOk(http.request, errorText)) return false;
+    size_t total = 0;
+    DWORD contentLength = 0;
+    DWORD lengthSize = sizeof(contentLength);
+    if (!WinHttpQueryHeaders(http.request, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+            WINHTTP_HEADER_NAME_BY_INDEX, &contentLength, &lengthSize, WINHTTP_NO_HEADER_INDEX)) {
+        contentLength = 0;
     }
-    if (request != nullptr) WinHttpCloseHandle(request);
-    if (connect != nullptr) WinHttpCloseHandle(connect);
-    WinHttpCloseHandle(session);
-    return ok;
+    DWORD available = 0;
+    while (WinHttpQueryDataAvailable(http.request, &available) && available > 0) {
+        std::vector<char> chunk(available);
+        DWORD read = 0;
+        if (!WinHttpReadData(http.request, chunk.data(), available, &read) || read == 0) break;
+        body->append(chunk.data(), read);
+        total += read;
+    }
+    if (!launcher_routes::downloadComplete(total, contentLength)) {
+        *errorText = total == 0 ? "empty response" : "the response was cut short";
+        return false;
+    }
+    return true;
 }
 
 // GET one url without following redirects and return the Location header of the answer.
 bool httpRedirectLocation(const std::string& urlString, std::string* location, const char** errorText)
 {
-    Url url;
-    if (!crackUrlWide(utf8ToWide(urlString), &url)) {
-        *errorText = "cannot parse url";
+    HttpGet http;
+    if (!httpOpenAndReceive(urlString, WINHTTP_NO_ADDITIONAL_HEADERS, true, &http, errorText)) return false;
+    wchar_t buffer[2048] = {};
+    DWORD size = sizeof(buffer) - sizeof(wchar_t);
+    if (!WinHttpQueryHeaders(http.request, WINHTTP_QUERY_LOCATION, WINHTTP_HEADER_NAME_BY_INDEX,
+            buffer, &size, WINHTTP_NO_HEADER_INDEX)) {
+        *errorText = "no redirect from the release page";
         return false;
     }
-    *errorText = nullptr;
-    HINTERNET session = WinHttpOpen(L"fallout2-ce-3d-launcher", proxyFor(url),
-        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (session == nullptr) {
-        *errorText = "WinHttpOpen failed";
-        return false;
-    }
-    WinHttpSetTimeouts(session, 10000, 15000, 30000, 300000);
-    HINTERNET connect = WinHttpConnect(session, url.host.c_str(), url.port, 0);
-    if (connect == nullptr) {
-        *errorText = "cannot connect";
-        WinHttpCloseHandle(session);
-        return false;
-    }
-    HINTERNET request = WinHttpOpenRequest(connect, L"GET", url.path.c_str(), nullptr, WINHTTP_NO_REFERER,
-        WINHTTP_DEFAULT_ACCEPT_TYPES, url.https ? WINHTTP_FLAG_SECURE : 0);
-    bool ok = request != nullptr;
-    if (!ok) {
-        *errorText = "cannot open request";
-    } else {
-        DWORD disable = WINHTTP_DISABLE_REDIRECTS;
-        WinHttpSetOption(request, WINHTTP_OPTION_DISABLE_FEATURE, &disable, sizeof(disable));
-        ok = WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
-        if (!ok) *errorText = "send failed";
-    }
-    if (ok) {
-        ok = WinHttpReceiveResponse(request, nullptr);
-        if (!ok) *errorText = "receive failed";
-    }
-    if (ok) {
-        wchar_t buffer[2048] = {};
-        DWORD size = sizeof(buffer) - sizeof(wchar_t);
-        ok = WinHttpQueryHeaders(request, WINHTTP_QUERY_LOCATION, WINHTTP_HEADER_NAME_BY_INDEX,
-                 buffer, &size, WINHTTP_NO_HEADER_INDEX)
-            != FALSE;
-        if (ok) *location = wideToUtf8(buffer);
-        else *errorText = "no redirect from the release page";
-    }
-    if (request != nullptr) WinHttpCloseHandle(request);
-    if (connect != nullptr) WinHttpCloseHandle(connect);
-    WinHttpCloseHandle(session);
-    return ok;
+    *location = wideToUtf8(buffer);
+    return true;
 }
 
 bool httpDownload(const std::string& urlString, const fs::path& destination, const char** errorText,
     const wchar_t* headers = WINHTTP_NO_ADDITIONAL_HEADERS)
 {
-    Url url;
-    if (!crackUrlWide(utf8ToWide(urlString), &url)) {
-        *errorText = "cannot parse url";
-        return false;
-    }
-    *errorText = nullptr;
-    HINTERNET session = WinHttpOpen(L"fallout2-ce-3d-launcher", proxyFor(url),
-        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (session == nullptr) {
-        *errorText = "WinHttpOpen failed";
-        return false;
-    }
-    WinHttpSetTimeouts(session, 10000, 15000, 30000, 300000);
-    HINTERNET connect = WinHttpConnect(session, url.host.c_str(), url.port, 0);
-    HINTERNET request = nullptr;
-    bool ok = connect != nullptr;
-    if (ok) {
-        request = WinHttpOpenRequest(connect, L"GET", url.path.c_str(), nullptr, WINHTTP_NO_REFERER,
-            WINHTTP_DEFAULT_ACCEPT_TYPES, url.https ? WINHTTP_FLAG_SECURE : 0);
-        ok = request != nullptr;
-        if (!ok) *errorText = "cannot open request";
-    }
-    if (ok) {
-        ok = WinHttpSendRequest(request, headers, headers == WINHTTP_NO_ADDITIONAL_HEADERS ? 0 : static_cast<DWORD>(-1L), WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
-        if (!ok) *errorText = "send failed";
-    }
-    if (ok) {
-        ok = WinHttpReceiveResponse(request, nullptr);
-        if (!ok) *errorText = "receive failed";
-    }
-    DWORD status = 0;
-    DWORD statusSize = sizeof(status);
-    if (ok) {
-        WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-            WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize, WINHTTP_NO_HEADER_INDEX);
-        ok = status == 200;
-        if (!ok) *errorText = "http status is not 200";
-    }
+    HttpGet http;
+    if (!httpOpenAndReceive(urlString, headers, false, &http, errorText)) return false;
+    if (!httpResponseOk(http.request, errorText)) return false;
     std::ofstream out;
-    if (ok) {
-        out.open(destination, std::ios::binary | std::ios::trunc);
-        ok = static_cast<bool>(out);
-        if (!ok) *errorText = "cannot open the destination file";
+    out.open(destination, std::ios::binary | std::ios::trunc);
+    if (!static_cast<bool>(out)) {
+        *errorText = "cannot open the destination file";
+        return false;
     }
-    if (ok) {
+    {
         DWORD available = 0;
         size_t total = 0;
         DWORD contentLength = 0;
         DWORD lengthSize = sizeof(contentLength);
-        if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+        if (!WinHttpQueryHeaders(http.request, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
                 WINHTTP_HEADER_NAME_BY_INDEX, &contentLength, &lengthSize, WINHTTP_NO_HEADER_INDEX)) {
             contentLength = 0;
         }
-        while (WinHttpQueryDataAvailable(request, &available) && available > 0) {
+        while (WinHttpQueryDataAvailable(http.request, &available) && available > 0) {
             std::vector<char> chunk(available);
             DWORD read = 0;
-            if (!WinHttpReadData(request, chunk.data(), available, &read) || read == 0) break;
+            if (!WinHttpReadData(http.request, chunk.data(), available, &read) || read == 0) break;
             out.write(chunk.data(), read);
             total += read;
             if (total / (1024 * 1024) != (total - read) / (1024 * 1024)) {
@@ -463,20 +394,16 @@ bool httpDownload(const std::string& urlString, const fs::path& destination, con
             }
         }
         out.close();
-        ok = launcher_routes::downloadComplete(total, contentLength);
-        if (ok) {
-            logf("  downloaded %zu bytes", total);
-        } else {
+        if (!launcher_routes::downloadComplete(total, contentLength)) {
             *errorText = total == 0 ? "empty download" : "the download was cut short";
             // A stump left in place would be taken for the whole file by the next run.
             std::error_code ignored;
             fs::remove(destination, ignored);
+            return false;
         }
+        logf("  downloaded %zu bytes", total);
     }
-    if (request != nullptr) WinHttpCloseHandle(request);
-    if (connect != nullptr) WinHttpCloseHandle(connect);
-    WinHttpCloseHandle(session);
-    return ok;
+    return true;
 }
 
 std::string joinUrl(const std::string& base, const char* name);
@@ -790,7 +717,16 @@ const std::vector<std::string>& buildFiles()
     return names;
 }
 
-bool backupInstalledBuild(const fs::path& root, const std::string& version, std::string* folderName)
+// The release-owned asset trees the update overwrites whole; the backup
+// carries them now too, so a restore can put every replaced file back (307).
+const std::vector<std::string>& buildTrees()
+{
+    static const std::vector<std::string> names = {"user-assets", "data/art/splash", "data/art/russian/splash"};
+    return names;
+}
+
+bool backupInstalledBuild(const fs::path& root, const std::string& version, std::string* folderName,
+    bool createIfMissing = true)
 {
     std::string backupVersion = version.empty() ? "manual" : version;
     for (char& ch : backupVersion) {
@@ -800,6 +736,18 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version, std:
     fs::path backup = root / "f2reimagined-backups" / backupVersion;
     *folderName = backupVersion;
     std::error_code error;
+    // 307: a version-named backup with a valid receipt is a finished
+    // snapshot of that whole version; it is never rebuilt, so a retry can
+    // never capture a mixed state over it.  A damaged or partial one (no
+    // receipt, hashes off) is rebuilt from the current, still-whole state.
+    std::string bad;
+    if (fs::is_directory(backup, error)
+        && launcher_update::validateBackup(backup, buildFiles(), sha256File, &bad)) {
+        logf("backup %s already stands complete, kept", backupVersion.c_str());
+        return true;
+    }
+    if (!createIfMissing) return false;  // a reuse-only caller creates nothing
+    fs::remove_all(backup, error);
     fs::create_directories(backup, error);
     if (error) {
         logf("cannot create build backup: %s", error.message().c_str());
@@ -820,10 +768,34 @@ bool backupInstalledBuild(const fs::path& root, const std::string& version, std:
         log("no installed build files were available to back up");
         return false;
     }
+    for (const std::string& name : buildTrees()) {
+        fs::path source = root / fs::u8path(name);
+        if (!fs::is_directory(source, error)) continue;
+        fs::create_directories(backup / fs::u8path(name).parent_path(), error);
+        if (error) {
+            logf("cannot prepare the backup folder for %s: %s", name.c_str(), error.message().c_str());
+            return false;
+        }
+        fs::copy(source, backup / fs::u8path(name),
+            fs::copy_options::recursive | fs::copy_options::overwrite_existing, error);
+        if (error) {
+            logf("cannot back up %s: %s", name.c_str(), error.message().c_str());
+            return false;
+        }
+    }
+    // The synthetic stamp for a stamp-less install goes in before the
+    // receipt: the receipt's inventory must cover every file the backup
+    // finally carries, including this one.
     if (!fs::exists(backup / kVersionTxt)) {
         std::ofstream versionFile(backup / kVersionTxt, std::ios::binary | std::ios::trunc);
         versionFile << backupVersion;
         if (!versionFile) return false;
+    }
+    // The receipt is the last write: from here the backup is known-good.
+    std::string receiptBlocked;
+    if (!launcher_update::writeBackupReceipt(backup, buildFiles(), sha256File, &receiptBlocked)) {
+        logf("cannot write the backup receipt (%s)", receiptBlocked.c_str());
+        return false;
     }
     logf("backed up build %s to f2reimagined-backups", version.c_str());
     return true;
@@ -863,51 +835,99 @@ bool rollbackInstalledBuild(const fs::path& root)
         if (file) currentVersion = trim(std::string((std::istreambuf_iterator<char>(file)),
             std::istreambuf_iterator<char>()));
     }
-    fs::path backupRoot = root / "f2reimagined-backups";
-    fs::path selected;
+    // 307: the interrupted update's marker names the backup that repairs the
+    // half-installed state, even when its version equals the installed stamp.
     std::string selectedVersion;
-    fs::file_time_type selectedTime = fs::file_time_type::min();
-    std::error_code error;
-    if (!fs::is_directory(backupRoot, error)) {
-        log("no previous build backup is available");
-        return false;
-    }
-    for (fs::directory_iterator it(backupRoot, error), end; !error && it != end; it.increment(error)) {
-        if (!it->is_directory(error)) continue;
-        std::ifstream versionFile(it->path() / kVersionTxt);
-        if (!versionFile) continue;
-        std::string version = trim(std::string((std::istreambuf_iterator<char>(versionFile)),
-            std::istreambuf_iterator<char>()));
-        if (version.empty() || version == currentVersion) continue;
-        fs::file_time_type time = fs::last_write_time(it->path(), error);
-        if (error) { error.clear(); continue; }
-        if (selected.empty() || time > selectedTime) {
-            selected = it->path();
-            selectedVersion = version;
-            selectedTime = time;
-        }
-    }
+    fs::path selected = launcher_update::repairBackup(root, currentVersion, &selectedVersion);
     if (selected.empty()) {
         log("no build different from the installed version is available for rollback");
         return false;
     }
-    for (const std::string& name : buildFiles()) {
-        fs::path source = selected / name;
-        if (!fs::is_regular_file(source, error)) continue;
-        if (name == kRootLauncher) {
-            if (!copyLauncher(source, root / name)) {
-                logf("rollback failed for %s", name.c_str());
-                return false;
-            }
-            continue;
-        }
-        fs::copy_file(source, root / name, fs::copy_options::overwrite_existing, error);
-        if (error) {
-            logf("rollback failed for %s: %s", name.c_str(), error.message().c_str());
+    // A known-good backup only: a damaged or partial one is refused before
+    // any destructive step, and its material stays for the next attempt.
+    std::string bad;
+    if (launcher_update::intendedSetCorrupt(root)) {
+        log("rollback blocked: the update journal is damaged, so the touched set is unknown; "
+            "delete f2reimagined-backups/update-manifest.txt only when you understand what it means");
+        return false;
+    }
+    if (!launcher_update::validateBackup(selected, buildFiles(), sha256File, &bad)) {
+        logf("rollback refused: the backup %s is not known-good (%s)",
+            selected.filename().string().c_str(), bad.c_str());
+        return false;
+    }
+    std::string blocked;
+    if (!launcher_update::restoreSavedBuild(root, selected, buildFiles(), buildTrees(), &blocked)) {
+        logf("rollback failed: %s could not be restored; the backup stays as it is", blocked.c_str());
+        return false;
+    }
+    // The repaired interrupted update needs no marker any more: the saved
+    // build stands, and a later launch must not restore it a second time.
+    std::string interruptedBackup = launcher_update::readMarker(root);
+    if (!interruptedBackup.empty() && selected.filename().string() == interruptedBackup) {
+        if (!launcher_update::clearMarker(root)) {
+            log("rollback restored the build but could not clear the marker; "
+                "the next start will restore the same backup again (it is idempotent)");
             return false;
         }
     }
     logf("restored previous build %s", selectedVersion.c_str());
+    return true;
+}
+
+// 307: an update that died between replacement steps leaves newer files mixed
+// with old ones.  The marker written before the first copy survives it; the
+// next start restores the saved build before anything can launch or mutate
+// the half-installed state.  False: the restore is blocked, the marker and
+// the backup stay so nothing pretends the game is whole.
+bool recoverInterruptedUpdate(const fs::path& root)
+{
+    if (!launcher_update::markerExists(root)) return true;
+    std::string backupFolder = launcher_update::readMarker(root);
+    // An existing marker that names nothing is a pending state too: block on
+    // it instead of sailing past a half-installed build.
+    if (backupFolder.empty()) {
+        log("an update marker stands but names no backup; "
+            "recovery blocked (delete f2reimagined-backups/update-in-progress.txt "
+            "only when you understand what it means)");
+        return false;
+    }
+    logf("an update was interrupted; restoring the saved build from f2reimagined-backups/%s",
+        backupFolder.c_str());
+    std::error_code error;
+    fs::path backup = root / launcher_update::kBackupsFolder / fs::u8path(backupFolder);
+    if (!fs::is_directory(backup, error)) {
+        logf("recovery blocked: the backup f2reimagined-backups/%s is not there", backupFolder.c_str());
+        return false;
+    }
+    std::string bad;
+    if (launcher_update::intendedSetCorrupt(root)) {
+        // A missing manifest with a standing marker is an unknown touched
+        // set too: the update died somewhere between the marker and its
+        // journal, or the journal was lost.  Block; the marker and the
+        // backup stay, and the user decides with full information.
+        log("recovery blocked: the update journal is missing, damaged or incomplete, so the touched set is unknown; "
+            "the marker and the backup stay. delete f2reimagined-backups/update-in-progress.txt "
+            "and update-manifest.txt only when you understand what they mean");
+        return false;
+    }
+    if (!launcher_update::validateBackup(backup, buildFiles(), sha256File, &bad)) {
+        logf("recovery blocked: the backup %s is not known-good (%s); the marker and the backup stay",
+            backupFolder.c_str(), bad.c_str());
+        return false;
+    }
+    std::string blocked;
+    if (!launcher_update::restoreSavedBuild(root, backup, buildFiles(), buildTrees(), &blocked)) {
+        logf("recovery blocked: %s could not be restored; the f2reimagined-backups folder is kept as it is",
+            blocked.c_str());
+        return false;
+    }
+    if (!launcher_update::clearMarker(root)) {
+        log("the build was restored but the marker could not be removed; recovery stays pending "
+            "and repeats the same idempotent restore on the next start");
+        return false;
+    }
+    logf("the interrupted update was rolled back; the saved build %s stands", backupFolder.c_str());
     return true;
 }
 
@@ -927,10 +947,11 @@ bool setLanguage(const fs::path& root, const char* language)
         log("cannot set the game language: [system].language was not found");
         return false;
     }
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out.write(output.data(), static_cast<std::streamsize>(output.size()));
-    if (!out) {
-        log("cannot write fallout2.cfg");
+    // The cfg is the player's file: a truncated in-place write would lose it,
+    // so the new text lands in a temporary file renamed over the old one (292).
+    std::string error;
+    if (!launcher_uninstall::writeFileAtomic(path, output, &error)) {
+        logf("cannot write fallout2.cfg: %s", error.c_str());
         return false;
     }
     return true;
@@ -1615,8 +1636,10 @@ bool removeRussianTranslation(const fs::path& root)
     return ok;
 }
 
-// Gives the game back as it was before the mod.  Saves (data/), the original game files
-// and fallout2.cfg are never touched.  The folder f2reimagined-backups only holds older
+// Gives the game back as it was before the mod.  Saves (data/) and the original
+// game files are never touched; fallout2.cfg only has its [system] language
+// switched back to English, through a temporary file renamed over it (292).
+// The folder f2reimagined-backups only holds older
 // mod builds, so it goes with the mod.
 bool uninstallMod(const fs::path& root)
 {
@@ -1868,6 +1891,42 @@ std::string findGameRootForUi()
 
 int runLauncherUi(int argc, char** argv);
 
+// 309: one writer per game root.  The lock is a file inside the root itself,
+// opened with no sharing and deleted when its handle closes: any alias of the
+// folder (another case, a relative path, a junction) opens the same physical
+// file, a separate root gets its own lock, and a crashed worker's handle
+// closes with its process, so the file disappears and the next worker walks
+// in.  --check-release returns before the root is resolved and never takes
+// it.
+struct RootLock {
+    HANDLE handle = nullptr;
+    DWORD error = 0;
+    explicit RootLock(const fs::path& root)
+    {
+        std::wstring path = (root / L"f2reimagined.lock").wstring();
+        handle = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
+            0 /* no sharing: a second opener is a second writer */,
+            nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+        // CreateFileW fails with INVALID_HANDLE_VALUE, not nullptr: without
+        // this check a refused second writer walked past the guard (522).
+        if (handle == INVALID_HANDLE_VALUE) {
+            handle = nullptr;
+            error = GetLastError();
+        }
+    }
+    ~RootLock() {
+        if (handle != nullptr) CloseHandle(handle);  // DELETE_ON_CLOSE removes the file
+    }
+    bool held() const { return handle != nullptr; }
+    // The reason the folder is not ours to write, captured at acquisition.
+    const char* refusedWhy() const
+    {
+        if (error == ERROR_SHARING_VIOLATION) return "another installer for this game folder is already running";
+        if (error == ERROR_ACCESS_DENIED) return "the game folder refuses the lock file (access denied)";
+        return "the game folder could not be locked";
+    }
+};
+
 int runConsole(Options options)
 {
     log("fallout2-ce-3d-launcher");
@@ -1906,6 +1965,27 @@ int runConsole(Options options)
         root = fs::canonical(root, error);
         if (error) { log("cannot resolve the game folder"); return 1; }
     }
+
+    // 309: the root lock covers every mutation below, recovery included, so
+    // two workers (two windows, two consoles, two aliases of one folder)
+    // never install, clean backups or restore side by side.
+    RootLock rootLock(root);
+    if (!rootLock.held()) {
+        die(rootLock.refusedWhy());
+    }
+
+    // 307: an interrupted update is repaired before anything can launch or
+    // mutate the half-installed build, before even the stale launcher .old
+    // is removed or any other branch runs.
+    bool recoveredPendingUpdate = false;
+    if (launcher_update::markerExists(root)) {
+        if (!recoverInterruptedUpdate(root)) {
+            die("the interrupted update could not be rolled back (see the lines above); remove the "
+                "obstruction, or delete f2reimagined-backups/update-in-progress.txt only when you understand what it means");
+        }
+        recoveredPendingUpdate = true;
+    }
+
     {
         std::error_code ignored;
         fs::path old = root / kRootLauncher;
@@ -1919,7 +1999,15 @@ int runConsole(Options options)
         log("removing the Russian translation:");
         return removeRussianTranslation(root) ? 0 : 1;
     }
-    if (options.rollback) return rollbackInstalledBuild(root) ? 0 : 1;
+    if (options.rollback) {
+        // The interrupted state was already repaired at this start; rolling
+        // back again would walk past the repaired build to an even older one.
+        if (recoveredPendingUpdate) {
+            log("the interrupted update was already rolled back at this start; nothing more to do");
+            return 0;
+        }
+        return rollbackInstalledBuild(root) ? 0 : 1;
+    }
 
     bool installedGamePresent = fs::exists(root / kGameExe);
     std::string installedVersion;
@@ -2007,17 +2095,99 @@ int runConsole(Options options)
         versionFile.close();
 
         std::string keptBackup;
-        // A refill of the wide art at the same version is no update: the older build stays the one to roll back to.
-        if (installedGamePresent && packageVersion != installedVersion && !backupInstalledBuild(root,
-            installedVersion.empty() ? std::string("manual") : installedVersion, &keptBackup)) {
+        if (installedGamePresent && packageVersion != installedVersion
+            && !backupInstalledBuild(root,
+                installedVersion.empty() ? std::string("manual") : installedVersion, &keptBackup)) {
             fs::remove_all(work, error);
             die("could not save the current build before updating; nothing was changed");
+        }
+        // A same-version wide-art refill still overwrites files, so it needs
+        // the same recovery material as any update: the version's own
+        // complete backup when one stands, else the machine's manual backup,
+        // else a fresh manual snapshot of the current state.  None of these
+        // ever replaces an older rollback backup, and the refill's cleanup
+        // keeps every backup there was.  Without any recovery point the
+        // refill refuses before mutating anything (307).
+        bool refill = false;
+        if (installedGamePresent && packageVersion == installedVersion) {
+            refill = true;
+            std::string reused;
+            const char* sourceName = installedVersion.empty() ? "manual" : installedVersion.c_str();
+            if (backupInstalledBuild(root, sourceName, &reused, false)) {
+                keptBackup = reused;
+            } else if (backupInstalledBuild(root, std::string("manual"), &reused, true)) {
+                keptBackup = reused;
+            } else {
+                fs::remove_all(work, error);
+                die("the wide-art refill found no complete backup of this build to restore from, "
+                    "and none could be made; nothing was changed");
+            }
+        }
+        // 307: from here to the version stamp the game folder may hold a
+        // half-installed build.  The marker names the backup a recovery
+        // restores from, and the intended touched set (every path the update
+        // will write, marked replaced or introduced) is written whole before
+        // the first copy, so a crash between a mutation and its bookkeeping
+        // cannot lose a path.
+        bool journaling = !keptBackup.empty();
+        if (journaling && !launcher_update::writeMarker(root, keptBackup)) {
+            fs::remove_all(work, error);
+            die("could not write the update recovery marker; nothing was changed");
+        }
+        if (journaling) {
+            std::vector<launcher_update::PendingPath> intended;
+            for (const char* name : { kGameExe, "ce.dat", kExporterExe }) {
+                if (fs::exists(stage / name, error)) intended.push_back({name, fs::exists(root / name, error)});
+            }
+            if (fs::exists(stage / kZipLauncher, error)) {
+                intended.push_back({kRootLauncher, fs::exists(root / kRootLauncher, error)});
+            }
+            for (const std::string& tree : buildTrees()) {
+                fs::path source = stage / fs::u8path(tree);
+                if (!fs::is_directory(source, error)) continue;
+                for (fs::recursive_directory_iterator it(source, fs::directory_options::skip_permission_denied, error), end;
+                     !error && it != end; it.increment(error)) {
+                    if (!it->is_regular_file(error)) continue;
+                    std::string relative = tree + std::string("/")
+                        + wideToUtf8(fs::relative(it->path(), source).generic_wstring());
+                    intended.push_back({relative, fs::exists(root / fs::u8path(relative), error)});
+                }
+            }
+            if (!fs::exists(root / kCfg, error) && fs::exists(stage / kCfg, error)) {
+                intended.push_back({kCfg, false});
+            }
+            if (!launcher_update::writeIntendedSet(root, intended)) {
+                fs::remove_all(work, error);
+                die("could not write the update journal; nothing was changed");
+            }
         }
 
         // --- into the game folder; the player's things stay theirs ---
         log("installing into the game folder:");
         auto stopUpdate = [&]() {
             fs::remove_all(work, error);
+            if (journaling) {
+                // Hand the old whole build back right here: a failed update
+                // must not leave a mixture for the player to stumble into.
+                fs::path backup = root / launcher_update::kBackupsFolder / fs::u8path(keptBackup);
+                std::string bad;
+                std::string blocked;
+                if (launcher_update::intendedSetCorrupt(root)) {
+                    // The touched set is unknown, so an immediate restore
+                    // could leave introduced files behind; the next start
+                    // blocks on the damaged journal instead.
+                    die("the update could not be installed and its journal is damaged (see the lines above); "
+                        "the next start blocks on the journal before it touches anything");
+                }
+                if (launcher_update::validateBackup(backup, buildFiles(), sha256File, &bad)
+                    && launcher_update::restoreSavedBuild(root, backup, buildFiles(), buildTrees(), &blocked)
+                    && launcher_update::clearMarker(root)) {
+                    die("the update could not be installed (see the lines above); "
+                        "the previous build was restored in full");
+                }
+                die("the update could not be installed and the restore could not finish (see the lines above); "
+                    "the next start restores the saved build from f2reimagined-backups before it does anything else");
+            }
             die("the update could not be installed (see the lines above); the build version was not changed");
         };
         if (!copyIfPresent(stage, kGameExe, root, true, "installed")
@@ -2040,8 +2210,15 @@ int runConsole(Options options)
         }
         if (!writeBuildVersion(root, packageVersion)) stopUpdate();
         logf("  version.txt: %s", packageVersion.c_str());
+        if (journaling && !launcher_update::clearMarker(root)) {
+            die("the update installed whole, but its recovery marker could not be removed (it may be held by "
+                "another program); the next start will roll this build back to f2reimagined-backups/%s. Do not "
+                "restart the game; remove the marker once the program holding it is closed", keptBackup.c_str());
+        }
         fs::remove_all(work, error);
-        cleanOlderBuildLeftovers(root, keptBackup);
+        // A refill keeps every backup there was: it changed no version, so
+        // no older rollback point becomes stale because of it.
+        if (!refill) cleanOlderBuildLeftovers(root, keptBackup);
         updated = true;
         installedVersion = packageVersion;
     } else if (!remoteVersion.empty()) {
@@ -2106,15 +2283,9 @@ int runConsole(Options options)
         return 0;
     }
 
-    // --- hashes of the player's things, before the run ---
-    std::string cfgBefore = "<missing>";
-    std::string savesBefore;
-    if (fs::exists(root / kCfg)) sha256File(root / kCfg, &cfgBefore);
-    sha256Tree(root / "data" / "savegame", &savesBefore);
-    logf("fallout2.cfg sha256 before: %s", cfgBefore.c_str());
-    logf("data/savegame sha256 before: %s", savesBefore.c_str());
-
     // --- start the game ---
+    // (292: the 091-acceptance hash check around the run is gone; it printed
+    // CHANGED whenever the player saved, which is what saves are for.)
     fs::path game = root / kGameExe;
     if (!fs::exists(game)) die("the game is not installed yet; press Install first");
     std::string command = "\"" + game.string() + "\"";
@@ -2130,15 +2301,6 @@ int runConsole(Options options)
     }
     logf("the game exited with code %lu", static_cast<unsigned long>(gameExitCode));
 
-    // --- and after: must be byte for byte the same ---
-    std::string cfgAfter = "<missing>";
-    std::string savesAfter;
-    if (fs::exists(root / kCfg)) sha256File(root / kCfg, &cfgAfter);
-    sha256Tree(root / "data" / "savegame", &savesAfter);
-    logf("fallout2.cfg sha256 after:  %s (%s)", cfgAfter.c_str(),
-        cfgAfter == cfgBefore ? "unchanged" : "CHANGED");
-    logf("data/savegame sha256 after:  %s (%s)", savesAfter.c_str(),
-        savesAfter == savesBefore ? "unchanged" : "CHANGED");
     log("bye");
     return 0;
 }

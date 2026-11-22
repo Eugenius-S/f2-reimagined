@@ -2,6 +2,8 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
 
 using namespace launcher_uninstall;
 
@@ -51,6 +53,29 @@ int main()
     check(staleBackups(backups, "").empty(), "no backup made, nothing removed");
     check(staleBackups(backups / "missing", "v3").empty(), "no backup folder, nothing removed");
     fs::remove_all(backups);
+
+    // writeFileAtomic (292): the target never stands half written, and a
+    // failed write leaves the old file as it was.
+    auto readWhole = [](const fs::path& path) {
+        std::ifstream in(path, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+    fs::path atomic = fs::temp_directory_path() / "f2r-atomic-write-test";
+    fs::remove_all(atomic);
+    fs::create_directories(atomic);
+    fs::path cfgPath = atomic / "fallout2.cfg";
+    std::string error;
+    check(writeFileAtomic(cfgPath, "language=russian\r\n", &error), "the first write lands");
+    check(error.empty(), "no error on a good write");
+    check(readWhole(cfgPath) == "language=russian\r\n", "the bytes are the ones written");
+    check(writeFileAtomic(cfgPath, "language=english\r\n", &error), "the second write renames over the first");
+    check(readWhole(cfgPath) == "language=english\r\n", "the old bytes are replaced whole");
+    check(!fs::exists(atomic / "fallout2.cfg.tmp"), "no temporary file is left behind");
+    check(!writeFileAtomic(atomic / "missing-dir" / "fallout2.cfg", "x", &error), "a missing folder fails");
+    check(!error.empty(), "the failure names its reason");
+    check(readWhole(cfgPath) == "language=english\r\n", "a failed write leaves the old file standing");
+    check(writeFileAtomic(cfgPath, "x", nullptr) && readWhole(cfgPath) == "x", "the error pointer may be left out");
+    fs::remove_all(atomic);
 
     std::printf("launcher_uninstall_tests: ok\n");
     return 0;
