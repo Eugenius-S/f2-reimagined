@@ -219,6 +219,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$slotHeld = $false
 # The folder's own captures and the run's state (snapshot-output.ps1): from here on a failure,
 # however early, leaves "incomplete" and no earlier capture listed as this run's.
 . (Join-Path $PSScriptRoot 'snapshot-output.ps1')
@@ -334,13 +335,17 @@ if (-not $GameRoot -and -not (Test-Path -LiteralPath $GameDir)) {
     $GameDir = Join-Path $main 'game'
 }
 if (-not (Test-Path -LiteralPath $GameDir -PathType Container)) { throw "No game root at $GameDir" }
-$built = if ($BuildExecutable) { [System.IO.Path]::GetFullPath((Join-Path $Root $BuildExecutable)) } else { Join-Path $Root 'build\fallout2-ce.exe' }
-if (-not (Test-Path $built)) { throw "No build at $built; run tools/configure-build.ps1 first." }
+function Resolve-CheckoutPath([string]$Path) {
+    if ([System.IO.Path]::IsPathRooted($Path)) { return [System.IO.Path]::GetFullPath($Path) }
+    return [System.IO.Path]::GetFullPath((Join-Path $Root $Path))
+}
+$built = if ($BuildExecutable) { Resolve-CheckoutPath $BuildExecutable } else { Join-Path $Root 'build\fallout2-ce.exe' }
+if (-not (Test-Path -LiteralPath $built -PathType Leaf)) { throw "No build at $built; run tools/configure-build.ps1 first." }
 # The exe's own folder holds the config: build it fresh from the fixed one, so
 # a saved setting can never leak into the next run.
 $fixedConfig = Join-Path $PSScriptRoot 'test-config\fallout2.cfg'
 if (-not (Test-Path -LiteralPath $fixedConfig)) { throw "Missing the fixed test config: $fixedConfig" }
-$exeDirectory = if ($TestDirectory) { [System.IO.Path]::GetFullPath((Join-Path $Root $TestDirectory)) } else { Join-Path $Root 'build\test-run' }
+$exeDirectory = if ($TestDirectory) { Resolve-CheckoutPath $TestDirectory } else { Join-Path $Root 'build\test-run' }
 New-Item -ItemType Directory -Path $exeDirectory -Force | Out-Null
 $exe = Join-Path $exeDirectory 'fallout2-ce-test.exe'
 # One test game at a time per worktree (they share this exe and its config);
@@ -351,7 +356,6 @@ $exe = Join-Path $exeDirectory 'fallout2-ce-test.exe'
 $slotKey = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash(
     [System.Text.Encoding]::UTF8.GetBytes($exe.ToLowerInvariant()))).Replace('-', '').Substring(0, 16)
 $slot = New-Object System.Threading.Mutex($false, "Global\fallout2-ce-test-slot-$slotKey")
-$slotHeld = $false
 function Release-TestSlot {
     if ($script:slotHeld) {
         $script:slotHeld = $false
@@ -359,7 +363,9 @@ function Release-TestSlot {
         $slot.Dispose()
     }
 }
-trap { Release-TestSlot; break }
+# A script-level trap also sees early errors before the mutex or its cleanup
+# function exists. Do not replace the original error with another one.
+trap { if ($script:slotHeld) { Release-TestSlot }; break }
 try { $slotHeld = $slot.WaitOne([TimeSpan]::FromMinutes($WaitMinutes)) }
 catch [System.Threading.AbandonedMutexException] { $slotHeld = $true }
 if (-not $slotHeld) { throw "The test slot stayed busy for $WaitMinutes minutes." }
