@@ -21,6 +21,8 @@ int main()
         "the translation line goes, the others and their endings stay");
     check(removeLine("rpu.dat\r\n", "rpu_russian.dat", &removed) == "rpu.dat\r\n" && !removed, "no line, no change");
     check(removeLine("rpu_russian.dat", "rpu_russian.dat").empty(), "last line without an ending");
+    check(removeModLine("# ./rpu_russian.dat\n./RPU_Russian.dat\n.\\rpu_russian.dat\r\nplayer.dat\n", "rpu_russian.dat", &removed)
+        == "# ./rpu_russian.dat\nplayer.dat\n" && removed, "managed aliases are removed while comments and other lines remain");
     check(!hasContent(removeLine("rpu_russian.dat\r\n\r\n", "rpu_russian.dat")), "only blanks left means an empty list");
     check(hasContent("a.dat\r\n"), "a real line is content");
 

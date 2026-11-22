@@ -971,25 +971,10 @@ bool enableRussianMod(const fs::path& root)
         out.write(input.data(), static_cast<std::streamsize>(input.size()));
         if (!out) return false;
     }
-    std::string lower = input;
-    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-    if (lower.find("rpu_russian.dat") == std::string::npos) {
-        std::string output;
-        std::stringstream lines(input);
-        std::string line;
-        bool inserted = false;
-        while (std::getline(lines, line)) {
-            if (!line.empty() && line.back() == '\r') line.pop_back(); // CRLF files must not gain an empty line
-            output += line + "\r\n";
-            std::string normalized = trim(line);
-            std::transform(normalized.begin(), normalized.end(), normalized.begin(),
-                [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-            if (!inserted && normalized == "rpu.dat") {
-                output += "rpu_russian.dat\r\n";
-                inserted = true;
-            }
-        }
-        if (!inserted) output = "rpu_russian.dat\r\n" + output;
+    bool active = false;
+    launcher_uninstall::removeModLine(input, "rpu_russian.dat", &active);
+    if (!active) {
+        std::string output = insertOfficialOrder(input);
         std::ofstream out(orderPath, std::ios::binary | std::ios::trunc);
         out.write(output.data(), static_cast<std::streamsize>(output.size()));
         if (!out) {
@@ -1349,7 +1334,7 @@ bool restoreRp(const fs::path& root, RpManifest manifest, bool cleanup = true)
             bool retiredVoice = false;
             for (const auto& voice : launcher_translations::voices) {
                 bool active = false;
-                launcher_uninstall::removeLine(now, voice.filename, &active);
+                launcher_uninstall::removeModLine(now, voice.filename, &active);
                 if (!active && !fs::exists(root / "mods" / voice.filename)) retiredVoice = true;
             }
             if (oldText || suppressOfficial || retiredVoice || suppressManualVoice) {
@@ -1360,16 +1345,16 @@ bool restoreRp(const fs::path& root, RpManifest manifest, bool cleanup = true)
                 if (oldText) {
                     for (const char* name : { oldText->filename, launcher_translations::fonts.filename }) {
                         bool active = false;
-                        launcher_uninstall::removeLine(now, name, &active);
-                        if (!active && !fs::exists(root / "mods" / name)) result = launcher_uninstall::removeLine(result, name);
+                        launcher_uninstall::removeModLine(now, name, &active);
+                        if (!active && !fs::exists(root / "mods" / name)) result = launcher_uninstall::removeModLine(result, name);
                     }
                 }
                 for (const auto& voice : launcher_translations::voices) {
                     bool active = false;
-                    launcher_uninstall::removeLine(now, voice.filename, &active);
-                    if (!active && !fs::exists(root / "mods" / voice.filename)) result = launcher_uninstall::removeLine(result, voice.filename);
+                    launcher_uninstall::removeModLine(now, voice.filename, &active);
+                    if (!active && !fs::exists(root / "mods" / voice.filename)) result = launcher_uninstall::removeModLine(result, voice.filename);
                 }
-                if (suppressOfficial) result = launcher_uninstall::removeLine(result, "rpu_russian.dat");
+                if (suppressOfficial) result = launcher_uninstall::removeModLine(result, "rpu_russian.dat");
                 if (suppressManualVoice) result = launcher_uninstall::removeLine(result, "upu_russian_sound.dat");
                 sharedOrders[file.path] = result;
                 continue;
@@ -1539,11 +1524,11 @@ bool installRestorationProject(const fs::path& root, bool* installedNow)
         std::string marker = readWholeFile(root / "mods/f2r-text-choice.txt");
         std::string id = trim(marker.substr(0, marker.find('\n')));
         if (const auto* oldText = launcher_translations::find(id)) {
-            merged = launcher_uninstall::removeLine(merged, oldText->filename);
-            merged = launcher_uninstall::removeLine(merged, launcher_translations::fonts.filename);
+            merged = launcher_uninstall::removeModLine(merged, oldText->filename);
+            merged = launcher_uninstall::removeModLine(merged, launcher_translations::fonts.filename);
         }
         bool official = false;
-        std::string withoutOfficial = launcher_uninstall::removeLine(merged, "rpu_russian.dat", &official);
+        std::string withoutOfficial = launcher_uninstall::removeModLine(merged, "rpu_russian.dat", &official);
         if (official) merged = insertOfficialOrder(withoutOfficial);
         if (!writeTextFile(packageOrder, merged)) { fs::remove_all(work, error); return false; }
     }
@@ -1709,7 +1694,7 @@ bool removeRussianTranslation(const fs::path& root)
     fs::path orderPath = root / "mods" / "mods_order.txt";
     if (fs::exists(orderPath, error)) {
         bool removed = false;
-        std::string order = launcher_uninstall::removeLine(readWholeFile(orderPath), "rpu_russian.dat", &removed);
+        std::string order = launcher_uninstall::removeModLine(readWholeFile(orderPath), "rpu_russian.dat", &removed);
         if (removed) {
             if (launcher_uninstall::hasContent(order)) {
                 std::ofstream out(orderPath, std::ios::binary | std::ios::trunc);
@@ -1804,20 +1789,12 @@ bool writeTextFile(const fs::path& path, const std::string& value)
     return !!out;
 }
 
-std::string normalizedModName(const std::string& line)
-{
-    if (line.find_first_of(";#") != std::string::npos) return {};
-    std::string name = launcher_uninstall::lowered(trim(line));
-    while (name.size() >= 2 && name[0] == '.' && (name[1] == '/' || name[1] == '\\')) name.erase(0, 2);
-    return name;
-}
-
 std::string insertAfterMod(const std::string& input, const char* target, const std::string& addition, bool prependIfMissing)
 {
     for (size_t begin = 0; begin < input.size();) {
         size_t end = input.find('\n', begin);
         size_t next = end == std::string::npos ? input.size() : end + 1;
-        if (normalizedModName(input.substr(begin, next - begin)) == target) {
+        if (launcher_uninstall::normalizedModName(input.substr(begin, next - begin)) == target) {
             std::string prefix = input.substr(0, next);
             if (!prefix.empty() && prefix.back() != '\n') prefix += "\r\n";
             return prefix + addition + input.substr(next);
@@ -1868,7 +1845,7 @@ bool translationRpOrderValid(const fs::path& root)
     if (!effectiveModOrder(root, &order)) return false;
     std::stringstream lines(order);
     std::string line;
-    while (std::getline(lines, line)) if (normalizedModName(line) == "rpu.dat") return true;
+    while (std::getline(lines, line)) if (launcher_uninstall::normalizedModName(line) == "rpu.dat") return true;
     return false;
 }
 
@@ -1935,8 +1912,8 @@ bool changeTextTranslation(const fs::path& root, const std::string& choice, cons
         && (textHash == ownedText->sha256 || textHash == find(textId, true)->sha256);
     bool fontsOwned = textOwned && sha256File(root / "mods" / fonts.filename, &fontsHash) && fontsHash == fonts.sha256;
     auto withoutOwnedText = [&](std::string value) {
-        if (textOwned) value = launcher_uninstall::removeLine(value, ownedText->filename);
-        if (fontsOwned) value = launcher_uninstall::removeLine(value, fonts.filename);
+        if (textOwned) value = launcher_uninstall::removeModLine(value, ownedText->filename);
+        if (fontsOwned) value = launcher_uninstall::removeModLine(value, fonts.filename);
         return value;
     };
     std::vector<bool> replace(translationTargets().size(), false);
@@ -1960,25 +1937,25 @@ bool changeTextTranslation(const fs::path& root, const std::string& choice, cons
             if (previous != item.id || !sha256File(path, &hash)
                 || (hash != item.sha256 && hash != find(item.id, true)->sha256)) return abandon();
         }
-        if (previous == item.id) order = launcher_uninstall::removeLine(order, item.filename);
+        if (previous == item.id) order = launcher_uninstall::removeModLine(order, item.filename);
     }
     fs::path fontPath = root / "mods" / fonts.filename;
     if (fs::exists(fontPath, error)) {
         std::string hash;
         if (!find(previous) || !sha256File(fontPath, &hash) || hash != fonts.sha256) return abandon();
     }
-    if (find(previous)) order = launcher_uninstall::removeLine(order, fonts.filename);
+    if (find(previous)) order = launcher_uninstall::removeModLine(order, fonts.filename);
     fs::path officialPath = root / "mods/rpu_russian.dat";
     bool officialExists = fs::exists(officialPath, error);
     bool officialOwned = previousMarker.find("\nofficial-owned=1\n") != std::string::npos;
     std::string officialHash;
     bool officialKnown = officialExists && sha256File(officialPath, &officialHash) && officialHash == kOfficialRussianHash;
     bool officialActive = false;
-    launcher_uninstall::removeLine(order, "rpu_russian.dat", &officialActive);
+    launcher_uninstall::removeModLine(order, "rpu_russian.dat", &officialActive);
     bool needsOfficial = choice == "official" || (rp && selected);
     if ((officialOwned && !officialKnown) || (needsOfficial && officialExists && !officialKnown)) return abandon();
     if (!needsOfficial && officialExists && !officialKnown && officialActive) return abandon();
-    if (!needsOfficial && officialKnown) order = launcher_uninstall::removeLine(order, "rpu_russian.dat");
+    if (!needsOfficial && officialKnown) order = launcher_uninstall::removeModLine(order, "rpu_russian.dat");
     if (error) return abandon();
     if (!needsOfficial && officialOwned) replace[7] = true;
     if (selected) {
@@ -2012,7 +1989,7 @@ bool changeTextTranslation(const fs::path& root, const std::string& choice, cons
             replace[7] = true;
             officialOwned = true;
         }
-        order = launcher_uninstall::removeLine(order, "rpu_russian.dat");
+        order = launcher_uninstall::removeModLine(order, "rpu_russian.dat");
         order = insertOfficialOrder(order);
         if (selected) order = insertTextAfterOfficial(order, fonts.filename, selected->filename);
     }
@@ -2142,7 +2119,7 @@ bool changeTextTranslation(const fs::path& root, const std::string& choice, cons
                 if (previous != item.id || ownedHash.size() != 64 || !sha256File(path, &hash) || hash != ownedHash) return abandon();
                 replace[9 + i] = true;
             }
-            if (previous == item.id) order = launcher_uninstall::removeLine(order, item.filename);
+            if (previous == item.id) order = launcher_uninstall::removeModLine(order, item.filename);
             if (error) return abandon();
         }
         if (const auto* selectedVoice = findVoice(voiceChoice)) {

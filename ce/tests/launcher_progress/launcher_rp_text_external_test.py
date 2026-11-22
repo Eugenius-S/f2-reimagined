@@ -44,7 +44,7 @@ class RpTextSwitch(unittest.TestCase):
                     manual_hash = hashlib.sha256(manual.read_bytes()).hexdigest()
                     order = mods / 'mods_order.txt'
                     order.write_bytes((b'rpu.dat\r\n' if situation == 'unsupported' else b'') +
-                                      voice.name.encode() + b'\r\nupu_russian_sound.dat\r\nplayer.dat\r\n')
+                                      b'./' + voice.name.encode() + b'\r\n.\\' + voice.name.encode() + b'\r\nupu_russian_sound.dat\r\nplayer.dat\r\n')
                     proc = subprocess.run([str(EXE), '--game-root', str(root), '--recover-text'], capture_output=True, timeout=30)
                     self.assertEqual(proc.returncode, 0, proc.stdout.decode('utf8', errors='replace'))
                     self.assertFalse(voice.exists())
@@ -72,17 +72,25 @@ class RpTextSwitch(unittest.TestCase):
             shutil.copyfile(packs / 'proof/rpu-2.4.34/mods/rpu.dat', mods / 'rpu.dat')
             shutil.copyfile(packs / 'proof/rpu-2.4.34/mods/rpu_russian.dat', mods / 'rpu_russian.dat')
             order = mods / 'mods_order.txt'
-            for rpu_line in (b'./rpu.dat\n', b'.\\rpu.dat\n'):
-                order.write_bytes(b'# player comment\n' + rpu_line + b'player.dat\n')
+            for rpu_line, official_line in ((b'./rpu.dat\n', b'./rpu_russian.dat\n'), (b'.\\rpu.dat\n', b'.\\rpu_russian.dat\n')):
+                order.write_bytes(b'# player comment\n' + rpu_line + official_line + b'player.dat\n')
                 proc = subprocess.run([str(EXE), '--game-root', str(root), '--text-translation', '1c'], capture_output=True, timeout=120)
                 self.assertEqual(proc.returncode, 0, proc.stdout.decode('utf8', errors='replace'))
                 result = order.read_bytes()
                 self.assertTrue(result.startswith(b'# player comment\n' + rpu_line + b'rpu_russian.dat\r\n'))
                 self.assertLess(result.index(b'rpu_russian.dat'), result.index(b'steam-1c-text.dat'))
                 self.assertLess(result.index(b'steam-1c-text.dat'), result.index(b'player.dat'))
+                self.assertEqual(result.count(b'rpu_russian.dat'), 1)
                 proc = subprocess.run([str(EXE), '--game-root', str(root), '--recover-text'], capture_output=True, timeout=30)
                 self.assertEqual(proc.returncode, 0, proc.stdout.decode('utf8', errors='replace'))
                 self.assertEqual((mods / 'f2r-text-choice.txt').read_text().splitlines()[0], '1c')
+                result = result.replace(b'rpu_russian.dat\r\n', official_line + b'./rpu_russian.dat\n')
+                result = result.replace(b'steam-1c-text.dat\r\n', b'./steam-1c-text.dat\n.\\steam-1c-text.dat\n')
+                result = result.replace(b'shared-legacy-fonts.dat\r\n', b'./shared-legacy-fonts.dat\n')
+                order.write_bytes(result)
+                proc = subprocess.run([str(EXE), '--game-root', str(root), '--text-translation', 'original'], capture_output=True, timeout=30)
+                self.assertEqual(proc.returncode, 0, proc.stdout.decode('utf8', errors='replace'))
+                self.assertEqual(order.read_bytes(), b'# player comment\n' + rpu_line + b'player.dat\n')
 
     def test_manual_rp_removal_is_noop_and_excluded_rp_is_rejected(self):
         packs = Path(ROOT)

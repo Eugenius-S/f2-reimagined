@@ -57,6 +57,30 @@ inline std::string trimmed(const std::string& text)
     return text.substr(begin, text.find_last_not_of(" \t\r\n") - begin + 1);
 }
 
+inline std::string normalizedModName(const std::string& line)
+{
+    if (line.find_first_of(";#") != std::string::npos) return {};
+    std::string name = lowered(trimmed(line));
+    while (name.size() >= 2 && name[0] == '.' && (name[1] == '/' || name[1] == '\\')) name.erase(0, 2);
+    return name;
+}
+
+inline std::string removeModLine(const std::string& text, const std::string& name, bool* removed = nullptr)
+{
+    std::string out;
+    bool any = false;
+    for (size_t begin = 0; begin < text.size();) {
+        size_t end = text.find('\n', begin);
+        end = end == std::string::npos ? text.size() : end + 1;
+        std::string line = text.substr(begin, end - begin);
+        if (normalizedModName(line) == lowered(name)) any = true;
+        else out += line;
+        begin = end;
+    }
+    if (removed) *removed = any;
+    return out;
+}
+
 // The text without the lines that are exactly `name` (any case); other lines and their endings stay as they were.
 inline std::string removeLine(const std::string& text, const std::string& name, bool* removed = nullptr)
 {
