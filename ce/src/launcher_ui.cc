@@ -15,13 +15,15 @@
 
 #include "launcher_progress.h"
 #include "launcher_uninstall.h"
-#include "launcher_translations.h"
+#include "launcher_voices.h"
 #include "launcher_translation_urls.h"
 
 namespace fs = std::filesystem;
 
 std::string findGameRootForUi();
 std::string ownGameRoot();
+bool supportedVoiceRp(const fs::path& root);
+bool knownActiveManualVoice(const fs::path& root);
 
 namespace {
 
@@ -47,9 +49,10 @@ constexpr int ID_PATH_HINT = 1016;
 constexpr int ID_VOICE = 1017;
 constexpr int ID_TEXT_LABEL = 1018;
 constexpr int ID_VOICE_LABEL = 1019;
+constexpr int ID_VOICE_WARNING = 1020;
 constexpr WORD IDB_LAUNCHER_LOGO = 201;
 
-enum class Operation { Install, Uninstall, RemoveRussian, RemoveRp, ChangeText, RecoverText };
+enum class Operation { Install, Uninstall, RemoveRussian, RemoveRp, ChangeText, ChangeVoice, RecoverText };
 
 struct UiArgs {
     std::wstring gameRoot;
@@ -101,6 +104,9 @@ bool g_russianInstall = false;
 int g_russianWish = -1;
 std::wstring g_textChoice;
 std::wstring g_textWish;
+std::wstring g_voiceChoice;
+std::wstring g_voiceWish;
+bool g_voicePendingRp = false;
 // The Restoration Project box follows disk after removal, otherwise the player's wish.
 bool g_rpInstall = false;
 int g_rpWish = -1;
@@ -250,6 +256,7 @@ void saveSettings()
     WritePrivateProfileStringW(L"launcher", L"language", g_uiLanguage.c_str(), g_settingsPath.c_str());
     WritePrivateProfileStringW(L"launcher", L"auto_updates", g_autoUpdates ? L"1" : L"0", g_settingsPath.c_str());
     if (!g_textWish.empty()) WritePrivateProfileStringW(L"launcher", L"text_choice", g_textWish.c_str(), g_settingsPath.c_str());
+    if (!g_voiceWish.empty()) WritePrivateProfileStringW(L"launcher", L"voice_choice", g_voiceWish.c_str(), g_settingsPath.c_str());
     if (g_russianWish >= 0) {
         WritePrivateProfileStringW(L"launcher", L"russian_wish", g_russianWish != 0 ? L"1" : L"0", g_settingsPath.c_str());
     }
@@ -416,12 +423,30 @@ std::wstring installedTextChoice()
     return russianOnDisk() ? L"official" : L"original";
 }
 
+std::wstring installedVoiceChoice()
+{
+    if (knownActiveManualVoice(chosenRoot())) return L"manual-bgforge";
+    std::ifstream in(chosenRoot() / L"mods" / L"f2r-voice-choice.txt");
+    std::string choice;
+    std::getline(in, choice);
+    if (!choice.empty() && choice.back() == '\r') choice.pop_back();
+    return choice.empty() ? L"original" : utf8ToWide(choice);
+}
+
+void updateVoiceWarning()
+{
+    SetWindowTextW(GetDlgItem(g_window, ID_VOICE_WARNING),
+        launcher_translations::voiceTextMayDiffer(wideToUtf8(g_textChoice), wideToUtf8(g_voiceChoice))
+            ? tr(L"Voice lines may differ from the text.", L"Озвучка может отличаться от текста.").c_str() : L"");
+}
+
 void refreshTextChoices()
 {
     using namespace launcher_translations;
     if (!g_russian || !g_voice) return;
-    std::wstring wanted = g_textWish.empty() ? installedTextChoice() : g_textWish;
+    std::wstring wanted = g_installed ? installedTextChoice() : (g_textWish.empty() ? installedTextChoice() : g_textWish);
     bool rp = g_rpInstall || rpOnDisk();
+    bool voiceRp = rp && (!rpOnDisk() || supportedVoiceRp(chosenRoot()));
     std::string id = wideToUtf8(wanted);
     const char* url = id == "1c" ? url1c : id == "fargus" ? urlFargus : urlLevy;
     if (!available(id, rp, url, urlFonts)) {
@@ -444,8 +469,22 @@ void refreshTextChoices()
     if (available("fargus", rp, urlFargus, urlFonts)) add(L"Fargus / Фаргус", L"fargus");
     if (available("levy", rp, urlLevy, urlFonts)) add(L"Levy / Левая Корпорация", L"levy");
     SendMessageW(g_voice, CB_RESETCONTENT, 0, 0);
-    SendMessageW(g_voice, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(L"Original", L"Оригинал").c_str()));
-    SendMessageW(g_voice, CB_SETCURSEL, 0, 0);
+    std::wstring voiceWanted = g_installed && !g_voicePendingRp ? installedVoiceChoice() : (g_voiceWish.empty() ? installedVoiceChoice() : g_voiceWish);
+    if (voiceWanted != L"manual-bgforge" && (!voiceAvailable(wideToUtf8(voiceWanted), rp) || (rp && voiceWanted != L"original" && !voiceRp))) voiceWanted = L"original";
+    g_voiceChoice = voiceWanted;
+    auto addVoice = [&](const wchar_t* name, const wchar_t* value) {
+        LRESULT index = SendMessageW(g_voice, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
+        SendMessageW(g_voice, CB_SETITEMDATA, index, reinterpret_cast<LPARAM>(value));
+        if (voiceWanted == value) SendMessageW(g_voice, CB_SETCURSEL, index, 0);
+    };
+    addVoice(tr(L"Original", L"Оригинал").c_str(), L"original");
+    if (voiceWanted == L"manual-bgforge") addVoice(tr(L"BGforge (manually installed)", L"BGforge (установлено вручную)").c_str(), L"manual-bgforge");
+    if (voiceAvailable("vanilla-1c", rp)) addVoice(L"1C", L"vanilla-1c");
+    if (voiceRp && voiceAvailable("rp-1c", rp)) addVoice(L"RP 1C", L"rp-1c");
+    if (voiceRp && voiceAvailable("rp-levy", rp)) addVoice(L"RP LeftCorp / Левая Корпорация", L"rp-levy");
+    if (voiceAvailable("vanilla-fargus", rp)) addVoice(L"Fargus / Фаргус", L"vanilla-fargus");
+    if (voiceAvailable("vanilla-levy", rp)) addVoice(L"LeftCorp / Левая Корпорация", L"vanilla-levy");
+    updateVoiceWarning();
 }
 
 bool rpRecoveryPending()
@@ -453,6 +492,7 @@ bool rpRecoveryPending()
     fs::path root = chosenRoot();
     if (root.empty()) return false;
     std::error_code error;
+    if (fs::exists(root / L".f2r-voice-rp-transition", error) || error) return true;
     fs::path receipt = root / L"backup/rpu/f2r-manifest.txt";
     if (!fs::exists(receipt, error)) return bool(error);
     std::ifstream in(receipt, std::ios::binary);
@@ -492,13 +532,14 @@ std::wstring doneStatus(Operation operation)
         return tr(L"The Russian translation is removed. The game text is English again.",
             L"Русификатор удалён. Текст игры снова английский.");
     case Operation::ChangeText:
-        return tr(L"Text selection applied.", L"Выбор текста применён.");
+    case Operation::ChangeVoice:
+        return tr(L"Translation selection applied.", L"Выбор перевода применён.");
     case Operation::RecoverText:
         return tr(L"Text recovery complete. Press Play.", L"Восстановление текста завершено. Нажмите «Играть».");
     default:
         if (g_translationFailed) {
-            return tr(L"The game is installed, but the Russian translation did not download. It will be tried again on the next install or update.",
-                L"Игра установлена, но русификатор не скачался. Попробуем снова при следующей установке или обновлении.");
+            return tr(L"The game is installed, but the translation selection could not be applied. See the log and try again.",
+                L"Игра установлена, но не удалось применить выбранный перевод. Подробности в журнале; попробуйте снова.");
         }
         return tr(L"Installation complete. Press Play to start.", L"Установка завершена. Нажмите «Играть».");
     }
@@ -670,6 +711,9 @@ void loadSettings()
     wchar_t textChoice[64] = {};
     GetPrivateProfileStringW(L"launcher", L"text_choice", L"", textChoice, static_cast<DWORD>(std::size(textChoice)), g_settingsPath.c_str());
     g_textWish = textChoice;
+    wchar_t voiceChoice[128] = {};
+    GetPrivateProfileStringW(L"launcher", L"voice_choice", L"", voiceChoice, static_cast<DWORD>(std::size(voiceChoice)), g_settingsPath.c_str());
+    g_voiceWish = voiceChoice;
     if (g_textWish.empty() && g_russianWish >= 0) g_textWish = g_russianWish ? L"official" : L"original";
     if (g_russianWish > 1) g_russianWish = 1;
     g_rpWish = GetPrivateProfileIntW(L"launcher", L"rp_wish", -1, g_settingsPath.c_str());
@@ -701,13 +745,21 @@ std::vector<std::wstring> workerArguments(Operation operation)
     } else if (operation == Operation::RemoveRussian) {
         args = {L"--game-root", g_args.gameRoot, L"--remove-russian", L"--ui-language", g_uiLanguage};
     } else if (operation == Operation::ChangeText) {
-        args = {L"--game-root", g_args.gameRoot, L"--text-translation", g_textChoice, L"--ui-language", g_uiLanguage};
+        args = {L"--game-root", g_args.gameRoot, L"--ui-language", g_uiLanguage};
+        if (installedTextChoice() != g_textChoice) { args.push_back(L"--text-translation"); args.push_back(g_textChoice); }
+    } else if (operation == Operation::ChangeVoice) {
+        args = {L"--game-root", g_args.gameRoot, L"--voice-translation", g_voiceChoice, L"--ui-language", g_uiLanguage};
     } else if (operation == Operation::RecoverText) {
         args = {L"--game-root", g_args.gameRoot, L"--recover-text", L"--ui-language", g_uiLanguage};
     } else {
         if (installedTextChoice() != g_textChoice) {
             args.push_back(L"--text-translation");
             args.push_back(g_textChoice);
+            args.push_back(L"--text-with-install");
+        }
+        if (installedVoiceChoice() != g_voiceChoice) {
+            args.push_back(L"--voice-translation");
+            args.push_back(g_voiceChoice);
             args.push_back(L"--text-with-install");
         }
         if (g_rpInstall && !rpOnDisk()) args.push_back(L"--restoration-project");
@@ -914,6 +966,7 @@ void createControls(HWND window)
     createControl(window, L"BUTTON", L"Install updates automatically on launch",
         BS_OWNERDRAW | BS_NOTIFY, 24, 348, 690, 28, ID_AUTO_UPDATE);
     g_autoUpdate = GetDlgItem(window, ID_AUTO_UPDATE);
+    createControl(window, L"STATIC", L"", SS_LEFT, 24, 378, 752, 20, ID_VOICE_WARNING);
     createControl(window, L"STATIC", L"", SS_LEFT, 24, 398, 752, 24, ID_RELEASE);
     g_release = GetDlgItem(window, ID_RELEASE);
     createControl(window, L"STATIC", L"", SS_LEFT | SS_NOPREFIX, 24, 424, 752, 52, ID_NOTES);
@@ -1135,6 +1188,8 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             if (g_args.gameRoot != root.wstring()) {
                 g_args.gameRoot = root.wstring();
                 g_textWish.clear();
+                g_voiceWish.clear();
+                g_voicePendingRp = false;
                 g_rpWish = -1;
                 g_operationCompleted = false;
             }
@@ -1176,10 +1231,36 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             g_textChoice = value;
             g_textWish = g_textChoice;
             g_russianInstall = g_textChoice == L"official";
+            updateVoiceWarning();
             saveSettings();
             if (g_installed && installedTextChoice() != g_textChoice) startOperation(Operation::ChangeText);
+        } else if (LOWORD(wParam) == ID_VOICE && HIWORD(wParam) == CBN_SELCHANGE) {
+            if (g_busy) return 0;
+            LRESULT index = SendMessageW(g_voice, CB_GETCURSEL, 0, 0);
+            if (index == CB_ERR) return 0;
+            auto value = reinterpret_cast<const wchar_t*>(SendMessageW(g_voice, CB_GETITEMDATA, index, 0));
+            if (!value || value == reinterpret_cast<const wchar_t*>(CB_ERR)) return 0;
+            g_voiceChoice = value;
+            updateVoiceWarning();
+            g_voiceWish = value;
+            saveSettings();
+            const auto* selected = launcher_translations::findVoice(wideToUtf8(g_voiceChoice));
+            g_voicePendingRp = selected && selected->rp && !rpOnDisk() && g_rpInstall;
+            if (g_installed && installedVoiceChoice() != g_voiceChoice && !g_voicePendingRp)
+                startOperation(Operation::ChangeVoice);
         } else if (LOWORD(wParam) == ID_RP && HIWORD(wParam) == BN_CLICKED) {
             if (g_busy) return 0;
+            fs::path transition = chosenRoot() / L".f2r-voice-rp-transition";
+            fs::path manifest = chosenRoot() / L"backup/rpu/f2r-manifest.txt";
+            if (fs::exists(transition)) {
+                std::ifstream in(manifest);
+                std::string state;
+                std::getline(in, state);
+                if (!fs::exists(manifest) || (state == "F2R-RP-1 installed" && rpOnDisk())) {
+                    startOperation(Operation::RecoverText);
+                    return 0;
+                }
+            }
             if (rpOnDisk() || rpRecoveryPending()) {
                 startOperation(Operation::RemoveRp);
                 return 0;
@@ -1272,8 +1353,9 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         }
         setBusy(false);
         syncRussianFromDisk();
+        g_voicePendingRp = false;
         syncRpFromDisk();
-        if (operation == Operation::ChangeText && result != 0) g_textWish = installedTextChoice();
+        if ((operation == Operation::ChangeText || operation == Operation::ChangeVoice) && result != 0) { g_textWish = installedTextChoice(); g_voiceWish = installedVoiceChoice(); }
         refreshTextChoices();
         setStatus(result == 0 || g_translationFailed ? doneStatus(operation) : failedStatus(operation));
         saveSettings();

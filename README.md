@@ -29,7 +29,9 @@ from the rolling [latest release](https://github.com/Eugenius-S/f2-reimagined/re
    choose its folder containing `master.dat` and `critter.dat`.
 3. Choose English or Russian for the launcher. Under **Text**, choose original
    English, official RPU Russian, or (for the base game) 1C, Fargus or Levy.
-   **Voice** currently offers the original audio independently of the text.
+   **Voice** is independent of the text: original audio, 1C and LeftCorp are
+   available for the base game and RP. Fargus voice is not available. Some old
+   LeftCorp Hakunin lines fall back to the original audio.
    To play the Restoration Project, select **Restoration Project**:
    the launcher downloads RPU from its official GitHub release (about
    900 MB), installs it the way RPU's own manual install does and builds its

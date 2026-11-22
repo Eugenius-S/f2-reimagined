@@ -26,6 +26,15 @@ inline const Package* find(const std::string& id)
     return nullptr;
 }
 
+inline bool voiceTextMayDiffer(const std::string& text, const std::string& voice)
+{
+    std::string source = voice == "vanilla-1c" || voice == "rp-1c" || voice == "manual-bgforge" ? "1c"
+        : voice == "vanilla-levy" || voice == "rp-levy" ? "levy"
+        : voice == "vanilla-fargus" ? "fargus" : "";
+    return !source.empty() && (text == "original" || text == "1c" || text == "fargus" || text == "levy" || text == "official")
+        && (text == "official" || text != source);
+}
+
 // Direct HTTPS only, with loopback HTTP reserved for local tests.
 inline bool validUrl(const std::string& url)
 {

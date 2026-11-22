@@ -118,3 +118,20 @@ binaries, scripts or settings from third-party installers as language assets.
 - 2026-11-08 claude: owner order 2026-11-08: claude takes critical bugs, performance, RP and the Russian translations.
 - 2026-11-11 claude (audit, folded in): the launcher takes a cut-off download for a whole one. `ce/src/launcher_main.cc:451` sets `ok = total > 0`; the Content-Length read at line 433 is never compared. `rpu_russian.dat` comes from the mirror as a bare file, so no unpack step catches a stump, and the next run keeps it (`kept the existing`, line 990). Fix here: a download succeeds only when the length is unknown or equals the bytes received; one case in `launcher_routes_test`.
 - 2026-11-12 claude: the audit find above is fixed (#473): a download succeeds only when the server named no length or every byte came, and a failed one removes its stump. Checked: ctest 27/27 (a case in `launcher_routes_test`); the launcher against a local server that names 5 MB and sends 2: "the download was cut short", nothing installed, no work folder left. The translations themselves still wait for step 2 (the owner's archives or a mirror).
+
+- 2026-11-22 gpt: added independent text and voice switching, including
+  rollback across RP changes and reversible handling of a manually installed
+  BGforge sound pack. Voice compatibility for RP is checked against the
+  tested `rpu.dat` from v2.4.34. Windows Release CTest 33/33 passed. A local
+  HTTP run installed the exact 1C and Levy voice packages and exercised
+  independent changes and a return to original audio. Four silent in-game
+  proof runs started Sulik speech and lip sync with Fargus text in base and
+  official Russian text in RPU, each with both available voice packs.
+- The two voice packages are ready outside git. The 1C recording matches
+  the BGforge Fallout2_Sound v1.2 track. The Levy DAT contains 706 playable
+  ACM recordings and 629 lip tracks. Twenty unreadable old Hakunin files
+  fall back to the game. The owner accepts Fargus text with another voice;
+  Fargus voice remains unavailable.
+- 2026-11-22 gpt: configured the 1C and LeftCorp voice package metadata for
+  base and RP from the owner's Drive links. Publication and public download
+  verification remain pending; owner visual check follows the merge.

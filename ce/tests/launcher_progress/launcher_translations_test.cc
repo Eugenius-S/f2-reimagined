@@ -20,4 +20,14 @@ int main()
     check(!available("1c", false, "http://example.org/1c", "https://example.org/fonts"));
     check(!validUrl("http://127.0.0.1:80" "@example.org/1c"));
     check(!available("unknown", false, "https://example.org/1", "https://example.org/fonts"));
+    check(voiceTextMayDiffer("fargus", "vanilla-1c"));
+    check(voiceTextMayDiffer("fargus", "vanilla-levy"));
+    check(voiceTextMayDiffer("official", "rp-levy"));
+    check(voiceTextMayDiffer("official", "rp-1c"));
+    check(voiceTextMayDiffer("official", "manual-bgforge"));
+    check(voiceTextMayDiffer("fargus", "manual-bgforge"));
+    check(!voiceTextMayDiffer("1c", "manual-bgforge"));
+    check(!voiceTextMayDiffer("1c", "vanilla-1c"));
+    check(!voiceTextMayDiffer("fargus", "original"));
+    check(!voiceTextMayDiffer("unknown", "vanilla-1c"));
 }

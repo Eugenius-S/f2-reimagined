@@ -1,4 +1,5 @@
 import ctypes
+import os
 from ctypes import wintypes
 import pathlib
 import shutil
@@ -23,6 +24,51 @@ user.EnumWindows.argtypes = (CALLBACK, wintypes.LPARAM)
 
 
 class TestUi(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get("F2R_VOICE_KNOWN_DAT"), "verified BGforge DAT required")
+    def test_manual_voice_visible_and_original_disables_it(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            for name in ("master.dat", "critter.dat"):
+                (root / name).write_bytes(b"fixture")
+            (root / "fallout2.cfg").write_bytes(b"[system]\r\nlanguage=english\r\n")
+            shutil.copyfile(pathlib.Path(EXE).with_name("launcher_routes_tests.exe"), root / "fallout2-ce.exe")
+            mods = root / "mods"
+            mods.mkdir()
+            shutil.copyfile(os.environ["F2R_VOICE_KNOWN_DAT"], mods / "upu_russian_sound.dat")
+            order = mods / "mods_order.txt"
+            order.write_bytes(b"upu_russian_sound.dat\r\nplayer.dat\r\n")
+            proc = subprocess.Popen([EXE, "--ui", "--no-activate", "--game-root", str(root),
+                "--settings-file", str(root / "ui.ini"), "--update-url", "http://127.0.0.1:1",
+                "--release-info-url", "http://127.0.0.1:1"])
+            window = None
+            try:
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline and not window:
+                    found = []
+                    @CALLBACK
+                    def enumerate_window(hwnd, _):
+                        pid = wintypes.DWORD()
+                        user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                        if pid.value == proc.pid and user.GetDlgItem(hwnd, 1017): found.append(hwnd)
+                        return True
+                    user.EnumWindows(enumerate_window, 0)
+                    window = found[0] if found else None
+                    if not window: time.sleep(0.05)
+                self.assertTrue(window)
+                voice = user.GetDlgItem(window, 1017)
+                self.assertEqual(user.SendMessageW(voice, 0x147, 0, 0), 1)  # manual is selected
+                user.SendMessageW(voice, 0x14e, 0, 0)
+                user.SendMessageW(window, 0x111, 1017 | (1 << 16), voice)
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline and b"upu_russian_sound.dat" in order.read_bytes(): time.sleep(0.05)
+                self.assertEqual(order.read_bytes(), b"player.dat\r\n")
+            finally:
+                if window: user.PostMessageW(window, 0x10, 0, 0)
+                try: proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.terminate()
+                    proc.wait(timeout=5)
+
     def test_text_and_voice_choices_and_rp_filter(self):
         for language in ("en", "ru"):
             with self.subTest(language=language), tempfile.TemporaryDirectory() as temp:
@@ -54,14 +100,19 @@ class TestUi(unittest.TestCase):
                     text = user.GetDlgItem(window, 1004)
                     voice = user.GetDlgItem(window, 1017)
                     self.assertEqual(user.SendMessageW(text, 0x146, 0, 0), 5)  # CB_GETCOUNT
-                    self.assertEqual(user.SendMessageW(voice, 0x146, 0, 0), 1)
+                    voice_count = user.SendMessageW(voice, 0x146, 0, 0)
+                    self.assertGreaterEqual(voice_count, 1)
+                    if voice_count > 1:
+                        user.SendMessageW(voice, 0x14e, 1, 0)
+                        user.SendMessageW(window, 0x111, 1017 | (1 << 16), voice)
+                        self.assertIn("voice_choice", settings.read_text().lower())
                     for index in range(5):
                         self.assertEqual(user.SendMessageW(text, 0x14e, index, 0), index)  # CB_SETCURSEL
                         user.SendMessageW(window, 0x111, 1004 | (1 << 16), text)  # CBN_SELCHANGE
                     self.assertIn("levy", settings.read_text().lower())
                     user.SendMessageW(user.GetDlgItem(window, 1005), 0xF5, 0, 0)  # BM_CLICK
                     self.assertEqual(user.SendMessageW(text, 0x146, 0, 0), 2)
-                    self.assertEqual(user.SendMessageW(voice, 0x146, 0, 0), 1)
+                    self.assertGreaterEqual(user.SendMessageW(voice, 0x146, 0, 0), 1)
                     other = root / "other"
                     (other / "mods").mkdir(parents=True)
                     for name in ("master.dat", "critter.dat"):

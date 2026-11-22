@@ -817,6 +817,29 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
             message(FATAL_ERROR "Invalid URL in ${url}")
         endif()
     endforeach()
+    foreach(voice VANILLA_1C RP_1C RP_LEVY VANILLA_FARGUS VANILLA_LEVY)
+        if(voice MATCHES "_1C$")
+            set(voice_url "https://drive.usercontent.google.com/download?id=1xQxdGieQlRRwqt8hdnW99muM2p3IOTLf&export=download&confirm=t")
+            set(voice_hash "042414243fdd3dd55a81916f974d120f0292aee954d77a2d3397b2265e0edd2a")
+            set(voice_size "97331522")
+        elseif(voice MATCHES "_LEVY$")
+            set(voice_url "https://drive.usercontent.google.com/download?id=1PztXbIoQL9LtSGLZyH9K70HGeU7oLshv&export=download&confirm=t")
+            set(voice_hash "62a63b60d5b4884eb390797dccaa4f4f69985286b35696b49436a43d4284839e")
+            set(voice_size "92496256")
+        else()
+            set(voice_url "")
+            set(voice_hash "")
+            set(voice_size "0")
+        endif()
+        set(F2R_VOICE_${voice}_URL "${voice_url}" CACHE STRING "Voice DAT URL")
+        set(F2R_VOICE_${voice}_SHA256 "${voice_hash}" CACHE STRING "Voice DAT SHA256")
+        set(F2R_VOICE_${voice}_SIZE "${voice_size}" CACHE STRING "Voice DAT byte length")
+        if("${F2R_VOICE_${voice}_URL}" MATCHES "[\"\r\n]" OR
+           NOT "${F2R_VOICE_${voice}_SHA256}" MATCHES "^[0-9a-f]*$" OR
+           NOT "${F2R_VOICE_${voice}_SIZE}" MATCHES "^[0-9]+$")
+            message(FATAL_ERROR "Invalid voice package metadata for ${voice}")
+        endif()
+    endforeach()
     configure_file(src/launcher_translation_urls.h.in generated/launcher_translation_urls.h @ONLY)
 
     # The player-facing launcher (task 091): installs the build from the
@@ -837,6 +860,9 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
     endif()
     if(WIN32 AND BUILD_TESTING)
         find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        add_test(NAME launcher_voice_tests COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_voice_test.py"
+            "$<TARGET_FILE:fallout2-ce-3d-launcher>")
         add_test(NAME launcher_text_lock_tests COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_text_lock_test.py"
             "$<TARGET_FILE:fallout2-ce-3d-launcher>")
