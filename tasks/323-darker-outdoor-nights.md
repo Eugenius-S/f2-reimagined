@@ -21,3 +21,11 @@ Acceptance: inspect fixed-camera 12:00, 18:30 and 00:00 with the floor fix integ
 Published with the first integration. The same Arroyo camera confirms a distinct darker 22:00 and 02:00 with readable HUD and visible fire. Daylight, another outdoor map and no-bake controls are recorded below; the complete fixed-hour visual acceptance is still open.
 
 [Native acceptance checks](../runs/325-night-checks/README.md).
+
+Additional exact Windows acceptance on commit 3369ef50b: a locked Arroyo
+camera at tile 25115 showed [12:00, 18:30, and 00:00](../runs/325-night-checks/arroyo-noon-dusk-midnight.jpg).
+The unlit ground averaged 88.10, 77.97, and 50.69 out of 255; the stone
+face averaged 75.29, 64.92, and 42.32. The fire stayed visible. The paired
+still images on the indoor Temple map ARCAVES e0 at tile 29107 were
+pixel-identical at noon and midnight. These same-frame crops do not
+measure every outdoor map or the readability of the full HUD.

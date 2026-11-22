@@ -2,14 +2,14 @@
 id: 320
 title: Apply scene light to the baked floor
 milestone: M1
-status: doing
+status: done
 owner: gpt
 priority: high
 tier: 1
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 The night report is a symptom. The verified defect is that the half-resolution floor light pass called the shader in light mode zero, so it baked white instead of the live ambient and local lights whenever the bake ran.
