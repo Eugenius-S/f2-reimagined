@@ -211,10 +211,26 @@ class InstallTests(LauncherFixture):
         self.assert_failed(code, output, name)
         self.assertEqual((self.root / name).read_bytes(), b"old-launcher")
 
-    def test_locked_version_keeps_old_stamp(self):
+    def test_locked_version_keeps_the_entire_old_build(self):
+        before = {path.relative_to(self.root): path.read_bytes()
+                  for path in self.root.rglob("*") if path.is_file()}
         with read_lock(self.root / "version.txt"):
             code, output = self.run_launcher()
         self.assert_failed(code, output, "version.txt")
+        after = {path.relative_to(self.root): path.read_bytes()
+                 for path in self.root.rglob("*") if path.is_file()}
+        changed = sorted(str(path) for path in before.keys() | after.keys()
+                         if before.get(path) != after.get(path))
+        self.assertEqual(changed, [])
+        self.assertFalse((self.root / "f2reimagined-backups").exists())
+
+    def test_an_unstamped_manual_install_can_still_update(self):
+        (self.root / "version.txt").unlink()
+        code, output = self.run_launcher()
+        self.assertEqual(code, 0, output)
+        self.assertEqual((self.root / "version.txt").read_bytes(), b"new-build")
+        self.assertEqual((self.root / REQUIRED[0]).read_bytes(), b"new-build")
+        self.assertEqual((self.root / "fallout2.cfg").read_bytes(), b"old-build")
 
 
 if __name__ == "__main__":

@@ -72,6 +72,8 @@ inline constexpr Entry kTable[] = {
     { "the update could not be installed (see the lines above); the build version was not changed",
         "обновление не установлено (см. строки выше); версия сборки не изменена" },
     { "  version.txt: write failed", "  version.txt: не удалось записать версию" },
+    { "version.txt cannot be replaced; no game files were changed",
+        "Не удалось подготовить замену version.txt. Файлы игры не изменены." },
     { "the downloaded package is damaged (the game is not in it); try the install again",
         "скачанный пакет повреждён (игры в нём нет); повторите установку" },
     { "could not save the current build before updating; nothing was changed",
