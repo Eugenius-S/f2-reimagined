@@ -18,6 +18,11 @@ class OwnerScreenshotRoutingTest(unittest.TestCase):
         self.assertIsNotNone(route)
         self.assertLess(route.start(), shared.index("_GNW_check_menu_bars(v3)"))
 
+    def test_held_f12_does_not_create_new_requests(self):
+        source = (SOURCE / "input.cc").read_text(encoding="utf-8")
+        self.assertIn("e.key.repeat && (rawKey == SDL_SCANCODE_F12", source)
+        self.assertIn("key == SDL_SCANCODE_F12 || owner_shot::suppressKeyRepeat(key)", source)
+
     def test_modal_loops_do_not_have_separate_legacy_f12_paths(self):
         for name in ("automap", "options", "pipboy", "preferences"):
             with self.subTest(menu=name):

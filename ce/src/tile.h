@@ -44,8 +44,9 @@ void tileDisable();
 void tileEnable();
 void tileWindowRefreshRect(Rect* rect, MapElevation elevation);
 void tileWindowRefresh();
+int tileSetCenter(int tile, int flags);
 // A boundary alignment can redraw the committed center and still return -1.
-int tileSetCenter(int tile, int flags, bool* redrawn = nullptr);
+int tileSetCenter(int tile, int flags, bool* redrawn);
 void tile_toggle_roof(bool refresh);
 int tileRoofIsVisible();
 int tileToScreenXY(int tile, int* x, int* y);
