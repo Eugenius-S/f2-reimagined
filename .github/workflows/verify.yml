@@ -147,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        suite: [ground_pick, preview_policy, sprite_card, game_view, map_clip, embedded_fonts, fixed_screen_options, snapshot_rows, settings_3d, sun, text_layer]
+        suite: [ground_pick, preview_policy, sprite_card, game_view, map_clip, embedded_fonts, fixed_screen_options, snapshot_rows, scene_build, settings_3d, sun, text_layer]
     steps:
       - uses: actions/checkout@v4
         # runs/ holds only evidence: skip its hundreds of megabytes.

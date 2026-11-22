@@ -1140,6 +1140,12 @@ int gSceneFloorReceiverMaskLocation = -1;
 
 bool createSceneShader(std::string* error)
 {
+    // 273: the waiting plane creates the program before any floor loads; a
+    // second call would leak this one.
+    if (gSceneProgram != 0) {
+        if (error != nullptr) error->clear();
+        return true;
+    }
     unsigned int vertexShader = compileShader(0x8B31 /* GL_VERTEX_SHADER */, kSceneVertexShader);
     unsigned int fragmentShader = compileShader(0x8B30 /* GL_FRAGMENT_SHADER */, kSceneFragmentShader);
     if (vertexShader == 0 || fragmentShader == 0) {

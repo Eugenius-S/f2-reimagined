@@ -80,6 +80,10 @@ extern MapHeader gMapHeader;
 extern TileData* _square[ELEVATION_COUNT];
 extern int gIsoWindow;
 
+// 273: repaint the whole map into its window buffer; the tick leaves it
+// empty while the 3D view presents.
+void mapRenderWholeIsoWindow();
+
 int isoInit();
 void isoReset();
 void isoExit();

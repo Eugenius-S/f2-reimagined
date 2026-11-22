@@ -1645,6 +1645,15 @@ static void isoWindowRefreshRect(Rect* rect)
     windowRefreshRect(gIsoWindow, rect);
 }
 
+// 273: the whole map painted back into its window buffer, for the scene's
+// waiting state to show while a map's scene cache builds (the tick leaves
+// the buffer empty while the 3D view presents).
+void mapRenderWholeIsoWindow()
+{
+    if (gIsoWindow == -1) return;
+    _map_scroll_refresh(&gIsoWindowRect);
+}
+
 // 0x483EE4 map_scroll_refresh_game
 static void isoWindowRefreshRectGame(Rect* rect)
 {

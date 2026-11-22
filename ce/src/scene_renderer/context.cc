@@ -6,6 +6,7 @@
 
 #include "gl_api.h"
 #include "post.h"
+#include "build_wait.h"
 #include "scene_internal.h"
 
 namespace fallout {
@@ -299,6 +300,7 @@ void shutdown()
         destroyStaticObjects();
         destroyStaticHero();
         destroyStaticWalls();
+        destroyWaitPlane();
         destroyStaticFloor();
         if (gTexture != 0) {
             glDeleteTextures(1, &gTexture);
