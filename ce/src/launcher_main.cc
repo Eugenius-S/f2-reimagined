@@ -55,6 +55,7 @@ constexpr const char* kRpuLatestUrl =
 constexpr const char* kGameExe = "fallout2-ce.exe";
 constexpr const char* kCfg = "fallout2.cfg";
 constexpr const char* kVersionTxt = "version.txt";
+constexpr const char* kLauncherHashTxt = "launcher-sha256.txt";
 constexpr const char* kExporterExe = "scene-exporter.exe";
 // The launcher as the player sees it in the game folder; the release zip carries it under kZipLauncher.
 constexpr const char* kRootLauncher = "Fallout 2 Reimagined.exe";
@@ -721,25 +722,159 @@ bool copyIfPresent(const fs::path& stage, const char* name, const fs::path& dest
     return true;
 }
 
-// A running exe cannot be overwritten but can be renamed: the old copy moves aside
-// (deleted on the next run) and the new one takes its name.
+// A loaded image can normally be renamed, but an outside handle that denies
+// sharing deletes blocks it. Refuse that case before mutating the game.
+bool canReplaceLauncher(const fs::path& target)
+{
+    HANDLE file = CreateFileW(target.c_str(), DELETE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        const DWORD error = GetLastError();
+        if (error == ERROR_FILE_NOT_FOUND) return true;
+        logf("  %s: cannot replace (%lu); close other launcher instances and retry",
+            wideToUtf8(target.filename().wstring()).c_str(), error);
+        return false;
+    }
+    BY_HANDLE_FILE_INFORMATION info = {};
+    bool regular = GetFileInformationByHandle(file, &info)
+        && !(info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT));
+    CloseHandle(file);
+    if (!regular) logf("  %s: not an ordinary file; refusing to replace it", kRootLauncher);
+    return regular;
+}
+
+// Reserve an unused name on the same volume. Never claim a pre-existing .old.
+fs::path reserveLauncherFile(const fs::path& root, const wchar_t* prefix)
+{
+    wchar_t path[MAX_PATH] = {};
+    if (GetTempFileNameW(root.c_str(), prefix, 0, path) == 0) return {};
+    return path;
+}
+
+// A mapped image may be unlinked only after it exits. Pass exactly the already
+// opened file and a ready event to a bounded helper. It can never delete a
+// later file at the same path, and never inherits the GUI worker's stdout.
+bool deferLauncherRemoval(HANDLE file)
+{
+    FILE_DISPOSITION_INFO remove = {TRUE};
+    if (SetFileInformationByHandle(file, FileDispositionInfo, &remove, sizeof(remove))) return true;
+    HANDLE inherited = nullptr;
+    if (!DuplicateHandle(GetCurrentProcess(), file, GetCurrentProcess(), &inherited, 0, TRUE, DUPLICATE_SAME_ACCESS))
+        return false;
+    SECURITY_ATTRIBUTES security = {sizeof(security), nullptr, TRUE};
+    HANDLE ready = CreateEventW(&security, TRUE, FALSE, nullptr);
+    HANDLE handles[] = {inherited, ready};
+    SIZE_T bytes = 0;
+    InitializeProcThreadAttributeList(nullptr, 1, 0, &bytes);
+    std::vector<unsigned char> storage(bytes);
+    STARTUPINFOEXW startup = {};
+    startup.StartupInfo.cb = sizeof(startup);
+    startup.lpAttributeList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(storage.data());
+    bool initialized = ready != nullptr && bytes != 0 && InitializeProcThreadAttributeList(startup.lpAttributeList, 1, 0, &bytes);
+    bool started = false;
+    PROCESS_INFORMATION process = {};
+    if (initialized && UpdateProcThreadAttribute(startup.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+            handles, sizeof(handles), nullptr, nullptr)) {
+        wchar_t system[MAX_PATH] = {};
+        UINT length = GetSystemDirectoryW(system, MAX_PATH);
+        fs::path helper = fs::path(system) / L"WindowsPowerShell" / L"v1.0" / L"powershell.exe";
+        // Only constant code and numeric inherited handles enter the command.
+        // Replace Q after argument parsing to quote the P/Invoke DLL names.
+        std::wstring command =
+            LR"PS(powershell.exe -NoLogo -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop';)PS"
+            LR"PS($src='using System; using System.Diagnostics; using System.Runtime.InteropServices; using System.Threading;)PS"
+            LR"PS(public static class F2RDelete {)PS"
+            LR"PS([DllImport(Qkernel32.dllQ)] static extern bool SetEvent(IntPtr e);)PS"
+            LR"PS([DllImport(Qkernel32.dllQ)] static extern bool SetFileInformationByHandle(IntPtr f,int c,ref byte d,int n);)PS"
+            LR"PS(public static void Run(long f,long e) {)PS"
+            LR"PS(if(!SetEvent(new IntPtr(e))) return; var timer=Stopwatch.StartNew(); byte delete=1;)PS"
+            LR"PS(while(timer.Elapsed.TotalMinutes<10) {)PS"
+            LR"PS(if(SetFileInformationByHandle(new IntPtr(f),4,ref delete,1)) return; Thread.Sleep(150);)PS"
+            LR"PS(} } }';Add-Type -TypeDefinition ($src.Replace('Q',[string][char]34));)PS";
+        command += L"[F2RDelete]::Run(" + std::to_wstring(reinterpret_cast<uintptr_t>(inherited)) + L","
+            + std::to_wstring(reinterpret_cast<uintptr_t>(ready)) + L")\"";
+        started = length > 0 && length < MAX_PATH && CreateProcessW(helper.c_str(), command.data(), nullptr, nullptr,
+            TRUE, CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT, nullptr, system, &startup.StartupInfo, &process);
+    }
+    if (initialized) DeleteProcThreadAttributeList(startup.lpAttributeList);
+    bool acknowledged = false;
+    if (started) {
+        HANDLE wait[] = {ready, process.hProcess};
+        acknowledged = WaitForMultipleObjects(2, wait, FALSE, 10000) == WAIT_OBJECT_0;
+        if (!acknowledged) TerminateProcess(process.hProcess, 1);
+        CloseHandle(process.hThread);
+        CloseHandle(process.hProcess);
+    }
+    if (ready != nullptr) CloseHandle(ready);
+    CloseHandle(inherited);
+    return acknowledged;
+}
+
+HANDLE openOwnedLauncher(const fs::path& path)
+{
+    HANDLE file = CreateFileW(path.c_str(), DELETE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return file;
+    BY_HANDLE_FILE_INFORMATION info = {};
+    if (!GetFileInformationByHandle(file, &info)
+        || (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))) {
+        CloseHandle(file);
+        SetLastError(ERROR_ACCESS_DENIED);
+        return INVALID_HANDLE_VALUE;
+    }
+    return file;
+}
+
+bool renameOpenedLauncher(HANDLE file, const fs::path& destination, BOOL replace)
+{
+    const DWORD nameBytes = static_cast<DWORD>(destination.native().size() * sizeof(wchar_t));
+    std::vector<unsigned char> storage(sizeof(FILE_RENAME_INFO) + nameBytes);
+    auto* rename = reinterpret_cast<FILE_RENAME_INFO*>(storage.data());
+    rename->ReplaceIfExists = replace != FALSE;
+    rename->FileNameLength = nameBytes;
+    std::memcpy(rename->FileName, destination.c_str(), nameBytes);
+    return SetFileInformationByHandle(file, FileRenameInfo, rename, static_cast<DWORD>(storage.size()));
+}
+
+// Copy in full next to the destination before changing its name. Never copy
+// into the running image, including after a failed move-aside.
 bool copyLauncher(const fs::path& source, const fs::path& target)
 {
     std::error_code error;
-    fs::path aside = target;
-    aside += ".old";
-    fs::remove(aside, error);
+    const fs::path temporary = reserveLauncherFile(target.parent_path(), L"f2s");
+    if (temporary.empty()) {
+        logf("  %s: cannot stage update (%lu)", kRootLauncher, GetLastError());
+        return false;
+    }
+    fs::copy_file(source, temporary, fs::copy_options::overwrite_existing, error);
+    fs::path aside;
+    HANDLE oldFile = INVALID_HANDLE_VALUE;
     bool moved = false;
-    if (fs::exists(target, error)) {
-        fs::rename(target, aside, error);
-        moved = !error;
+    if (!error) {
+        oldFile = openOwnedLauncher(target);
+        const DWORD openError = GetLastError();
+        if (oldFile == INVALID_HANDLE_VALUE && openError != ERROR_FILE_NOT_FOUND)
+            error = std::error_code(openError, std::system_category());
+        if (oldFile != INVALID_HANDLE_VALUE) {
+            aside = reserveLauncherFile(target.parent_path(), L"f2r");
+            if (aside.empty() || !renameOpenedLauncher(oldFile, aside, TRUE))
+                error = std::error_code(GetLastError(), std::system_category());
+            else moved = true;
+        }
     }
-    fs::copy_file(source, target, fs::copy_options::overwrite_existing, error);
-    if (error) logf("  %s: copy failed (%s)", kRootLauncher, error.message().c_str());
-    if (error && moved) {
+    if (!error && !MoveFileExW(temporary.c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH))
+        error = std::error_code(GetLastError(), std::system_category());
+    if (error) {
+        logf("  %s: staged replacement failed (%s)", kRootLauncher, error.message().c_str());
+        if (moved && !renameOpenedLauncher(oldFile, target, FALSE))
+            logf("  %s: could not restore the previous executable; it remains at %s", kRootLauncher, wideToUtf8(aside.filename().wstring()).c_str());
         std::error_code ignored;
-        fs::rename(aside, target, ignored);
+        fs::remove(temporary, ignored);
+        if (!moved && !aside.empty()) fs::remove(aside, ignored);
+    } else if (moved && !deferLauncherRemoval(oldFile)) {
+        logf("  previous launcher cleanup could not be scheduled; it remains at %s", wideToUtf8(aside.filename().wstring()).c_str());
     }
+    if (oldFile != INVALID_HANDLE_VALUE) CloseHandle(oldFile);
     return !error;
 }
 
@@ -1618,6 +1753,30 @@ bool removeRussianTranslation(const fs::path& root)
 // Gives the game back as it was before the mod.  Saves (data/), the original game files
 // and fallout2.cfg are never touched.  The folder f2reimagined-backups only holds older
 // mod builds, so it goes with the mod.
+bool removeLauncherSettings(const fs::path& root)
+{
+    wchar_t appData[32768] = {};
+    DWORD size = GetEnvironmentVariableW(L"APPDATA", appData, static_cast<DWORD>(std::size(appData)));
+    if (size == 0 || size >= std::size(appData)) return true;
+    const fs::path settings = launcher_uninstall::settingsDirectory(fs::path(appData)) / "launcher.ini";
+    wchar_t configuredRoot[32768] = {};
+    GetPrivateProfileStringW(L"launcher", L"game_root", L"", configuredRoot,
+        static_cast<DWORD>(std::size(configuredRoot)), settings.c_str());
+    if (configuredRoot[0] != L'\0' && !launcher_uninstall::samePath(root, fs::path(configuredRoot))) {
+        log("  preserving launcher settings because they point to a different game folder");
+        return true;
+    }
+    bool removed = false;
+    std::error_code error;
+    if (!launcher_uninstall::removeLauncherSettings(fs::path(appData), &removed, &error)) {
+        logf("  cannot remove launcher settings at %s (%s)",
+            wideToUtf8(launcher_uninstall::settingsDirectory(fs::path(appData)).wstring()).c_str(), error.message().c_str());
+        return false;
+    }
+    if (removed) log("  launcher settings removed");
+    return true;
+}
+
 bool uninstallMod(const fs::path& root)
 {
     if (!removeRestorationProject(root)) return false;
@@ -1647,37 +1806,42 @@ bool uninstallMod(const fs::path& root)
     fs::remove(root / "user-assets", error); // only when nothing of the player's is left in it
     if (!removeRussianTranslation(root)) ok = false;
 
-    // The launcher itself, last: if it is the running program, it moves aside and a helper deletes it after we close.
-    fs::path launcher = root / kRootLauncher;
-    if (fs::exists(launcher, error)) {
-        fs::remove(launcher, error);
-        if (!error) {
+    // The launcher itself, last. Never assume that an ordinary .old file belongs to us.
+    const fs::path launcher = root / kRootLauncher;
+    bool deferredLauncherRemoval = false;
+    HANDLE file = openOwnedLauncher(launcher);
+    if (file == INVALID_HANDLE_VALUE) {
+        const DWORD openError = GetLastError();
+        if (openError != ERROR_FILE_NOT_FOUND) {
+            logf("  cannot open %s for removal (%lu); close other instances and retry", kRootLauncher, openError);
+            ok = false;
+        }
+    } else {
+        FILE_DISPOSITION_INFO remove = {TRUE};
+        if (SetFileInformationByHandle(file, FileDispositionInfo, &remove, sizeof(remove))) {
             logf("  removed %s", kRootLauncher);
         } else {
-            fs::path aside = launcher;
-            aside += ".old";
-            fs::remove(aside, error);
-            fs::rename(launcher, aside, error);
-            if (error) {
-                logf("  cannot remove %s (%s)", kRootLauncher, error.message().c_str());
+            const fs::path aside = reserveLauncherFile(root, L"f2r");
+            if (aside.empty() || !renameOpenedLauncher(file, aside, TRUE)) {
+                logf("  cannot move %s aside for removal (%lu)", kRootLauncher, GetLastError());
+                if (!aside.empty()) fs::remove(aside, error);
+                ok = false;
+            } else if (!deferLauncherRemoval(file)) {
+                logf("  could not start launcher cleanup");
+                if (!renameOpenedLauncher(file, launcher, FALSE))
+                    logf("  the previous launcher remains at %s", wideToUtf8(aside.filename().wstring()).c_str());
                 ok = false;
             } else {
-                // cmd repeats the delete until the running copy is closed; it stops by itself at the latest after ten minutes.
-                std::wstring command = L"cmd.exe /c \"for /l %i in (1,1,600) do @(del /f /q \"" + aside.wstring()
-                    + L"\" 2>nul & if not exist \"" + aside.wstring() + L"\" exit & ping -n 2 127.0.0.1 >nul)\"";
-                STARTUPINFOW startup = {};
-                startup.cb = sizeof(startup);
-                PROCESS_INFORMATION process = {};
-                if (CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW | DETACHED_PROCESS,
-                        nullptr, root.c_str(), &startup, &process)) {
-                    CloseHandle(process.hThread);
-                    CloseHandle(process.hProcess);
-                }
-                logf("  %s: removed (the last file goes when this window closes)", kRootLauncher);
+                deferredLauncherRemoval = true;
+                logf("  %s: removal scheduled for after it closes", kRootLauncher);
             }
         }
+        CloseHandle(file);
     }
-    log(ok ? "the mod is removed; your saves and the original Fallout 2 files were not touched"
+    if (ok && !removeLauncherSettings(root)) ok = false;
+    log(ok ? (deferredLauncherRemoval
+            ? "mod files removed; launcher removal is pending until the launcher closes"
+            : "the mod is removed; your saves and the original Fallout 2 files were not touched")
            : "the mod is only partly removed; see the lines above");
     return ok;
 }
@@ -1744,14 +1908,34 @@ std::string shortNotes(const std::string& body)
     return result;
 }
 
+bool validSha256(const std::string& value)
+{
+    return value.size() == 64 && std::all_of(value.begin(), value.end(), [](unsigned char ch) {
+        return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
+    });
+}
+
+bool fetchLauncherHash(const std::string& updateBase, std::string* hash)
+{
+    std::string body;
+    std::string error;
+    hash->clear();
+    if (!fetchRoutes(releaseRoutes(updateBase, kLauncherHashTxt), &body, nullptr, &error)) return false;
+    body = trim(body);
+    if (!validSha256(body)) return false;
+    *hash = body;
+    return true;
+}
+
 bool fetchReleaseInfo(const std::string& updateBase, const std::string& releaseInfoUrl,
-    std::string* version, std::string* notes, std::string* routeError)
+    std::string* version, std::string* notes, std::string* launcherHash, std::string* routeError)
 {
     const char* error = nullptr;
     std::string versionBody;
     if (!fetchRoutes(releaseRoutes(updateBase, kVersionTxt), &versionBody, nullptr, routeError)) return false;
     *version = trim(versionBody);
     notes->clear();
+    fetchLauncherHash(updateBase, launcherHash);
     if (!releaseInfoUrl.empty()) {
         std::string response;
         if (httpGet(releaseInfoUrl, &response, &error)) {
@@ -1876,14 +2060,20 @@ int runConsole(Options options)
     if (options.checkRelease) {
         std::string version;
         std::string notes;
+        std::string launcherHash;
         std::string routeError;
-        if (!fetchReleaseInfo(options.updateBase, options.releaseInfoUrl, &version, &notes, &routeError)) {
+        if (!fetchReleaseInfo(options.updateBase, options.releaseInfoUrl, &version, &notes, &launcherHash, &routeError)) {
             logf("RELEASE_ERROR:%s", routeError.c_str());
             log("release check failed: GitHub does not answer");
             return 1;
         }
         logf("RELEASE_VERSION:%s", version.c_str());
         logf("RELEASE_NOTES:%s", notes.c_str());
+        logf("RELEASE_LAUNCHER_SHA256:%s", launcherHash.c_str());
+        fs::path checkRoot = options.gameRoot.empty() ? fs::path(utf8ToWide(ownGameRoot())) : fs::path(utf8ToWide(options.gameRoot));
+        std::string installedLauncherHash;
+        if (!checkRoot.empty()) sha256File(checkRoot / kRootLauncher, &installedLauncherHash);
+        logf("RELEASE_INSTALLED_LAUNCHER_SHA256:%s", installedLauncherHash.c_str());
         return 0;
     }
 
@@ -1905,12 +2095,6 @@ int runConsole(Options options)
         std::error_code error;
         root = fs::canonical(root, error);
         if (error) { log("cannot resolve the game folder"); return 1; }
-    }
-    {
-        std::error_code ignored;
-        fs::path old = root / kRootLauncher;
-        old += ".old";
-        fs::remove(old, ignored);
     }
 
     if (options.removeRp) return removeRestorationProject(root, true) ? 0 : 1;
@@ -1946,6 +2130,12 @@ int runConsole(Options options)
         remoteVersion = trim(remoteVersion);
         logf("release build: %s", remoteVersion.c_str());
     }
+    std::string remoteLauncherHash;
+    fetchLauncherHash(options.updateBase, &remoteLauncherHash);
+    std::string installedLauncherHash;
+    bool installedLauncherReadable = sha256File(root / kRootLauncher, &installedLauncherHash);
+    bool launcherNeedsUpdate = !remoteLauncherHash.empty()
+        && (!installedLauncherReadable || installedLauncherHash != remoteLauncherHash);
 
     if (remoteVersion.empty()) {
         if (installedVersion.empty() && !installedGamePresent) {
@@ -1960,7 +2150,7 @@ int runConsole(Options options)
     // The picture itself, not its folder: an install over an older build left the folders empty.
     std::error_code artError;
     bool wideArtMissing = fs::file_size(root / launcher_uninstall::kWideMenuArt, artError) == 0 || artError;
-    if (!remoteVersion.empty() && (remoteVersion != installedVersion || wideArtMissing)) {
+    if (!remoteVersion.empty() && (remoteVersion != installedVersion || wideArtMissing || launcherNeedsUpdate)) {
         // --- download and unpack ---
         if (installedVersion.empty()) logf("installing: none -> %s", remoteVersion.c_str());
         else logf("updating: %s -> %s", installedVersion.c_str(), remoteVersion.c_str());
@@ -1985,7 +2175,7 @@ int runConsole(Options options)
             fs::remove_all(work, error);
             die("the downloaded file could not be unpacked; try the install again");
         }
-        for (const char* name : { kGameExe, "ce.dat", kExporterExe, kVersionTxt }) {
+        for (const char* name : { kGameExe, "ce.dat", kExporterExe, kVersionTxt, kZipLauncher }) {
             if (!fs::is_regular_file(stage / name, error)) {
                 fs::remove_all(work, error);
                 die("the downloaded package is damaged (required file %s is missing); nothing was changed", name);
@@ -2005,6 +2195,26 @@ int runConsole(Options options)
             die("the downloaded package has an invalid version.txt; nothing was changed");
         }
         versionFile.close();
+        std::string packageLauncherHash;
+        fs::path packageHashPath = stage / kLauncherHashTxt;
+        if (fs::exists(packageHashPath, error)) {
+            std::ifstream hashFile(packageHashPath, std::ios::binary);
+            std::string packagedHash((std::istreambuf_iterator<char>(hashFile)), std::istreambuf_iterator<char>());
+            packagedHash = trim(packagedHash);
+            if (!validSha256(packagedHash) || !sha256File(stage / kZipLauncher, &packageLauncherHash)
+                || packageLauncherHash != packagedHash || (!remoteLauncherHash.empty() && remoteLauncherHash != packagedHash)) {
+                fs::remove_all(work, error);
+                die("the downloaded launcher hash metadata is invalid or does not match the official release; nothing was changed");
+            }
+        } else if (!remoteLauncherHash.empty()) {
+            fs::remove_all(work, error);
+            die("the downloaded package is missing its official launcher hash metadata; nothing was changed");
+        }
+
+        if (!canReplaceLauncher(root / kRootLauncher)) {
+            fs::remove_all(work, error);
+            die("the launcher could not be replaced; nothing was changed");
+        }
 
         std::string keptBackup;
         // A refill of the wide art at the same version is no update: the older build stays the one to roll back to.

@@ -39,13 +39,22 @@ if ($runNumber -le $publishedNumber) {
     return
 }
 
+$launcherPath = Join-Path (Get-Location) 'staging/fallout2-ce-3d-launcher.exe'
+if (-not (Test-Path -LiteralPath $launcherPath -PathType Leaf)) { throw 'The launcher is missing from the release staging folder' }
+$launcherHash = (Get-FileHash -LiteralPath $launcherPath -Algorithm SHA256).Hash.ToLowerInvariant()
+Set-Content -LiteralPath (Join-Path (Get-Location) 'staging/launcher-sha256.txt') -Value $launcherHash -Encoding ascii -NoNewline
 Compress-Archive -Path staging/* -DestinationPath fallout2-ce-3d-win64.zip -Force
-# The launcher unpacks these six by name; check before uploading.
+# The launcher unpacks these files by name; check before uploading.
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead((Join-Path (Get-Location) 'fallout2-ce-3d-win64.zip'))
 try {
     $names = $zip.Entries | ForEach-Object { $_.FullName } | Where-Object { $_ }
-    $want = 'fallout2-ce.exe', 'fallout2-ce-3d-launcher.exe', 'ce.dat', 'fallout2.cfg', 'version.txt', 'scene-exporter.exe'
+    $zipHashEntry = $zip.GetEntry('launcher-sha256.txt')
+    if ($null -eq $zipHashEntry) { throw 'the release zip is missing launcher-sha256.txt' }
+    $reader = New-Object IO.StreamReader($zipHashEntry.Open())
+    try { $zipLauncherHash = $reader.ReadToEnd() } finally { $reader.Dispose() }
+    if ($zipLauncherHash -ne $launcherHash) { throw 'the ZIP launcher hash differs from the release marker' }
+    $want = 'fallout2-ce.exe', 'fallout2-ce-3d-launcher.exe', 'ce.dat', 'fallout2.cfg', 'version.txt', 'scene-exporter.exe', 'launcher-sha256.txt'
     $missing = @($want | Where-Object { $_ -notin $names })
     "zip contains: $($names -join ', ')"
     if ($missing.Count -gt 0) { throw "the release zip is missing: $($missing -join ', ')" }
@@ -71,7 +80,7 @@ if ($releaseTags -notcontains 'latest') {
 }
 # Keep the download name and the ZIP's in-place-update launcher name unchanged.
 Copy-Item staging/fallout2-ce-3d-launcher.exe Install-F2R.exe
-gh release upload latest fallout2-ce-3d-win64.zip staging/version.txt Install-F2R.exe --repo $repo --clobber
+gh release upload latest fallout2-ce-3d-win64.zip staging/version.txt staging/launcher-sha256.txt Install-F2R.exe --repo $repo --clobber
 if ($LASTEXITCODE -ne 0) { throw 'Cannot upload the latest release assets' }
 if ($assets.name -contains 'fallout2-ce-3d-launcher.exe') {
     gh release delete-asset latest fallout2-ce-3d-launcher.exe --repo $repo --yes
@@ -85,7 +94,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Cannot update the latest release notes' }
 if ((Get-Item fallout2-ce-3d-win64.zip).Length -gt 90MB) { throw 'the release zip is too big for the dist mirror' }
 $dist = Join-Path $env:RUNNER_TEMP 'dist'
 New-Item -ItemType Directory $dist | Out-Null
-Copy-Item fallout2-ce-3d-win64.zip, staging/version.txt $dist
+Copy-Item fallout2-ce-3d-win64.zip, staging/version.txt, staging/launcher-sha256.txt $dist
 $rpu = Join-Path $env:RUNNER_TEMP 'rpu'
 New-Item -ItemType Directory $rpu | Out-Null
 $rpuRepo = 'BGforgeNet/Fallout2_Restoration_Project'
