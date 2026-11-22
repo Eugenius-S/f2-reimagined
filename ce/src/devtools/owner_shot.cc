@@ -1,4 +1,6 @@
 #include "owner_shot.h"
+#include "mark_repeat_guard.h"
+#include "mark_rect.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -148,6 +150,7 @@ bool gMarkDragPixelVerified = false;
 // the marked PNG and the JSON with the regions, Esc cancels.
 bool gMarkMode = false;
 bool gMarkF12Released = false;
+MarkRepeatGuard<SDL_NUM_SCANCODES> gMarkRepeatGuard;
 bool gMarkRestoreScrolling = false;
 std::vector<unsigned char> gMarkClean; // top-down RGBA of the frozen frame
 int gMarkWidth = 0;
@@ -652,8 +655,10 @@ std::string buildRegionsJson()
 
         if (!firstRegion) out += ",\n";
         firstRegion = false;
-        out += "    {\"rect\":[" + std::to_string(rx0) + "," + std::to_string(ry0) + ","
-            + std::to_string(rx1 - rx0) + "," + std::to_string(ry1 - ry0) + "],\n";
+        const DrawableMarkRect pixel = markDrawableRect(rx0, ry0, rx1, ry1, gMarkLogicalWidth, gMarkLogicalHeight,
+            gMarkViewportX, gMarkViewportY, gMarkViewportWidth, gMarkViewportHeight, gMarkWidth, gMarkHeight);
+        out += "    {\"rect\":[" + std::to_string(pixel.x0) + "," + std::to_string(pixel.y0) + ","
+            + std::to_string(pixel.x1 - pixel.x0) + "," + std::to_string(pixel.y1 - pixel.y0) + "],\n";
         out += "     \"tiles\":[";
         for (size_t i = 0; i < tiles.size(); i++) {
             out += std::to_string(tiles[i]);
@@ -689,14 +694,10 @@ void drawMarkOnPixels(std::vector<unsigned char>& pixels, int width, int height)
         pixel[3] = 255;
     };
     for (const MarkRect& rect : gMarkRects) {
-        int x0 = std::min(rect.x0, rect.x1), y0 = std::min(rect.y0, rect.y1);
-        int x1 = std::max(rect.x0, rect.x1), y1 = std::max(rect.y0, rect.y1);
-        x0 = gMarkViewportX + x0 * gMarkViewportWidth / gMarkLogicalWidth;
-        x1 = gMarkViewportX + x1 * gMarkViewportWidth / gMarkLogicalWidth;
-        y0 = gMarkViewportY + y0 * gMarkViewportHeight / gMarkLogicalHeight;
-        y1 = gMarkViewportY + y1 * gMarkViewportHeight / gMarkLogicalHeight;
-        x0 = std::max(0, x0); y0 = std::max(0, y0);
-        x1 = std::min(width - 1, x1); y1 = std::min(height - 1, y1);
+        const DrawableMarkRect pixel = markDrawableRect(rect.x0, rect.y0, rect.x1, rect.y1,
+            gMarkLogicalWidth, gMarkLogicalHeight, gMarkViewportX, gMarkViewportY,
+            gMarkViewportWidth, gMarkViewportHeight, width, height);
+        const int x0 = pixel.x0, y0 = pixel.y0, x1 = pixel.x1, y1 = pixel.y1;
         if (x1 < x0 || y1 < y0) continue;
         for (int t = 0; t < 2; t++) {
             for (int x = x0 + t; x <= x1 - t; x++) {
@@ -859,6 +860,7 @@ void enterMarkMode()
     gMarkRects.clear();
     gMarkDragging = false;
     gMarkF12Released = gPressedPhysicalKeys[SDL_SCANCODE_F12] == 0;
+    gMarkRepeatGuard.begin(gPressedPhysicalKeys);
     gMarkRestoreScrolling = gmouse_scrolling_is_enabled();
     _gmouse_disable_scrolling();
     // No monitor message here: the game floats the last monitor message over
@@ -1004,6 +1006,17 @@ bool handleKey(int key)
 void observeKeyRelease(int scancode)
 {
     if (gMarkMode && scancode == SDL_SCANCODE_F12) gMarkF12Released = true;
+    gMarkRepeatGuard.release(scancode);
+}
+
+void observeKeyPress(int scancode)
+{
+    if (gMarkMode) gMarkRepeatGuard.press(scancode);
+}
+
+bool suppressKeyRepeat(int scancode)
+{
+    return gMarkRepeatGuard.blocks(scancode, gMarkMode);
 }
 
 void draw(unsigned char* surface, int width, int height, int pitch)
@@ -1030,10 +1043,6 @@ void draw(unsigned char* surface, int width, int height, int pitch)
     // refreshes, and stay drawn on the bottom panel after the mark ends.
     if (scene_renderer::isActive() && scene::shouldPresent()
         && scene::activeView() == scene::View::Full) {
-        ScopedFont scopedFont(101);
-        fontDrawText(surface + pitch * 8 + 8,
-            scene::menuText("Ctrl+F12 again: save. Esc: cancel", settings.system.language),
-            width - 16, pitch, COLOR_GREEN);
         return;
     }
     for (const MarkRect& rect : gMarkRects) {
@@ -1061,7 +1070,6 @@ void draw(unsigned char* surface, int width, int height, int pitch)
 void drawSceneOverlay()
 {
     if (!gMarkMode || gSdlSurface == nullptr) return;
-    if (gMarkRects.empty() && !gMarkDragging) return;
     const int width = gSdlSurface->w;
     const int height = gSdlSurface->h;
     const auto outlinePatch = [&](const MarkRect& rect) {
@@ -1099,6 +1107,26 @@ void drawSceneOverlay()
     }
     if (gMarkDragging) {
         outlinePatch(gMarkDrag);
+    }
+    if (gSdlSurface->format != nullptr && gSdlSurface->format->palette != nullptr) {
+        ScopedFont font(101);
+        const char* text = scene::menuText("Ctrl+F12 again: save. Esc: cancel", settings.system.language);
+        const int w = std::min(fontGetStringWidth(text), width - 16);
+        const int h = fontGetLineHeight();
+        if (w > 0 && h > 0) {
+            std::vector<unsigned char> indexed(static_cast<size_t>(w) * h, COLOR_FIRST);
+            fontDrawText(indexed.data(), text, w, w, COLOR_GREEN);
+            std::vector<unsigned char> rgba(static_cast<size_t>(w) * h * 4, 0);
+            SDL_Palette* palette = gSdlSurface->format->palette;
+            for (size_t i = 0; i < indexed.size(); ++i) {
+                const unsigned char index = indexed[i];
+                if (index == COLOR_FIRST || index >= palette->ncolors) continue;
+                const SDL_Color& color = palette->colors[index];
+                rgba[i * 4] = color.r; rgba[i * 4 + 1] = color.g;
+                rgba[i * 4 + 2] = color.b; rgba[i * 4 + 3] = 255;
+            }
+            scene_renderer::drawOverlay(rgba.data(), w, h, w * 4, 8, 8, w, h);
+        }
     }
 }
 
@@ -1286,12 +1314,20 @@ void pumpDrag()
 void verifySceneOverlayPresented()
 {
     if (!gMarkDragPending || gMarkDragState < 1 || gMarkDragState > 5) return;
+    MarkRect observed;
+    if (gMarkDragging) observed = gMarkDrag;
+    else if (!gMarkRects.empty()) observed = gMarkRects.back();
+    else {
+        mouseGetPosition(&observed.x0, &observed.y0);
+        observed.x1 = observed.x0 + 1;
+        observed.y1 = observed.y0;
+    }
     int x0 = 0;
     int y0 = 0;
-    if (!scene_renderer::overlayLogicalToWindow(gMarkDragPlanned.x0, gMarkDragPlanned.y0, &x0, &y0)) return;
+    if (!scene_renderer::overlayLogicalToWindow(std::min(observed.x0, observed.x1), std::min(observed.y0, observed.y1), &x0, &y0)) return;
     int x1 = 0;
     int y1 = 0;
-    if (!scene_renderer::overlayLogicalToWindow(gMarkDragPlanned.x1, gMarkDragPlanned.y0, &x1, &y1)) return;
+    if (!scene_renderer::overlayLogicalToWindow(std::max(observed.x0, observed.x1), std::min(observed.y0, observed.y1), &x1, &y1)) return;
     const int stripWidth = x1 - x0 + 1;
     if (stripWidth <= 0) return;
     std::vector<unsigned char> pixels;
@@ -1306,7 +1342,7 @@ void verifySceneOverlayPresented()
         gMarkDragGreenBaseline = green;
         return;
     }
-    if (!gMarkDragPixelVerified && gMarkDragGreenBaseline >= 0
+    if (!gMarkDragPixelVerified && stripWidth >= 16 && gMarkDragGreenBaseline >= 0
         && green - gMarkDragGreenBaseline >= stripWidth / 2) {
         gMarkDragPixelVerified = true;
         printf("owner shot: overlay pixels verified on screen (green %d, baseline %d, strip %d)\n",

@@ -780,7 +780,7 @@ static void renderPresentBody()
             // Read the current hero frame at each scene presentation; nested
             // modal presents yield below and never advance movement observers.
             const Uint64 refreshStart = SDL_GetPerformanceCounter();
-            devtools::scenePresented(scene::refreshForPresent());
+            if (!owner_shot::markMode()) devtools::scenePresented(scene::refreshForPresent());
             const Uint64 refreshEnd = SDL_GetPerformanceCounter();
             // 172: the chain's split of the first present (the between-presents gap).
             scene_renderer::perfLoadMark("ff_refresh_done");
@@ -844,6 +844,7 @@ static void renderPresentBody()
                             fpsX, 8, overlayWidth, overlayHeight);
                     }
                     owner_shot::drawSceneOverlay();
+                    owner_shot::verifySceneOverlayPresented();
                     devtools::sceneLiveFrameReady();
                     scene_renderer::swap();
                     scene_renderer::perfEnd();

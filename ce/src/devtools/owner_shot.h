@@ -19,6 +19,8 @@ namespace owner_shot {
 // and only answers the keys left over.
 bool handleKey(int key);
 void observeKeyRelease(int scancode);
+void observeKeyPress(int scancode);
+bool suppressKeyRepeat(int scancode);
 
 // The teleport (step 3): dev-teleport.txt next to the exe, one line
 // "map.elev" (the safe pick) or "map.elev.hex" (the named hex), is consumed
