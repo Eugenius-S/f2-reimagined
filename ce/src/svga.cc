@@ -588,8 +588,15 @@ void handleWindowSizeChanged()
 // Keep the logical canvas intact so local 3D, UI and input stay live.
 void applyWindowModeLive()
 {
-    if (gSdlWindow == nullptr || SDL_getenv("F2CE_DEV_BACKGROUND") != nullptr) {
-        return;
+    if (gSdlWindow == nullptr) return;
+    const bool background = SDL_getenv("F2CE_DEV_BACKGROUND") != nullptr;
+    if (background) {
+        // A fixture can resize its offscreen window, never the display or
+        // a fullscreen application on the owner's desktop.
+        const Uint32 flags = SDL_GetWindowFlags(gSdlWindow);
+        if (SDL_getenv("F2CE_DEV_TEST_RESIZE") == nullptr
+            || settings.screen.windowed != WindowMode::Windowed
+            || (flags & SDL_WINDOW_FULLSCREEN) != 0 || (flags & SDL_WINDOW_SKIP_TASKBAR) == 0) return;
     }
 
     int width = settings.screen.resolution_x;
@@ -609,12 +616,23 @@ void applyWindowModeLive()
         SDL_SetWindowDisplayMode(gSdlWindow, &request);
         SDL_SetWindowFullscreen(gSdlWindow, SDL_WINDOW_FULLSCREEN);
     } else {
-        SDL_SetWindowFullscreen(gSdlWindow, 0);
+        if (!background) SDL_SetWindowFullscreen(gSdlWindow, 0);
         SDL_SetWindowSize(gSdlWindow, width, height);
-        SDL_SetWindowPosition(gSdlWindow, SDL_WINDOWPOS_CENTERED_DISPLAY(0), SDL_WINDOWPOS_CENTERED_DISPLAY(0));
+        if (!background) {
+            SDL_SetWindowPosition(gSdlWindow, SDL_WINDOWPOS_CENTERED_DISPLAY(0), SDL_WINDOWPOS_CENTERED_DISPLAY(0));
+        }
     }
 
     handleWindowSizeChanged();
+    if (background) {
+        int actualWidth = 0;
+        int actualHeight = 0;
+        SDL_GetWindowSize(gSdlWindow, &actualWidth, &actualHeight);
+        printf("DEV_DISPLAY_RESIZE requested=%dx%d output=%dx%d logical=%dx%d scene_gl=%d\n",
+            width, height, actualWidth, actualHeight, screenGetWidth(), screenGetHeight(),
+            scene_renderer::isActive() ? 1 : 0);
+        fflush(stdout);
+    }
 }
 
 void renderFpsCounter()

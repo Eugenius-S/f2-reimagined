@@ -19,6 +19,9 @@ class LiveDisplayResolutionTest(unittest.TestCase):
         live = renderer.split("void applyWindowModeLive()", 1)[1].split("static void renderPresentBody", 1)[0]
         self.assertIn("SDL_SetWindowDisplayMode", live)
         self.assertIn("SDL_SetWindowSize", live)
+        self.assertIn("F2CE_DEV_TEST_RESIZE", live)
+        self.assertIn("|| (flags & SDL_WINDOW_FULLSCREEN) != 0", live)
+        self.assertIn("(flags & SDL_WINDOW_SKIP_TASKBAR) == 0", live)
         resize = renderer.split("void handleWindowSizeChanged()", 1)[1].split("void applyWindowModeLive()", 1)[0]
         self.assertLess(resize.index("return;"), resize.index("destroyRenderer();"))
         self.assertIn("mouseDeviceRefreshWindowMapping();", resize)
