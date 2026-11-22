@@ -562,9 +562,9 @@ void handleWindowSizeChanged()
     mouseDeviceRefreshWindowMapping();
 }
 
-// 209: the display-mode pick applies the moment the menu closes. The picture
-// itself keeps its size and letterboxes, so the engine buffers stay intact;
-// only the resolution and the interface scale still need a restart.
+// Apply window mode and physical resolution when the menu closes. A
+// borderless window continues to use the desktop's physical resolution.
+// Keep the logical canvas intact so local 3D, UI and input stay live.
 void applyWindowModeLive()
 {
     if (gSdlWindow == nullptr || SDL_getenv("F2CE_DEV_BACKGROUND") != nullptr) {

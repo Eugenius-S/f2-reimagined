@@ -326,7 +326,7 @@ void initSettingsRegistry(bool isMapper)
     SettingDescriptor& resolutionModeDescriptor = settingDescriptors[settingDescriptors.size() - 5];
     resolutionModeDescriptor.valueType = SettingValueType::Choice;
     resolutionModeDescriptor.category = SettingCategory::Screen;
-    resolutionModeDescriptor.applyPolicy = SettingApplyPolicy::Restart;
+    resolutionModeDescriptor.applyPolicy = SettingApplyPolicy::OnClose;
     resolutionModeDescriptor.subsection = "Display";
     resolutionModeDescriptor.fallbackLabel = "Resolution";
     resolutionModeDescriptor.fallbackDescription = "Select an available display resolution.";
@@ -335,8 +335,8 @@ void initSettingsRegistry(bool isMapper)
     SettingDescriptor& windowModeDescriptor = settingDescriptors[settingDescriptors.size() - 4];
     windowModeDescriptor.valueType = SettingValueType::Choice;
     windowModeDescriptor.category = SettingCategory::Screen;
-    // 209: the mode itself applies live on menu close; only the resolution
-    // and the interface scale keep the restart note.
+    // The output resolution and window mode apply together on menu close.
+    // Only a logical canvas scale change requires a restart.
     windowModeDescriptor.applyPolicy = SettingApplyPolicy::OnClose;
     windowModeDescriptor.subsection = "Display";
     windowModeDescriptor.fallbackLabel = "Window mode";
@@ -780,18 +780,10 @@ void settingsWriteToConfig(bool onlyAdd)
             entry.write(onlyAdd);
         }
     }
-    // Keep the legacy resolution keys in sync with a pending menu choice.
-    // The active framebuffer is not resized until restart.
-    if (!onlyAdd) {
-        for (const auto& entry : settingsRegistry) {
-            if (entry.descriptor.id != "screen.resolution_mode" || !entry.restartValue.has_value()) continue;
-            const int* resolution = std::get_if<int>(&*entry.restartValue);
-            if (resolution != nullptr && *resolution > 0) {
-                settingsWrite("screen", "resolution_x", *resolution / 10000);
-                settingsWrite("screen", "resolution_y", *resolution % 10000);
-            }
-            break;
-        }
+    // Keep the legacy output keys in sync with the selected physical resolution.
+    if (!onlyAdd && settings.screen.resolution_mode > 0) {
+        settingsWrite("screen", "resolution_x", settings.screen.resolution_mode / 10000);
+        settingsWrite("screen", "resolution_y", settings.screen.resolution_mode % 10000);
     }
 }
 
