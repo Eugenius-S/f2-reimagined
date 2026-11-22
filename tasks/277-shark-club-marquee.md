@@ -2,15 +2,15 @@
 id: 277
 title: The Shark Club marquee stands right in 3D
 milestone: M1
-status: todo
-owner: glm
+status: done
+owner: gpt
 suggested: glm
 priority: normal
 tier: 2
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -34,3 +34,16 @@ A modelled 3D sign (229's reference views come first).
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+
+### 2026-11-23 gpt
+
+Reproduced the Shark Club roof-grid cut in native Game 3D and found the
+same defect on Desperado. Matched renders identify just CASENT06 and
+CASENT26 as the exterior canopies; adjacent walls keep their normal
+clip. Verified Classic, Game 3D and a +30-degree turn at both places
+and at the independent New Reno arch. The arch and boxing controls
+passed the standard still pixel comparison with zero differences.
+The standard New Reno fly tour covered eight spots at three turns
+and all changes were localized to the restored Desperado canopy.
+
+[Evidence and exact Windows comparisons](../runs/277-shark-club-marquee/README.md).
