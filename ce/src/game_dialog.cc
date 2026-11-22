@@ -844,9 +844,12 @@ bool gameDialogWindowActive()
     return _gdialog_state == GAME_DIALOG_ACTIVE;
 }
 
-bool gameDialogWindowClosing()
+bool gameDialogWindowTransitionActive()
 {
-    return gGameDialogWindowClosing;
+    // Opening barter rolls the talk panel away while the legacy special
+    // mode is set. Both panels still belong over the same local map.
+    return gGameDialogWindowClosing
+        || (gameDialogWindowActive() && dialogSwitchMode == GAME_DIALOG_MODE_BARTER_ACTIVE);
 }
 
 int gameDialogGetReplyTextOffset()
