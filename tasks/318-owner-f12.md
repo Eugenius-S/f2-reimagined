@@ -27,3 +27,5 @@ Verified one actual F12 screenshot in Preferences with the open panel and on rnd
 [Native acceptance checks](../runs/325-night-checks/README.md).
 
 Follow-up: the dev flight binding used to consume Ctrl+F12 during combat. The patch passes it to the normal owner handler. The two decoded shortcut events saved a region in actual Windows combat without ending the fight. Physical keyboard and window focus are separate. [Evidence](../runs/325-combat-and-exit/README.md).
+
+Additional plain F12 checks covered visible Inventory, Pip-Boy, Character and NPC dialogue via the standard SDL queue. The normal frame request succeeded for each; this fixture discarded the temporary player output before file inspection. The menu and world map still need their own plain F12 checks.
