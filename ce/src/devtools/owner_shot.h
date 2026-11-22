@@ -18,8 +18,8 @@ namespace owner_shot {
 // keep their devshot format), so this handler runs after devtools::handleKey
 // and only answers the keys left over.
 bool handleKey(int key);
-void observeKeyRelease(int scancode);
-void observeKeyPress(int scancode);
+int observeKeyRelease(int scancode);
+void observeKeyPress(int scancode, int effectiveScancode);
 bool suppressKeyRepeat(int scancode);
 
 // The teleport (step 3): dev-teleport.txt next to the exe, one line

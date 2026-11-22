@@ -159,6 +159,7 @@ int gMarkLogicalWidth = 0;
 int gMarkLogicalHeight = 0;
 int gMarkViewportX = 0, gMarkViewportY = 0, gMarkViewportWidth = 0, gMarkViewportHeight = 0;
 std::vector<SDL_Point> gMarkTilePositions;
+std::string gMarkCameraJson;
 char gMarkStem[96] = {}; // file name stem reserved at entry
 struct MarkRect {
     int x0 = 0;
@@ -316,6 +317,27 @@ struct ShotContext {
     std::string versionJson;
 };
 
+std::string cameraContextJson()
+{
+    scene_renderer::StaticFlyCamera fly;
+    char piece[512];
+    scene_renderer::GameView view;
+    const double zoom = scene_renderer::gameViewAtCenterTile(gCenterTile, &view)
+        ? view.zoom : settings.scene3d.zoom;
+    if (scene_renderer::staticGameViewCamera(&fly)) {
+        snprintf(piece, sizeof(piece),
+            "{\"eye\":[%.3f,%.3f,%.3f],\"yaw_deg\":%.2f,\"fov_y_deg\":%.2f,\"camera_turn\":%.4f,\"zoom\":%.4f,\"center_tile\":%d}",
+            fly.eye[0], fly.eye[1], fly.eye[2],
+            static_cast<double>(fly.yaw) * 180.0 / 3.14159265358979323846,
+            static_cast<double>(fly.fovY), scene::cameraTurnAngle(), zoom, gCenterTile);
+    } else {
+        snprintf(piece, sizeof(piece),
+            "{\"camera_turn\":%.4f,\"zoom\":%.4f,\"center_tile\":%d}",
+            scene::cameraTurnAngle(), zoom, gCenterTile);
+    }
+    return piece;
+}
+
 void assembleContext(ShotContext& out)
 {
     // The frame rate over the last few seconds, always on (183).
@@ -367,23 +389,7 @@ void assembleContext(ShotContext& out)
         out.playerJson = piece;
     }
 
-    // The camera as the view looks from, and the game's own turn and zoom.
-    {
-        scene_renderer::StaticFlyCamera fly;
-        char piece[512];
-        if (scene_renderer::staticGameViewCamera(&fly)) {
-            snprintf(piece, sizeof(piece),
-                "{\"eye\":[%.3f,%.3f,%.3f],\"yaw_deg\":%.2f,\"fov_y_deg\":%.2f,\"camera_turn\":%.4f,\"zoom\":%.4f,\"center_tile\":%d}",
-                fly.eye[0], fly.eye[1], fly.eye[2],
-                static_cast<double>(fly.yaw) * 180.0 / 3.14159265358979323846,
-                static_cast<double>(fly.fovY), scene::cameraTurnAngle(), settings.scene3d.zoom, gCenterTile);
-        } else {
-            snprintf(piece, sizeof(piece),
-                "{\"camera_turn\":%.4f,\"zoom\":%.4f,\"center_tile\":%d}",
-                scene::cameraTurnAngle(), settings.scene3d.zoom, gCenterTile);
-        }
-        out.cameraJson = piece;
-    }
+    out.cameraJson = cameraContextJson();
 
     // The object under the cursor, as the game's own pick reads the hex.
     out.cursorJson = "null";
@@ -738,6 +744,7 @@ bool saveMark()
 
     ShotContext context;
     assembleContext(context);
+    context.cameraJson = gMarkCameraJson;
     const std::string regionsJson = buildRegionsJson();
 
     std::string json;
@@ -855,6 +862,7 @@ void enterMarkMode()
     }
     gMarkViewportWidth = viewportRight - gMarkViewportX;
     gMarkViewportHeight = viewportBottom - gMarkViewportY;
+    gMarkCameraJson = cameraContextJson();
     freezeMarkTilePositions();
     gMarkClean = std::move(pixels);
     gMarkRects.clear();
@@ -877,6 +885,7 @@ void exitMarkMode()
     gMarkRestoreScrolling = false;
     gMarkClean.clear();
     gMarkTilePositions.clear();
+    gMarkCameraJson.clear();
     gMarkClean.shrink_to_fit();
     gMarkRects.clear();
     gMarkDragging = false;
@@ -1003,15 +1012,16 @@ bool handleKey(int key)
     return true;
 }
 
-void observeKeyRelease(int scancode)
+int observeKeyRelease(int scancode)
 {
-    if (gMarkMode && scancode == SDL_SCANCODE_F12) gMarkF12Released = true;
-    gMarkRepeatGuard.release(scancode);
+    const int effective = gMarkRepeatGuard.release(scancode);
+    if (gMarkMode && (scancode == SDL_SCANCODE_F12 || effective == SDL_SCANCODE_F12)) gMarkF12Released = true;
+    return effective;
 }
 
-void observeKeyPress(int scancode)
+void observeKeyPress(int scancode, int effectiveScancode)
 {
-    if (gMarkMode) gMarkRepeatGuard.press(scancode);
+    gMarkRepeatGuard.press(scancode, effectiveScancode, gMarkMode);
 }
 
 bool suppressKeyRepeat(int scancode)
