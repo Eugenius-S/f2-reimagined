@@ -32,6 +32,7 @@
 #include "../scene_renderer/picking.h"
 #include "../combat.h"
 #include "../game.h"
+#include "../game_mouse.h"
 #include "../interface.h"
 #include "../map.h"
 #include "../movie.h"
@@ -403,7 +404,7 @@ PreviewRuntimeState runtimeState()
         gameModeShowsMap(mode),
         !isoIsDisabled(),
         _moviePlaying() == 0,
-        modal && !coveringTransition && !mapIsTransitioning(),
+        (modal || gameMouseActionMenuIsOpen()) && !coveringTransition && !mapIsTransitioning(),
     };
 }
 
