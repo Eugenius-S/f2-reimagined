@@ -563,6 +563,9 @@ void gameExit()
 // 0x442D44
 int gameHandleKey(int eventCode, bool isInCombatMode)
 {
+    if (owner_shot::markMode() && owner_shot::handleKey(eventCode)) {
+        return 0;
+    }
     static bool fpsCounterToggleKeyHeld = false;
     if (gPressedPhysicalKeys[SDL_SCANCODE_F8] == 0) fpsCounterToggleKeyHeld = false;
     if (eventCode == KEY_F8 && gGameLoaded) {

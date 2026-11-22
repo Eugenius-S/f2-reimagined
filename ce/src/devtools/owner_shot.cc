@@ -1055,7 +1055,7 @@ void draw(unsigned char* surface, int width, int height, int pitch)
         && scene::activeView() == scene::View::Full) {
         ScopedFont scopedFont(101);
         fontDrawText(surface + pitch * 8 + 8,
-            scene::menuText("MARK: drag rectangles, Enter saves, Esc cancels", settings.system.language),
+            scene::menuText("Ctrl+F12 again: save. Esc: cancel", settings.system.language),
             width - 16, pitch, COLOR_GREEN);
         return;
     }
@@ -1072,7 +1072,7 @@ void draw(unsigned char* surface, int width, int height, int pitch)
     // Top-left, not the bottom corner: the game's own monitor messages share
     // the bottom-left corner and the two texts landed on top of each other.
     fontDrawText(surface + pitch * 8 + 8,
-        scene::menuText("MARK: drag rectangles, Enter saves, Esc cancels", settings.system.language),
+        scene::menuText("Ctrl+F12 again: save. Esc: cancel", settings.system.language),
         width - 16, pitch, COLOR_GREEN);
 }
 
