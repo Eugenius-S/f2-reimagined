@@ -600,6 +600,17 @@ void applyWindowModeLive()
     }
 
     const WindowMode mode = settings.screen.windowed;
+    const Uint32 flags = SDL_GetWindowFlags(gSdlWindow);
+    const bool fullscreen = (flags & SDL_WINDOW_FULLSCREEN) != 0;
+    const bool borderless = (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN_DESKTOP;
+    if (mode == WindowMode::WindowedFullscreen && borderless) return;
+    if ((!fullscreen && mode == WindowMode::Windowed) || (fullscreen && !borderless && mode == WindowMode::Fullscreen)) {
+        int currentWidth = 0, currentHeight = 0;
+        SDL_GetWindowSize(gSdlWindow, &currentWidth, &currentHeight);
+        // Other preferences and unchanged output choices must not move or
+        // resize the player's window.
+        if (width == currentWidth && height == currentHeight) return;
+    }
     if (mode == WindowMode::WindowedFullscreen) {
         SDL_SetWindowFullscreen(gSdlWindow, SDL_WINDOW_FULLSCREEN_DESKTOP);
     } else if (mode == WindowMode::Fullscreen) {

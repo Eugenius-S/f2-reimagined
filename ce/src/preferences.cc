@@ -885,9 +885,6 @@ int _SavePrefs(bool save)
 
     if (save) {
         settingsSave();
-        // Resize physical output when the preferences close. The existing
-        // logical game canvas and camera stay intact.
-        applyWindowModeLive();
     }
 
     return 0;
@@ -1425,6 +1422,8 @@ int doPreferences(bool animated)
     }
 
     preferencesWindowFree();
+    // Modern display choices commit independently of legacy preferences.
+    if (rc == 1) applyWindowModeLive();
 
     return rc;
 }
