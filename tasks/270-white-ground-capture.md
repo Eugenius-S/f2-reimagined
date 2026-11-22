@@ -2,7 +2,7 @@
 id: 270
 title: A 3D capture never comes out with white ground
 milestone: M1
-status: todo
+status: done
 owner: gpt
 suggested: gpt
 priority: normal
@@ -10,7 +10,7 @@ tier: 3
 claude-only: no
 user-check: no
 depends-on: [306]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -36,3 +36,12 @@ Renderer and map data changes.
 ## Log
 
 - 2026-11-13 claude: cut from the review of gpt's run of 2026-11-12: the blocked evidence tasks share a few harness gaps.
+
+- 2026-11-23 gpt: PR #573 restored the atlas and draw framebuffer in the
+  bake-target allocator. On exact release `7667d33e`, KLAMALL e0 at view
+  28096, hour 8 and zoom 1 rendered a textured floor with the normal
+  bake enabled. The exact release had 0 near-white samples in 13,502
+  samples. The diagnostic baseline had about 60% near-white in the same
+  sampled view. The [paired native frames](../runs/306-ground-bake-current/before-after.jpg)
+  record the restored floor. The old notched vine-wall report belongs to
+  KLADWTWN, a separate map at the same view tile; 256 records that check.

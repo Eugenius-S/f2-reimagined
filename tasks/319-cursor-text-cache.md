@@ -23,3 +23,10 @@ Native Windows stock Sulik dialogue with SharpText on now has glyph alpha 27 to 
 [Native acceptance checks](../runs/325-night-checks/README.md).
 
 Inventory with SharpText on: four successive true logical cursor placements sampled in the first presented frames. The current crops changed by 453, 496, 464 and 460 pixels against a hidden-cursor baseline; every other crop fully restored to its baseline on each move. Local 3D stayed active. This covers the stock Klamath stats panel at the test resolution, not every cursor animation or the owner save.
+
+Dialogue sweep: repeated the test with four actual logical placements
+over Sulik's reply text in separate first-present frames. Current crops
+showed 806, 808, 1271 and 808 changed pixels against the no-cursor baseline.
+All other crops were restored exactly before the new frame presented.
+Local 3D stayed active. This checks the reported trail type on this
+native text fixture, not a physical cursor driver or every font layout.

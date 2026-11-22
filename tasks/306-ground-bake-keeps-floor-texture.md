@@ -42,3 +42,14 @@ Floor geometry/exporter changes, a blanket bake-disable workaround, new performa
 - 2026-11-15 gpt: split the missing renderer prerequisite from PR #504's blocked Log. The exact renderer cause still needs reproduction and diagnosis.
 
 - 2026-11-23 gpt: reproduced on current main and ported the missing texture and draw framebuffer restoration from the old diagnosis without importing its other renderer changes. Matches direct lighting at KLAMALL and preserves the glow render at ARVILLAG. [Current native evidence](../runs/306-ground-bake-current/README.md).
+
+- Published as PR #573, commit `7667d33e`. The exact Windows build
+  passed CTest 34/34 and native first-frame captures on KLAMALL and
+  ARVILLAG. Matched comparisons show that atlas unit 0 and the caller's
+  draw framebuffer are restored after allocation; this preserves the
+  original bake shader and direct render path. The candidate was also
+  tested in a real hidden SDL resize from 1920x1080 to 1600x1200: the
+  local scene remained 3D on the first frame after resizing. The glow
+  framebuffer and the atlas binding remained valid at both sizes.
+  The four-map threshold passed; one recorded run was noisy. Do not
+  treat that row as a hardware performance measurement.

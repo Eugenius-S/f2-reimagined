@@ -38,3 +38,12 @@ Camera bottom-stop behavior (104/108), corner post card splitting (107/189), new
 ## Log
 
 - 2026-11-12 gpt review of 096: The saved evidence records a notched building-shadow edge by the vine wall at tile 28096, hour 8. 096 and main are pixel-identical there except for the separate pen fence corner post. Exact wall/object ownership and the affected pixels were not marked, so reproduction and pinning are required before any fix.
+
+- 2026-11-23 gpt: matched the owner's vine-wall and pen landmarks to
+  KLADWTWN e0 at view 28096, not the similarly indexed KLAMALL white-floor
+  diagnostic. In matched 3D frames with outdoor sun shadows on and off,
+  all 900 sampled pixels at the suspected notch matched exactly; the
+  surroundings did change, confirming that the shadow control applied.
+  The same dark strip is also visible in Classic. This does not establish
+  the exact pixel the owner intended or a defect in the dynamic shadow pass.
+  No shadow or art change was made.
