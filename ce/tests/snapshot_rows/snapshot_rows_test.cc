@@ -32,6 +32,17 @@ int main()
     if (guard.release(1) != 3 || guard.blocks(3, false)) return 16;
     guard.press(0, 1, false);
     if (guard.release(0) != -1 || guard.blocks(1, false)) return 17;
+    guard.press(0, 1, false);
+    if (!guard.blocksNativeRepeat(0) || guard.blocksNativeRepeat(1)) return 18;
+    if (guard.release(0) != -1 || guard.blocksNativeRepeat(0)) return 19;
+    guard.press(2, decltype(guard)::Vetoed, true);
+    if (!guard.blocksNativeRepeat(2) || !guard.blocks(2, false)) return 20;
+    if (guard.release(2) != -1 || guard.blocksNativeRepeat(2) || guard.blocks(2, false)) return 21;
+    guard.press(2, decltype(guard)::Vetoed, false);
+    const unsigned char none[] = { 0, 0, 0, 0 };
+    guard.begin(none);
+    if (!guard.blocks(2, false)) return 22;
+    guard.release(2);
     const auto rect = fallout::owner_shot::markDrawableRect(1366, 223, 1564, 389, 1720, 720, 0, 0, 3440, 1440, 3440, 1440);
     if (rect.x0 != 2732 || rect.y0 != 446 || rect.x1 - rect.x0 != 396 || rect.y1 - rect.y0 != 332) return 9;
     const auto clipped = fallout::owner_shot::markDrawableRect(-5, -5, 2000, 900, 1720, 720, 0, 0, 3440, 1440, 3440, 1440);

@@ -1024,6 +1024,16 @@ void observeKeyPress(int scancode, int effectiveScancode)
     gMarkRepeatGuard.press(scancode, effectiveScancode, gMarkMode);
 }
 
+void observeKeyVeto(int scancode)
+{
+    gMarkRepeatGuard.press(scancode, decltype(gMarkRepeatGuard)::Vetoed, gMarkMode);
+}
+
+bool suppressNativeKeyRepeat(int scancode)
+{
+    return gMarkRepeatGuard.blocksNativeRepeat(scancode);
+}
+
 bool suppressKeyRepeat(int scancode)
 {
     return gMarkRepeatGuard.blocks(scancode, gMarkMode);

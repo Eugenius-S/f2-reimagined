@@ -1033,7 +1033,7 @@ void _GNW95_process_message()
             const int rawKey = e.key.keysym.scancode;
             int markedRelease = -1;
             if (e.type == SDL_KEYDOWN) {
-                if (e.key.repeat && owner_shot::suppressKeyRepeat(rawKey)) break;
+                if (e.key.repeat && (owner_shot::suppressKeyRepeat(rawKey) || owner_shot::suppressNativeKeyRepeat(rawKey))) break;
             } else {
                 markedRelease = owner_shot::observeKeyRelease(rawKey);
             }
@@ -1046,6 +1046,7 @@ void _GNW95_process_message()
                 if (!e.key.repeat && !syntheticSfallKey && !mouseDeviceIsCaptured()) {
                     int keyOverride = sfall_kb_handle_key_pressed(keyboardData.key, keyboardData.down);
                     if (keyOverride == SDL_SCANCODE_UNKNOWN && markedRelease < 0) {
+                        if (e.type == SDL_KEYDOWN) owner_shot::observeKeyVeto(rawKey);
                         break;
                     }
                     if (keyOverride != -1 && keyOverride != SDL_SCANCODE_UNKNOWN) {
