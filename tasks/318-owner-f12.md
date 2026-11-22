@@ -1,3 +1,17 @@
+---
+id: 318
+title: Take owner screenshots from every menu
+milestone: M1
+status: doing
+owner: gpt
+priority: high
+tier: 1
+claude-only: no
+user-check: no
+depends-on: []
+reviewed: no
+---
+
 # 318: Take owner screenshots from every menu
 
 Status: in review. Parent queue: #317 / PR #554.
