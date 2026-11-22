@@ -19,6 +19,11 @@ A Russian player picks the translation they grew up with in the installer:
 1C, Fargus, Levy Corporation, or the official RPU text. Text and audio are
 selected separately. The original audio is available with any supported text.
 
+Both base Fallout 2 and the supported RPU release offer the original English,
+official RPU Russian, 1C, Fargus and Levy Corporation text. The three adapted RP
+variants keep official RPU text for its added and changed messages. The separate
+voice menu shows the original and the voices verified for the selected game mode.
+
 ## Context
 
 199 added one Russian option: the launcher fetches the RPU translation from
