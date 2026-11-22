@@ -1,5 +1,6 @@
 """RP operations use only synthetic games, local packages and real filesystem failures."""
 import hashlib
+import http.server
 import json
 import os
 import time
@@ -8,6 +9,7 @@ from ctypes import wintypes
 from pathlib import Path
 import subprocess
 import sys
+import threading
 import zipfile
 import unittest
 
@@ -126,6 +128,108 @@ class RpInstallTests(LauncherFixture):
         output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
         print(f"\n{self.id()}: exit {result.returncode}\n{output}", flush=True)
         return result.returncode, output
+
+    @unittest.skipUnless(os.environ.get("F2R_VOICE_FIXTURE"), "fixture-configured voice launcher required")
+    def test_voice_preflight_bad_hash_preserves_original_and_retry(self):
+        class BadVoice(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"x" * 22)
+            def log_message(self, *args):
+                pass
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 18751), BadVoice)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        mods = self.root / "mods"
+        mods.mkdir(exist_ok=True)
+        voice = mods / "f2r-voice-vanilla-1c.dat"
+        voice.write_bytes(b"fixture voice package\n")
+        (mods / "f2r-voice-choice.txt").write_text("vanilla-1c\nhash=16b874f8ebf84d286c4684a0a7a78c0cd00c84c35515a0eee9d889746537f2c1\n")
+        order = b"f2r-voice-vanilla-1c.dat\r\nplayer.dat\r\n"
+        (mods / "mods_order.txt").write_bytes(order)
+        for _ in range(2):
+            code, output = self.rp_run("--restoration-project", "--voice-translation", "rp-1c", "--text-with-install")
+            self.assertNotEqual(code, 0, output)
+            self.assertIn("SHA-256", output)
+            self.assertEqual(voice.read_bytes(), b"fixture voice package\n")
+            self.assertEqual((mods / "mods_order.txt").read_bytes(), order)
+            self.assertFalse((mods / "rpu.dat").exists())
+            self.assertFalse((self.root / ".f2r-voice-rp-transition").exists())
+
+    @unittest.skipUnless(os.environ.get("F2R_VOICE_FIXTURE") and os.environ.get("F2R_VOICE_REAL_RP"), "fixture launcher and real RP required")
+    def test_voice_transition_and_rp_removal_with_real_rp(self):
+        class Voice(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"fixture voice package\n")
+            def log_message(self, *args):
+                pass
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 18751), Voice)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        mods = self.root / "mods"
+        mods.mkdir(exist_ok=True)
+        old = mods / "f2r-voice-vanilla-1c.dat"
+        old.write_bytes(b"fixture voice package\n")
+        (mods / "f2r-voice-choice.txt").write_text("vanilla-1c\nhash=16b874f8ebf84d286c4684a0a7a78c0cd00c84c35515a0eee9d889746537f2c1\n")
+        (mods / "mods_order.txt").write_bytes(b"f2r-voice-vanilla-1c.dat\r\nplayer.dat\r\n")
+        (self.root / "fallout2.cfg").write_bytes(b"[system]\r\nlanguage=english\r\n")
+        with zipfile.ZipFile(self.release / "rp.zip", "w", zipfile.ZIP_STORED) as package:
+            package.write(os.environ["F2R_VOICE_REAL_RP"], "mods/rpu.dat")
+            package.writestr("mods_order.txt", b"rpu.dat\r\n")
+        (self.release / "rpu_russian.dat").write_bytes(b"corrupt translation")
+        (self.release / "rpu-version.txt").write_text("test")
+        code, output = self.rp_run("--restoration-project", "--text-translation", "official", "--voice-translation", "rp-1c", "--text-with-install")
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("downloaded 19 bytes", output)
+        self.assertEqual(old.read_bytes(), b"fixture voice package\n")
+        self.assertEqual((mods / "mods_order.txt").read_bytes(), b"f2r-voice-vanilla-1c.dat\r\nplayer.dat\r\n")
+        self.assertFalse((mods / "rpu.dat").exists())
+        self.assertFalse((mods / "f2r-voice-rp-1c.dat").exists())
+        self.assertFalse((self.root / ".f2r-voice-rp-transition").exists())
+        code, output = self.rp_run("--restoration-project", "--voice-translation", "rp-1c", "--text-with-install")
+        self.assertEqual(code, 0, output)
+        self.assertFalse(old.exists())
+        self.assertTrue((mods / "f2r-voice-rp-1c.dat").exists())
+        self.assertFalse((self.root / ".f2r-voice-rp-transition").exists())
+        with (mods / "rpu.dat").open("r+b") as f:
+            f.write(b"X")
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertNotEqual(code, 0, output)
+        self.assertTrue((mods / "f2r-voice-rp-1c.dat").exists())
+        self.assertIn(b"f2r-voice-rp-1c.dat", (mods / "mods_order.txt").read_bytes())
+        self.assertFalse((self.root / ".f2r-voice-rp-transition").exists())
+        import shutil
+        shutil.copyfile(os.environ["F2R_VOICE_REAL_RP"], mods / "rpu.dat")
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertEqual(code, 0, output)
+        order = (mods / "mods_order.txt").read_bytes()
+        self.assertNotIn(b"f2r-voice-vanilla-1c.dat", order)
+        self.assertNotIn(b"f2r-voice-rp-1c.dat", order)
+        self.assertIn(b"player.dat", order)
+
+    @unittest.skipUnless(os.environ.get("F2R_VOICE_KNOWN_DAT"), "verified BGforge DAT required")
+    def test_manual_voice_stays_suppressed_through_rp_removal(self):
+        import shutil
+        mods = self.root / "mods"
+        mods.mkdir(exist_ok=True)
+        shutil.copyfile(os.environ["F2R_VOICE_KNOWN_DAT"], mods / "upu_russian_sound.dat")
+        original = b"# upu_russian_sound.dat\r\nupu_russian_sound.dat\r\nplayer.dat\r\n"
+        (mods / "mods_order.txt").write_bytes(original)
+        code, output = self.rp_run("--restoration-project")
+        self.assertEqual(code, 0, output)
+        code, output = self.rp_run("--voice-translation", "original")
+        self.assertEqual(code, 0, output)
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertEqual(code, 0, output)
+        self.assertEqual((mods / "mods_order.txt").read_bytes(), b"# upu_russian_sound.dat\r\nplayer.dat\r\n")
+        code, output = self.rp_run("--uninstall")
+        self.assertEqual(code, 0, output)
+        self.assertEqual((mods / "mods_order.txt").read_bytes(), original)
 
     @unittest.skipUnless(os.environ.get("F2R_TRANSLATION_FIXTURES"), "external verified translation DATs not supplied")
     def test_rp_install_removes_incompatible_translation_and_keeps_user_mod(self):
