@@ -51,6 +51,17 @@ double smoothstep(double edge0, double edge1, double x)
     return t * t * (3.0 - 2.0 * t);
 }
 
+double nightFraction(double hour)
+{
+    if (hour >= kNightStart && hour < kNightFull) {
+        return smoothstep(kNightStart, kNightFull, hour);
+    }
+    if (hour >= kMoonFull && hour < kMoonEnd) {
+        return 1.0 - smoothstep(kMoonFull, kMoonEnd, hour);
+    }
+    return (hour >= kNightFull || hour < kMoonFull) ? 1.0 : 0.0;
+}
+
 } // namespace
 
 unsigned int stepClockHour(unsigned int gameTime, int direction)
@@ -60,6 +71,14 @@ unsigned int stepClockHour(unsigned int gameTime, int direction)
         ? std::numeric_limits<unsigned int>::max() : gameTime + hour;
     if (direction < 0) return gameTime <= hour ? 1u : gameTime - hour;
     return gameTime;
+}
+
+int outdoorAmbientForTime(unsigned int gameTime, int ambient, bool exterior)
+{
+    if (!exterior || ambient <= 0) return ambient;
+    const double hour = std::fmod(gameTime / kTicksPerHour, 24.0);
+    constexpr double kNightAmbientReduction = 0.26;
+    return static_cast<int>(std::lround(ambient * (1.0 - nightFraction(hour) * kNightAmbientReduction)));
 }
 
 Sun sunAt(unsigned int gameTime, double ambient, bool daylight, double swingDegrees)
@@ -93,11 +112,7 @@ Sun sunAt(unsigned int gameTime, double ambient, bool daylight, double swingDegr
     const bool daytime = daylight && day > 0.0 && day < 1.0;
     double strength = daytime ? smoothstep(0.0, kHorizonFade, sun.height) * light : 0.0;
     if (!daytime && daylight) {
-        const double nightFade = hour >= kNightStart && hour < kNightFull
-            ? smoothstep(kNightStart, kNightFull, hour)
-            : hour >= kMoonFull && hour < kMoonEnd
-                ? 1.0 - smoothstep(kMoonFull, kMoonEnd, hour)
-                : (hour >= kNightFull || hour < kMoonFull ? 1.0 : 0.0);
+        const double nightFade = nightFraction(hour);
         if (nightFade > 0.0) {
             // A high, fixed moon keeps the existing shadow map well resolved.
             // The same direction lights surfaces and casts the soft night shadow.

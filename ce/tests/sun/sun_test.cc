@@ -31,6 +31,20 @@ int main()
     int failures = 0;
     const unsigned int day = 3 * 24 * kHour; // some day of the game
 
+    using fallout::scene::outdoorAmbientForTime;
+    const int baseAmbient = 16384;
+    const int midnightAmbient = outdoorAmbientForTime(day, baseAmbient, true);
+    failures += !check(midnightAmbient > 0 && midnightAmbient < baseAmbient * 0.8,
+        "midnight reduces outdoor ambient while keeping a visible floor");
+    failures += !check(outdoorAmbientForTime(day, baseAmbient, false) == baseAmbient
+            && outdoorAmbientForTime(day + 12 * kHour, baseAmbient, true) == baseAmbient,
+        "daylight and indoor maps keep their original ambient");
+    const int duskAmbient = outdoorAmbientForTime(day + 18 * kHour + kHour / 2, baseAmbient, true);
+    const int dawnAmbient = outdoorAmbientForTime(day + 5 * kHour + kHour / 2, baseAmbient, true);
+    failures += !check(duskAmbient > midnightAmbient && duskAmbient < baseAmbient
+            && dawnAmbient > midnightAmbient && dawnAmbient < baseAmbient,
+        "the darker outdoor ambient fades in at dusk and out at dawn");
+
     // 082 round 2: one vertical plane, the tilt linear through the day: with
     // a 30 degree swing, -30 degrees at 6:00, 0 at noon, +30 at 18:00.
     const Sun dawn = sunAt(day + 6 * kHour, 1.0, true, 30.0);
