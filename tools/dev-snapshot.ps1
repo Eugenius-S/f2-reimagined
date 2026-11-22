@@ -740,6 +740,7 @@ if ($SceneCache) {
 $process = $null
 $probeHarnessStoppedProcess = $false
 $snapshots = @()
+$arrivalSnapshot = $null
 $dialogFixtureFailed = $false
 $watchdogExpired = $false
 $watchdogReason = ''
@@ -831,7 +832,8 @@ try {
                 $probed = $exitStatus -eq 'passed'
                 if ($TransitionWatch -and $probed) {
                     $transitionLog = Join-Path $runDirectory 'logs\devtransitions.log'
-                    $probed = Test-SnapshotExitArrival $transitionLog $ExitProbeDestination
+                    $arrivalSnapshot = Find-SnapshotExitArrival $log $transitionLog $ExitProbeDestination $snapshots
+                    $probed = $null -ne $arrivalSnapshot
                 }
             }
             if ($Combat) {
@@ -1378,9 +1380,8 @@ if ($ExitProbeDestination) {
     if ((Get-SnapshotExitProbeStatus $probeLog $ExitProbeDestination) -ne 'passed') {
         throw "Exit probe did not reach '$ExitProbeDestination'. See the probe log in the output or run folder."
     }
-    if ($TransitionWatch -and
-        -not (Test-SnapshotExitArrival (Join-Path $runDirectory 'logs\devtransitions.log') $ExitProbeDestination)) {
-        throw "Exit probe reached '$ExitProbeDestination' without a verified first 3D frame."
+    if ($TransitionWatch -and -not $arrivalSnapshot) {
+        throw "Exit probe reached '$ExitProbeDestination' without a copyable first 3D frame."
     }
 }
 Complete-RunFolder

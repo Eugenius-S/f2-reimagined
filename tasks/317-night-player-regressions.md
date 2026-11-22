@@ -57,3 +57,12 @@ fixture captured targeting, attack, enemy turn and combat end in
 scene-gl at tile 17288. It used a spawned fixture critter, not the story
 challenge NPC. These independent checks do not prove the continuous
 post-challenge route from ARCAVES e2 on the owner's save.
+
+At exact Windows build cc7ea07d, four separate normal clicks on authored
+ARCAVES connections reached e0 to e1, e1 to e0, e1 to e2, and e2 to e1.
+The transition watcher saw full 3D at the first destination frame in each
+case. These start beside the exits and do not prove the continuous story
+challenge path. The snapshot wrapper also now requires the destination
+floor and tile and copies the matching first-3D PNG and sidecar before
+marking a watched exit run complete. Tested this export for ARCAVES e1 to
+e0 and ARTEMPLE to ARCAVES e0 using the native Windows game.

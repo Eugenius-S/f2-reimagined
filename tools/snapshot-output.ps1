@@ -79,7 +79,29 @@ function Get-SnapshotExitProbeStatus([string]$Path, [string]$Destination) {
     return 'pending'
 }
 
-function Test-SnapshotExitArrival([string]$Path, [string]$Destination) {
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
-    return Select-String -LiteralPath $Path -Quiet -Pattern ('^first-3d-capture result=pass map=' + [regex]::Escape($Destination) + ' elevation=')
+# The log alone may describe the source floor or arrive after the current
+# file scan. Complete only when the matching 3D sidecar and PNG can be copied.
+function Find-SnapshotExitArrival([string]$ProbePath, [string]$WatchPath, [string]$Destination, $Snapshots) {
+    if (-not (Test-Path -LiteralPath $WatchPath -PathType Leaf)) { return }
+    $name = [regex]::Escape($Destination)
+    $exit = Select-String -LiteralPath $ProbePath -Pattern (
+        '^exit transition passed: .+ target=' + $name + ' map=' + $name + '\.(?:MAP|SAV) index=\d+ elevation=(\d+) tile=(\d+) '
+    ) | Select-Object -Last 1
+    if (-not $exit) { return }
+    $elevation = [int]$exit.Matches[0].Groups[1].Value
+    $tile = [int]$exit.Matches[0].Groups[2].Value
+    $arrival = Select-String -LiteralPath $WatchPath -Pattern (
+        "^first-3d-capture result=pass map=$name elevation=$elevation hero=$tile status=snapshot: (devshot-[\w-]+\.json)$"
+    ) | Select-Object -First 1
+    if (-not $arrival) { return }
+    $file = $arrival.Matches[0].Groups[1].Value
+    foreach ($snapshot in @($Snapshots | Where-Object Name -eq $file)) {
+        try { $metadata = Get-Content -Raw -LiteralPath $snapshot.FullName | ConvertFrom-Json }
+        catch { continue }
+        if ($metadata.map -notmatch ('^' + $name + '\.(?:MAP|SAV)$') -or
+            $metadata.elevation -ne $elevation -or $metadata.hero.tile -ne $tile -or
+            $metadata.scene_3d_enabled -ne $true -or $metadata.image -notmatch '^devhero-[\w-]+\.png$') { continue }
+        $image = Join-Path $snapshot.DirectoryName $metadata.image
+        if (Test-Path -LiteralPath $image -PathType Leaf) { return $snapshot }
+    }
 }
