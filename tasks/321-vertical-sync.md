@@ -21,3 +21,5 @@ Windows acceptance: verify Screen UI in English/Russian, toggling and persistenc
 Published with the first integration. The setting is routed to both video paths and the Windows builds pass. Physical synchronization with the monitor, toggling on a visible display, and the full unsupported-driver matrix remain unverified.
 
 [Native acceptance checks](../runs/325-night-checks/README.md).
+
+The Windows Display panel saved VSync using its real key and Done paths. The isolated restarted build kept the setting and the native OpenGL driver returned interval 1 instead of 0. This does not certify physical monitor behavior, fullscreen, or unsupported hardware.
