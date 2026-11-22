@@ -290,6 +290,23 @@ def solid_faces(proj, sprites, boards, row):
     return _forced(row, faces)
 
 
+REST_CAP_OFFSET = 0.002  # Clearance over the horizontal drum mesh.
+
+
+def supported_rest_cap(proj, sprites, row, plane=None):
+    """Project a detached mouth texture onto the top of its supporting drum."""
+    sprite, u, v, support = row[:4]
+    page, x, y, w, h, ox, oy = sprites[sprite]
+    z = support + REST_CAP_OFFSET
+    corners = []
+    for i, j in ((0, 1), (1, 1), (1, 0), (0, 0)):
+        du, dv = proj.delta_to_ground(ox + i * w, oy + j * h + h / 2)
+        point = [u + du, v + dv, z]
+        home = (0, 0, 0) if plane is None else depth_home(proj, point, plane)
+        corners.append([*point, x + i * w, y + j * h, *home])
+    return page, corners
+
+
 def rest_card(proj, sprites, row, plane=None):
     """(page, corners) of one scene.rests row as a game-view card: corners
     [u, v, z, atlas x, atlas y, home u, home v, home z], home = the way along

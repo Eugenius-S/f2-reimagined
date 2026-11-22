@@ -9,7 +9,7 @@ import struct
 import numpy as np
 
 from scene_check import one_map_elevation
-from solids import HULL_MIN_WIDTH, OVER_CARD, Projection, hull_plane, rest_card, rest_cross, row_plane, screen_area, solid_faces
+from solids import HULL_MIN_WIDTH, OVER_CARD, Projection, hull_plane, rest_card, rest_cross, row_plane, screen_area, solid_faces, supported_rest_cap
 
 
 MAGIC = b"F2WL"
@@ -1726,6 +1726,7 @@ def encode_wall_sidecar(scene, skip_props=frozenset(), skip_rests=frozenset(), m
     # (067: at their own pixel's depth the solid hid a pot's mouth).
     axis_owner = {}
     axis_plane = {}
+    drum_tops = {}
     forced_axes = {(row[5], row[6]) for row in scene.get("props") or [] if len(row) > 14 and row[14]}
     for index, row in enumerate(scene.get("props") or []):
         axis_owner.setdefault((row[5], row[6]), board_owner(row[3]))
@@ -1734,6 +1735,8 @@ def encode_wall_sidecar(scene, skip_props=frozenset(), skip_rests=frozenset(), m
             axis_plane.setdefault((row[5], row[6]), row_plane(proj, board_u, board_v, stack) + 2 * OVER_CARD)
         if index in skip_props:
             continue
+        if row[4] == 1:
+            drum_tops.setdefault((row[5], row[6]), set()).add(row[10])
         batches.object = fly.object = game.object = board_owner(row[3])
         by_camera = {"both": batches, "fly": fly, "game": game}
         for page, corners, away, camera in solid_faces(proj, sprites, scene.get("boards") or [], row):
@@ -1746,6 +1749,13 @@ def encode_wall_sidecar(scene, skip_props=frozenset(), skip_rests=frozenset(), m
         # each from both sides.
         game.object = fly.object = axis_owner.get((row[1], row[2]), -1.0)
         seen = row[5] if len(row) > 5 else 0     # 1: crossed fly-only rest, 2: game card, 3: fixed fly-only plane
+        axis = (row[1], row[2])
+        if seen == 0 and axis not in forced_axes and row[3] > 0 and row[3] in drum_tops.get(axis, ()):
+            page, corners = supported_rest_cap(proj, sprites, row, axis_plane.get(axis))
+            _polygon(game, proj, page, pages[page], corners)
+            page, corners = supported_rest_cap(proj, sprites, row)
+            _polygon(fly, proj, page, pages[page], corners)
+            continue
         # A hull-sized grouped picture on water stands as one vertical plane
         # on the water line it docks at (168); anything else keeps rest_card's
         # game-screen plane.
