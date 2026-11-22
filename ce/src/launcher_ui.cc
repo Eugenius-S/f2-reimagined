@@ -15,6 +15,8 @@
 
 #include "launcher_progress.h"
 #include "launcher_uninstall.h"
+#include "launcher_translations.h"
+#include "launcher_translation_urls.h"
 
 namespace fs = std::filesystem;
 
@@ -42,9 +44,12 @@ constexpr int ID_REMOVE = 1013;
 constexpr int ID_PLAY = 1014;
 constexpr int ID_LOG_SCROLL = 1015;
 constexpr int ID_PATH_HINT = 1016;
+constexpr int ID_VOICE = 1017;
+constexpr int ID_TEXT_LABEL = 1018;
+constexpr int ID_VOICE_LABEL = 1019;
 constexpr WORD IDB_LAUNCHER_LOGO = 201;
 
-enum class Operation { Install, Uninstall, RemoveRussian, RemoveRp };
+enum class Operation { Install, Uninstall, RemoveRussian, RemoveRp, ChangeText, RecoverText };
 
 struct UiArgs {
     std::wstring gameRoot;
@@ -66,6 +71,7 @@ HWND g_language = nullptr;
 HWND g_root = nullptr;
 HWND g_browse = nullptr;
 HWND g_russian = nullptr;
+HWND g_voice = nullptr;
 HWND g_rp = nullptr;
 HWND g_autoUpdate = nullptr;
 HWND g_progress = nullptr;
@@ -93,6 +99,8 @@ bool g_autoUpdates = false;
 bool g_russianInstall = false;
 // The player's own wish for the translation (task 238): -1 not chosen yet (the box follows the disk), 0 no, 1 yes.
 int g_russianWish = -1;
+std::wstring g_textChoice;
+std::wstring g_textWish;
 // The Restoration Project box follows disk after removal, otherwise the player's wish.
 bool g_rpInstall = false;
 int g_rpWish = -1;
@@ -241,6 +249,7 @@ void saveSettings()
 {
     WritePrivateProfileStringW(L"launcher", L"language", g_uiLanguage.c_str(), g_settingsPath.c_str());
     WritePrivateProfileStringW(L"launcher", L"auto_updates", g_autoUpdates ? L"1" : L"0", g_settingsPath.c_str());
+    if (!g_textWish.empty()) WritePrivateProfileStringW(L"launcher", L"text_choice", g_textWish.c_str(), g_settingsPath.c_str());
     if (g_russianWish >= 0) {
         WritePrivateProfileStringW(L"launcher", L"russian_wish", g_russianWish != 0 ? L"1" : L"0", g_settingsPath.c_str());
     }
@@ -349,6 +358,27 @@ fs::path chosenRoot()
     return fs::path(root);
 }
 
+bool validGameRoot(const fs::path& root)
+{
+    std::error_code error;
+    return !root.empty() && fs::is_regular_file(root / L"master.dat", error)
+        && fs::is_regular_file(root / L"critter.dat", error) && !error;
+}
+
+bool textRecoveryPending()
+{
+    std::error_code error;
+    bool present = fs::exists(chosenRoot() / L".f2r-text-transaction", error);
+    if (present || error) return true;
+    fs::path root = chosenRoot();
+    if (!fs::exists(root / L"mods/rpu.dat", error)) return bool(error);
+    std::ifstream receipt(root / L"mods/f2r-text-choice.txt");
+    std::string id;
+    std::getline(receipt, id);
+    if (!id.empty() && id.back() == '\r') id.pop_back();
+    return launcher_translations::find(id) != nullptr;
+}
+
 // The translation counts as installed when its file is there and the game language is Russian.
 bool russianOnDisk()
 {
@@ -374,6 +404,48 @@ bool rpOnDisk()
     fs::path root = chosenRoot();
     std::error_code error;
     return !root.empty() && fs::exists(root / L"mods" / L"rpu.dat", error);
+}
+
+std::wstring installedTextChoice()
+{
+    std::ifstream in(chosenRoot() / L"mods" / L"f2r-text-choice.txt");
+    std::string choice;
+    std::getline(in, choice);
+    if (!choice.empty() && choice.back() == '\r') choice.pop_back();
+    if (!choice.empty()) return utf8ToWide(choice);
+    return russianOnDisk() ? L"official" : L"original";
+}
+
+void refreshTextChoices()
+{
+    using namespace launcher_translations;
+    if (!g_russian || !g_voice) return;
+    std::wstring wanted = g_textWish.empty() ? installedTextChoice() : g_textWish;
+    bool rp = g_rpInstall || rpOnDisk();
+    std::string id = wideToUtf8(wanted);
+    const char* url = id == "1c" ? url1c : id == "fargus" ? urlFargus : urlLevy;
+    if (!available(id, rp, url, urlFonts)) {
+        wanted = L"original";
+        g_textWish = wanted;
+        setStatus(tr(L"The saved text is unavailable with the current RP or download settings; original text selected.",
+            L"Сохранённый перевод недоступен с выбранным RP или ссылками; выбран оригинальный текст."));
+    }
+    g_textChoice = wanted;
+    g_russianInstall = wanted == L"official";
+    SendMessageW(g_russian, CB_RESETCONTENT, 0, 0);
+    auto add = [&](const wchar_t* name, const wchar_t* value) {
+        LRESULT index = SendMessageW(g_russian, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
+        SendMessageW(g_russian, CB_SETITEMDATA, index, reinterpret_cast<LPARAM>(value));
+        if (wanted == value) SendMessageW(g_russian, CB_SETCURSEL, index, 0);
+    };
+    add(tr(L"Original (English)", L"Оригинал (английский)").c_str(), L"original");
+    add(tr(L"Official RPU", L"Официальный RPU").c_str(), L"official");
+    if (available("1c", rp, url1c, urlFonts)) add(L"1C", L"1c");
+    if (available("fargus", rp, urlFargus, urlFonts)) add(L"Fargus / Фаргус", L"fargus");
+    if (available("levy", rp, urlLevy, urlFonts)) add(L"Levy / Левая Корпорация", L"levy");
+    SendMessageW(g_voice, CB_RESETCONTENT, 0, 0);
+    SendMessageW(g_voice, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(L"Original", L"Оригинал").c_str()));
+    SendMessageW(g_voice, CB_SETCURSEL, 0, 0);
 }
 
 bool rpRecoveryPending()
@@ -403,6 +475,7 @@ void syncRpFromDisk()
         EnableWindow(g_rp, !g_busy);
         InvalidateRect(g_rp, nullptr, TRUE);
     }
+    refreshTextChoices();
 }
 
 std::wstring doneStatus(Operation operation)
@@ -418,6 +491,10 @@ std::wstring doneStatus(Operation operation)
     case Operation::RemoveRussian:
         return tr(L"The Russian translation is removed. The game text is English again.",
             L"Русификатор удалён. Текст игры снова английский.");
+    case Operation::ChangeText:
+        return tr(L"Text selection applied.", L"Выбор текста применён.");
+    case Operation::RecoverText:
+        return tr(L"Text recovery complete. Press Play.", L"Восстановление текста завершено. Нажмите «Играть».");
     default:
         if (g_translationFailed) {
             return tr(L"The game is installed, but the Russian translation did not download. It will be tried again on the next install or update.",
@@ -502,8 +579,10 @@ void setBusy(bool busy)
 {
     g_busy = busy;
     EnableWindow(g_install, !busy && GetWindowTextLengthW(g_root) != 0);
+    EnableWindow(g_root, !busy);
     EnableWindow(g_browse, !busy);
     EnableWindow(g_russian, !busy);
+    EnableWindow(g_voice, !busy);
     EnableWindow(g_rp, !busy);
     EnableWindow(g_autoUpdate, !busy);
     EnableWindow(g_remove, !busy && g_installed);
@@ -555,7 +634,9 @@ void updateLabels()
     SetWindowTextW(g_pathHint, tr(L"Choose the folder that contains master.dat and critter.dat.",
         L"Выберите папку, где находятся master.dat и critter.dat.").c_str());
     SetWindowTextW(g_browse, tr(L"Browse...", L"Обзор...").c_str());
-    SetWindowTextW(g_russian, tr(L"Russian text (official RPU translation)", L"Русский текст (официальный перевод RPU)").c_str());
+    SetWindowTextW(GetDlgItem(g_window, ID_TEXT_LABEL), tr(L"Text", L"Текст").c_str());
+    SetWindowTextW(GetDlgItem(g_window, ID_VOICE_LABEL), tr(L"Voice", L"Озвучка").c_str());
+    refreshTextChoices();
     SetWindowTextW(g_rp, tr(L"Restoration Project (official RPU release, a 900 MB download)",
         L"Restoration Project (официальный релиз RPU, загрузка 900 МБ)").c_str());
     SetWindowTextW(g_autoUpdate, tr(L"Install updates automatically on launch", L"Устанавливать обновления при запуске").c_str());
@@ -586,6 +667,10 @@ void loadSettings()
     }
     g_autoUpdates = GetPrivateProfileIntW(L"launcher", L"auto_updates", 0, g_settingsPath.c_str()) != 0;
     g_russianWish = GetPrivateProfileIntW(L"launcher", L"russian_wish", -1, g_settingsPath.c_str());
+    wchar_t textChoice[64] = {};
+    GetPrivateProfileStringW(L"launcher", L"text_choice", L"", textChoice, static_cast<DWORD>(std::size(textChoice)), g_settingsPath.c_str());
+    g_textWish = textChoice;
+    if (g_textWish.empty() && g_russianWish >= 0) g_textWish = g_russianWish ? L"official" : L"original";
     if (g_russianWish > 1) g_russianWish = 1;
     g_rpWish = GetPrivateProfileIntW(L"launcher", L"rp_wish", -1, g_settingsPath.c_str());
     if (g_rpWish > 1) g_rpWish = 1;
@@ -615,8 +700,16 @@ std::vector<std::wstring> workerArguments(Operation operation)
         args = {L"--game-root", g_args.gameRoot, L"--remove-restoration-project", L"--ui-language", g_uiLanguage};
     } else if (operation == Operation::RemoveRussian) {
         args = {L"--game-root", g_args.gameRoot, L"--remove-russian", L"--ui-language", g_uiLanguage};
+    } else if (operation == Operation::ChangeText) {
+        args = {L"--game-root", g_args.gameRoot, L"--text-translation", g_textChoice, L"--ui-language", g_uiLanguage};
+    } else if (operation == Operation::RecoverText) {
+        args = {L"--game-root", g_args.gameRoot, L"--recover-text", L"--ui-language", g_uiLanguage};
     } else {
-        if (g_russianInstall) args.push_back(L"--russian");
+        if (installedTextChoice() != g_textChoice) {
+            args.push_back(L"--text-translation");
+            args.push_back(g_textChoice);
+            args.push_back(L"--text-with-install");
+        }
         if (g_rpInstall && !rpOnDisk()) args.push_back(L"--restoration-project");
     }
     return args;
@@ -628,7 +721,7 @@ void startOperation(Operation operation)
     wchar_t path[32768] = {};
     GetWindowTextW(g_root, path, static_cast<int>(std::size(path)));
     g_args.gameRoot = path;
-    if (g_args.gameRoot.empty()) {
+    if (!validGameRoot(g_args.gameRoot)) {
         setStatus(tr(L"Choose the folder containing master.dat and critter.dat.",
             L"Выберите папку с файлами master.dat и critter.dat."));
         return;
@@ -714,8 +807,16 @@ void checkReleaseAsync()
 void launchGame()
 {
     if (g_busy) return;
+    if (!validGameRoot(chosenRoot())) {
+        setStatus(tr(L"Choose the folder containing master.dat and critter.dat.", L"Выберите папку с файлами master.dat и critter.dat."));
+        return;
+    }
     if (rpRecoveryPending()) {
         setStatus(rpRecoveryStatus());
+        return;
+    }
+    if (textRecoveryPending()) {
+        startOperation(Operation::RecoverText);
         return;
     }
     wchar_t root[32768] = {};
@@ -801,9 +902,12 @@ void createControls(HWND window)
     SendMessageW(g_root, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(10, 0));
     createControl(window, L"BUTTON", L"Browse...", BS_OWNERDRAW, 642, 234, 130, 38, ID_BROWSE);
     g_browse = GetDlgItem(window, ID_BROWSE);
-    createControl(window, L"BUTTON", L"Install Russian text from the official RPU release",
-        BS_OWNERDRAW | BS_NOTIFY, 24, 284, 690, 28, ID_RUSSIAN);
+    createControl(window, L"STATIC", L"Text", SS_LEFT, 24, 286, 55, 24, ID_TEXT_LABEL);
+    createControl(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 80, 282, 278, 180, ID_RUSSIAN);
     g_russian = GetDlgItem(window, ID_RUSSIAN);
+    createControl(window, L"STATIC", L"Voice", SS_LEFT, 385, 286, 75, 24, ID_VOICE_LABEL);
+    createControl(window, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, 465, 282, 249, 150, ID_VOICE);
+    g_voice = GetDlgItem(window, ID_VOICE);
     createControl(window, L"BUTTON", L"Restoration Project (official RPU release, a 900 MB download)",
         BS_OWNERDRAW | BS_NOTIFY, 24, 316, 690, 28, ID_RP);
     g_rp = GetDlgItem(window, ID_RP);
@@ -930,7 +1034,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
     }
     case WM_DRAWITEM: {
         DRAWITEMSTRUCT* item = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
-        if (item->CtlID == ID_RUSSIAN || item->CtlID == ID_RP || item->CtlID == ID_AUTO_UPDATE) {
+        if (item->CtlID == ID_RP || item->CtlID == ID_AUTO_UPDATE) {
             const bool enabled = (item->itemState & ODS_DISABLED) == 0;
             const bool checked = item->CtlID == ID_RUSSIAN ? g_russianInstall
                 : item->CtlID == ID_AUTO_UPDATE ? g_autoUpdates : g_rpInstall;
@@ -1026,7 +1130,22 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
     }
     case WM_COMMAND:
         if (LOWORD(wParam) == ID_GAME_ROOT && HIWORD(wParam) == EN_CHANGE) {
-            EnableWindow(g_install, !g_busy && GetWindowTextLengthW(g_root) != 0);
+            if (!g_root || !g_play) return 0;
+            fs::path root = chosenRoot();
+            if (g_args.gameRoot != root.wstring()) {
+                g_args.gameRoot = root.wstring();
+                g_textWish.clear();
+                g_rpWish = -1;
+                g_operationCompleted = false;
+            }
+            bool valid = validGameRoot(root);
+            std::error_code error;
+            g_installed = valid && fs::is_regular_file(root / L"fallout2-ce.exe", error);
+            syncRussianFromDisk();
+            syncRpFromDisk();
+            EnableWindow(g_install, !g_busy && valid);
+            EnableWindow(g_remove, !g_busy && g_installed);
+            EnableWindow(g_play, !g_busy && g_installed && !rpRecoveryPending());
         } else if (LOWORD(wParam) == ID_LANGUAGE && HIWORD(wParam) == BN_CLICKED) {
             HMENU menu = CreatePopupMenu();
             AppendMenuW(menu, MF_STRING | (g_uiLanguage == L"en" ? MF_CHECKED : 0), 1, L"English");
@@ -1048,22 +1167,17 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             g_autoUpdates = !g_autoUpdates;
             InvalidateRect(g_autoUpdate, nullptr, TRUE);
             saveSettings();
-        } else if (LOWORD(wParam) == ID_RUSSIAN && HIWORD(wParam) == BN_CLICKED) {
+        } else if (LOWORD(wParam) == ID_RUSSIAN && HIWORD(wParam) == CBN_SELCHANGE) {
             if (g_busy) return 0;
-            if (g_russianInstall && g_installed && russianOnDisk()) {
-                if (confirm(tr(L"Remove the Russian translation?", L"Удалить русификатор?"),
-                        tr(L"The game text goes back to English. Your saves are not touched.",
-                            L"Текст игры снова станет английским. Ваши сохранения не затронем."))) {
-                    startOperation(Operation::RemoveRussian);
-                }
-            } else {
-                g_russianInstall = !g_russianInstall;
-                g_russianWish = g_russianInstall ? 1 : 0;
-                saveSettings();
-                InvalidateRect(g_russian, nullptr, TRUE);
-                // A game that is already installed gets the translation at once; a fresh one gets it with Install.
-                if (g_russianInstall && g_installed) startOperation(Operation::Install);
-            }
+            LRESULT index = SendMessageW(g_russian, CB_GETCURSEL, 0, 0);
+            if (index == CB_ERR) return 0;
+            auto value = reinterpret_cast<const wchar_t*>(SendMessageW(g_russian, CB_GETITEMDATA, index, 0));
+            if (!value || value == reinterpret_cast<const wchar_t*>(CB_ERR)) return 0;
+            g_textChoice = value;
+            g_textWish = g_textChoice;
+            g_russianInstall = g_textChoice == L"official";
+            saveSettings();
+            if (g_installed && installedTextChoice() != g_textChoice) startOperation(Operation::ChangeText);
         } else if (LOWORD(wParam) == ID_RP && HIWORD(wParam) == BN_CLICKED) {
             if (g_busy) return 0;
             if (rpOnDisk() || rpRecoveryPending()) {
@@ -1072,6 +1186,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             }
             g_rpInstall = !g_rpInstall;
             g_rpWish = g_rpInstall ? 1 : 0;
+            refreshTextChoices();
             saveSettings();
             InvalidateRect(g_rp, nullptr, TRUE);
             // As the translation: an installed game gets it at once, a fresh one with Install.
@@ -1158,6 +1273,8 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
         setBusy(false);
         syncRussianFromDisk();
         syncRpFromDisk();
+        if (operation == Operation::ChangeText && result != 0) g_textWish = installedTextChoice();
+        refreshTextChoices();
         setStatus(result == 0 || g_translationFailed ? doneStatus(operation) : failedStatus(operation));
         saveSettings();
         // After a removal the launcher may be gone: nothing is left to run the release check or an install.

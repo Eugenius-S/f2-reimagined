@@ -27,9 +27,10 @@ from the rolling [latest release](https://github.com/Eugenius-S/f2-reimagined/re
 1. Install Fallout 2 from Steam or GOG.
 2. Run the launcher. It detects those installs; if it cannot find the game,
    choose its folder containing `master.dat` and `critter.dat`.
-3. Choose English or Russian for the launcher. To play in Russian, select
-   **Install Russian text**; the launcher downloads it from the official RPU
-   release. To play the Restoration Project, select **Restoration Project**:
+3. Choose English or Russian for the launcher. Under **Text**, choose original
+   English, official RPU Russian, or (for the base game) 1C, Fargus or Levy.
+   **Voice** currently offers the original audio independently of the text.
+   To play the Restoration Project, select **Restoration Project**:
    the launcher downloads RPU from its official GitHub release (about
    900 MB), installs it the way RPU's own manual install does and builds its
    maps in 3D. Install it on a clean Fallout 2, as RPU asks; the files it

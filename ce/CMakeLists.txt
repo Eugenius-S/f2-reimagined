@@ -485,6 +485,10 @@ if(BUILD_TESTING)
     target_include_directories(launcher_rp_tests PRIVATE "src")
     add_test(NAME launcher_rp_tests COMMAND launcher_rp_tests)
 
+    add_executable(launcher_translations_tests "tests/launcher_progress/launcher_translations_test.cc")
+    target_include_directories(launcher_translations_tests PRIVATE "src")
+    add_test(NAME launcher_translations_tests COMMAND launcher_translations_tests)
+
     add_executable(preview_policy_tests
         "src/scene/preview_policy.cc"
         "tests/preview_policy/preview_policy_test.cc"
@@ -804,6 +808,17 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
         )
     endif()
 
+    set(F2R_TEXT_1C_URL "https://drive.usercontent.google.com/download?id=1CYsykbLD8_7abn_vO_rC7H-hmgl9E7b5&export=download&confirm=t" CACHE STRING "1C text DAT URL")
+    set(F2R_TEXT_FARGUS_URL "https://drive.usercontent.google.com/download?id=1xnTnMjvY44LxbNJvqEHJp2logm0xERJq&export=download&confirm=t" CACHE STRING "Fargus text DAT URL")
+    set(F2R_TEXT_LEVY_URL "https://drive.usercontent.google.com/download?id=16VQ-LjZsBZ92DdSU5KTbeCpHA2JptzXx&export=download&confirm=t" CACHE STRING "Levy text DAT URL")
+    set(F2R_TEXT_FONTS_URL "https://drive.usercontent.google.com/download?id=1R2Hq2ndvZGE0Q63Tcmq8ocnqZYw7ZbYR&export=download&confirm=t" CACHE STRING "Shared font DAT URL")
+    foreach(url F2R_TEXT_1C_URL F2R_TEXT_FARGUS_URL F2R_TEXT_LEVY_URL F2R_TEXT_FONTS_URL)
+        if("${${url}}" MATCHES "[\"\r\n]")
+            message(FATAL_ERROR "Invalid URL in ${url}")
+        endif()
+    endforeach()
+    configure_file(src/launcher_translation_urls.h.in generated/launcher_translation_urls.h @ONLY)
+
     # The player-facing launcher (task 091): installs the build from the
     # rolling latest release onto a clean Fallout 2 and starts the game.
     add_executable(fallout2-ce-3d-launcher
@@ -811,7 +826,7 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
         "src/launcher_ui.cc"
         "src/launcher.rc"
     )
-    target_include_directories(fallout2-ce-3d-launcher PRIVATE "src")
+    target_include_directories(fallout2-ce-3d-launcher PRIVATE "src" "${CMAKE_CURRENT_BINARY_DIR}/generated")
     if(WIN32)
         target_link_libraries(fallout2-ce-3d-launcher winhttp bcrypt advapi32 ole32 uuid comctl32 shell32)
         if(MSVC)
@@ -822,6 +837,12 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
     endif()
     if(WIN32 AND BUILD_TESTING)
         find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        add_test(NAME launcher_text_lock_tests COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_text_lock_test.py"
+            "$<TARGET_FILE:fallout2-ce-3d-launcher>")
+        add_test(NAME launcher_text_ui_tests COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_text_ui_test.py"
+            "$<TARGET_FILE:fallout2-ce-3d-launcher>")
         add_test(NAME launcher_install_tests COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_install_test.py"
             "$<TARGET_FILE:fallout2-ce-3d-launcher>")

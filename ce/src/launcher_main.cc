@@ -37,6 +37,8 @@
 #include "launcher_rp.h"
 #include "launcher_ru.h"
 #include "launcher_uninstall.h"
+#include "launcher_translations.h"
+#include "launcher_translation_urls.h"
 
 namespace fs = std::filesystem;
 
@@ -60,6 +62,7 @@ constexpr const char* kExporterExe = "scene-exporter.exe";
 constexpr const char* kRootLauncher = "Fallout 2 Reimagined.exe";
 constexpr const char* kZipLauncher = "fallout2-ce-3d-launcher.exe";
 constexpr const char* kDefaultMaps = "all";
+constexpr const char* kOfficialRussianHash = "f32d9d0b2696a5066a05a13e431c8dfc9d0772c058932121209049c374d8a8c7";
 // The project mirror (task 235): the CI branch `dist`.  Since task 238 it also holds
 // rpu_russian.dat and rpu-version.txt.  --mirror-url overrides it (tests).
 std::string g_mirrorBase = std::string("https://raw.githubusercontent.com/") + kDefaultRepo + "/dist/";
@@ -79,6 +82,9 @@ struct Options {
     bool rollback = false;
     bool installRussian = false;
     bool removeRussian = false;
+    std::string textTranslation;
+    bool textWithInstall = false;
+    bool recoverTextOnly = false;
     bool installRp = false;
     bool removeRp = false;
     bool uninstall = false;
@@ -937,6 +943,10 @@ bool setLanguage(const fs::path& root, const char* language)
 }
 
 std::string jsonStringValue(const std::string& json, const char* key);
+bool effectiveModOrder(const fs::path& root, std::string* order);
+std::string readWholeFile(const fs::path& path);
+bool writeTextFile(const fs::path& path, const std::string& value);
+std::string insertOfficialOrder(const std::string& input);
 
 bool enableRussianMod(const fs::path& root)
 {
@@ -947,6 +957,13 @@ bool enableRussianMod(const fs::path& root)
     {
         std::ifstream in(orderPath, std::ios::binary);
         if (in) input.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    }
+    std::error_code error;
+    if (!fs::exists(orderPath, error)) {
+        if (error || !effectiveModOrder(root, &input)) return false;
+        std::ofstream out(orderPath, std::ios::binary | std::ios::trunc);
+        out.write(input.data(), static_cast<std::streamsize>(input.size()));
+        if (!out) return false;
     }
     std::string lower = input;
     std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
@@ -1061,6 +1078,10 @@ bool installRussianTranslation(const fs::path& root)
         }
         bool copied = false;
         if (got) {
+            std::string hash;
+            if (!sha256File(dat, &hash) || hash != kOfficialRussianHash) got = false;
+        }
+        if (got) {
             fs::create_directories(translation.parent_path(), error);
             fs::copy_file(dat, translation, fs::copy_options::overwrite_existing, error);
             copied = !error;
@@ -1071,6 +1092,11 @@ bool installRussianTranslation(const fs::path& root)
         if (source == "RPU") log("  installed mods/rpu_russian.dat from the official RPU release");
         else logf("  installed mods/rpu_russian.dat from the project mirror (RPU %s)", source.c_str());
     } else {
+        std::string hash;
+        if (!sha256File(translation, &hash) || hash != kOfficialRussianHash) {
+            log("the existing RPU translation is not recognized; it was left untouched");
+            return false;
+        }
         log("  kept the existing mods/rpu_russian.dat");
     }
     if (!enableRussianMod(root)) return false;
@@ -1093,10 +1119,12 @@ struct RpFile {
     std::string path;
     std::string original = "-";
     std::string installed = "-";
+    bool autoOriginal = false;
 };
 struct RpManifest {
     bool pending = true;
     bool restored = false;
+    bool installing = true;
     std::vector<RpFile> files;
     std::set<std::string> directories;
 };
@@ -1166,9 +1194,9 @@ bool writeRpManifest(const fs::path& root, const RpManifest& manifest)
     fs::remove(temp, error);
     if (error) return false;
     std::ofstream out(temp, std::ios::binary | std::ios::trunc);
-    out << "F2R-RP-1 " << (manifest.restored ? "restored" : manifest.pending ? "pending" : "installed") << '\n';
+    out << "F2R-RP-1 " << (manifest.restored ? "restored" : manifest.installing ? "installing" : manifest.pending ? "pending" : "installed") << '\n';
     for (const auto& file : manifest.files)
-        out << "F " << file.original << ' ' << file.installed << ' ' << std::quoted(file.path) << '\n';
+        out << "F " << file.original << ' ' << file.installed << ' ' << std::quoted(file.path) << (file.autoOriginal ? " auto" : "") << '\n';
     for (const auto& directory : manifest.directories) out << "D " << std::quoted(directory) << '\n';
     out.close();
     return out && MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
@@ -1180,8 +1208,9 @@ bool readRpManifest(const fs::path& root, RpManifest* manifest)
         || !rpContained(root, fs::path(launcher_rp::kBackupFolder) / "f2r-restore.tmp")) return false;
     std::ifstream in(root / kRpManifest, std::ios::binary);
     std::string line;
-    if (!std::getline(in, line) || (line != "F2R-RP-1 pending" && line != "F2R-RP-1 installed" && line != "F2R-RP-1 restored")) return false;
-    manifest->pending = line == "F2R-RP-1 pending";
+    if (!std::getline(in, line) || (line != "F2R-RP-1 installing" && line != "F2R-RP-1 pending" && line != "F2R-RP-1 installed" && line != "F2R-RP-1 restored")) return false;
+    manifest->installing = line == "F2R-RP-1 installing";
+    manifest->pending = line == "F2R-RP-1 pending" || manifest->installing;
     manifest->restored = line == "F2R-RP-1 restored";
     std::set<std::string> names;
     auto hash = [](const std::string& value) {
@@ -1195,6 +1224,13 @@ bool readRpManifest(const fs::path& root, RpManifest* manifest)
         if (type == 'F') {
             if (!(row >> file.original >> file.installed >> std::quoted(file.path))
                 || !hash(file.original) || !hash(file.installed) || (file.original == "-" && file.installed == "-")) return false;
+            row >> std::ws;
+            if (!row.eof()) {
+                std::string flag;
+                if (!(row >> flag) || flag != "auto" || launcher_uninstall::lowered(file.path) != "mods/mods_order.txt"
+                    || file.original == "-") return false;
+                file.autoOriginal = true;
+            }
         } else if (type == 'D') {
             if (!(row >> std::quoted(file.path))) return false;
         } else return false;
@@ -1295,6 +1331,31 @@ bool restoreRp(const fs::path& root, RpManifest manifest, bool cleanup = true)
             logf("RP restore: cannot read %s; backup/rpu was kept", file.path.c_str());
             return false;
         }
+        if (launcher_uninstall::lowered(file.path) == "mods/mods_order.txt" && file.installed != "-") {
+            std::string marker = rpRead(root / "mods/f2r-text-choice.txt");
+            size_t at = marker.find("\nretired=");
+            size_t end = at == std::string::npos ? at : marker.find('\n', at + 9);
+            std::string retired = at == std::string::npos ? "" : trim(marker.substr(at + 9, end - (at + 9)));
+            const auto* oldText = launcher_translations::find(retired);
+            bool suppressOfficial = marker.find("\nsuppress-official=1\n") != std::string::npos;
+            if (oldText || suppressOfficial) {
+                std::string installed;
+                if (!sha256File(root / kRpOrder, &installed) || installed != file.installed) return false;
+                std::string now = rpRead(destination);
+                std::string result = launcher_rp::restoredOrder(file.original == "-" ? "" : rpRead(rpOriginal(root, file.path)),
+                    rpRead(root / kRpOrder), now);
+                if (oldText) {
+                    for (const char* name : { oldText->filename, launcher_translations::fonts.filename }) {
+                        bool active = false;
+                        launcher_uninstall::removeLine(now, name, &active);
+                        if (!active && !fs::exists(root / "mods" / name)) result = launcher_uninstall::removeLine(result, name);
+                    }
+                }
+                if (suppressOfficial) result = launcher_uninstall::removeLine(result, "rpu_russian.dat");
+                sharedOrders[file.path] = result;
+                continue;
+            }
+        }
         if (current == file.original || current == file.installed) continue;
         if (launcher_uninstall::lowered(file.path) == "mods/mods_order.txt" && file.installed != "-") {
             std::string installed;
@@ -1322,9 +1383,14 @@ bool restoreRp(const fs::path& root, RpManifest manifest, bool cleanup = true)
         fs::path destination = root / utf8ToWide(file.path);
         std::error_code error;
         std::string current;
-        if (file.original != "-" && sha256File(destination, &current) && current == file.original) continue;
+        if (file.autoOriginal && manifest.installing) {
+            if (rpPresent(destination)) fs::remove(destination, error);
+            if (error) ok = false;
+            continue;
+        }
         auto order = sharedOrders.find(file.path);
-        bool hasOrder = order != sharedOrders.end() && !order->second.empty();
+        if (order == sharedOrders.end() && file.original != "-" && sha256File(destination, &current) && current == file.original) continue;
+        bool hasOrder = order != sharedOrders.end();
         if (file.original != "-" || hasOrder) {
             fs::create_directories(destination.parent_path(), error);
             if (!error) fs::remove(temp, error);
@@ -1438,6 +1504,31 @@ bool installRestorationProject(const fs::path& root, bool* installedNow)
         return false;
     }
 
+    // Merge the effective pre-RP order into the package before the RP journal
+    // is written, so an interrupted install cannot lose automatically found mods.
+    std::string oldOrder;
+    if (!effectiveModOrder(root, &oldOrder)) { fs::remove_all(work, error); return false; }
+    fs::path packageOrder = stage / "mods_order.txt";
+    if (!fs::exists(packageOrder, error)) packageOrder = stage / "mods/mods_order.txt";
+    bool hasPackageOrder = fs::exists(packageOrder, error);
+    if (error) { fs::remove_all(work, error); return false; }
+    fs::path autoOriginal = work / "auto-order.txt";
+    bool syntheticOriginal = !fs::exists(root / "mods/mods_order.txt", error) && !oldOrder.empty();
+    if (error || (syntheticOriginal && !writeTextFile(autoOriginal, oldOrder))) { fs::remove_all(work, error); return false; }
+    if (hasPackageOrder || !oldOrder.empty()) {
+        std::string merged = launcher_rp::restoredOrder(hasPackageOrder ? readWholeFile(packageOrder) : "rpu.dat\r\n", "", oldOrder);
+        std::string marker = readWholeFile(root / "mods/f2r-text-choice.txt");
+        std::string id = trim(marker.substr(0, marker.find('\n')));
+        if (const auto* oldText = launcher_translations::find(id)) {
+            merged = launcher_uninstall::removeLine(merged, oldText->filename);
+            merged = launcher_uninstall::removeLine(merged, launcher_translations::fonts.filename);
+        }
+        bool official = false;
+        std::string withoutOfficial = launcher_uninstall::removeLine(merged, "rpu_russian.dat", &official);
+        if (official) merged = insertOfficialOrder(withoutOfficial);
+        if (!writeTextFile(packageOrder, merged)) { fs::remove_all(work, error); return false; }
+    }
+
     RpManifest manifest;
     std::map<std::string, fs::path> sources;
     std::set<std::string> targets;
@@ -1495,6 +1586,10 @@ bool installRestorationProject(const fs::path& root, bool* installedNow)
     for (auto& file : manifest.files) {
         fs::path destination = root / utf8ToWide(file.path);
         if (rpPresent(destination) && (!fs::is_regular_file(destination, error) || !sha256File(destination, &file.original))) ok = false;
+        else if (syntheticOriginal && launcher_uninstall::lowered(file.path) == "mods/mods_order.txt") {
+            file.autoOriginal = true;
+            if (!sha256File(autoOriginal, &file.original)) ok = false;
+        }
         for (fs::path parent = destination.parent_path(); parent != root && !rpPresent(parent); parent = parent.parent_path())
             manifest.directories.insert(wideToUtf8(parent.lexically_relative(root).generic_wstring()));
     }
@@ -1505,7 +1600,9 @@ bool installRestorationProject(const fs::path& root, bool* installedNow)
         if (!ok || file.original == "-") continue;
         fs::path kept = rpOriginal(root, file.path);
         fs::create_directories(kept.parent_path(), error);
-        if (!error) fs::copy_file(root / utf8ToWide(file.path), kept, error);
+        fs::path original = root / utf8ToWide(file.path);
+        if (syntheticOriginal && launcher_uninstall::lowered(file.path) == "mods/mods_order.txt" && !rpPresent(original)) original = autoOriginal;
+        if (!error) fs::copy_file(original, kept, error);
         std::string hash;
         ok = !error && sha256File(kept, &hash) && hash == file.original;
     }
@@ -1552,8 +1649,9 @@ bool installRestorationProject(const fs::path& root, bool* installedNow)
     }
     if (ok) {
         manifest.pending = false;
+        manifest.installing = false;
         ok = writeRpManifest(root, manifest);
-        if (!ok) manifest.pending = true;
+        if (!ok) { manifest.pending = true; manifest.installing = true; }
     }
     if (!ok) {
         log("RP install failed; restoring the original game files");
@@ -1581,13 +1679,13 @@ bool removeRussianTranslation(const fs::path& root)
     fs::path translation = root / "mods" / "rpu_russian.dat";
     bool ok = true;
     if (fs::exists(translation, error)) {
-        fs::remove(translation, error);
-        if (error) {
-            log("cannot remove mods/rpu_russian.dat; is the game running? Close it and try again");
-            ok = false;
-        } else {
-            log("  removed mods/rpu_russian.dat");
+        std::string hash;
+        if (!sha256File(translation, &hash)
+            || hash != kOfficialRussianHash) {
+            log("the existing RPU translation is not recognized; it was left untouched");
+            return false;
         }
+        log("  kept the unowned mods/rpu_russian.dat");
     }
     fs::path orderPath = root / "mods" / "mods_order.txt";
     if (fs::exists(orderPath, error)) {
@@ -1615,11 +1713,234 @@ bool removeRussianTranslation(const fs::path& root)
     return ok;
 }
 
+// The translation transaction only owns these names. A journal in the game
+// folder lets the next launcher run restore originals after an interrupted swap.
+const std::vector<std::string>& translationTargets()
+{
+    static const std::vector<std::string> names = {
+        "fallout2.cfg", "mods/mods_order.txt", "mods/f2r-text-choice.txt",
+        "mods/steam-1c-text.dat", "mods/fio-fargus-text.dat", "mods/fio-levy-text.dat",
+        "mods/shared-legacy-fonts.dat", "mods/rpu_russian.dat"
+    };
+    return names;
+}
+
+bool recoverTextTransaction(const fs::path& root)
+{
+    fs::path work = root / ".f2r-text-transaction";
+    std::error_code error;
+    if (!fs::exists(work, error)) return !error;
+    if (fs::exists(work / "committed", error)) {
+        fs::remove_all(work, error);
+        return !error;
+    }
+    if (!fs::exists(work / "journal", error)) {
+        if (!fs::exists(work / "started", error) && !fs::is_empty(work, error)) return false;
+        if (error) return false;
+        fs::remove_all(work, error);
+        return !error;
+    }
+    std::string journal = readWholeFile(work / "journal");
+    if (journal.size() != translationTargets().size()) return false;
+    for (size_t i = 0; i < translationTargets().size(); ++i) {
+        if (journal[i] == '2') continue;
+        fs::path dest = root / translationTargets()[i];
+        fs::path backup = work / ("old" + std::to_string(i));
+        fs::path staged = work / ("new" + std::to_string(i));
+        if (journal[i] == '1' && fs::exists(backup, error)) {
+            fs::remove(dest, error);
+            if (error) return false;
+            fs::rename(backup, dest, error);
+            if (error) return false;
+        } else if (journal[i] == '0' && !fs::exists(staged, error)) {
+            fs::remove(dest, error);
+            if (error) return false;
+        } else if (journal[i] != '0' && journal[i] != '1') return false;
+        if (error) return false;
+    }
+    fs::remove_all(work, error);
+    return !error;
+}
+
+bool writeTextFile(const fs::path& path, const std::string& value)
+{
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    out.write(value.data(), static_cast<std::streamsize>(value.size()));
+    out.close();
+    return !!out;
+}
+
+std::string insertOfficialOrder(const std::string& input)
+{
+    std::string result;
+    std::stringstream lines(input);
+    std::string line;
+    bool inserted = false;
+    while (std::getline(lines, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        result += line + "\r\n";
+        std::string name = trim(line);
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (!inserted && name == "rpu.dat") { result += "rpu_russian.dat\r\n"; inserted = true; }
+    }
+    return inserted ? result : "rpu_russian.dat\r\n" + result;
+}
+
+bool effectiveModOrder(const fs::path& root, std::string* order)
+{
+    fs::path path = root / "mods/mods_order.txt";
+    std::error_code error;
+    if (fs::exists(path, error)) {
+        std::ifstream in(path, std::ios::binary);
+        if (!in) return false;
+        order->assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+        return !in.bad();
+    }
+    if (error) return false;
+    std::vector<std::string> names;
+    fs::path mods = root / "mods";
+    if (!fs::exists(mods, error)) return !error;
+    for (fs::directory_iterator it(mods, error), end; !error && it != end; it.increment(error)) {
+        if (!it->is_regular_file(error)) continue;
+        if (_wcsicmp(it->path().extension().c_str(), L".dat") == 0) names.push_back(wideToUtf8(it->path().filename().wstring()));
+    }
+    if (error) return false;
+    std::sort(names.begin(), names.end(), [](const std::string& a, const std::string& b) { return _stricmp(a.c_str(), b.c_str()) < 0; });
+    for (const auto& name : names) *order += name + "\r\n";
+    return true;
+}
+
+bool changeTextTranslation(const fs::path& root, const std::string& choice, const std::string& previousOrder = {})
+{
+    using namespace launcher_translations;
+    if (!recoverTextTransaction(root)) return false;
+    const Package* selected = find(choice);
+    const char* url = choice == "1c" ? url1c : choice == "fargus" ? urlFargus : urlLevy;
+    if (!available(choice, rpOnDisk(root), url, urlFonts)) {
+        log("this translation is unavailable for the current game or has no download URL");
+        return false;
+    }
+    std::error_code error;
+    fs::create_directories(root / "mods", error);
+    if (error) return false;
+    fs::path work = root / ".f2r-text-transaction";
+    if (!fs::create_directory(work, error)) return false;
+    auto abandon = [&]() { std::error_code ignored; fs::remove_all(work, ignored); return false; };
+    if (!writeTextFile(work / "started", "f2r text staging\n")) return abandon();
+    std::string cfg = readWholeFile(root / kCfg);
+    bool found = false;
+    cfg = launcher_uninstall::withLanguage(cfg, choice == "original" ? "english" : "russian", &found);
+    if (!found) return abandon();
+    std::string order;
+    if (!effectiveModOrder(root, &order)) return abandon();
+    order = launcher_rp::restoredOrder(order, "", previousOrder);
+    std::string previousMarker = readWholeFile(root / "mods/f2r-text-choice.txt");
+    previousMarker.erase(std::remove(previousMarker.begin(), previousMarker.end(), '\r'), previousMarker.end());
+    std::string previous = trim(previousMarker.substr(0, previousMarker.find('\n')));
+    for (const Package& item : texts) {
+        fs::path path = root / "mods" / item.filename;
+        if (fs::exists(path, error)) {
+            std::string hash;
+            if (previous != item.id || !sha256File(path, &hash) || hash != item.sha256) return abandon();
+        }
+        if (previous == item.id) order = launcher_uninstall::removeLine(order, item.filename);
+    }
+    fs::path fontPath = root / "mods" / fonts.filename;
+    if (fs::exists(fontPath, error)) {
+        std::string hash;
+        if (!find(previous) || !sha256File(fontPath, &hash) || hash != fonts.sha256) return abandon();
+    }
+    if (find(previous)) order = launcher_uninstall::removeLine(order, fonts.filename);
+    fs::path officialPath = root / "mods/rpu_russian.dat";
+    bool officialExists = fs::exists(officialPath, error);
+    bool officialOwned = previousMarker.find("\nofficial-owned=1\n") != std::string::npos;
+    std::string officialHash;
+    bool officialKnown = officialExists && sha256File(officialPath, &officialHash) && officialHash == kOfficialRussianHash;
+    bool officialActive = false;
+    launcher_uninstall::removeLine(order, "rpu_russian.dat", &officialActive);
+    if ((officialOwned && !officialKnown) || (choice == "official" && officialExists && !officialKnown)) return abandon();
+    if (choice != "official" && officialExists && !officialKnown && officialActive) return abandon();
+    if (choice != "official" && officialKnown) order = launcher_uninstall::removeLine(order, "rpu_russian.dat");
+    if (error) return abandon();
+    std::vector<bool> replace(translationTargets().size(), false);
+    if (choice != "official" && officialOwned) replace[7] = true;
+    auto stageText = [&](size_t i, const std::string& content) {
+        replace[i] = true;
+        return writeTextFile(work / ("new" + std::to_string(i)), content);
+    };
+    if (selected) {
+        size_t index = choice == "1c" ? 3 : choice == "fargus" ? 4 : 5;
+        auto download = [&](const char* source, const Package& item, size_t i) {
+            std::string message, hash;
+            fs::path path = work / ("new" + std::to_string(i));
+            if (!fetchRoutes({ { "translation", source, "" } }, nullptr, &path, &message)
+                || fs::file_size(path, error) != item.size || error
+                || !sha256File(path, &hash) || hash != item.sha256) return false;
+            replace[i] = true;
+            return true;
+        };
+        if (!download(url, *selected, index) || !download(urlFonts, fonts, 6)) return abandon();
+        order = std::string(selected->filename) + "\r\n" + fonts.filename + "\r\n" + order;
+    } else if (choice == "official") {
+        // Reuse the existing official mirror and RPU fallback in an isolated root.
+        fs::path scratch = work / "official";
+        fs::create_directories(scratch / "mods", error);
+        if (error || !writeTextFile(scratch / kCfg, "[system]\r\nlanguage=english\r\n")) return abandon();
+        if (!officialExists) {
+            if (!installRussianTranslation(scratch)) return abandon();
+            fs::rename(scratch / "mods/rpu_russian.dat", work / "new7", error);
+            if (error) return abandon();
+            replace[7] = true;
+            officialOwned = true;
+        }
+        order = launcher_uninstall::removeLine(order, "rpu_russian.dat");
+        order = insertOfficialOrder(order);
+    }
+    std::string marker = choice + "\n";
+    if (choice == "official" && officialOwned) marker += "official-owned=1\n";
+    if (rpOnDisk(root)) {
+        size_t at = previousMarker.find("\nretired=");
+        size_t end = at == std::string::npos ? at : previousMarker.find('\n', at + 9);
+        std::string retired = find(previous) ? previous : at == std::string::npos ? "" : trim(previousMarker.substr(at + 9, end - (at + 9)));
+        if (find(retired)) marker += "retired=" + retired + "\n";
+        if (choice != "official" && (previous == "official" || officialKnown
+                || previousMarker.find("\nsuppress-official=1\n") != std::string::npos))
+            marker += "suppress-official=1\n";
+    }
+    if (!stageText(0, cfg) || !stageText(1, order) || !stageText(2, marker)) return abandon();
+    // Old owned DATs are removed by moving them to the transaction backup.
+    for (size_t i = 3; i <= 6; ++i) {
+        if (!replace[i] && fs::exists(root / translationTargets()[i], error)) replace[i] = true;
+    }
+    std::string journal;
+    for (size_t i = 0; i < replace.size(); ++i) {
+        if (!replace[i]) { journal += '2'; continue; }
+        journal += fs::exists(root / translationTargets()[i], error) ? '1' : '0';
+        if (error) return abandon();
+    }
+    if (!writeTextFile(work / "journal.tmp", journal)) return abandon();
+    fs::rename(work / "journal.tmp", work / "journal", error);
+    if (error) return abandon();
+    for (size_t i = 0; i < replace.size(); ++i) {
+        if (!replace[i]) continue;
+        fs::path dest = root / translationTargets()[i];
+        if (journal[i] == '1') fs::rename(dest, work / ("old" + std::to_string(i)), error);
+        if (!error && fs::exists(work / ("new" + std::to_string(i))))
+            fs::rename(work / ("new" + std::to_string(i)), dest, error);
+        if (error) { recoverTextTransaction(root); return false; }
+    }
+    fs::rename(work / "journal", work / "committed", error);
+    if (error) { recoverTextTransaction(root); return false; }
+    fs::remove_all(work, error);
+    return true;
+}
+
 // Gives the game back as it was before the mod.  Saves (data/), the original game files
 // and fallout2.cfg are never touched.  The folder f2reimagined-backups only holds older
 // mod builds, so it goes with the mod.
 bool uninstallMod(const fs::path& root)
 {
+    if (fs::exists(root / "mods/f2r-text-choice.txt") && !changeTextTranslation(root, "original")) return false;
     if (!removeRestorationProject(root)) return false;
     bool ok = true;
     std::error_code error;
@@ -1814,6 +2135,12 @@ Options parseOptions(int argc, char** argv)
             options.installRussian = true;
         } else if (arg == "--remove-russian") {
             options.removeRussian = true;
+        } else if (arg == "--text-translation" && i + 1 < argc) {
+            options.textTranslation = argv[++i];
+        } else if (arg == "--text-with-install") {
+            options.textWithInstall = true;
+        } else if (arg == "--recover-text") {
+            options.recoverTextOnly = true;
         } else if (arg == "--remove-restoration-project") {
             options.removeRp = true;
         } else if (arg == "--restoration-project") {
@@ -1906,18 +2233,70 @@ int runConsole(Options options)
         root = fs::canonical(root, error);
         if (error) { log("cannot resolve the game folder"); return 1; }
     }
+    // Other launcher instances must not recover or mutate this root mid-swap.
+    std::wstring rootKey = root.wstring();
+    CharLowerBuffW(rootKey.data(), static_cast<DWORD>(rootKey.size()));
+    unsigned char rootDigest[32];
+    std::string rootBytes = wideToUtf8(rootKey);
+    if (!sha256Data(reinterpret_cast<const unsigned char*>(rootBytes.data()), rootBytes.size(), rootDigest)) return 1;
+    std::wstring mutexName = L"Local\\F2R-" + utf8ToWide(hashToHex(rootDigest));
+    HANDLE mutex = CreateMutexW(nullptr, FALSE, mutexName.c_str());
+    if (!mutex) return 1;
+    DWORD lockResult = WaitForSingleObject(mutex, 0);
+    if (lockResult != WAIT_OBJECT_0 && lockResult != WAIT_ABANDONED) {
+        CloseHandle(mutex);
+        log("another launcher is already working on this game folder");
+        return 1;
+    }
+    struct RootLock {
+        HANDLE handle;
+        ~RootLock() { ReleaseMutex(handle); CloseHandle(handle); }
+    } rootLock{ mutex };
+    if (!options.installRp && !options.removeRp && !options.uninstall) {
+        fs::path receiptPath = root / kRpManifest;
+        DWORD attributes = GetFileAttributesW(receiptPath.c_str());
+        DWORD attributeError = attributes == INVALID_FILE_ATTRIBUTES ? GetLastError() : ERROR_SUCCESS;
+        bool absent = attributeError == ERROR_FILE_NOT_FOUND || attributeError == ERROR_PATH_NOT_FOUND;
+        std::error_code statusError;
+        bool regularReceipt = attributes != INVALID_FILE_ATTRIBUTES && fs::is_regular_file(receiptPath, statusError);
+        bool valid = absent;
+        if (!absent && regularReceipt && !statusError) {
+            RpManifest receipt;
+            fs::path rpDat = root / "mods/rpu.dat";
+            std::error_code datError;
+            valid = readRpManifest(root, &receipt) && !receipt.pending && !receipt.restored
+                && fs::is_regular_file(rpDat, datError) && !datError;
+        }
+        if (!valid) {
+            log("finish Restoration Project recovery before continuing");
+            return 1;
+        }
+    }
     {
         std::error_code ignored;
         fs::path old = root / kRootLauncher;
         old += ".old";
         fs::remove(old, ignored);
     }
-
+    if (!recoverTextTransaction(root)) { log("cannot recover the previous translation change"); return 1; }
+    std::string textReceipt = readWholeFile(root / "mods/f2r-text-choice.txt");
+    std::string textId = trim(textReceipt.substr(0, textReceipt.find('\n')));
+    if (rpOnDisk(root) && launcher_translations::find(textId)) {
+        bool rpReady = true;
+        if (rpPresent(root / kRpManifest)) {
+            RpManifest receipt;
+            rpReady = readRpManifest(root, &receipt) && !receipt.pending && !receipt.restored;
+        }
+        if (rpReady && !changeTextTranslation(root, "original")) return 1;
+        if (!rpReady && options.recoverTextOnly) { log("finish Restoration Project recovery before switching the text"); return 1; }
+    }
+    if (options.recoverTextOnly) return 0;
+    if (!options.textTranslation.empty() && !options.textWithInstall) return changeTextTranslation(root, options.textTranslation) ? 0 : 1;
     if (options.removeRp) return removeRestorationProject(root, true) ? 0 : 1;
     if (options.uninstall) return uninstallMod(root) ? 0 : 1;
     if (options.removeRussian) {
         log("removing the Russian translation:");
-        return removeRussianTranslation(root) ? 0 : 1;
+        return changeTextTranslation(root, "original") ? 0 : 1;
     }
     if (options.rollback) return rollbackInstalledBuild(root) ? 0 : 1;
 
@@ -2055,6 +2434,13 @@ int runConsole(Options options)
             log("the Restoration Project could not be installed (see the lines above)");
             return 1;
         }
+        if (rpOnDisk(root) && launcher_translations::find(trim(readWholeFile(root / "mods/f2r-text-choice.txt")))) {
+            if (!changeTextTranslation(root, "original")) {
+                if (rpInstalledNow && !removeRestorationProject(root))
+                    log("could not restore the previous game after the translation change failed");
+                return 1;
+            }
+        }
     }
 
     // --- 3D scene data, always made on this machine from this game ---
@@ -2095,7 +2481,11 @@ int runConsole(Options options)
     }
     if (!installedVersion.empty()) logf("the game folder holds build %s", installedVersion.c_str());
 
-    if (options.installRussian && !installRussianTranslation(root)) {
+    if (!options.textTranslation.empty() && !changeTextTranslation(root, options.textTranslation)) {
+        log("the Russian translation could not be installed (see the lines above)");
+        return 2;
+    }
+    if (options.installRussian && !changeTextTranslation(root, "official")) {
         // Exit 2: the game itself is installed, only the translation will be tried again.
         log("the Russian translation could not be installed (see the lines above)");
         return 2;
