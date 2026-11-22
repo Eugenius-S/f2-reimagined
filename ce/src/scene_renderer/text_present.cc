@@ -377,6 +377,17 @@ void patchCyclingRegion(SDL_Surface* indexedSurface, SDL_Surface* rgbaSurface,
     const int indexPitch = indexedSurface->pitch;
     unsigned char* rgba = static_cast<unsigned char*>(rgbaSurface->pixels);
     const int rgbaPitch = rgbaSurface->pitch;
+    PreparedSharpTextFrame& frame = preparedFrameStorage();
+    // A partial upload must also advance the saved source and restored
+    // pixels used by capture and by the next overlay fallback.
+    for (int y = y0; y <= y1; ++y) {
+        const size_t indexOffset = static_cast<size_t>(y) * indexPitch + x0;
+        const size_t savedRgbaOffset = static_cast<size_t>(y) * frame.rgbaPitch + x0 * 4;
+        const auto* rgbaRow = rgba + static_cast<size_t>(y) * rgbaPitch + x0 * 4;
+        std::memcpy(frame.originalIndices.data() + indexOffset, indices + indexOffset, rect.w);
+        std::memcpy(frame.restoredIndices.data() + indexOffset, indices + indexOffset, rect.w);
+        std::memcpy(frame.originalRgba.data() + savedRgbaOffset, rgbaRow, rect.w * 4);
+    }
     // The text restores inside the box: the same rule the full prepare
     // applies, restricted to it.
     for (size_t index = 0; index < records.size() && index < masks.size(); index++) {
@@ -389,6 +400,7 @@ void patchCyclingRegion(SDL_Surface* indexedSurface, SDL_Surface* rgbaSurface,
                 || !mask.visibleAt(pixel.x, pixel.y)
                 || indices[static_cast<size_t>(pixel.y) * indexPitch + pixel.x] != pixel.after
                 || pixel.before >= paletteEntries) continue;
+            frame.restoredIndices[static_cast<size_t>(pixel.y) * indexPitch + pixel.x] = pixel.before;
             unsigned char* rgbaPixel = rgba + static_cast<size_t>(pixel.y) * rgbaPitch + pixel.x * 4;
             const unsigned char* color = paletteRgb + pixel.before * 3;
             rgbaPixel[0] = color[0];
@@ -405,6 +417,8 @@ void patchCyclingRegion(SDL_Surface* indexedSurface, SDL_Surface* rgbaSurface,
         const unsigned char* index = indices + static_cast<size_t>(y) * indexPitch;
         const unsigned char* shown = gSharpShownMask.data() + static_cast<size_t>(y) * width;
         unsigned char* pixel = rgba + static_cast<size_t>(y) * rgbaPitch + static_cast<size_t>(x0) * 4;
+        auto* saved = frame.restoredRgba.data() + static_cast<size_t>(y) * frame.rgbaPitch + x0 * 4;
+        std::memcpy(saved, pixel, rect.w * 4);
         for (int x = x0; x <= x1; x++, pixel += 4) {
             if (shown[x] != 0 && index[x] == COLOR_FIRST) {
                 pixel[0] = pixel[1] = pixel[2] = pixel[3] = 0;

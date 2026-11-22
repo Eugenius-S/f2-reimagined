@@ -3871,6 +3871,10 @@ static void runDialogFixtureFrame()
                     if (preparedOffset >= frame.originalIndices.size()
                         || static_cast<const unsigned char*>(gSdlSurface->pixels)[indexedOffset] != gDialogCursorCheckCursorIndex
                         || frame.originalIndices[preparedOffset] != gDialogCursorCheckCursorIndex) {
+                        printf("DIALOG_CURSOR_INDEX live=%u prepared=%d expected=%u cached=%d\n",
+                            static_cast<unsigned>(static_cast<const unsigned char*>(gSdlSurface->pixels)[indexedOffset]),
+                            preparedOffset < frame.originalIndices.size() ? frame.originalIndices[preparedOffset] : -1,
+                            static_cast<unsigned>(gDialogCursorCheckCursorIndex), frame.cached ? 1 : 0);
                         failCursorCheck("cursor-not-drawn-at-target-in-indexed-frame");
                         return;
                     }
