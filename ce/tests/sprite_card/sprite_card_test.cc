@@ -1,4 +1,5 @@
 #include "sprite_card.h"
+#include "outline_mask.h"
 
 #include <cmath>
 #include <cstdio>
@@ -143,6 +144,26 @@ int main()
     CHECK(!flatSpriteCard(projection, art, 0.0, corners));
     art = { 25075, 0, 0, 0, 0, 0, 60 };
     CHECK(!standingSpriteCard(projection, art, corners, nullptr, nullptr));
+    // Three adjacent outline texels at 3x are a continuous 9 by 3 band.
+    unsigned char mask[5 * 5] = {};
+    mask[6] = mask[7] = mask[8] = 41;
+    unsigned char screen[18 * 18] = {};
+    const OutlinePoint scaled[4] = { { 2, 2 }, { 17, 2 }, { 17, 17 }, { 2, 17 } };
+    CHECK(drawProjectedOutlineMask(mask, 5, 5, scaled, screen, 18, 0, 0, 17, 17));
+    for (int y = 0; y < 18; ++y) {
+        for (int x = 0; x < 18; ++x) {
+            CHECK(screen[y * 18 + x] == (x >= 5 && x <= 13 && y >= 5 && y <= 7 ? 41 : 0));
+        }
+    }
+    // Perspective, clipping and transparent mask cells preserve other pixels.
+    std::fill_n(screen, 18 * 18, 79);
+    const OutlinePoint skewed[4] = { { 3, 2 }, { 15, 3 }, { 13, 16 }, { 1, 13 } };
+    CHECK(drawProjectedOutlineMask(mask, 5, 5, skewed, screen, 18, 8, 0, 17, 17));
+    CHECK(screen[5 * 18 + 8] == 41);
+    CHECK(screen[5 * 18 + 7] == 79 && screen[10 * 18 + 8] == 79);
+    const OutlinePoint edgeOn[4] = { { 0, 4 }, { 4, 4 }, { 7, 4 }, { 2, 4 } };
+    CHECK(!drawProjectedOutlineMask(mask, 5, 5, edgeOn, screen, 18, 0, 0, 17, 17));
+
     std::puts("sprite_card_tests: ok");
     return 0;
 }
