@@ -27,7 +27,7 @@ int gameDialogReset();
 int gameDialogExit();
 bool _gdialogActive();
 bool gameDialogWindowActive();
-bool gameDialogWindowClosing();
+bool gameDialogWindowTransitionActive();
 int gameDialogGetReplyTextOffset();
 void gameDialogEnter(Object* speaker, int mode);
 void _gdialogSystemEnter();

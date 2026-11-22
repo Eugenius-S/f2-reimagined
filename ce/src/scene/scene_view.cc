@@ -397,8 +397,8 @@ void updateRoofsFromGame()
 PreviewRuntimeState runtimeState()
 {
     const unsigned int mode = static_cast<unsigned int>(GameMode::getCurrentGameMode());
-    const bool dialogueClosing = gameDialogWindowClosing();
-    const bool dialog = (mode & GameMode::kDialog) != 0 || dialogueClosing;
+    const bool dialogueTransition = gameDialogWindowTransitionActive();
+    const bool dialog = (mode & GameMode::kDialog) != 0 || dialogueTransition;
     const bool modal = (mode & (GameMode::kInventory | GameMode::kEditor | GameMode::kDialog | GameMode::kPipboy)) != 0;
     const bool coveringTransition = (mode & (GameMode::kWorldmap | GameMode::kSaveGame | GameMode::kLoadGame)) != 0
         || mapIsTransitioning();
@@ -408,7 +408,7 @@ PreviewRuntimeState runtimeState()
         !isoIsDisabled(),
         _moviePlaying() == 0,
         mapVisibleUnderLocalModal(modal || gameMouseActionMenuIsOpen(), (mode & GameMode::kSpecial) != 0,
-            coveringTransition, dialogueClosing),
+            coveringTransition, dialogueTransition),
     };
 }
 
