@@ -35,6 +35,7 @@ int main()
         check(conversions(entry.en) == conversions(entry.ru), entry.en);
     }
     check(std::string(launcher_ru::translate("unpacking")) == launcher_ru::kUnpackingRu, "unpacking is translated");
+    check(std::string(launcher_ru::translate("Warning: voice lines may differ from the text.")) == "Внимание: озвучка может отличаться от текста.", "voice warning is translated");
     check(std::string(launcher_ru::translate("no such line")) == "no such line", "an unknown line stays English");
     // Machine lines are never translated.
     for (const char* machine : { "RELEASE_VERSION:%s", "RELEASE_ERROR:%s", "  ... %zu / %lu MB" }) {

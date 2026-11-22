@@ -23,6 +23,7 @@ struct Entry {
 };
 
 inline constexpr Entry kTable[] = {
+    { "Warning: voice lines may differ from the text.", "Внимание: озвучка может отличаться от текста." },
     { "RP restore: invalid or missing backup for %s; backup/rpu was kept", "Восстановление RP: резервная копия %s отсутствует или повреждена; backup/rpu сохранена" },
     { "RP restore: cannot read %s; backup/rpu was kept", "Восстановление RP: не удалось прочитать %s; backup/rpu сохранена" },
     { "RP restore: %s was changed by the player; backup/rpu was kept", "Восстановление RP: игрок изменил %s; backup/rpu сохранена" },

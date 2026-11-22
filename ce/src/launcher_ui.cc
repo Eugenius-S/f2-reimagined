@@ -49,6 +49,7 @@ constexpr int ID_PATH_HINT = 1016;
 constexpr int ID_VOICE = 1017;
 constexpr int ID_TEXT_LABEL = 1018;
 constexpr int ID_VOICE_LABEL = 1019;
+constexpr int ID_VOICE_WARNING = 1020;
 constexpr WORD IDB_LAUNCHER_LOGO = 201;
 
 enum class Operation { Install, Uninstall, RemoveRussian, RemoveRp, ChangeText, ChangeVoice, RecoverText };
@@ -432,6 +433,13 @@ std::wstring installedVoiceChoice()
     return choice.empty() ? L"original" : utf8ToWide(choice);
 }
 
+void updateVoiceWarning()
+{
+    SetWindowTextW(GetDlgItem(g_window, ID_VOICE_WARNING),
+        launcher_translations::voiceTextMayDiffer(wideToUtf8(g_textChoice), wideToUtf8(g_voiceChoice))
+            ? tr(L"Voice lines may differ from the text.", L"Озвучка может отличаться от текста.").c_str() : L"");
+}
+
 void refreshTextChoices()
 {
     using namespace launcher_translations;
@@ -476,6 +484,7 @@ void refreshTextChoices()
     if (voiceRp && voiceAvailable("rp-levy", rp)) addVoice(L"RP LeftCorp / Левая Корпорация", L"rp-levy");
     if (voiceAvailable("vanilla-fargus", rp)) addVoice(L"Fargus / Фаргус", L"vanilla-fargus");
     if (voiceAvailable("vanilla-levy", rp)) addVoice(L"LeftCorp / Левая Корпорация", L"vanilla-levy");
+    updateVoiceWarning();
 }
 
 bool rpRecoveryPending()
@@ -957,6 +966,7 @@ void createControls(HWND window)
     createControl(window, L"BUTTON", L"Install updates automatically on launch",
         BS_OWNERDRAW | BS_NOTIFY, 24, 348, 690, 28, ID_AUTO_UPDATE);
     g_autoUpdate = GetDlgItem(window, ID_AUTO_UPDATE);
+    createControl(window, L"STATIC", L"", SS_LEFT, 24, 378, 752, 20, ID_VOICE_WARNING);
     createControl(window, L"STATIC", L"", SS_LEFT, 24, 398, 752, 24, ID_RELEASE);
     g_release = GetDlgItem(window, ID_RELEASE);
     createControl(window, L"STATIC", L"", SS_LEFT | SS_NOPREFIX, 24, 424, 752, 52, ID_NOTES);
@@ -1221,6 +1231,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             g_textChoice = value;
             g_textWish = g_textChoice;
             g_russianInstall = g_textChoice == L"official";
+            updateVoiceWarning();
             saveSettings();
             if (g_installed && installedTextChoice() != g_textChoice) startOperation(Operation::ChangeText);
         } else if (LOWORD(wParam) == ID_VOICE && HIWORD(wParam) == CBN_SELCHANGE) {
@@ -1230,6 +1241,7 @@ LRESULT CALLBACK launcherWindowProc(HWND window, UINT message, WPARAM wParam, LP
             auto value = reinterpret_cast<const wchar_t*>(SendMessageW(g_voice, CB_GETITEMDATA, index, 0));
             if (!value || value == reinterpret_cast<const wchar_t*>(CB_ERR)) return 0;
             g_voiceChoice = value;
+            updateVoiceWarning();
             g_voiceWish = value;
             saveSettings();
             const auto* selected = launcher_translations::findVoice(wideToUtf8(g_voiceChoice));

@@ -130,5 +130,8 @@ binaries, scripts or settings from third-party installers as language assets.
 - The two voice packages are ready outside git. The 1C recording matches
   the BGforge Fallout2_Sound v1.2 track. The Levy DAT contains 706 playable
   ACM recordings and 629 lip tracks. Twenty unreadable old Hakunin files
-  fall back to the game. A PC Boheme Fargus voice source and publicly
-  accessible Drive links for the new packages remain pending.
+  fall back to the game. The owner accepts Fargus text with another voice;
+  Fargus voice remains unavailable.
+- 2026-11-22 gpt: configured the 1C and LeftCorp voice package metadata for
+  base and RP from the owner's Drive links. Publication and public download
+  verification remain pending; owner visual check follows the merge.

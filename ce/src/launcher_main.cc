@@ -2143,6 +2143,11 @@ bool changeTextTranslation(const fs::path& root, const std::string& choice, cons
     fs::rename(work / "journal", work / "committed", error);
     if (error) { recoverTextTransaction(root); return false; }
     fs::remove_all(work, error);
+    std::string finalText = choice.empty() ? textId : choice;
+    if (finalText.empty()) finalText = launcher_uninstall::languageOf(readWholeFile(root / kCfg)) == "russian" ? "official" : "original";
+    std::string finalVoice = voiceChoice.empty() ? installedVoiceId(root) : voiceChoice;
+    if ((finalVoice.empty() || finalVoice == "original") && knownActiveManualVoice(root)) finalVoice = "manual-bgforge";
+    if (voiceTextMayDiffer(finalText, finalVoice)) log("Warning: voice lines may differ from the text.");
     return true;
 }
 
