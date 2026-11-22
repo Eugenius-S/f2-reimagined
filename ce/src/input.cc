@@ -1031,15 +1031,15 @@ void _GNW95_process_message()
         case SDL_KEYDOWN:
         case SDL_KEYUP: {
             const int rawKey = e.key.keysym.scancode;
+            keyboardData.key = rawKey;
+            keyboardData.down = (e.key.state & SDL_PRESSED) != 0;
+            const bool syntheticSfallKey = !e.key.repeat && sfall_kb_consume_synthetic_key_event(rawKey, keyboardData.down);
             int markedRelease = -1;
             if (e.type == SDL_KEYDOWN) {
                 if (e.key.repeat && (owner_shot::suppressKeyRepeat(rawKey) || owner_shot::suppressNativeKeyRepeat(rawKey))) break;
-            } else {
+            } else if (!syntheticSfallKey) {
                 markedRelease = owner_shot::observeKeyRelease(rawKey);
             }
-            keyboardData.key = rawKey;
-            keyboardData.down = (e.key.state & SDL_PRESSED) != 0;
-            bool syntheticSfallKey = sfall_kb_consume_synthetic_key_event(keyboardData.key, keyboardData.down);
             if (!keyboardIsDisabled()) {
                 // The dev tools' fly camera keeps its keys from script hooks;
                 // the keys still reach the dev tools.
@@ -1054,7 +1054,7 @@ void _GNW95_process_message()
                     }
                 }
                 if (markedRelease >= 0) keyboardData.key = markedRelease;
-                if (e.type == SDL_KEYDOWN && !e.key.repeat) owner_shot::observeKeyPress(rawKey, keyboardData.key);
+                if (e.type == SDL_KEYDOWN && !e.key.repeat && !syntheticSfallKey) owner_shot::observeKeyPress(rawKey, keyboardData.key);
                 _GNW95_process_key(&keyboardData);
             }
             break;
