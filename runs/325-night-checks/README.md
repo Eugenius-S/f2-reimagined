@@ -42,3 +42,14 @@ The integration PR #562 was verified and published as 8d9e4de. Releasing the int
   88.2 at 09:00; Modoc averaged 18.3 versus 90.2. The HUD sample
   was identical across all four hours on each map, and the character's
   local light stayed visible. These are two extra scenes, not all maps.
+
+- On exact Windows build 3369ef50b, the stock English character creation
+  fixture verified trait rows against their button centers to one logical
+  pixel and within their assigned widths. A real trait-button press and
+  release changed selection without dropping any of the 96 captured text
+  runs. SharpText on rendered all 96 overlay runs; SharpText off kept the
+  96 native text runs without an overlay. This is not a Russian-font or
+  every-button acceptance result.
+- The same build supplied [Arroyo at noon, dusk, and midnight](arroyo-noon-dusk-midnight.jpg)
+  and a pixel-identical indoor Temple control. See [task 323](../../tasks/323-darker-outdoor-nights.md)
+  for the measured areas and limits.
