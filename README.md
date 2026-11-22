@@ -28,7 +28,9 @@ from the rolling [latest release](https://github.com/Eugenius-S/f2-reimagined/re
 2. Run the launcher. It detects those installs; if it cannot find the game,
    choose its folder containing `master.dat` and `critter.dat`.
 3. Choose English or Russian for the launcher. Under **Text**, choose original
-   English, official RPU Russian, or (for the base game) 1C, Fargus or Levy.
+   English, official RPU Russian, 1C, Fargus or Levy, in the base game or RP.
+   In RP 2.4.34, new or changed lines use the official RPU translation; the
+   other translations apply to verified unchanged original-game lines.
    **Voice** is independent of the text: original audio, 1C and LeftCorp are
    available for the base game and RP. Fargus voice is not available. Some old
    LeftCorp Hakunin lines fall back to the original audio.

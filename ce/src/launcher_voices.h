@@ -25,6 +25,12 @@ inline const VoicePackage* findVoice(const std::string& id)
     for (const auto& voice : voices) if (id == voice.id) return &voice;
     return nullptr;
 }
+inline std::string voiceForMode(const std::string& id, bool rp)
+{
+    if (id == "vanilla-1c" || id == "rp-1c") return rp ? "rp-1c" : "vanilla-1c";
+    if (id == "vanilla-levy" || id == "rp-levy") return rp ? "rp-levy" : "vanilla-levy";
+    return id;
+}
 inline bool voiceAvailable(const std::string& id, bool rp)
 {
     if (id == "original") return true;

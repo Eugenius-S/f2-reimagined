@@ -111,8 +111,14 @@ class TestUi(unittest.TestCase):
                         user.SendMessageW(window, 0x111, 1004 | (1 << 16), text)  # CBN_SELCHANGE
                     self.assertIn("levy", settings.read_text().lower())
                     user.SendMessageW(user.GetDlgItem(window, 1005), 0xF5, 0, 0)  # BM_CLICK
-                    self.assertEqual(user.SendMessageW(text, 0x146, 0, 0), 2)
-                    self.assertGreaterEqual(user.SendMessageW(voice, 0x146, 0, 0), 1)
+                    self.assertEqual(user.SendMessageW(text, 0x146, 0, 0), 5)
+                    self.assertEqual(user.SendMessageW(voice, 0x146, 0, 0), 3)
+                    labels = []
+                    for index in range(5):
+                        buffer = ctypes.create_unicode_buffer(256)
+                        user.SendMessageW(text, 0x148, index, ctypes.addressof(buffer))
+                        labels.append(buffer.value)
+                    self.assertTrue(all(any(expected in label for label in labels) for expected in ('RPU', '1C', 'Fargus', 'Levy')))
                     other = root / "other"
                     (other / "mods").mkdir(parents=True)
                     for name in ("master.dat", "critter.dat"):

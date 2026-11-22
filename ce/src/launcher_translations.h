@@ -19,11 +19,24 @@ inline constexpr Package texts[] = {
     { "fargus", "fio-fargus-text.dat", 1717961, "f6ad417e5f78c6498c22458fed0d14720fefc2a5ded5edc2575b826aa1d439de" },
     { "levy", "fio-levy-text.dat", 1614114, "1b735481a1c82a1c4ef320ed34c25e1b937ecfe218ce6ace0389efad3a572b9b" },
 };
+// The install names are shared with base-game variants so old transaction
+// journals and choice markers keep working across a mode change.
+inline constexpr Package rpTexts[] = {
+    { "1c", "steam-1c-text.dat", 2137826, "cecbec9903172351fd4387475cd9f87eab3cd4b2b0836991a5640373ea46de51" },
+    { "fargus", "fio-fargus-text.dat", 2113776, "809cd3ae1532d6742c1c7adfb316dbc2b657595dcb52130d474e8f31c4740ef0" },
+    { "levy", "fio-levy-text.dat", 2016939, "8193204d9fda452d21fe8cc8b34c09dacc5269ed7273469ebf0aef75f70b3040" },
+};
 
 inline const Package* find(const std::string& id)
 {
     for (const auto& item : texts) if (id == item.id) return &item;
     return nullptr;
+}
+
+inline const Package* find(const std::string& id, bool rp)
+{
+    const auto* base = find(id);
+    return !base || !rp ? base : &rpTexts[base - texts];
 }
 
 inline bool voiceTextMayDiffer(const std::string& text, const std::string& voice)
@@ -32,7 +45,7 @@ inline bool voiceTextMayDiffer(const std::string& text, const std::string& voice
         : voice == "vanilla-levy" || voice == "rp-levy" ? "levy"
         : voice == "vanilla-fargus" ? "fargus" : "";
     return !source.empty() && (text == "original" || text == "1c" || text == "fargus" || text == "levy" || text == "official")
-        && (text == "official" || text != source);
+        && (text == "official" || text != source || voice == "rp-1c" || voice == "rp-levy");
 }
 
 // Direct HTTPS only, with loopback HTTP reserved for local tests.
@@ -54,7 +67,7 @@ inline bool validUrl(const std::string& url)
 inline bool available(const std::string& id, bool rp, const std::string& textUrl, const std::string& fontsUrl)
 {
     if (id == "original" || id == "official") return true;
-    return !rp && find(id) != nullptr && validUrl(textUrl) && validUrl(fontsUrl);
+    return find(id, rp) != nullptr && validUrl(textUrl) && validUrl(fontsUrl);
 }
 
 }

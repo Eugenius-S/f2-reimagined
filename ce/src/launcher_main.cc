@@ -1819,6 +1819,20 @@ std::string insertOfficialOrder(const std::string& input)
     return inserted ? result : "rpu_russian.dat\r\n" + result;
 }
 
+std::string insertTextAfterOfficial(const std::string& input, const char* fonts, const char* text)
+{
+    std::string result;
+    std::stringstream lines(input);
+    std::string line;
+    while (std::getline(lines, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        result += line + "\r\n";
+        if (launcher_uninstall::lowered(trim(line)) == "rpu_russian.dat")
+            result += std::string(fonts) + "\r\n" + text + "\r\n";
+    }
+    return result;
+}
+
 bool effectiveModOrder(const fs::path& root, std::string* order)
 {
     fs::path path = root / "mods/mods_order.txt";
@@ -1869,7 +1883,7 @@ bool fetchVoice(const launcher_translations::VoicePackage& voice, const fs::path
     return true;
 }
 
-bool changeTextTranslation(const fs::path& root, const std::string& choice, const std::string& previousOrder = {}, const std::string& voiceChoice = {}, bool restoreManualVoice = false, const fs::path& preflight = {})
+bool changeTextTranslation(const fs::path& root, const std::string& choice, const std::string& previousOrder = {}, const std::string& voiceChoice = {}, bool restoreManualVoice = false, const fs::path& preflight = {}, const fs::path& textPreflight = {})
 {
     using namespace launcher_translations;
     for (const auto& name : translationTargets()) if (!safeTranslationTarget(root / name)) {
@@ -1877,9 +1891,11 @@ bool changeTextTranslation(const fs::path& root, const std::string& choice, cons
         return false;
     }
     if (!recoverTextTransaction(root)) return false;
-    const Package* selected = find(choice);
-    const char* url = choice == "1c" ? url1c : choice == "fargus" ? urlFargus : urlLevy;
-    if ((!choice.empty() && !available(choice, rpOnDisk(root), url, urlFonts))
+    bool rp = rpOnDisk(root);
+    const Package* selected = find(choice, rp);
+    const char* url = textUrl(choice, rp);
+    if ((!choice.empty() && (!available(choice, rp, url, urlFonts)
+            || (selected && rp && !supportedVoiceRp(root))))
         || (!voiceChoice.empty() && (!voiceAvailable(voiceChoice, rpOnDisk(root))
             || (findVoice(voiceChoice) && findVoice(voiceChoice)->rp && !supportedVoiceRp(root))))) {
         log("this translation is unavailable for the current game or has no download URL");
@@ -1899,7 +1915,8 @@ bool changeTextTranslation(const fs::path& root, const std::string& choice, cons
     std::string textId = trim(textReceipt.substr(0, textReceipt.find('\n')));
     const Package* ownedText = find(textId);
     std::string textHash, fontsHash;
-    bool textOwned = ownedText && sha256File(root / "mods" / ownedText->filename, &textHash) && textHash == ownedText->sha256;
+    bool textOwned = ownedText && sha256File(root / "mods" / ownedText->filename, &textHash)
+        && (textHash == ownedText->sha256 || textHash == find(textId, true)->sha256);
     bool fontsOwned = textOwned && sha256File(root / "mods" / fonts.filename, &fontsHash) && fontsHash == fonts.sha256;
     auto withoutOwnedText = [&](std::string value) {
         if (textOwned) value = launcher_uninstall::removeLine(value, ownedText->filename);
@@ -1924,7 +1941,8 @@ bool changeTextTranslation(const fs::path& root, const std::string& choice, cons
         fs::path path = root / "mods" / item.filename;
         if (fs::exists(path, error)) {
             std::string hash;
-            if (previous != item.id || !sha256File(path, &hash) || hash != item.sha256) return abandon();
+            if (previous != item.id || !sha256File(path, &hash)
+                || (hash != item.sha256 && hash != find(item.id, true)->sha256)) return abandon();
         }
         if (previous == item.id) order = launcher_uninstall::removeLine(order, item.filename);
     }
@@ -1941,25 +1959,32 @@ bool changeTextTranslation(const fs::path& root, const std::string& choice, cons
     bool officialKnown = officialExists && sha256File(officialPath, &officialHash) && officialHash == kOfficialRussianHash;
     bool officialActive = false;
     launcher_uninstall::removeLine(order, "rpu_russian.dat", &officialActive);
-    if ((officialOwned && !officialKnown) || (choice == "official" && officialExists && !officialKnown)) return abandon();
-    if (choice != "official" && officialExists && !officialKnown && officialActive) return abandon();
-    if (choice != "official" && officialKnown) order = launcher_uninstall::removeLine(order, "rpu_russian.dat");
+    bool needsOfficial = choice == "official" || (rp && selected);
+    if ((officialOwned && !officialKnown) || (needsOfficial && officialExists && !officialKnown)) return abandon();
+    if (!needsOfficial && officialExists && !officialKnown && officialActive) return abandon();
+    if (!needsOfficial && officialKnown) order = launcher_uninstall::removeLine(order, "rpu_russian.dat");
     if (error) return abandon();
-    if (choice != "official" && officialOwned) replace[7] = true;
+    if (!needsOfficial && officialOwned) replace[7] = true;
     if (selected) {
         size_t index = choice == "1c" ? 3 : choice == "fargus" ? 4 : 5;
         auto download = [&](const char* source, const Package& item, size_t i) {
             std::string message, hash;
             fs::path path = work / ("new" + std::to_string(i));
-            if (!fetchRoutes({ { "translation", source, "" } }, nullptr, &path, &message)
+            bool fetched = i == index && !textPreflight.empty()
+                ? fs::copy_file(textPreflight, path, error) && !error
+                : i == 6 && !textPreflight.empty()
+                ? fs::copy_file(root / "mods" / fonts.filename, path, error) && !error
+                : fetchRoutes({ { "translation", source, "" } }, nullptr, &path, &message);
+            if (!fetched
                 || fs::file_size(path, error) != item.size || error
                 || !sha256File(path, &hash) || hash != item.sha256) return false;
             replace[i] = true;
             return true;
         };
         if (!download(url, *selected, index) || !download(urlFonts, fonts, 6)) return abandon();
-        order = std::string(selected->filename) + "\r\n" + fonts.filename + "\r\n" + order;
-    } else if (choice == "official") {
+        if (!rp) order = std::string(selected->filename) + "\r\n" + fonts.filename + "\r\n" + order;
+    }
+    if (needsOfficial) {
         // Reuse the existing official mirror and RPU fallback in an isolated root.
         fs::path scratch = work / "official";
         fs::create_directories(scratch / "mods", error);
@@ -1973,9 +1998,10 @@ bool changeTextTranslation(const fs::path& root, const std::string& choice, cons
         }
         order = launcher_uninstall::removeLine(order, "rpu_russian.dat");
         order = insertOfficialOrder(order);
+        if (selected) order = insertTextAfterOfficial(order, fonts.filename, selected->filename);
     }
     std::string marker = choice + "\n";
-    if (choice == "official" && officialOwned) marker += "official-owned=1\n";
+    if (needsOfficial && officialOwned) marker += "official-owned=1\n";
     if (rpOnDisk(root)) {
         size_t at = previousMarker.find("\nretired=");
         size_t end = at == std::string::npos ? at : previousMarker.find('\n', at + 9);
@@ -2529,7 +2555,15 @@ int runConsole(Options options)
         if (ready) {
             const auto* voice = launcher_translations::findVoice(installedVoiceId(root));
             if (voice && (voice->rp != rpOnDisk(root) || (voice->rp && !supportedVoiceRp(root)))) {
-                if (!changeTextTranslation(root, "", {}, "original")) return 1;
+                std::string mapped = launcher_translations::voiceForMode(voice->id, rpOnDisk(root));
+                std::string sourceHash;
+                const auto* mappedVoice = launcher_translations::findVoice(mapped);
+                if (!launcher_translations::voiceAvailable(mapped, rpOnDisk(root))
+                    || !sha256File(root / "mods" / voice->filename, &sourceHash) || sourceHash != voice->hash
+                    || !mappedVoice || std::string(mappedVoice->hash) != voice->hash || std::string(mappedVoice->size) != voice->size
+                    || (rpOnDisk(root) && !supportedVoiceRp(root))) mapped = "original";
+                if (!changeTextTranslation(root, "", {}, mapped, false,
+                        mapped == "original" ? fs::path{} : root / "mods" / voice->filename)) return 1;
             }
             std::error_code markerError;
             if (!fs::remove(root / kVoiceRpTransition, markerError) || markerError) return 1;
@@ -2540,20 +2574,63 @@ int runConsole(Options options)
     }
     std::string textReceipt = readWholeFile(root / "mods/f2r-text-choice.txt");
     std::string textId = trim(textReceipt.substr(0, textReceipt.find('\n')));
-    if (rpOnDisk(root) && launcher_translations::find(textId)) {
+    if (!options.installRp && !options.removeRp && launcher_translations::find(textId)) {
         bool rpReady = true;
         if (rpPresent(root / kRpManifest)) {
             RpManifest receipt;
             rpReady = readRpManifest(root, &receipt) && !receipt.pending && !receipt.restored;
         }
-        if (rpReady && !changeTextTranslation(root, "original")) return 1;
+        const auto* package = launcher_translations::find(textId, rpOnDisk(root));
+        std::string hash;
+        if (rpReady && rpOnDisk(root) && !supportedVoiceRp(root)) {
+            log("The installed RP version does not match the text package; switching to English.");
+            if (!changeTextTranslation(root, "original")) return 1;
+        } else
+        if (rpReady && (!sha256File(root / "mods" / package->filename, &hash) || hash != package->sha256)
+            && !changeTextTranslation(root, textId)) return 1;
         if (!rpReady && options.recoverTextOnly) { log("finish Restoration Project recovery before switching the text"); return 1; }
     }
     if (options.recoverTextOnly) return 0;
     if ((!options.textTranslation.empty() || !options.voiceTranslation.empty()) && !options.textWithInstall)
         return changeTextTranslation(root, options.textTranslation, {}, options.voiceTranslation) ? 0 : 1;
     if (options.removeRp) {
+        fs::path textPreflight;
+        fs::path voicePreflight;
+        struct TextPreflightCleanup {
+            fs::path* path;
+            ~TextPreflightCleanup() { if (!path->empty()) { std::error_code ignored; fs::remove(*path, ignored); } }
+        } textCleanup{ &textPreflight };
+        TextPreflightCleanup voiceCleanup{ &voicePreflight };
+        const auto* baseText = rpOnDisk(root) ? launcher_translations::find(textId) : nullptr;
+        if (baseText) {
+            std::string installedHash, fontHash;
+            const auto* currentText = launcher_translations::find(textId, true);
+            if (!rpOnDisk(root) || !supportedVoiceRp(root)
+                || !sha256File(root / "mods" / currentText->filename, &installedHash) || installedHash != currentText->sha256
+                || !sha256File(root / "mods" / launcher_translations::fonts.filename, &fontHash) || fontHash != launcher_translations::fonts.sha256) return 1;
+            textPreflight = fs::temp_directory_path() / ("f2r-text-" + std::to_string(GetCurrentProcessId()) + ".dat");
+            if (fs::exists(textPreflight)) { textPreflight.clear(); return 1; }
+            std::string message, hash;
+            std::error_code error;
+            if (!fetchRoutes({ { "translation", launcher_translations::textUrl(textId, false), "" } }, nullptr, &textPreflight, &message)
+                || fs::file_size(textPreflight, error) != baseText->size || error
+                || !sha256File(textPreflight, &hash) || hash != baseText->sha256) return 1;
+        }
         std::string voice = installedVoiceId(root);
+        std::string mappedVoice = launcher_translations::voiceForMode(voice, false);
+        if (mappedVoice != voice) {
+            const auto* oldVoice = launcher_translations::findVoice(voice);
+            const auto* newVoice = launcher_translations::findVoice(mappedVoice);
+            std::string hash;
+            if (!oldVoice || !newVoice || !launcher_translations::voiceAvailable(mappedVoice, false)
+                || !sha256File(root / "mods" / oldVoice->filename, &hash) || hash != oldVoice->hash) return 1;
+            voicePreflight = fs::temp_directory_path() / ("f2r-voice-" + std::to_string(GetCurrentProcessId()) + ".dat");
+            if (fs::exists(voicePreflight)) { voicePreflight.clear(); return 1; }
+            if (std::string(oldVoice->hash) == newVoice->hash && std::string(oldVoice->size) == newVoice->size) {
+                std::error_code error;
+                if (!fs::copy_file(root / "mods" / oldVoice->filename, voicePreflight, error) || error) return 1;
+            } else if (!fetchVoice(*newVoice, voicePreflight)) return 1;
+        }
         bool guard = launcher_translations::findVoice(voice) && launcher_translations::findVoice(voice)->rp && rpPresent(root / kRpManifest);
         if (guard && !writeTextFile(root / kVoiceRpTransition, "F2R voice RP transition\n")) return 1;
         if (!removeRestorationProject(root, true)) {
@@ -2563,7 +2640,9 @@ int runConsole(Options options)
             }
             return 1;
         }
-        if (const auto* package = launcher_translations::findVoice(voice); package && package->rp != rpOnDisk(root))
+        if ((baseText || mappedVoice != voice)
+            && !changeTextTranslation(root, baseText ? textId : "", {}, mappedVoice != voice ? mappedVoice : "", false, voicePreflight, textPreflight)) return 1;
+        if (const auto* package = launcher_translations::findVoice(voice); mappedVoice == voice && package && package->rp != rpOnDisk(root))
             if (!changeTextTranslation(root, "", {}, "original")) return 1;
         { std::error_code markerError; fs::remove(root / kVoiceRpTransition, markerError); if (markerError) return 1; }
         return 0;
@@ -2711,6 +2790,11 @@ int runConsole(Options options)
             ~PreflightCleanup() { if (!path->empty()) { std::error_code ignored; fs::remove(*path, ignored); } }
         } cleanup{ &preflight };
         bool changingMode = !rpOnDisk(root);
+        if (changingMode && options.voiceTranslation.empty()) {
+            std::string oldVoice = installedVoiceId(root);
+            std::string mapped = launcher_translations::voiceForMode(oldVoice, true);
+            if (mapped != oldVoice) options.voiceTranslation = mapped;
+        }
         const auto* requestedVoice = launcher_translations::findVoice(options.voiceTranslation);
         if (changingMode && !options.voiceTranslation.empty()) {
             if (!launcher_translations::voiceAvailable(options.voiceTranslation, true)) {
@@ -2732,9 +2816,11 @@ int runConsole(Options options)
         std::string currentVoice = installedVoiceId(root);
         const auto* voicePackage = launcher_translations::findVoice(currentVoice);
         bool retireVoice = voicePackage && voicePackage->rp != rpOnDisk(root);
-        bool retireText = rpOnDisk(root) && launcher_translations::find(trim(readWholeFile(root / "mods/f2r-text-choice.txt")));
+        std::string currentTextMarker = readWholeFile(root / "mods/f2r-text-choice.txt");
+        std::string currentText = trim(currentTextMarker.substr(0, currentTextMarker.find('\n')));
+        bool retireText = rpOnDisk(root) && launcher_translations::find(currentText);
         std::string desiredText = changingMode ? (options.textTranslation.empty() && options.installRussian ? "official" : options.textTranslation) : "";
-        if (desiredText.empty() && retireText) desiredText = "original";
+        if (desiredText.empty() && retireText) desiredText = currentText;
         if (retireVoice || !desiredText.empty() || (changingMode && !options.voiceTranslation.empty())) {
             std::string desiredVoice = changingMode && !options.voiceTranslation.empty() ? options.voiceTranslation : retireVoice ? "original" : "";
             if (!changeTextTranslation(root, desiredText, {}, desiredVoice, false, preflight)) {
