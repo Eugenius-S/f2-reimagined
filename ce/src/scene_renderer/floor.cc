@@ -22,6 +22,7 @@ unsigned int gFloorVao = 0;
 unsigned int gFloorTexture = 0;
 int gFloorVertexCount = 0;
 bool gFloorLoaded = false;
+static bool gFloorIncludesRoof = false;
 int gFloorExtensionFirst = 0;
 int gFloorExtensionCount = 0;
 float gFloorSeaColor[3] = {0.04f, 0.04f, 0.045f};
@@ -125,6 +126,7 @@ void destroyStaticFloor()
     gFloorSeaColor[0] = gFloorSeaColor[1] = 0.04f;
     gFloorSeaColor[2] = 0.045f;
     gFloorLoaded = false;
+    gFloorIncludesRoof = false;
     gFloorMapClip = {};
     gActiveMapClip = {};
     gFloorOccupancy.clear();
@@ -144,9 +146,11 @@ void unloadStaticScene()
     resetCamera();
 }
 
-bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* error)
+bool loadStaticFloor(const std::filesystem::path& cacheDirectory, bool withRoof, std::string* error)
 {
-    if (gFloorLoaded) return true;
+    if (gFloorLoaded && (!withRoof || gFloorIncludesRoof)) return true;
+    // A repaired cache may be retried while its floor-only view is active.
+    if (gFloorLoaded) destroyStaticFloor();
     auto fail = [&](const std::string& message) {
         destroyStaticFloor();
         if (error != nullptr) *error = message;
@@ -201,11 +205,15 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     const size_t layerBytes = version >= 2 ? 2 * kFloorBytes : kFloorBytes;
     const size_t cellsEnd = kHeaderSize + layerBytes + static_cast<size_t>(tileCount) * 4;
     const size_t listedCount = version >= 3 && sidecar.size() >= cellsEnd + 2 ? readU16(sidecar.data() + cellsEnd) : 0;
-    const size_t fringeCount = version >= 5 ? listedCount : 0;
     constexpr size_t kPatchEntryBytes = 8;
     const size_t patchesAt = cellsEnd + (version >= 3 ? 2 + listedCount * entryBytes : 0);
-    const size_t patchCount = version >= 6 && sidecar.size() >= patchesAt + 2 ? readU16(sidecar.data() + patchesAt) : 0;
-    const size_t waterAt = patchesAt + (version >= 6 ? 2 + patchCount * kPatchEntryBytes : 0);
+    const size_t listedPatchCount = version >= 6 && sidecar.size() >= patchesAt + 2
+        ? readU16(sidecar.data() + patchesAt) : 0;
+    const size_t waterAt = patchesAt + (version >= 6 ? 2 + listedPatchCount * kPatchEntryBytes : 0);
+    // Keep all serialized offsets for validation, even when the recovery
+    // view does not use the optional roof data or its separate texture.
+    const size_t fringeCount = withRoof && version >= 5 ? listedCount : 0;
+    const size_t patchCount = withRoof ? listedPatchCount : 0;
     constexpr size_t kGridSquares = 100 * 100;
     const size_t expectedSize = waterAt + (version >= 7 ? 3 + kGridSquares : 0) + (version >= 8 ? tileCount : 0);
     // tileCount 0 is a tile-less elevation (171): the map's squares are all
@@ -274,7 +282,7 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     constexpr float kHalfMap = 50.0f;
     quad(-kHalfMap, -0.08f, -kHalfMap, kHalfMap, kHalfMap, 0.0f, 0.0f, 1.0f, 1.0f);
     const unsigned char* floorData = sidecar.data() + kHeaderSize;
-    const unsigned char* roofData = version >= 2 ? floorData + kFloorBytes : nullptr;
+    const unsigned char* roofData = withRoof && version >= 2 ? floorData + kFloorBytes : nullptr;
     const unsigned char* cellData = floorData + layerBytes;
     for (int row = 0; row < 100; row++) {
         for (int col = 0; col < 100; col++) {
@@ -372,13 +380,13 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     // Every square of an exported run, whether or not clipping leaves a band piece on it: the flat
     // atlas square is never drawn in flight for it (its wall-top art stands as a band or is cut away).
     std::vector<unsigned char> inRun(100 * 100, 0);
-    if (fringeNeeded) {
-        PerfScope stage("floor_fringe");
-        if (!fringeErrorMessage.empty()) {
-            return fail(fringeErrorMessage);
-        }
+    // The real floor and the base roof cells are already decoded.
+    // A missing cosmetic band atlas must not remove the walls or the hero.
+    const bool fringeReady = fringeNeeded && fringeErrorMessage.empty();
+    if (fringeNeeded && !fringeReady) {
+        fprintf(stderr, "scene: using flat roof cells: %s\n", fringeErrorMessage.c_str());
     }
-    for (size_t entry = 0; entry < fringeCount; entry++) {
+    for (size_t entry = 0; fringeReady && entry < fringeCount; entry++) {
         const unsigned char* data = sidecar.data() + cellsEnd + 2 + entry * kFringeEntryBytes;
         const int edge = readU16(data), plane = readU16(data + 2), start = readU16(data + 4), count = readU16(data + 6);
         const int x = readU16(data + 8), y = readU16(data + 10), w = readU16(data + 12), h = readU16(data + 14);
@@ -428,7 +436,7 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     // The squares drawn from a cell of roof_fringe.png under the free camera.
     std::vector<unsigned char> patchCell(100 * 100, 0);
     std::vector<int> patchX(100 * 100, 0), patchY(100 * 100, 0);
-    for (size_t entry = 0; entry < patchCount; entry++) {
+    for (size_t entry = 0; fringeReady && entry < patchCount; entry++) {
         const unsigned char* data = sidecar.data() + patchesAt + 2 + entry * kPatchEntryBytes;
         const int index = readU16(data), x = readU16(data + 2), y = readU16(data + 4);
         if (index >= 100 * 100 || fringeRgba.empty()
@@ -679,7 +687,7 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     }
     gFloorOccupancy = std::move(floorOccupancy);
     setRoofSquares(std::move(roofs));
-    if (!fringeRgba.empty()) {
+    if (fringeReady) {
         unsigned int fringeTexture = 0;
         glGenTextures(1, &fringeTexture);
         glBindTexture(kTexture2D, fringeTexture);
@@ -693,6 +701,7 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     }
     loadFloorReceiver(cacheDirectory);
     gFloorLoaded = true;
+    gFloorIncludesRoof = withRoof;
     if (error != nullptr) error->clear();
     return true;
 }
