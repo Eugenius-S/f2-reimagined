@@ -4109,6 +4109,7 @@ static void runDialogFixtureFrame()
                 motion.motion.y = cursorY;
                 scriptedInputSetExternalMouse(true);
                 scriptedInputObserveEvent(motion);
+                mouseResetAbsoluteSensitivityTracking();
                 mouseHideCursor();
                 _mouse_set_position(cursorX, cursorY);
                 mouseShowCursor();
