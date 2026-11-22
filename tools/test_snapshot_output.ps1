@@ -112,6 +112,22 @@ try {
     $copies = [regex]::Matches($source, 'Copy-Item[^\r\n]*(\$OutputDirectory[^\r\n]*)?\r?\n\s*Add-SnapshotOutput').Count
     Check ($copies -eq 3) "dev-snapshot records $copies of its 3 capture copies"
 
+    . (Join-Path $PSScriptRoot 'snapshot-output.ps1')
+    $probe = Join-Path $testRoot 'exit.log'
+    Check ((Get-SnapshotExitProbeStatus $probe 'arcaves') -eq 'pending') 'no exit data must remain pending'
+    Set-Content -LiteralPath $probe -Value 'exit probe placed: source=ARTEMPLE e0'
+    Check ((Get-SnapshotExitProbeStatus $probe 'arcaves') -eq 'pending') 'selecting an exit does not prove walking'
+    Add-Content -LiteralPath $probe -Value 'probe done: hero tile=15887 busy=0 scene=available'
+    Check ((Get-SnapshotExitProbeStatus $probe 'arcaves') -eq 'failed') 'a finished probe without an arrival must fail'
+    Set-Content -LiteralPath $probe -Value 'exit probe failed: no reachable arcaves exit grid'
+    Check ((Get-SnapshotExitProbeStatus $probe 'arcaves') -eq 'failed') 'a rejected exit must fail promptly'
+    $pass = 'exit transition passed: source=ARTEMPLE/12 exit=12 target=arcaves map=ARCAVES.MAP index=2 elevation=0 tile=28707 after=42 frames'
+    Set-Content -LiteralPath $probe -Value @($pass, 'probe done: hero tile=28707')
+    Check ((Get-SnapshotExitProbeStatus $probe 'arcaves') -eq 'passed') 'the matching real arrival must pass'
+    Check ((Get-SnapshotExitProbeStatus $probe 'arcave') -eq 'failed') 'a prefix must not count as a different exit'
+    Set-Content -LiteralPath $probe -Value @($pass.Replace('map=ARCAVES.MAP','map=ARBRIDGE.MAP'), 'probe done')
+    Check ((Get-SnapshotExitProbeStatus $probe 'arcaves') -eq 'failed') 'the label of a target must not override the wrong actual arrival'
+
     Write-Host "snapshot-output: $script:checks checks passed"
     $global:LASTEXITCODE = 0
 } finally {
