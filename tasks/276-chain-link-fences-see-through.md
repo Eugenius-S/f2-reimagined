@@ -2,7 +2,7 @@
 id: 276
 title: Chain-link fences show what is behind them
 milestone: M1
-status: todo
+status: doing
 owner: glm
 suggested: glm
 priority: high
