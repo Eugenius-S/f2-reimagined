@@ -3765,6 +3765,7 @@ static void runDialogFixtureFrame()
             }
             if (gDialogCursorCheckRequested) {
                 auto failCursorCheck = [](const char* reason) {
+                    scriptedInputSetExternalMouse(false);
                     printf("DIALOG_CURSOR_CHECK FAIL map=%s script=%s speaker=%d speaker_tile=%d hero=%d reason=%s\n",
                         gMapHeader.name, gDialogFixtureScript, gDialogFixtureSpeakerId,
                         gDialogFixtureSpeakerTile, gDude != nullptr ? gDude->tile : -1, reason);
@@ -3783,6 +3784,7 @@ static void runDialogFixtureFrame()
 
                 const scene_renderer::PreparedSharpTextFrame& frame = scene_renderer::preparedSharpTextFrame();
                 if (gDialogCursorCheckStage == 2) {
+                    scriptedInputSetExternalMouse(false);
                     if (!frame.active || !frame.drawn || frame.overlay.pixels.empty()
                         || frame.width <= 0 || frame.height <= 0
                         || frame.overlay.width <= 0 || frame.overlay.height <= 0
@@ -4092,8 +4094,20 @@ static void runDialogFixtureFrame()
                 gDialogCursorCheckRecord = *replyRecord;
                 gDialogCursorCheckOverlayBefore = frame.overlay.pixels;
                 gDialogCursorCheckCursorMoveInProgress = true;
+                const int cursorX = targetLogicalX - cursorPixelX + hotX;
+                const int cursorY = targetLogicalY - cursorPixelY + hotY;
+                // The next input pump rereads absolute mouse state. Feed
+                // the fixture's virtual device as well as moving the engine
+                // cursor, so the host pointer cannot reset this probe.
+                SDL_Event motion = {};
+                motion.type = SDL_MOUSEMOTION;
+                motion.motion.which = kScriptMouse;
+                motion.motion.x = cursorX;
+                motion.motion.y = cursorY;
+                scriptedInputSetExternalMouse(true);
+                scriptedInputObserveEvent(motion);
                 mouseHideCursor();
-                _mouse_set_position(targetLogicalX - cursorPixelX + hotX, targetLogicalY - cursorPixelY + hotY);
+                _mouse_set_position(cursorX, cursorY);
                 mouseShowCursor();
                 gDialogCursorCheckCursorMoveInProgress = false;
                 TextCursorSnapshot movedCursor = {};
