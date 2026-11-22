@@ -183,6 +183,8 @@ SharpFrameScan sharpScanFrame(const unsigned char* indices, int width, int heigh
         excludeBox[1] = gSharpCursorBox[1];
         excludeBox[2] = gSharpCursorBox[2];
         excludeBox[3] = gSharpCursorBox[3];
+    } else if (gSharpPrevCursorBox[2] >= gSharpPrevCursorBox[0]) {
+        std::copy(gSharpPrevCursorBox, gSharpPrevCursorBox + 4, excludeBox);
     } else {
         excludeBox[0] = 0;
         excludeBox[1] = 0;
@@ -491,23 +493,28 @@ bool prepareSharpTextForPresent(SDL_Surface* indexedSurface, SDL_Surface* rgbaSu
     const bool cacheAllowed = SDL_getenv("F2CE_NO_SHARP_CACHE") == nullptr;
     const bool staticHit = cacheAllowed && gSharpStaticKeyValid && gSharpStaticKey == scan.staticKey && sameFrame;
     const bool glyphHit = cacheAllowed && gSharpGlyphKeyValid && gSharpGlyphKey == glyphKey && sameFrame;
+    const auto patchChanges = [&]() {
+        if (!scan.maskAvailable) return;
+        if (scan.hasDynamic()) {
+            patchCyclingRegion(indexedSurface, rgbaSurface, output.records, output.masks,
+                paletteRgb, paletteEntries, scan);
+        }
+        const bool sameCursorBox = std::equal(gSharpPrevCursorBox, gSharpPrevCursorBox + 4, gSharpCursorBox);
+        for (const int* box : { gSharpPrevCursorBox, gSharpCursorBox }) {
+            if (sameCursorBox && box == gSharpPrevCursorBox) continue;
+            if (box[2] < box[0]) continue;
+            SharpFrameScan cursorPatch;
+            cursorPatch.dynamicX0 = box[0]; cursorPatch.dynamicY0 = box[1];
+            cursorPatch.dynamicX1 = box[2]; cursorPatch.dynamicY1 = box[3];
+            patchCyclingRegion(indexedSurface, rgbaSurface, output.records, output.masks,
+                paletteRgb, paletteEntries, cursorPatch);
+        }
+    };
     if (staticHit && glyphHit) {
         // The picture is byte-for-byte the one the cached layers were built
         // from. The moving small parts patch straight over the cached
         // texture: the palette's cycling colors and the mouse cursor.
-        if (scan.maskAvailable && scan.hasDynamic()) {
-            patchCyclingRegion(indexedSurface, rgbaSurface, output.records, output.masks,
-                paletteRgb, paletteEntries, scan);
-        }
-        if (scan.maskAvailable && gSharpCursorBox[2] >= gSharpCursorBox[0]) {
-            SharpFrameScan cursorPatch;
-            cursorPatch.dynamicX0 = gSharpCursorBox[0];
-            cursorPatch.dynamicY0 = gSharpCursorBox[1];
-            cursorPatch.dynamicX1 = gSharpCursorBox[2];
-            cursorPatch.dynamicY1 = gSharpCursorBox[3];
-            patchCyclingRegion(indexedSurface, rgbaSurface, output.records, output.masks,
-                paletteRgb, paletteEntries, cursorPatch);
-        }
+        patchChanges();
         output.active = true;
         output.drawn = false;
         output.cached = true;
@@ -539,6 +546,7 @@ bool prepareSharpTextForPresent(SDL_Surface* indexedSurface, SDL_Surface* rgbaSu
             disableSharpText("capture or glyph rendering failed");
             return false;
         }
+        patchChanges();
         const PreparedSharpTextFrame& frame = preparedSharpTextFrame();
         if (!uploadSharpTextOverlay(frame.overlay.pixels.data(), frame.overlay.width,
                 frame.overlay.height, frame.overlay.pitch)) {
