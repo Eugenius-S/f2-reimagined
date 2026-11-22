@@ -14,6 +14,76 @@ ROOT = os.environ.get('F2R_RP_TEXT_PACKS')
 
 @unittest.skipUnless(ROOT, 'external DAT fixtures not supplied')
 class RpTextSwitch(unittest.TestCase):
+    def test_rp_voice_recovery_when_excluded_or_unsupported(self):
+        packs = Path(ROOT)
+        for label in ('1c', 'levy'):
+            for situation in ('excluded', 'unsupported'):
+                with self.subTest(label=label, situation=situation), tempfile.TemporaryDirectory(prefix='f2r-rp-voice-') as temp:
+                    root = Path(temp)
+                    mods = root / 'mods'
+                    mods.mkdir()
+                    for name in ('master.dat', 'critter.dat'):
+                        (root / name).write_bytes(b'fixture')
+                    (root / 'fallout2.cfg').write_bytes(b'[system]\r\nlanguage=english\r\n')
+                    shutil.copyfile(packs / 'proof/rpu-2.4.34/mods/rpu.dat', mods / 'rpu.dat')
+                    if situation == 'unsupported':
+                        with (mods / 'rpu.dat').open('r+b') as file:
+                            first = file.read(1)
+                            file.seek(0)
+                            file.write(bytes([first[0] ^ 1]))
+                    voice = mods / ('f2r-voice-rp-' + label + '.dat')
+                    shutil.copyfile(packs / 'for-google-drive-voice' / (label + '-voice.dat'), voice)
+                    voice_hash = hashlib.sha256(voice.read_bytes()).hexdigest()
+                    (mods / 'f2r-text-choice.txt').write_text('original\n')
+                    (mods / 'f2r-voice-choice.txt').write_text('rp-' + label + '\nhash=' + voice_hash + '\n')
+                    manual = mods / 'upu_russian_sound.dat'
+                    if label == '1c' and situation == 'excluded':
+                        shutil.copyfile(packs / 'for-google-drive-voice/1c-voice.dat', manual)
+                    else:
+                        manual.write_bytes(b'foreign voice')
+                    manual_hash = hashlib.sha256(manual.read_bytes()).hexdigest()
+                    order = mods / 'mods_order.txt'
+                    order.write_bytes((b'rpu.dat\r\n' if situation == 'unsupported' else b'') +
+                                      voice.name.encode() + b'\r\nupu_russian_sound.dat\r\nplayer.dat\r\n')
+                    proc = subprocess.run([str(EXE), '--game-root', str(root), '--recover-text'], capture_output=True, timeout=30)
+                    self.assertEqual(proc.returncode, 0, proc.stdout.decode('utf8', errors='replace'))
+                    self.assertFalse(voice.exists())
+                    self.assertEqual((mods / 'f2r-voice-choice.txt').read_text().strip(), 'original')
+                    self.assertNotIn(voice.name.encode(), order.read_bytes())
+                    self.assertIn(b'upu_russian_sound.dat\r\nplayer.dat\r\n', order.read_bytes())
+                    self.assertEqual(hashlib.sha256(manual.read_bytes()).hexdigest(), manual_hash)
+                    voice.write_bytes(b'foreign replacement')
+                    (mods / 'f2r-voice-choice.txt').write_text('rp-' + label + '\nhash=' + voice_hash + '\n')
+                    order.write_bytes(voice.name.encode() + b'\r\nplayer.dat\r\n')
+                    proc = subprocess.run([str(EXE), '--game-root', str(root), '--recover-text'], capture_output=True, timeout=30)
+                    self.assertNotEqual(proc.returncode, 0)
+                    self.assertEqual(voice.read_bytes(), b'foreign replacement')
+                    self.assertEqual(order.read_bytes(), voice.name.encode() + b'\r\nplayer.dat\r\n')
+
+    def test_relative_rpu_order_paths_keep_priority(self):
+        packs = Path(ROOT)
+        with tempfile.TemporaryDirectory(prefix='f2r-relative-rp-') as temp:
+            root = Path(temp)
+            mods = root / 'mods'
+            mods.mkdir()
+            for name in ('master.dat', 'critter.dat'):
+                (root / name).write_bytes(b'fixture')
+            (root / 'fallout2.cfg').write_bytes(b'[system]\r\nlanguage=english\r\n')
+            shutil.copyfile(packs / 'proof/rpu-2.4.34/mods/rpu.dat', mods / 'rpu.dat')
+            shutil.copyfile(packs / 'proof/rpu-2.4.34/mods/rpu_russian.dat', mods / 'rpu_russian.dat')
+            order = mods / 'mods_order.txt'
+            for rpu_line in (b'./rpu.dat\n', b'.\\rpu.dat\n'):
+                order.write_bytes(b'# player comment\n' + rpu_line + b'player.dat\n')
+                proc = subprocess.run([str(EXE), '--game-root', str(root), '--text-translation', '1c'], capture_output=True, timeout=120)
+                self.assertEqual(proc.returncode, 0, proc.stdout.decode('utf8', errors='replace'))
+                result = order.read_bytes()
+                self.assertTrue(result.startswith(b'# player comment\n' + rpu_line + b'rpu_russian.dat\r\n'))
+                self.assertLess(result.index(b'rpu_russian.dat'), result.index(b'steam-1c-text.dat'))
+                self.assertLess(result.index(b'steam-1c-text.dat'), result.index(b'player.dat'))
+                proc = subprocess.run([str(EXE), '--game-root', str(root), '--recover-text'], capture_output=True, timeout=30)
+                self.assertEqual(proc.returncode, 0, proc.stdout.decode('utf8', errors='replace'))
+                self.assertEqual((mods / 'f2r-text-choice.txt').read_text().splitlines()[0], '1c')
+
     def test_manual_rp_removal_is_noop_and_excluded_rp_is_rejected(self):
         packs = Path(ROOT)
         with tempfile.TemporaryDirectory(prefix='f2r-manual-rp-') as temp:

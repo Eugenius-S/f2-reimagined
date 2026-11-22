@@ -1804,34 +1804,37 @@ bool writeTextFile(const fs::path& path, const std::string& value)
     return !!out;
 }
 
+std::string normalizedModName(const std::string& line)
+{
+    if (line.find_first_of(";#") != std::string::npos) return {};
+    std::string name = launcher_uninstall::lowered(trim(line));
+    while (name.size() >= 2 && name[0] == '.' && (name[1] == '/' || name[1] == '\\')) name.erase(0, 2);
+    return name;
+}
+
+std::string insertAfterMod(const std::string& input, const char* target, const std::string& addition, bool prependIfMissing)
+{
+    for (size_t begin = 0; begin < input.size();) {
+        size_t end = input.find('\n', begin);
+        size_t next = end == std::string::npos ? input.size() : end + 1;
+        if (normalizedModName(input.substr(begin, next - begin)) == target) {
+            std::string prefix = input.substr(0, next);
+            if (!prefix.empty() && prefix.back() != '\n') prefix += "\r\n";
+            return prefix + addition + input.substr(next);
+        }
+        begin = next;
+    }
+    return prependIfMissing ? addition + input : input;
+}
+
 std::string insertOfficialOrder(const std::string& input)
 {
-    std::string result;
-    std::stringstream lines(input);
-    std::string line;
-    bool inserted = false;
-    while (std::getline(lines, line)) {
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        result += line + "\r\n";
-        std::string name = trim(line);
-        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        if (!inserted && name == "rpu.dat") { result += "rpu_russian.dat\r\n"; inserted = true; }
-    }
-    return inserted ? result : "rpu_russian.dat\r\n" + result;
+    return insertAfterMod(input, "rpu.dat", "rpu_russian.dat\r\n", true);
 }
 
 std::string insertTextAfterOfficial(const std::string& input, const char* fonts, const char* text)
 {
-    std::string result;
-    std::stringstream lines(input);
-    std::string line;
-    while (std::getline(lines, line)) {
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        result += line + "\r\n";
-        if (launcher_uninstall::lowered(trim(line)) == "rpu_russian.dat")
-            result += std::string(fonts) + "\r\n" + text + "\r\n";
-    }
-    return result;
+    return insertAfterMod(input, "rpu_russian.dat", std::string(fonts) + "\r\n" + text + "\r\n", false);
 }
 
 bool effectiveModOrder(const fs::path& root, std::string* order)
@@ -1862,10 +1865,11 @@ bool translationRpOrderValid(const fs::path& root)
 {
     if (!rpOnDisk(root)) return true;
     std::string order;
-    bool active = false;
     if (!effectiveModOrder(root, &order)) return false;
-    launcher_uninstall::removeLine(order, "rpu.dat", &active);
-    return active;
+    std::stringstream lines(order);
+    std::string line;
+    while (std::getline(lines, line)) if (normalizedModName(line) == "rpu.dat") return true;
+    return false;
 }
 
 std::string installedVoiceId(const fs::path& root)
@@ -2453,6 +2457,8 @@ bool translationRecoveryPending(const std::filesystem::path& root)
 {
     std::error_code error;
     if (fs::exists(root / ".f2r-text-transaction", error) || error) return true;
+    const auto* voice = launcher_translations::findVoice(installedVoiceId(root));
+    if (voice && voice->rp && !supportedVoiceRp(root)) return true;
     std::string receipt = readWholeFile(root / "mods/f2r-text-choice.txt");
     std::string id = trim(receipt.substr(0, receipt.find('\n')));
     bool rp = rpOnDisk(root);
@@ -2601,6 +2607,17 @@ int runConsole(Options options)
         } else if (!options.installRp && !options.removeRp && !options.uninstall) {
             log("finish Restoration Project recovery before continuing");
             return 1;
+        }
+    }
+    if (!options.installRp && !options.removeRp && !options.uninstall) {
+        const auto* voice = launcher_translations::findVoice(installedVoiceId(root));
+        if (voice && voice->rp && !supportedVoiceRp(root)) {
+            if (!options.voiceTranslation.empty() && options.voiceTranslation != "original") {
+                log("The RP voice is unavailable for the current RP; select original voice.");
+                return 1;
+            }
+            log("The RP voice is incompatible with the current RP; switching to original voice.");
+            if (!changeTextTranslation(root, "", {}, "original", true)) return 1;
         }
     }
     std::string textReceipt = readWholeFile(root / "mods/f2r-text-choice.txt");

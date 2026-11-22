@@ -18,6 +18,8 @@ user.SendMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, win
 user.SendMessageW.restype = wintypes.LPARAM
 user.SetWindowTextW.argtypes = (wintypes.HWND, wintypes.LPCWSTR)
 user.SetWindowTextW.restype = wintypes.BOOL
+user.IsWindowEnabled.argtypes = (wintypes.HWND,)
+user.IsWindowEnabled.restype = wintypes.BOOL
 user.PostMessageW.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
 user.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
 CALLBACK = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
@@ -25,6 +27,73 @@ user.EnumWindows.argtypes = (CALLBACK, wintypes.LPARAM)
 
 
 class TestUi(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('F2R_RP_TEXT_PACKS'), 'external pinned RP and voice DATs required')
+    def test_play_recovers_excluded_rp_voice(self):
+        packs = pathlib.Path(os.environ['F2R_RP_TEXT_PACKS'])
+        with tempfile.TemporaryDirectory(prefix='f2r-rp-voice-ui-') as temp:
+            root = pathlib.Path(temp)
+            mods = root / 'mods'
+            mods.mkdir()
+            for name in ('master.dat', 'critter.dat'):
+                (root / name).write_bytes(b'fixture')
+            (root / 'fallout2.cfg').write_bytes(b'[system]\r\nlanguage=english\r\n')
+            shutil.copyfile(pathlib.Path(EXE).with_name('launcher_routes_tests.exe'), root / 'fallout2-ce.exe')
+            shutil.copyfile(packs / 'proof/rpu-2.4.34/mods/rpu.dat', mods / 'rpu.dat')
+            voice = mods / 'f2r-voice-rp-1c.dat'
+            shutil.copyfile(packs / 'for-google-drive-voice/1c-voice.dat', voice)
+            digest = hashlib.sha256(voice.read_bytes()).hexdigest()
+            receipt = mods / 'f2r-voice-choice.txt'
+            receipt.write_text('rp-1c\nhash=' + digest + '\n')
+            (mods / 'f2r-text-choice.txt').write_text('original\n')
+            order = mods / 'mods_order.txt'
+            order.write_bytes(voice.name.encode() + b'\r\nplayer.dat\r\n')
+            settings = root / 'ui.ini'
+            settings.write_text('[launcher]\nlanguage=en\nauto_updates=0\n')
+            proc = subprocess.Popen([EXE, '--ui', '--no-activate', '--game-root', str(root),
+                                     '--settings-file', str(settings), '--update-url', 'http://127.0.0.1:1',
+                                     '--release-info-url', 'http://127.0.0.1:1'], creationflags=subprocess.CREATE_NO_WINDOW)
+            window = None
+            try:
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline and not window:
+                    found = []
+                    @CALLBACK
+                    def enumerate_window(hwnd, _):
+                        pid = wintypes.DWORD()
+                        user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                        if pid.value == proc.pid and user.GetDlgItem(hwnd, 1014): found.append(hwnd)
+                        return True
+                    user.EnumWindows(enumerate_window, 0)
+                    window = found[0] if found else None
+                    if not window: time.sleep(0.05)
+                self.assertTrue(window)
+                user.SendMessageW(window, 0x111, 1014, user.GetDlgItem(window, 1014))
+                deadline = time.monotonic() + 30
+                while time.monotonic() < deadline and receipt.read_text().splitlines()[0] != 'original': time.sleep(0.05)
+                self.assertEqual(receipt.read_text().strip(), 'original')
+                self.assertFalse(voice.exists())
+                self.assertEqual(order.read_bytes(), b'player.dat\r\n')
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline and not user.IsWindowEnabled(user.GetDlgItem(window, 1014)): time.sleep(0.05)
+                self.assertTrue(user.IsWindowEnabled(user.GetDlgItem(window, 1014)))
+                user.SendMessageW(window, 0x111, 1014, user.GetDlgItem(window, 1014))
+                status = ctypes.create_unicode_buffer(512)
+                user.SendMessageW(user.GetDlgItem(window, 1008), 0xD, len(status), ctypes.addressof(status))
+                self.assertIn('running', status.value.lower())
+            finally:
+                if window: user.PostMessageW(window, 0x10, 0, 0)
+                try: proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.terminate()
+                    proc.wait(timeout=5)
+                deadline = time.monotonic() + 20
+                while (mods / 'rpu.dat').exists():
+                    try:
+                        (mods / 'rpu.dat').unlink()
+                    except PermissionError:
+                        if time.monotonic() >= deadline: raise
+                        time.sleep(0.1)
+
     @unittest.skipUnless(os.environ.get('F2R_RP_TEXT_PACKS'), 'external pinned RP and text DATs required')
     def test_play_with_adapted_rp_text(self):
         packs = pathlib.Path(os.environ['F2R_RP_TEXT_PACKS'])
