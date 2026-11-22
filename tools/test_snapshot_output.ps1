@@ -124,6 +124,8 @@ try {
     $pass = 'exit transition passed: source=ARTEMPLE/12 exit=12 target=arcaves map=ARCAVES.MAP index=2 elevation=0 tile=28707 after=42 frames'
     Set-Content -LiteralPath $probe -Value @($pass, 'probe done: hero tile=28707')
     Check ((Get-SnapshotExitProbeStatus $probe 'arcaves') -eq 'passed') 'the matching real arrival must pass'
+    Set-Content -LiteralPath $probe -Value @($pass.Replace('map=ARCAVES.MAP','map=ARCAVES.SAV'), 'probe done')
+    Check ((Get-SnapshotExitProbeStatus $probe 'arcaves') -eq 'passed') 'the same previously visited map must pass'
     Check ((Get-SnapshotExitProbeStatus $probe 'arcave') -eq 'failed') 'a prefix must not count as a different exit'
     Set-Content -LiteralPath $probe -Value @($pass.Replace('map=ARCAVES.MAP','map=ARBRIDGE.MAP'), 'probe done')
     Check ((Get-SnapshotExitProbeStatus $probe 'arcaves') -eq 'failed') 'the label of a target must not override the wrong actual arrival'

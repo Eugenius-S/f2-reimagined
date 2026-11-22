@@ -70,7 +70,7 @@ function Get-SnapshotExitProbeStatus([string]$Path, [string]$Destination) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return 'pending' }
     $text = Get-Content -Raw -LiteralPath $Path
     $name = [regex]::Escape($Destination)
-    if ($text -match ('(?m)^exit transition passed: [^\r\n]+ target=' + $name + ' map=' + $name + '\.MAP ')) {
+    if ($text -match ('(?m)^exit transition passed: [^\r\n]+ target=' + $name + ' map=' + $name + '\.(?:MAP|SAV) ')) {
         return 'passed'
     }
     if ($text -match '(?m)^(?:exit probe failed:|outside probe failed:|probe done\b)') {
