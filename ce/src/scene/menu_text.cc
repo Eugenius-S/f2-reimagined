@@ -178,7 +178,7 @@ const std::vector<Translation>& catalog()
         { "mark saved:", cp1251(u8"рамка сохранена:") },
         { "mark failed:", cp1251(u8"рамка не удалась:") },
         { "mark cancelled", cp1251(u8"рамка отменена") },
-        { "MARK: drag rectangles, Enter saves, Esc cancels", cp1251(u8"РАМКА: выделяй мышью, Enter - сохранить, Esc - отмена") },
+        { "Ctrl+F12 again: save. Esc: cancel", cp1251(u8"Ctrl+F12 ещё раз: сохранить. Esc: отменить") },
         { "teleported:", cp1251(u8"переход выполнен:") },
         { "3D scene is disabled in settings", cp1251(u8"3D-сцена выключена в настройках") },
         { "no map is loaded", cp1251(u8"карта не загружена") },

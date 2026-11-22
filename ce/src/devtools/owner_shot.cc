@@ -1,4 +1,6 @@
 #include "owner_shot.h"
+#include "mark_repeat_guard.h"
+#include "mark_rect.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,6 +33,7 @@
 #include "../display_monitor.h"
 #include "../dialog.h"
 #include "../game_dialog.h"
+#include "../game_mouse.h"
 #include "../game_movie.h"
 #include "../kb.h"
 #include "../map.h"
@@ -53,6 +56,7 @@
 #include "../scene_renderer/game_view.h"
 #include "../scene_renderer/perf.h"
 #include "../scene_renderer/scene_draw.h"
+#include "../scene_renderer/sprite_card.h"
 #include "../scene_renderer/text_present.h"
 #include "preferences_probe.h"
 #include "snapshot_rows.h"
@@ -64,7 +68,6 @@ namespace {
 
 constexpr int kMaxRegionTiles = 256;
 constexpr int kMaxRegionObjects = 128;
-constexpr int kMaxRegionHexProbe = 20000;
 
 // The PNG and sidecar encode threads: the exit joins the last one, so
 // quitting right after F12 cannot cut a file mid-write. A fresh shot hands
@@ -146,9 +149,17 @@ bool gMarkDragPixelVerified = false;
 // the owner drags rectangles, Enter or a second press saves the clean PNG,
 // the marked PNG and the JSON with the regions, Esc cancels.
 bool gMarkMode = false;
+bool gMarkF12Released = false;
+MarkRepeatGuard<SDL_NUM_SCANCODES> gMarkRepeatGuard;
+bool gMarkRestoreScrolling = false;
 std::vector<unsigned char> gMarkClean; // top-down RGBA of the frozen frame
 int gMarkWidth = 0;
 int gMarkHeight = 0;
+int gMarkLogicalWidth = 0;
+int gMarkLogicalHeight = 0;
+int gMarkViewportX = 0, gMarkViewportY = 0, gMarkViewportWidth = 0, gMarkViewportHeight = 0;
+std::vector<SDL_Point> gMarkTilePositions;
+std::string gMarkCameraJson;
 char gMarkStem[96] = {}; // file name stem reserved at entry
 struct MarkRect {
     int x0 = 0;
@@ -306,6 +317,27 @@ struct ShotContext {
     std::string versionJson;
 };
 
+std::string cameraContextJson()
+{
+    scene_renderer::StaticFlyCamera fly;
+    char piece[512];
+    scene_renderer::GameView view;
+    const double zoom = scene_renderer::gameViewAtCenterTile(gCenterTile, &view)
+        ? view.zoom : settings.scene3d.zoom;
+    if (scene_renderer::staticGameViewCamera(&fly)) {
+        snprintf(piece, sizeof(piece),
+            "{\"eye\":[%.3f,%.3f,%.3f],\"yaw_deg\":%.2f,\"fov_y_deg\":%.2f,\"camera_turn\":%.4f,\"zoom\":%.4f,\"center_tile\":%d}",
+            fly.eye[0], fly.eye[1], fly.eye[2],
+            static_cast<double>(fly.yaw) * 180.0 / 3.14159265358979323846,
+            static_cast<double>(fly.fovY), scene::cameraTurnAngle(), zoom, gCenterTile);
+    } else {
+        snprintf(piece, sizeof(piece),
+            "{\"camera_turn\":%.4f,\"zoom\":%.4f,\"center_tile\":%d}",
+            scene::cameraTurnAngle(), zoom, gCenterTile);
+    }
+    return piece;
+}
+
 void assembleContext(ShotContext& out)
 {
     // The frame rate over the last few seconds, always on (183).
@@ -357,23 +389,7 @@ void assembleContext(ShotContext& out)
         out.playerJson = piece;
     }
 
-    // The camera as the view looks from, and the game's own turn and zoom.
-    {
-        scene_renderer::StaticFlyCamera fly;
-        char piece[512];
-        if (scene_renderer::staticGameViewCamera(&fly)) {
-            snprintf(piece, sizeof(piece),
-                "{\"eye\":[%.3f,%.3f,%.3f],\"yaw_deg\":%.2f,\"fov_y_deg\":%.2f,\"camera_turn\":%.4f,\"zoom\":%.4f,\"center_tile\":%d}",
-                fly.eye[0], fly.eye[1], fly.eye[2],
-                static_cast<double>(fly.yaw) * 180.0 / 3.14159265358979323846,
-                static_cast<double>(fly.fovY), scene::cameraTurnAngle(), settings.scene3d.zoom, gCenterTile);
-        } else {
-            snprintf(piece, sizeof(piece),
-                "{\"camera_turn\":%.4f,\"zoom\":%.4f,\"center_tile\":%d}",
-                scene::cameraTurnAngle(), settings.scene3d.zoom, gCenterTile);
-        }
-        out.cameraJson = piece;
-    }
+    out.cameraJson = cameraContextJson();
 
     // The object under the cursor, as the game's own pick reads the hex.
     out.cursorJson = "null";
@@ -575,40 +591,33 @@ bool takeShot()
     return true;
 }
 
+bool freezeMarkTilePositions()
+{
+    gMarkTilePositions.clear();
+    if (gSdlSurface == nullptr) return false;
+    scene_renderer::SpriteCardProjection projection;
+    if (!scene_renderer::currentGameProjection(&projection)) return false;
+    gMarkTilePositions.assign(40000, SDL_Point { -1, -1 });
+    for (int tile = 0; tile < 40000; ++tile) {
+        double px, py, wx, wz;
+        scene_renderer::spriteHexPixel(tile, &px, &py);
+        if (!scene_renderer::spritePixelToGround(projection, px, py, &wx, &wz)) continue;
+        double sx, sy;
+        if (scene_renderer::staticScreenFromWorld(wx, 0.0, wz, &sx, &sy)
+            && sx >= 0 && sx < gSdlSurface->w && sy >= 0 && sy < gSdlSurface->h) {
+            gMarkTilePositions[tile] = { static_cast<int>(sx), static_cast<int>(sy) };
+        }
+    }
+    return true;
+}
+
 // The regions under the dragged rectangles, read off the frozen camera.
 std::string buildRegionsJson()
 {
     std::string out = "null";
     if (gMarkRects.empty() || gDude == nullptr) return out;
 
-    scene_renderer::GameView view;
-    if (!scene_renderer::gameViewAtCenterTile(gDude->tile, &view)) return out;
-
-    // The hex grid in world units: centers at p00 + gx*du + gy*dv, probed
-    // off the view itself (tiles 0, 1 and 200 step one hex along the axes).
-    double p00[2] = { 0.0, 0.0 };
-    double du[2] = { 0.0, 0.0 };
-    double dv[2] = { 0.0, 0.0 };
-    {
-        double wx = 0.0;
-        double wz = 0.0;
-        scene_renderer::GameView probe;
-        if (!scene_renderer::gameViewAtCenterTile(0, &probe)
-            || !scene_renderer::gameViewCenter(probe, &wx, &wz)) return out;
-        p00[0] = wx;
-        p00[1] = wz;
-        if (!scene_renderer::gameViewAtCenterTile(1, &probe)
-            || !scene_renderer::gameViewCenter(probe, &wx, &wz)) return out;
-        du[0] = wx - p00[0];
-        du[1] = wz - p00[1];
-        if (!scene_renderer::gameViewAtCenterTile(200, &probe)
-            || !scene_renderer::gameViewCenter(probe, &wx, &wz)) return out;
-        dv[0] = wx - p00[0];
-        dv[1] = wz - p00[1];
-    }
-    const double determinant = du[0] * dv[1] - du[1] * dv[0];
-    if (std::abs(determinant) < 1e-9) return out;
-    const double scale = settings.screen.scale_factor > 0.0 ? settings.screen.scale_factor : 1.0;
+    if (gMarkTilePositions.size() != 40000) return out;
 
     out = "[\n";
     bool firstRegion = true;
@@ -619,87 +628,32 @@ std::string buildRegionsJson()
         const int ry1 = std::max(rect.y0, rect.y1);
         if (rx1 <= rx0 || ry1 <= ry0) continue;
 
-        // The world rect the two far corners see on the ground plane.
-        double worldMin[2] = { 0.0, 0.0 };
-        double worldMax[2] = { 0.0, 0.0 };
-        bool haveWorld = true;
-        for (int c = 0; c < 2 && haveWorld; c++) {
-            const int px = c == 0 ? rx0 : rx1;
-            const int py = c == 0 ? ry0 : ry1;
-            double wx = 0.0;
-            double wz = 0.0;
-            if (!scene_renderer::gameViewPickGround(view, static_cast<double>(px) / scale,
-                    static_cast<double>(py) / scale, &wx, &wz)) {
-                haveWorld = false;
-                break;
-            }
-            if (c == 0) {
-                worldMin[0] = worldMax[0] = wx;
-                worldMin[1] = worldMax[1] = wz;
-            } else {
-                worldMin[0] = std::min(worldMin[0], wx);
-                worldMax[0] = std::max(worldMax[0], wx);
-                worldMin[1] = std::min(worldMin[1], wz);
-                worldMax[1] = std::max(worldMax[1], wz);
-            }
-        }
-        if (!haveWorld) continue;
-
-        // The hexes whose centers project into the rectangle.
         std::vector<int> tiles;
         std::vector<int> squares;
         std::vector<std::string> objectPieces;
-        const auto hexAt = [&](double wx, double wz, int* gx, int* gy) {
-            const double rx = wx - p00[0];
-            const double rz = wz - p00[1];
-            *gx = static_cast<int>((rx * dv[1] - rz * dv[0]) / determinant);
-            *gy = static_cast<int>((rz * du[0] - rx * du[1]) / determinant);
-        };
-        int gx0 = 0;
-        int gy0 = 0;
-        int gx1 = 0;
-        int gy1 = 0;
-        hexAt(worldMin[0], worldMin[1], &gx0, &gy0);
-        hexAt(worldMax[0], worldMax[1], &gx1, &gy1);
-        if (gx0 > gx1) std::swap(gx0, gx1);
-        if (gy0 > gy1) std::swap(gy0, gy1);
-        int probes = 0;
-        for (int gy = gy0 - 1; gy <= gy1 + 1 && probes < kMaxRegionHexProbe; gy++) {
-            for (int gx = gx0 - 1; gx <= gx1 + 1 && probes < kMaxRegionHexProbe; gx++) {
-                probes++;
-                if (gx < 0 || gx >= 200 || gy < 0 || gy >= 200) continue;
-                const double wx = p00[0] + gx * du[0] + gy * dv[0];
-                const double wz = p00[1] + gx * du[1] + gy * dv[1];
-                double lx = 0.0;
-                double ly = 0.0;
-                if (!scene_renderer::gameViewProject(view, wx, 0.0, wz, &lx, &ly)) continue;
-                const int px = static_cast<int>(lx * scale);
-                const int py = static_cast<int>(ly * scale);
-                if (px < rx0 || px > rx1 || py < ry0 || py > ry1) continue;
-                const int tile = gy * 200 + gx;
-                if (std::find(tiles.begin(), tiles.end(), tile) == tiles.end()) {
-                    if (tiles.size() < kMaxRegionTiles) tiles.push_back(tile);
-                }
-                const int square = squareTileFromTile(tile);
-                if (square >= 0 && std::find(squares.begin(), squares.end(), square) == squares.end()
-                    && squares.size() < kMaxRegionTiles) {
-                    squares.push_back(square);
-                }
-                if (objectPieces.size() < kMaxRegionObjects) {
-                    for (Object* object = objectFindFirstAtLocation(gDude->elevation, tile);
-                        object != nullptr; object = objectFindNextAtLocation()) {
-                        if (((object->fid >> 24) & 0xF) == OBJ_TYPE_TILE) continue;
-                        if (object->pid == -1) continue;
-                        char piece[384];
-                        snprintf(piece, sizeof(piece),
-                            "{\"pid\":%d,\"name\":\"%s\",\"type\":%d,\"tile\":%d}",
-                            object->pid, protoNameOf(object).c_str(),
-                            static_cast<int>((object->fid >> 24) & 0xF), object->tile);
-                        std::string key = piece;
-                        if (std::find(objectPieces.begin(), objectPieces.end(), key) == objectPieces.end()
-                            && objectPieces.size() < kMaxRegionObjects) {
-                            objectPieces.push_back(key);
-                        }
+        for (int tile = 0; tile < 40000; ++tile) {
+            const SDL_Point& point = gMarkTilePositions[tile];
+            if (point.x < rx0 || point.x > rx1 || point.y < ry0 || point.y > ry1) continue;
+            if (tiles.size() < kMaxRegionTiles) tiles.push_back(tile);
+            const int square = squareTileFromTile(tile);
+            if (square >= 0 && std::find(squares.begin(), squares.end(), square) == squares.end()
+                && squares.size() < kMaxRegionTiles) {
+                squares.push_back(square);
+            }
+            if (objectPieces.size() < kMaxRegionObjects) {
+                for (Object* object = objectFindFirstAtLocation(gDude->elevation, tile);
+                    object != nullptr; object = objectFindNextAtLocation()) {
+                    if (((object->fid >> 24) & 0xF) == OBJ_TYPE_TILE) continue;
+                    if (object->pid == -1) continue;
+                    char piece[384];
+                    snprintf(piece, sizeof(piece),
+                        "{\"pid\":%d,\"name\":\"%s\",\"type\":%d,\"tile\":%d}",
+                        object->pid, protoNameOf(object).c_str(),
+                        static_cast<int>((object->fid >> 24) & 0xF), object->tile);
+                    std::string key = piece;
+                    if (std::find(objectPieces.begin(), objectPieces.end(), key) == objectPieces.end()
+                        && objectPieces.size() < kMaxRegionObjects) {
+                        objectPieces.push_back(key);
                     }
                 }
             }
@@ -707,8 +661,10 @@ std::string buildRegionsJson()
 
         if (!firstRegion) out += ",\n";
         firstRegion = false;
-        out += "    {\"rect\":[" + std::to_string(rx0) + "," + std::to_string(ry0) + ","
-            + std::to_string(rx1 - rx0) + "," + std::to_string(ry1 - ry0) + "],\n";
+        const DrawableMarkRect pixel = markDrawableRect(rx0, ry0, rx1, ry1, gMarkLogicalWidth, gMarkLogicalHeight,
+            gMarkViewportX, gMarkViewportY, gMarkViewportWidth, gMarkViewportHeight, gMarkWidth, gMarkHeight);
+        out += "    {\"rect\":[" + std::to_string(pixel.x0) + "," + std::to_string(pixel.y0) + ","
+            + std::to_string(pixel.x1 - pixel.x0) + "," + std::to_string(pixel.y1 - pixel.y0) + "],\n";
         out += "     \"tiles\":[";
         for (size_t i = 0; i < tiles.size(); i++) {
             out += std::to_string(tiles[i]);
@@ -744,10 +700,10 @@ void drawMarkOnPixels(std::vector<unsigned char>& pixels, int width, int height)
         pixel[3] = 255;
     };
     for (const MarkRect& rect : gMarkRects) {
-        const int x0 = std::max(0, std::min(rect.x0, rect.x1));
-        const int y0 = std::max(0, std::min(rect.y0, rect.y1));
-        const int x1 = std::min(width - 1, std::max(rect.x0, rect.x1));
-        const int y1 = std::min(height - 1, std::max(rect.y0, rect.y1));
+        const DrawableMarkRect pixel = markDrawableRect(rect.x0, rect.y0, rect.x1, rect.y1,
+            gMarkLogicalWidth, gMarkLogicalHeight, gMarkViewportX, gMarkViewportY,
+            gMarkViewportWidth, gMarkViewportHeight, width, height);
+        const int x0 = pixel.x0, y0 = pixel.y0, x1 = pixel.x1, y1 = pixel.y1;
         if (x1 < x0 || y1 < y0) continue;
         for (int t = 0; t < 2; t++) {
             for (int x = x0 + t; x <= x1 - t; x++) {
@@ -788,6 +744,7 @@ bool saveMark()
 
     ShotContext context;
     assembleContext(context);
+    context.cameraJson = gMarkCameraJson;
     const std::string regionsJson = buildRegionsJson();
 
     std::string json;
@@ -890,9 +847,30 @@ void enterMarkMode()
         displayMonitorAddMessage(scene::menuStatusText("mark failed: capture unavailable", settings.system.language).c_str());
         return;
     }
+    if (gSdlSurface == nullptr || gSdlSurface->w <= 0 || gSdlSurface->h <= 0) {
+        displayMonitorAddMessage(scene::menuStatusText("mark failed: capture unavailable", settings.system.language).c_str());
+        return;
+    }
+    gMarkLogicalWidth = gSdlSurface->w;
+    gMarkLogicalHeight = gSdlSurface->h;
+    int viewportRight = gMarkWidth, viewportBottom = gMarkHeight;
+    gMarkViewportX = gMarkViewportY = 0;
+    if (!scene_renderer::overlayLogicalToWindow(0, 0, &gMarkViewportX, &gMarkViewportY)
+        || !scene_renderer::overlayLogicalToWindow(gMarkLogicalWidth, gMarkLogicalHeight, &viewportRight, &viewportBottom)) {
+        gMarkViewportX = gMarkViewportY = 0;
+        viewportRight = gMarkWidth; viewportBottom = gMarkHeight;
+    }
+    gMarkViewportWidth = viewportRight - gMarkViewportX;
+    gMarkViewportHeight = viewportBottom - gMarkViewportY;
+    gMarkCameraJson = cameraContextJson();
+    freezeMarkTilePositions();
     gMarkClean = std::move(pixels);
     gMarkRects.clear();
     gMarkDragging = false;
+    gMarkF12Released = gPressedPhysicalKeys[SDL_SCANCODE_F12] == 0;
+    gMarkRepeatGuard.begin(gPressedPhysicalKeys);
+    gMarkRestoreScrolling = gmouse_scrolling_is_enabled();
+    _gmouse_disable_scrolling();
     // No monitor message here: the game floats the last monitor message over
     // the map view and the next frames' pictures, and the clean capture must
     // stay clean of it. The hint lives in draw().
@@ -903,7 +881,11 @@ void exitMarkMode()
 {
     const bool hadRects = !gMarkRects.empty() || gMarkDragging;
     gMarkMode = false;
+    if (gMarkRestoreScrolling) _gmouse_enable_scrolling();
+    gMarkRestoreScrolling = false;
     gMarkClean.clear();
+    gMarkTilePositions.clear();
+    gMarkCameraJson.clear();
     gMarkClean.shrink_to_fit();
     gMarkRects.clear();
     gMarkDragging = false;
@@ -1000,6 +982,7 @@ bool handleKey(int key)
             handleMarkMouse();
             return true;
         }
+        if ((key == KEY_F12 || key == KEY_CTRL_F12) && !gMarkF12Released) return true;
         if (key == KEY_RETURN || key == KEY_F9 || key == KEY_CTRL_F9 || key == KEY_ALT_F9
             || key == KEY_F12 || key == KEY_CTRL_F12) {
             std::string failure;
@@ -1029,6 +1012,33 @@ bool handleKey(int key)
     return true;
 }
 
+int observeKeyRelease(int scancode)
+{
+    const int effective = gMarkRepeatGuard.release(scancode);
+    if (gMarkMode && (scancode == SDL_SCANCODE_F12 || effective == SDL_SCANCODE_F12)) gMarkF12Released = true;
+    return effective;
+}
+
+void observeKeyPress(int scancode, int effectiveScancode)
+{
+    gMarkRepeatGuard.press(scancode, effectiveScancode, gMarkMode);
+}
+
+void observeKeyVeto(int scancode)
+{
+    gMarkRepeatGuard.press(scancode, decltype(gMarkRepeatGuard)::Vetoed, gMarkMode);
+}
+
+bool suppressNativeKeyRepeat(int scancode)
+{
+    return gMarkRepeatGuard.blocksNativeRepeat(scancode);
+}
+
+bool suppressKeyRepeat(int scancode)
+{
+    return gMarkRepeatGuard.blocks(scancode, gMarkMode);
+}
+
 void draw(unsigned char* surface, int width, int height, int pitch)
 {
     if (!gMarkMode || surface == nullptr) return;
@@ -1053,10 +1063,6 @@ void draw(unsigned char* surface, int width, int height, int pitch)
     // refreshes, and stay drawn on the bottom panel after the mark ends.
     if (scene_renderer::isActive() && scene::shouldPresent()
         && scene::activeView() == scene::View::Full) {
-        ScopedFont scopedFont(101);
-        fontDrawText(surface + pitch * 8 + 8,
-            scene::menuText("MARK: drag rectangles, Enter saves, Esc cancels", settings.system.language),
-            width - 16, pitch, COLOR_GREEN);
         return;
     }
     for (const MarkRect& rect : gMarkRects) {
@@ -1072,7 +1078,7 @@ void draw(unsigned char* surface, int width, int height, int pitch)
     // Top-left, not the bottom corner: the game's own monitor messages share
     // the bottom-left corner and the two texts landed on top of each other.
     fontDrawText(surface + pitch * 8 + 8,
-        scene::menuText("MARK: drag rectangles, Enter saves, Esc cancels", settings.system.language),
+        scene::menuText("Ctrl+F12 again: save. Esc: cancel", settings.system.language),
         width - 16, pitch, COLOR_GREEN);
 }
 
@@ -1084,7 +1090,6 @@ void draw(unsigned char* surface, int width, int height, int pitch)
 void drawSceneOverlay()
 {
     if (!gMarkMode || gSdlSurface == nullptr) return;
-    if (gMarkRects.empty() && !gMarkDragging) return;
     const int width = gSdlSurface->w;
     const int height = gSdlSurface->h;
     const auto outlinePatch = [&](const MarkRect& rect) {
@@ -1122,6 +1127,26 @@ void drawSceneOverlay()
     }
     if (gMarkDragging) {
         outlinePatch(gMarkDrag);
+    }
+    if (gSdlSurface->format != nullptr && gSdlSurface->format->palette != nullptr) {
+        ScopedFont font(101);
+        const char* text = scene::menuText("Ctrl+F12 again: save. Esc: cancel", settings.system.language);
+        const int w = std::min(fontGetStringWidth(text), width - 16);
+        const int h = fontGetLineHeight();
+        if (w > 0 && h > 0) {
+            std::vector<unsigned char> indexed(static_cast<size_t>(w) * h, COLOR_FIRST);
+            fontDrawText(indexed.data(), text, w, w, COLOR_GREEN);
+            std::vector<unsigned char> rgba(static_cast<size_t>(w) * h * 4, 0);
+            SDL_Palette* palette = gSdlSurface->format->palette;
+            for (size_t i = 0; i < indexed.size(); ++i) {
+                const unsigned char index = indexed[i];
+                if (index == COLOR_FIRST || index >= palette->ncolors) continue;
+                const SDL_Color& color = palette->colors[index];
+                rgba[i * 4] = color.r; rgba[i * 4 + 1] = color.g;
+                rgba[i * 4 + 2] = color.b; rgba[i * 4 + 3] = 255;
+            }
+            scene_renderer::drawOverlay(rgba.data(), w, h, w * 4, 8, 8, w, h);
+        }
     }
 }
 
@@ -1189,8 +1214,8 @@ void pumpMark()
     }
     // The rectangles stand where the view's own quarters are, so a run lands
     // them over live world pieces whatever the resolution is.
-    const int w = gMarkWidth;
-    const int h = gMarkHeight;
+    const int w = gSdlSurface->w;
+    const int h = gSdlSurface->h;
     MarkRect first;
     first.x0 = w / 3;
     first.y0 = h / 3;
@@ -1240,10 +1265,10 @@ void pumpDrag()
             return;
         }
         // The rectangle spans the view's middle third, as the pump mark does.
-        gMarkDragPlanned.x0 = gMarkWidth / 3;
-        gMarkDragPlanned.y0 = gMarkHeight / 3;
-        gMarkDragPlanned.x1 = gMarkWidth * 2 / 3;
-        gMarkDragPlanned.y1 = gMarkHeight * 2 / 3;
+        gMarkDragPlanned.x0 = gSdlSurface->w / 3;
+        gMarkDragPlanned.y0 = gSdlSurface->h / 3;
+        gMarkDragPlanned.x1 = gSdlSurface->w * 2 / 3;
+        gMarkDragPlanned.y1 = gSdlSurface->h * 2 / 3;
         devtools::scriptedInputSetExternalMouse(true);
         gMarkDragState = 1;
         gMarkDragFrame = 0;
@@ -1309,12 +1334,20 @@ void pumpDrag()
 void verifySceneOverlayPresented()
 {
     if (!gMarkDragPending || gMarkDragState < 1 || gMarkDragState > 5) return;
+    MarkRect observed;
+    if (gMarkDragging) observed = gMarkDrag;
+    else if (!gMarkRects.empty()) observed = gMarkRects.back();
+    else {
+        mouseGetPosition(&observed.x0, &observed.y0);
+        observed.x1 = observed.x0 + 1;
+        observed.y1 = observed.y0;
+    }
     int x0 = 0;
     int y0 = 0;
-    if (!scene_renderer::overlayLogicalToWindow(gMarkDragPlanned.x0, gMarkDragPlanned.y0, &x0, &y0)) return;
+    if (!scene_renderer::overlayLogicalToWindow(std::min(observed.x0, observed.x1), std::min(observed.y0, observed.y1), &x0, &y0)) return;
     int x1 = 0;
     int y1 = 0;
-    if (!scene_renderer::overlayLogicalToWindow(gMarkDragPlanned.x1, gMarkDragPlanned.y0, &x1, &y1)) return;
+    if (!scene_renderer::overlayLogicalToWindow(std::max(observed.x0, observed.x1), std::min(observed.y0, observed.y1), &x1, &y1)) return;
     const int stripWidth = x1 - x0 + 1;
     if (stripWidth <= 0) return;
     std::vector<unsigned char> pixels;
@@ -1329,7 +1362,7 @@ void verifySceneOverlayPresented()
         gMarkDragGreenBaseline = green;
         return;
     }
-    if (!gMarkDragPixelVerified && gMarkDragGreenBaseline >= 0
+    if (!gMarkDragPixelVerified && stripWidth >= 16 && gMarkDragGreenBaseline >= 0
         && green - gMarkDragGreenBaseline >= stripWidth / 2) {
         gMarkDragPixelVerified = true;
         printf("owner shot: overlay pixels verified on screen (green %d, baseline %d, strip %d)\n",

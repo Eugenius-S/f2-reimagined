@@ -1,5 +1,7 @@
 #include "../../src/devtools/snapshot_rows.h"
 #include "../../src/devtools/snapshot_palette.h"
+#include "../../src/devtools/mark_repeat_guard.h"
+#include "../../src/devtools/mark_rect.h"
 
 #include <cstdio>
 #include <vector>
@@ -8,6 +10,43 @@ using fallout::devtools::copySnapshotRowsTightly;
 
 int main()
 {
+    fallout::owner_shot::MarkRepeatGuard<4> guard;
+    const unsigned char pressed[] = { 1, 0, 0, 0 };
+    guard.begin(pressed);
+    guard.press(1, 1, true);
+    guard.press(2, 2, true);
+    if (!guard.blocks(0, false) || !guard.blocks(1, false) || !guard.blocks(2, false)) return 6;
+    guard.release(0); guard.release(1); guard.release(2);
+    if (guard.blocks(0, false) || guard.blocks(1, false) || guard.blocks(2, false)) return 7;
+    if (!guard.blocks(3, true) || guard.blocks(3, false)) return 8;
+    guard.press(0, 1, false);
+    const unsigned char mappedHeld[] = { 0, 1, 0, 0 };
+    guard.begin(mappedHeld);
+    if (!guard.blocks(0, false) || !guard.blocks(1, false)) return 11;
+    if (guard.release(0) != 1 || guard.blocks(0, false) || guard.blocks(1, false)) return 12;
+    guard.press(2, 3, true);
+    if (!guard.blocks(2, false) || !guard.blocks(3, false)) return 13;
+    if (guard.release(2) != 3 || guard.blocks(2, false) || guard.blocks(3, false)) return 14;
+    guard.press(0, 3, true); guard.press(1, 3, true);
+    if (guard.release(0) != 3 || !guard.blocks(1, false) || !guard.blocks(3, false)) return 15;
+    if (guard.release(1) != 3 || guard.blocks(3, false)) return 16;
+    guard.press(0, 1, false);
+    if (guard.release(0) != -1 || guard.blocks(1, false)) return 17;
+    guard.press(0, 1, false);
+    if (!guard.blocksNativeRepeat(0) || guard.blocksNativeRepeat(1)) return 18;
+    if (guard.release(0) != -1 || guard.blocksNativeRepeat(0)) return 19;
+    guard.press(2, decltype(guard)::Vetoed, true);
+    if (!guard.blocksNativeRepeat(2) || !guard.blocks(2, false)) return 20;
+    if (guard.release(2) != -1 || guard.blocksNativeRepeat(2) || guard.blocks(2, false)) return 21;
+    guard.press(2, decltype(guard)::Vetoed, false);
+    const unsigned char none[] = { 0, 0, 0, 0 };
+    guard.begin(none);
+    if (!guard.blocks(2, false)) return 22;
+    guard.release(2);
+    const auto rect = fallout::owner_shot::markDrawableRect(1366, 223, 1564, 389, 1720, 720, 0, 0, 3440, 1440, 3440, 1440);
+    if (rect.x0 != 2732 || rect.y0 != 446 || rect.x1 - rect.x0 != 396 || rect.y1 - rect.y0 != 332) return 9;
+    const auto clipped = fallout::owner_shot::markDrawableRect(-5, -5, 2000, 900, 1720, 720, 0, 0, 3440, 1440, 3440, 1440);
+    if (clipped.x0 != 0 || clipped.y0 != 0 || clipped.x1 != 3439 || clipped.y1 != 1439) return 10;
     const auto colors = fallout::devtools::snapshotCyclePalette();
     bool hasBlueMonitor = false;
     for (int index = 233; index <= 237; ++index) {

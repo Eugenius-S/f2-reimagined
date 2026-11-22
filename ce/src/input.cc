@@ -12,6 +12,7 @@
 #include "dev_output.h"
 #include "dinput.h"
 #include "devtools/devtools.h"
+#include "devtools/owner_shot.h"
 #include "devtools/preferences_probe.h"
 #include "draw.h"
 #include "game.h"
@@ -1029,21 +1030,31 @@ void _GNW95_process_message()
             break;
         case SDL_KEYDOWN:
         case SDL_KEYUP: {
-            keyboardData.key = e.key.keysym.scancode;
+            const int rawKey = e.key.keysym.scancode;
+            keyboardData.key = rawKey;
             keyboardData.down = (e.key.state & SDL_PRESSED) != 0;
-            bool syntheticSfallKey = sfall_kb_consume_synthetic_key_event(keyboardData.key, keyboardData.down);
+            const bool syntheticSfallKey = !e.key.repeat && sfall_kb_consume_synthetic_key_event(rawKey, keyboardData.down);
+            int markedRelease = -1;
+            if (e.type == SDL_KEYDOWN) {
+                if (e.key.repeat && (owner_shot::suppressKeyRepeat(rawKey) || owner_shot::suppressNativeKeyRepeat(rawKey))) break;
+            } else if (!syntheticSfallKey) {
+                markedRelease = owner_shot::observeKeyRelease(rawKey);
+            }
             if (!keyboardIsDisabled()) {
                 // The dev tools' fly camera keeps its keys from script hooks;
                 // the keys still reach the dev tools.
                 if (!e.key.repeat && !syntheticSfallKey && !mouseDeviceIsCaptured()) {
                     int keyOverride = sfall_kb_handle_key_pressed(keyboardData.key, keyboardData.down);
-                    if (keyOverride == SDL_SCANCODE_UNKNOWN) {
+                    if (keyOverride == SDL_SCANCODE_UNKNOWN && markedRelease < 0) {
+                        if (e.type == SDL_KEYDOWN) owner_shot::observeKeyVeto(rawKey);
                         break;
                     }
-                    if (keyOverride != -1) {
+                    if (keyOverride != -1 && keyOverride != SDL_SCANCODE_UNKNOWN) {
                         keyboardData.key = keyOverride;
                     }
                 }
+                if (markedRelease >= 0) keyboardData.key = markedRelease;
+                if (e.type == SDL_KEYDOWN && !e.key.repeat && !syntheticSfallKey) owner_shot::observeKeyPress(rawKey, keyboardData.key);
                 _GNW95_process_key(&keyboardData);
             }
             break;
@@ -1088,6 +1099,7 @@ void _GNW95_process_message()
 
         for (int key = 0; key < SDL_NUM_SCANCODES; key++) {
             RepeatInfo* ptr = &(_GNW95_key_time_stamps[key]);
+            if (owner_shot::suppressKeyRepeat(key)) continue;
             if (ptr->tick != -1) {
                 int elapsedTime = ptr->tick > tick ? INT_MAX : tick - ptr->tick;
                 int delay = ptr->repeatCount == 0 ? gKeyboardKeyRepeatDelay : gKeyboardKeyRepeatRate;

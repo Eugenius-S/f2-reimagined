@@ -1,4 +1,5 @@
 #include "preview_policy.h"
+#include "action_menu_selection.h"
 
 #include <cstdio>
 
@@ -7,6 +8,11 @@ using namespace fallout::scene;
 int main()
 {
 #define CHECK(expr) do { if (!(expr)) { std::fprintf(stderr, "CHECK failed at %s:%d: %s\n", __FILE__, __LINE__, #expr); return 1; } } while (0)
+    CHECK(actionMenuIndexAtY(189, 190, 40, 5) == 0);
+    CHECK(actionMenuIndexAtY(250, 190, 40, 5) == 1);
+    CHECK(actionMenuIndexAtY(350, 190, 40, 5) == 4);
+    CHECK(actionMenuIndexAtY(240, 90, 40, 5) == 3); // panel shifted up at bottom
+    CHECK(actionMenuIndexAtY(999, 90, 40, 5) == 4);
     const PreviewRuntimeState normal = { true, true, true, true };
     CHECK(previewMayPresent(normal));
 

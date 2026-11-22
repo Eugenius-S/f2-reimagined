@@ -446,7 +446,7 @@ class FloorSidecarTests(unittest.TestCase):
         water[9999] = 1
         payload = encode_floor_sidecar(scene, water=water, water_color=[0.04, 0.047, 0.045])
         decoded = decode_floor_sidecar(payload)
-        self.assertEqual(decoded["version"], VERSION)
+        self.assertEqual(decoded["version"], 7)
         self.assertEqual(decoded["water"][0], 1)
         self.assertEqual(decoded["water"][1], 2)
         self.assertEqual(decoded["water"][2], 0)
@@ -463,6 +463,22 @@ class FloorSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "truncated"):
             decode_floor_sidecar(payload[:-1])
 
+    def test_desert_atlas_flags_round_trip_and_validate(self):
+        scene = self.sample_scene()
+        water = bytearray(10000)
+        payload = encode_floor_sidecar(scene, water=water, water_color=[0, 0, 0], desert_cells=[1, 0])
+        decoded = decode_floor_sidecar(payload)
+        self.assertEqual(decoded["version"], VERSION)
+        self.assertEqual(decoded["desertCells"], [1, 0])
+        with self.assertRaisesRegex(ValueError, "desert cell"):
+            encode_floor_sidecar(scene, water=water, water_color=[0, 0, 0], desert_cells=[1])
+        with self.assertRaisesRegex(ValueError, "truncated"):
+            decode_floor_sidecar(payload[:-1])
+        corrupt = bytearray(payload)
+        corrupt[-1] = 2
+        with self.assertRaisesRegex(ValueError, "desert cell"):
+            decode_floor_sidecar(corrupt)
+
     def test_version_5_floor_lists_still_decode_without_patches(self):
         payload = bytearray(encode_floor_sidecar(self.sample_scene())[:-2])  # no patch count: version 5 had none
         struct.pack_into("<H", payload, 4, 5)
@@ -478,7 +494,7 @@ class FloorSidecarTests(unittest.TestCase):
         scene["tiles"]["cells"] = []
         payload = encode_floor_sidecar(scene, water=bytearray(100 * 100), water_color=[0.05, 0.05, 0.05])
         decoded = decode_floor_sidecar(payload)
-        self.assertEqual(decoded["version"], VERSION)
+        self.assertEqual(decoded["version"], 7)
         self.assertEqual(decoded["cells"], [])
         self.assertEqual(decoded["water"], [0] * 100 * 100)
         # one drawn square over the empty atlas is still a broken scene

@@ -1,4 +1,5 @@
 #include "map_clip.h"
+#include "../../src/map_edge_recovery.h"
 
 #include <algorithm>
 #include <cmath>
@@ -29,6 +30,16 @@ void pixelToWorld(double px, double py, const double squ[2], const double sqv[2]
 
 int main()
 {
+    const fallout::Rect bounds { 100, 20, 0, 80 };
+    if (!check(fallout::mapEdgePastAuthoredBottom(bounds, 50, 90), "floor extension inside authored sides")) return 1;
+    if (!check(!fallout::mapEdgePastAuthoredBottom(bounds, 110, 90), "expanded camera side does not expand the floor clip")) return 1;
+    if (!check(fallout::mapEdgeRecoveryStep(bounds, 140, 10, 130, 10, true, true), "recover one corner axis")) return 1;
+    if (!check(fallout::mapEdgeRecoveryStep(bounds, 140, 10, 140, 20, true, true), "recover the other corner axis")) return 1;
+    if (!check(!fallout::mapEdgeRecoveryStep(bounds, 140, 10, 150, 20, true, true), "reject worsening another axis")) return 1;
+    if (!check(!fallout::mapEdgeRecoveryStep(bounds, 140, 50, 150, 50, true, true), "reject outward movement after shrinking")) return 1;
+    if (!check(!fallout::mapEdgeRecoveryStep(bounds, 140, 50, 130, 90, true, false), "reject a new bottom violation")) return 1;
+    if (!check(!fallout::mapEdgeRecoveryStep(bounds, 90, 30, 110, 30, true, true), "reject new outward travel")) return 1;
+    if (!check(fallout::mapEdgeRecoveryStep(bounds, 50, 110, 50, 100, false, false), "recover past bottom")) return 1;
     using namespace fallout::scene_renderer;
 
     // EDG v2's format may store X backwards (for example left=99,right=0).
@@ -86,6 +97,15 @@ int main()
     pixelToWorld(14.1, 1.0, squ, sqv, origin, &outsideX, &outsideZ);
     if (!check(projectedFloor.enabled && projectedFloor.source == MapClipSource::Floor,
             "diamond floor mask produces a projected four-sided floor cut")) return 1;
+    double floorBounds[4], zoomBounds[4];
+    if (!check(floorScrollPixelBounds(projectedFloor, squ, sqv, origin, 6, 6, 1.0, floorBounds)
+            && floorScrollPixelBounds(projectedFloor, squ, sqv, origin, 6, 6, 1.28, zoomBounds),
+            "floor scroll bounds use the actual projection")) return 1;
+    if (!check(zoomBounds[0] > floorBounds[0] && zoomBounds[2] < floorBounds[2]
+            && zoomBounds[1] > floorBounds[1] && zoomBounds[3] < floorBounds[3],
+            "zoom-in contracts both floor scroll axes")) return 1;
+    if (!check(!floorScrollPixelBounds({}, squ, sqv, origin, 6, 6, 1.0, floorBounds),
+            "missing floor does not produce unbounded scrolling")) return 1;
     if (!check(mapClipContains(projectedFloor, insideX, insideZ)
             && !mapClipContains(projectedFloor, outsideX, outsideZ),
             "projected cell centers and half-cell inset produce the straight pixel rectangle")) return 1;

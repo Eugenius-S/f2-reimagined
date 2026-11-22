@@ -4,6 +4,7 @@
 #include "obj_types.h"
 
 namespace fallout {
+bool gameMouseActionMenuIsOpen();
 
 enum GameMouseMode : int {
     GAME_MOUSE_MODE_INVALID = -1,

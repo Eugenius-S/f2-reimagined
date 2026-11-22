@@ -599,7 +599,9 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
     }
     scene_path.write_text(json.dumps(scene, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     (out_dir / "floor.bin").write_bytes(encode_floor_sidecar(scene, fringe, patches, builder.water,
-                                                             builder.water_color))
+                                                             builder.water_color,
+                                                             [int(builder.water_names[i] in {f"edg500{n}.frm" for n in range(8)})
+                                                              for i in range(len(builder.tile_cells))]))
     receiver_layout = json.loads((HERE / "floor_receivers.json").read_text(encoding="utf-8"))
     receiver = floor_receiver(receiver_layout, map_name, elevation, builder.map.objects[elevation], builder.floor_ids)
     write_floor_receiver(out_dir, receiver)

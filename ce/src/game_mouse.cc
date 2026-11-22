@@ -28,6 +28,7 @@
 #include "kb.h"
 #include "devtools/devtools.h"
 #include "scene/camera_turn.h"
+#include "scene/action_menu_selection.h"
 #include "scene/scene_view.h"
 #include "scene/scene_objects.h"
 #include "map_edge.h"
@@ -127,6 +128,11 @@ static unsigned int _gmouse_3d_last_move_time = 0;
 // actmenu.frm
 // 0x518C8C gmouse_3d_menu_frame
 static Art* gGameMouseActionMenuFrm = nullptr;
+static bool gGameMouseActionMenuOpen = false;
+static int gGameMouseActionMenuTop = 0;
+static int gGameMouseActionMenuItemHeight = 0;
+
+bool gameMouseActionMenuIsOpen() { return gGameMouseActionMenuOpen; }
 
 // 0x518C90 gmouse_3d_menu_frame_key
 static CacheEntry* gGameMouseActionMenuFrmHandle = INVALID_CACHE_ENTRY;
@@ -1258,6 +1264,7 @@ void _gmouse_handle_event(int mouseX, int mouseY, int mouseState)
                 // NOTE: Uninline.
                 if (gameMouse3dSetFlatFrmId(InterfaceFrameId::ActionMenu, &cursorRect) == 0 && _gmouse_3d_move_to(mouseX, mouseY, gElevation, &cursorRect) == 0) {
                     tileWindowRefreshRect(&cursorRect, gElevation);
+                    gGameMouseActionMenuOpen = true;
                     isoDisable();
 
                     int newMouseY = mouseY;
@@ -1275,15 +1282,10 @@ void _gmouse_handle_event(int mouseX, int mouseY, int mouseState)
                         int updatedMouseY;
                         mouseGetPosition(&updatedMouseX, &updatedMouseY);
 
-                        if (abs(updatedMouseY - newMouseY) > 10) {
-                            int nextActionIndex;
-                            if (newMouseY >= updatedMouseY) {
-                                nextActionIndex = actionIndex - 1;
-                            } else {
-                                nextActionIndex = actionIndex + 1;
-                            }
-
-                            if (gameMouseHighlightActionMenuItemAtIndex(nextActionIndex) == 0) {
+                        if (updatedMouseY != newMouseY) {
+                            const int nextActionIndex = scene::actionMenuIndexAtY(updatedMouseY,
+                                gGameMouseActionMenuTop, gGameMouseActionMenuItemHeight, actionMenuItemsCount);
+                            if (nextActionIndex != actionIndex && gameMouseHighlightActionMenuItemAtIndex(nextActionIndex) == 0) {
                                 tileWindowRefreshRect(&cursorRect, gElevation);
                                 actionIndex = nextActionIndex;
                             }
@@ -1295,6 +1297,7 @@ void _gmouse_handle_event(int mouseX, int mouseY, int mouseState)
                     }
 
                     isoEnable();
+                    gGameMouseActionMenuOpen = false;
 
                     _gmouse_3d_hover_test = false;
                     gGameMouseLastX = mouseX;
@@ -2008,6 +2011,8 @@ int gameMouseRenderActionMenuItems(int x, int y, const GameMouseActionMenuItem* 
     shiftY = std::clamp(shiftY, 0, maxShiftY);
 
     unsigned char* arrowFrmDest = gGameMouseActionMenuFrmData;
+    gGameMouseActionMenuTop = y - (height <= maxY ? shiftY : 0);
+    gGameMouseActionMenuItemHeight = menuItemHeight;
     unsigned char* menuItemFrmDest = arrowFrmDest;
 
     if (x + arrowWidth + menuItemWidth - 1 < width) {

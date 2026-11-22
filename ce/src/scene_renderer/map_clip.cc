@@ -138,6 +138,31 @@ bool mapClipContains(const MapClip& clip, double x, double z)
     return true;
 }
 
+bool floorScrollPixelBounds(const MapClip& clip, const double squ[2], const double sqv[2],
+    const double origin[2], int width, int height, double zoom, double bounds[4])
+{
+    if (!clip.enabled || width <= 0 || height <= 0 || !std::isfinite(zoom) || zoom <= 0.0) return false;
+    double minX = 1e300, maxX = -1e300, minY = 1e300, maxY = -1e300;
+    for (int i = 0; i < 4; ++i) {
+        const MapClipPlane& a = clip.planes[i];
+        const MapClipPlane& b = clip.planes[(i + 1) % 4];
+        const double det = static_cast<double>(a.x) * b.z - static_cast<double>(b.x) * a.z;
+        if (std::abs(det) < 1e-9) return false;
+        const double x = (static_cast<double>(a.z) * b.offset - static_cast<double>(b.z) * a.offset) / det;
+        const double z = (static_cast<double>(b.x) * a.offset - static_cast<double>(a.x) * b.offset) / det;
+        const double px = origin[0] + (x + 50.0) * squ[0] + (z + 50.0) * sqv[0];
+        const double py = origin[1] + (x + 50.0) * squ[1] + (z + 50.0) * sqv[1];
+        if (!std::isfinite(px) || !std::isfinite(py)) return false;
+        minX = std::min(minX, px); maxX = std::max(maxX, px);
+        minY = std::min(minY, py); maxY = std::max(maxY, py);
+    }
+    const double insetX = std::min((maxX - minX) * 0.5, width * 0.5) - width / (3.0 * zoom);
+    const double insetY = std::min((maxY - minY) * 0.5, height * 0.5) - height / (3.0 * zoom);
+    bounds[0] = minX + insetX; bounds[1] = minY + insetY;
+    bounds[2] = maxX - insetX; bounds[3] = maxY - insetY;
+    return true;
+}
+
 bool extendMapClipPlaneToFloor(MapClip& clip, const MapClip& floor, int planeIndex)
 {
     if (!clip.enabled || !floor.enabled || planeIndex < 0 || planeIndex >= 4) return false;

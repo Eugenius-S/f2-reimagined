@@ -14,6 +14,7 @@
 #include "critter.h"
 #include "db.h"
 #include "debug.h"
+#include "devtools/owner_shot.h"
 #include "display_monitor.h"
 #include "draw.h"
 #include "elevator.h"
@@ -3218,11 +3219,13 @@ static int _combat_input()
             break;
         }
 
-        if (keyCode == KEY_SPACE) {
+        if (!owner_shot::markMode() && keyCode == KEY_SPACE) {
             break;
         }
 
-        if (keyCode == KEY_RETURN) {
+        if (owner_shot::markMode()) {
+            owner_shot::handleKey(keyCode);
+        } else if (keyCode == KEY_RETURN) {
             combatAttemptEnd();
         } else {
             _scripts_check_state_in_combat();

@@ -85,7 +85,9 @@ int mapEdgeSelectZoneAndClamp(int tile, MapElevation elevation);
 
 // Returns true if tile is within the EDG boundary for the given elevation.
 // Used by the stencil flood-fill as a traversal gate.
-bool mapEdgeTileInBounds(int tile);
+bool mapEdgeTileInBounds(int tile, bool manual3d = false);
+bool mapEdgeFloorScrollBounds(Rect* bounds);
+bool mapEdgeFloorScrollAllows(int tile, const Rect& bounds);
 bool mapEdgeTilePastBottomStop(int tile);
 
 // Returns true if squareRect data (v2 EDG) is available for this elevation.
@@ -118,7 +120,7 @@ int mapEdgeGetTileYAlignment();
 // tile's pixel position is exactly on a scrollBorderRect edge.
 // Returns true if the tile is on a boundary edge (mods changed) — caller should set
 // TILE_SET_CENTER_REFRESH_WINDOW for full redraw, matching sfall CheckBorder result==1.
-bool mapEdgeSetBoundaryMods(int tile);
+bool mapEdgeSetBoundaryMods(int tile, bool manual3d = false);
 
 // Computes the screen-space visible area rectangle.
 // Equivalent to sfall EdgeClipping's mapVisibleArea. Returns false if no EDG loaded.
