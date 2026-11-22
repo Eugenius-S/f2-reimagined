@@ -36,3 +36,9 @@ Do not change the owner's installation or saves. Follow-on input, lighting and v
 ### 2026-11-22 gpt
 
 Claimed the first packet from the owner's overnight batch. Owner-visible symptoms are recorded separately from verified source behavior.
+
+## 2026-11-23 Windows evidence
+
+The published Windows candidate shows the orange random bridge and green Arroyo bridge exit cues after actual F12, with matching before and after scene-gl metadata. The sampled left edge is identical to the prior release. The Temple corner moves along the authored limit and away from it at 3440x1440 / 2x. The ordinary ARCAVES-to-ARTEMPLE click passes; additional reverse and world-map routes, full edge coverage, and the owner-specific door click remain open.
+
+[Native acceptance checks](../runs/325-night-checks/README.md).
