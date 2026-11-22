@@ -13,6 +13,7 @@
 #include "../scene/scene_view.h"
 #include "../scene/text_capture.h"
 #include "../settings.h"
+#include "../svga.h"
 #include "../window_manager.h"
 #include "context.h"
 #include "post.h"
@@ -713,13 +714,16 @@ void presentFrameWithSharpText(SDL_Surface* indexedSurface, SDL_Surface* rgbaSur
         }
     }
     if (ready) {
-        const PreparedSharpTextFrame& frame = preparedSharpTextFrame();
+        PreparedSharpTextFrame& frame = preparedFrameStorage();
+        renderCompositeRgbaBackground(frame.restoredRgba.data(), frame.width, frame.height, frame.rgbaPitch);
         presentFrame(frame.restoredRgba.data(), frame.width, frame.height, frame.rgbaPitch);
         if (drawPreparedSharpTextOverlay()) return;
         disableSharpText("OpenGL draw failed");
     }
 
     SDL_BlitSurface(indexedSurface, nullptr, rgbaSurface, nullptr);
+    renderCompositeRgbaBackground(static_cast<unsigned char*>(rgbaSurface->pixels),
+        rgbaSurface->w, rgbaSurface->h, rgbaSurface->pitch);
     presentFrame(static_cast<const unsigned char*>(rgbaSurface->pixels),
         rgbaSurface->w, rgbaSurface->h, rgbaSurface->pitch);
 }

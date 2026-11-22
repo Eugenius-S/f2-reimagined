@@ -23,6 +23,7 @@ extern FpsLimiter sharedFpsLimiter;
 // The mask keeps menu controls and labels on top of the image.
 void renderSetRgbaBackground(const unsigned char* rgba, const unsigned char* mask, int width, int height);
 void renderClearRgbaBackground();
+void renderCompositeRgbaBackground(unsigned char* pixels, int width, int height, int pitch);
 
 enum class WindowMode : int {
     Fullscreen = 0,
