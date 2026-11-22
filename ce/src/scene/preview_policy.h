@@ -33,6 +33,11 @@ inline bool gameModeShowsMap(unsigned int gameMode)
     return (gameMode & kGameModesWithoutMap) == 0;
 }
 
+inline bool mapVisibleUnderLocalModal(bool modal, bool special, bool mapTransition, bool dialogueClosing)
+{
+    return !mapTransition && (modal || dialogueClosing) && (!special || dialogueClosing);
+}
+
 PreviewBlockReason previewBlockReason(const PreviewRuntimeState& state);
 bool previewMayPresent(const PreviewRuntimeState& state);
 
