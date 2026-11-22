@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -120,6 +121,41 @@ inline std::string languageOf(const std::string& input)
         begin = end;
     }
     return std::string();
+}
+
+// Write `content` over `path` without ever leaving it half written (292): the
+// bytes land in a temporary file next to the target, and only a full write
+// renames it over the old file. False when either step failed; the old file
+// then still stands.
+inline bool writeFileAtomic(const std::filesystem::path& path, const std::string& content,
+    std::string* error = nullptr)
+{
+    std::filesystem::path temp = path;
+    temp += ".tmp";
+    {
+        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+        if (!out) {
+            if (error != nullptr) *error = "cannot write " + temp.filename().string();
+            return false;
+        }
+        out.write(content.data(), static_cast<std::streamsize>(content.size()));
+        out.close();
+        if (!out) {
+            if (error != nullptr) *error = "cannot write " + temp.filename().string();
+            std::error_code ignored;
+            std::filesystem::remove(temp, ignored);
+            return false;
+        }
+    }
+    std::error_code error_code;
+    std::filesystem::rename(temp, path, error_code);
+    if (error_code) {
+        if (error != nullptr) *error = error_code.message();
+        std::error_code ignored;
+        std::filesystem::remove(temp, ignored);
+        return false;
+    }
+    return true;
 }
 
 } // namespace launcher_uninstall
