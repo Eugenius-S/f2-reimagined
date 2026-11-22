@@ -825,14 +825,14 @@ try {
                     (Select-String -Path $transitionLog -Pattern 'first-3d-capture result=pass map=kladwtwn' -Quiet)
                 $probed = $exitPassed -and $arrivalCaptured
             }
-            if ($TransitionWatch -and $ExitProbeDestination) {
-                $transitionLog = Join-Path $runDirectory 'logs\devtransitions.log'
-                $destinationPattern = [regex]::Escape($ExitProbeDestination.ToLowerInvariant())
-                $exitPassed = (Test-Path $log) -and
-                    (Select-String -Path $log -Pattern ('exit transition passed: .* target=' + $destinationPattern + ' ') -Quiet)
-                $arrivalCaptured = (Test-Path $transitionLog) -and
-                    (Select-String -Path $transitionLog -Pattern ('first-3d-capture result=pass map=' + $destinationPattern + ' elevation=') -Quiet)
-                $probed = $exitPassed -and $arrivalCaptured
+            if ($ExitProbeDestination) {
+                $exitStatus = Get-SnapshotExitProbeStatus $log $ExitProbeDestination
+                if ($exitStatus -eq 'failed') { break }
+                $probed = $exitStatus -eq 'passed'
+                if ($TransitionWatch -and $probed) {
+                    $transitionLog = Join-Path $runDirectory 'logs\devtransitions.log'
+                    $probed = Test-SnapshotExitArrival $transitionLog $ExitProbeDestination
+                }
             }
             if ($Combat) {
                 $combatLog = Join-Path $OutputDirectory 'process.stdout.log'
@@ -1372,6 +1372,15 @@ if ($OutputDirectory) {
 }
 if ($Probe -or $ExitProbeDestination) {
     Write-Output "PROBE:"
-    Get-Content $probeLog
+    if (Test-Path -LiteralPath $probeLog -PathType Leaf) { Get-Content -LiteralPath $probeLog }
+}
+if ($ExitProbeDestination) {
+    if ((Get-SnapshotExitProbeStatus $probeLog $ExitProbeDestination) -ne 'passed') {
+        throw "Exit probe did not reach '$ExitProbeDestination'. See the probe log in the output or run folder."
+    }
+    if ($TransitionWatch -and
+        -not (Test-SnapshotExitArrival (Join-Path $runDirectory 'logs\devtransitions.log') $ExitProbeDestination)) {
+        throw "Exit probe reached '$ExitProbeDestination' without a verified first 3D frame."
+    }
 }
 Complete-RunFolder

@@ -63,3 +63,23 @@ function Add-SnapshotOutput([string]$Directory, [string]$Path) {
 function Complete-SnapshotOutput([string]$Directory) {
     Write-SnapshotOutput $Directory 'complete'
 }
+
+# "probe done" is a terminal diagnostic, not proof of a successful walk.
+# A named-map exit needs the expected target and the actual arrival map.
+function Get-SnapshotExitProbeStatus([string]$Path, [string]$Destination) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return 'pending' }
+    $text = Get-Content -Raw -LiteralPath $Path
+    $name = [regex]::Escape($Destination)
+    if ($text -match ('(?m)^exit transition passed: [^\r\n]+ target=' + $name + ' map=' + $name + '\.MAP ')) {
+        return 'passed'
+    }
+    if ($text -match '(?m)^(?:exit probe failed:|outside probe failed:|probe done\b)') {
+        return 'failed'
+    }
+    return 'pending'
+}
+
+function Test-SnapshotExitArrival([string]$Path, [string]$Destination) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    return Select-String -LiteralPath $Path -Quiet -Pattern ('^first-3d-capture result=pass map=' + [regex]::Escape($Destination) + ' elevation=')
+}
