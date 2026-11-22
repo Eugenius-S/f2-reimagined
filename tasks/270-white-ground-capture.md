@@ -36,3 +36,4 @@ Renderer and map data changes.
 ## Log
 
 - 2026-11-13 claude: cut from the review of gpt's run of 2026-11-12: the blocked evidence tasks share a few harness gaps.
+- 2026-11-17 claude: 306 fixed the renderer cause (the bake target's creation took the floor's texture unit, and the bake ran without the floor's light mode). The original KLAMALL command now gives a textured floor with the bake on: `runs/306-ground-bake-keeps-floor-texture/before-after.jpg`. This task's own evidence and 256's shadow check stay here.
