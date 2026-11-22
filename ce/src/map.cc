@@ -29,6 +29,7 @@
 #include "loadsave.h"
 #include "map_defs.h"
 #include "map_edge.h"
+#include "map_scroll_step.h"
 #include "memory.h"
 #include "object.h"
 #include "party_member.h"
@@ -636,10 +637,7 @@ int mapScroll(int dx, int dy)
 
     gIsoWindowScrollTimestamp = getTicks();
 
-    int screenDx = dx * 32;
-    int screenDy = dy * 24;
-
-    if (screenDx == 0 && screenDy == 0) {
+    if (dx == 0 && dy == 0) {
         return -1;
     }
 
@@ -648,15 +646,15 @@ int mapScroll(int dx, int dy)
     int centerScreenX;
     int centerScreenY;
     tileToScreenXY(gCenterTile, &centerScreenX, &centerScreenY);
-    centerScreenX += screenDx + 16;
-    centerScreenY += screenDy + 8;
-
-    int newCenterTile = tileFromScreenXY(centerScreenX, centerScreenY);
-    if (newCenterTile == -1) {
-        return -1;
-    }
-
-    if (tileSetCenter(newCenterTile, TILE_SET_CENTER_FLAG_MANUAL_SCROLL) == -1) {
+    const MapScrollStep accepted = chooseMapScrollStep({ dx * 32, dy * 24 },
+        tileSceneOverlayActive() && !mapEdgeIsMapperMode(), [&](MapScrollStep step) {
+            const int tile = tileFromScreenXY(centerScreenX + step.x + 16,
+                centerScreenY + step.y + 8);
+            return tile != -1 && tileSetCenter(tile, TILE_SET_CENTER_FLAG_MANUAL_SCROLL) != -1;
+        });
+    const int screenDx = accepted.x;
+    const int screenDy = accepted.y;
+    if (screenDx == 0 && screenDy == 0) {
         return -1;
     }
 

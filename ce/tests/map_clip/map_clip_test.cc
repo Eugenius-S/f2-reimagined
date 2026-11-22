@@ -1,5 +1,6 @@
 #include "map_clip.h"
 #include "../../src/map_edge_recovery.h"
+#include "../../src/map_scroll_step.h"
 
 #include <algorithm>
 #include <cmath>
@@ -30,6 +31,18 @@ void pixelToWorld(double px, double py, const double squ[2], const double sqv[2]
 
 int main()
 {
+    using fallout::MapScrollStep;
+    const auto legal = [](MapScrollStep step) { return step.x == 0 && step.y == -24; };
+    const auto testedCorner = fallout::chooseMapScrollStep({32, -24}, true, legal);
+    if (!check(testedCorner.x == 0 && testedCorner.y == -24,
+            "3D diagonal requests slide along an edge when one axis is blocked")) return 1;
+    const auto classicCorner = fallout::chooseMapScrollStep({32, -24}, false, legal);
+    if (!check(classicCorner.x == 0 && classicCorner.y == 0,
+            "classic scroll retains its existing blocked diagonals")) return 1;
+    const auto allLegal = [](MapScrollStep) { return true; };
+    const auto diagonal = fallout::chooseMapScrollStep({-32, 24}, true, allLegal);
+    if (!check(diagonal.x == -32 && diagonal.y == 24,
+            "an available diagonal is preferred to either axis")) return 1;
     const fallout::Rect bounds { 100, 20, 0, 80 };
     if (!check(fallout::mapEdgePastAuthoredBottom(bounds, 50, 90), "floor extension inside authored sides")) return 1;
     if (!check(!fallout::mapEdgePastAuthoredBottom(bounds, 110, 90), "expanded camera side does not expand the floor clip")) return 1;
