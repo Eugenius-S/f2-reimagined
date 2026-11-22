@@ -206,13 +206,15 @@ int main()
             && scaleFactor->numericRange->step == 0.2,
             "screen scale factor is a restart setting from 1.0x to 3.0x in 0.2x steps")) return 1;
     if (!check(resolutionMode != nullptr && resolutionMode->valueType == SettingValueType::Choice
-            && resolutionMode->applyPolicy == SettingApplyPolicy::Restart
+            && resolutionMode->applyPolicy == SettingApplyPolicy::OnClose
             && windowMode != nullptr && windowMode->valueType == SettingValueType::Choice
+            && windowMode->applyPolicy == SettingApplyPolicy::OnClose
             && windowMode->choices.size() == 3,
-            "resolution and window mode are registered restart choices")) return 1;
+            "resolution and window mode are registered apply-on-close choices")) return 1;
     if (!check(settingsSetValue(*resolutionMode, 25601440, nullptr) && settingsSave()
+            && settings.screen.resolution_mode == 25601440
             && gWrittenWidth == 2560 && gWrittenHeight == 1440,
-            "a pending resolution choice writes both legacy resolution keys")) return 1;
+            "a live resolution choice becomes active and writes both legacy keys")) return 1;
     gConfiguredWindowedPresent = true;
     gConfiguredWindowed = static_cast<int>(WindowMode::Windowed);
     if (!check(initializeWith(nullptr) && settings.screen.windowed == WindowMode::Windowed,

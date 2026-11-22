@@ -1,0 +1,38 @@
+---
+id: 317
+title: Restore 3D exit cues and predictable edge scrolling
+milestone: M1
+status: doing
+owner: gpt
+priority: high
+tier: 0
+claude-only: no
+user-check: no
+depends-on: []
+reviewed: no
+---
+
+## Goal
+
+Keep local maps navigable and their exits visible without losing the corrected map edge.
+
+## Context
+
+The November 22 owner reports are grouped and ordered in the [inbox](inbox.md#november-22-night-queue). This first packet extends task 316, after the ac73dbb release. The second Arroyo area and a random encounter were affected. Screenshot timing and the edge fix are clues, not established causes. Old 3D policy intentionally omitted translucent exit sprites while keeping their pick proxies, so distinguish visibility from navigation before assigning blame.
+
+## Acceptance
+
+- Compare known-good and current builds on the same disposable saves: 3D exit marker, hover/picking and actual route; check Arroyo and a random encounter. Compare with a classic 2D control and check both before and after F12 and Ctrl+F12 where possible.
+- Keep local 3D active and the world map in 2D. Check the Temple route with and without combat when a walking fixture exists.
+- Pan in both directions along the edge of the map and diagonally. Preserve the wider camera travel and straight authored clipping; verify the round Temple door separately.
+- Keep change-specific checks bounded. Send each tested packet to CI and obtain an independent read-only Terra High review before the release decision.
+
+## Out of scope
+
+Do not change the owner's installation or saves. Follow-on input, lighting and visual defects remain on the linked ordered queue rather than expanding this renderer packet.
+
+## Log
+
+### 2026-11-22 gpt
+
+Claimed the first packet from the owner's overnight batch. Owner-visible symptoms are recorded separately from verified source behavior.

@@ -408,7 +408,11 @@ void updateLightsFromGame()
         if (!lights.back().reach.empty()) gEffectLightProbes.push_back({ effect.object,
             effect.light.tile, effect.light.objectX, effect.light.objectY });
     }
-    scene_renderer::setStaticLight(lightGetAmbientIntensity(), std::move(hexLight), std::move(color), std::move(lights));
+    // Darken only the ambient floor at night, not the intensity from maps'
+    // lamps, fire and muzzle flashes, or the original game's lighting.
+    const int ambient = outdoorAmbientForTime(gameTimeGetTime(), lightGetAmbientIntensity(),
+        settings.scene3d.sun && gDaylight);
+    scene_renderer::setStaticLight(ambient, std::move(hexLight), std::move(color), std::move(lights));
 }
 
 bool effectLightMatches(const Object* object, int tile, int x, int y)

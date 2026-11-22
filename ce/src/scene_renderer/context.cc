@@ -1,6 +1,7 @@
 #include "context.h"
 
 #include "../dev_output.h"
+#include "../settings.h"
 
 #include <stdio.h>
 
@@ -233,8 +234,11 @@ bool init(SDL_Window* window, int logicalWidth, int logicalHeight)
         }
     }
 
-    // The vanilla SDL_Renderer was created without vsync; keep the same.
-    SDL_GL_SetSwapInterval(0);
+    // Swap synchronization is a preference, not a condition for using OpenGL.
+    const int swapInterval = settings.screen.vsync ? 1 : 0;
+    if (SDL_GL_SetSwapInterval(swapInterval) != 0 && swapInterval != 0) {
+        contextLog("Vertical sync unavailable on this OpenGL context");
+    }
 
     unsigned int vertex = compileShader(0x8B31 /* GL_VERTEX_SHADER */, kVertexShader);
     unsigned int fragment = compileShader(0x8B30 /* GL_FRAGMENT_SHADER */, kFragmentShader);

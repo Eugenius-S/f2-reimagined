@@ -208,6 +208,12 @@ int inputGetInput()
     _process_bk();
 
     v3 = dequeueInputEvent();
+    // Plain F12 takes the current frame regardless of the active menu.
+    // Region marking still owns its save/cancel keys in the gameplay loop.
+    if (v3 == KEY_F12 && !owner_shot::markMode()) {
+        owner_shot::requestPresentedShot();
+        return -1;
+    }
     if (v3 == -1 && mouseGetEvent() & 0x33) {
         mouseGetPosition(&_input_mx, &_input_my);
         return -2;
@@ -1036,7 +1042,8 @@ void _GNW95_process_message()
             const bool syntheticSfallKey = !e.key.repeat && sfall_kb_consume_synthetic_key_event(rawKey, keyboardData.down);
             int markedRelease = -1;
             if (e.type == SDL_KEYDOWN) {
-                if (e.key.repeat && (owner_shot::suppressKeyRepeat(rawKey) || owner_shot::suppressNativeKeyRepeat(rawKey))) break;
+                if (e.key.repeat && (rawKey == SDL_SCANCODE_F12
+                        || owner_shot::suppressKeyRepeat(rawKey) || owner_shot::suppressNativeKeyRepeat(rawKey))) break;
             } else if (!syntheticSfallKey) {
                 markedRelease = owner_shot::observeKeyRelease(rawKey);
             }
@@ -1099,7 +1106,8 @@ void _GNW95_process_message()
 
         for (int key = 0; key < SDL_NUM_SCANCODES; key++) {
             RepeatInfo* ptr = &(_GNW95_key_time_stamps[key]);
-            if (owner_shot::suppressKeyRepeat(key)) continue;
+            // A screenshot is one action per press, not an auto-repeat key.
+            if (key == SDL_SCANCODE_F12 || owner_shot::suppressKeyRepeat(key)) continue;
             if (ptr->tick != -1) {
                 int elapsedTime = ptr->tick > tick ? INT_MAX : tick - ptr->tick;
                 int delay = ptr->repeatCount == 0 ? gKeyboardKeyRepeatDelay : gKeyboardKeyRepeatRate;

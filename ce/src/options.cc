@@ -193,9 +193,6 @@ int showOptions()
             case KEY_MINUS:
                 brightnessDecrease();
                 break;
-            case KEY_F12:
-                takeScreenshot();
-                break;
             case KEY_UPPERCASE_E:
             case KEY_LOWERCASE_E:
             case KEY_CTRL_Q:

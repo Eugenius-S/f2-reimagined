@@ -562,6 +562,12 @@ void tileWindowRefresh()
 // 0x4B12F8 tile_set_center
 int tileSetCenter(int tile, int flags)
 {
+    return tileSetCenter(tile, flags, nullptr);
+}
+
+int tileSetCenter(int tile, int flags, bool* redrawn)
+{
+    if (redrawn != nullptr) *redrawn = false;
     if (!tileIsValid(tile)) {
         return -1;
     }
@@ -690,6 +696,7 @@ int tileSetCenter(int tile, int flags)
     if ((flags & TILE_SET_CENTER_REFRESH_WINDOW) != 0) {
         // NOTE: Uninline.
         tileWindowRefresh();
+        if (redrawn != nullptr) *redrawn = true;
         if (boundaryModsSet)
             return -1; // necessary for the correct rendering of the map
     }

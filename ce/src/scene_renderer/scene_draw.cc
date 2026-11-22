@@ -172,9 +172,8 @@ void drawStaticPreview(bool withWalls, bool withHero)
 
     // 157: the ground's light and sun shadow bake at a quarter of the pixel
     // work; the tiles below sample it (uGroundBakeMode 2) instead of running
-    // the light loop and the 25-tap shadow disk per pixel. Same geometry,
-    // same uniforms, half-sized viewport with the same origin, so both passes
-    // share one normalized space.
+    // the light loop and the 25-tap shadow disk per pixel. Keep the same
+    // normalized space, but use the offscreen target's own zero-based origin.
     const bool bakeGround = lit && shadowed && gGroundBakeWidth >= 0
         && SDL_getenv("F2CE_NO_BAKE") == nullptr
         && ensureGroundBake(width / 2, height / 2);
@@ -183,17 +182,24 @@ void drawStaticPreview(bool withWalls, bool withHero)
         int previousFbo = 0;
         glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &previousFbo);
         glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, gGroundBakeFbo);
-        glViewport(x, y, width / 2, height / 2);
+        glViewport(0, 0, width / 2, height / 2);
+        glUniform4f(gSceneViewportLocation, 0.0f, 0.0f,
+            static_cast<float>(width / 2), static_cast<float>(height / 2));
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         glClear(kColorBufferBit);
         glDepthMask(0);
         glUniform1i(gSceneGroundBakeModeLocation, 1);
+        // Use the same floor lighting as the direct draw: mode 0 bakes
+        // full white and never queries the ambient light or local lights.
+        glUniform1i(gSceneLightModeLocation, 1);
         glUniform1f(gSceneCutoffLocation, -1.0f);
         glUniform1i(gSceneTexturedLocation, 1);
         glDrawArrays(kTriangles, 6,
             (gFloorExtensionFirst > 0 ? gFloorExtensionFirst : gFloorVertexCount) - 6);
         glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, previousFbo);
         glViewport(x, y, width, height);
+        glUniform4f(gSceneViewportLocation, static_cast<float>(x), static_cast<float>(y),
+            static_cast<float>(width), static_cast<float>(height));
         glDepthMask(1);
         glUniform1f(gSceneCutoffLocation, 0.01f);
         // The bake map rides unit 7 for this frame's floor draw; the binding
@@ -537,6 +543,19 @@ bool capturePresentedFramePng(const std::filesystem::path& path, int* width, int
     if (width != nullptr) *width = drawableWidth;
     if (height != nullptr) *height = drawableHeight;
     if (error != nullptr) error->clear();
+    return true;
+}
+
+bool capturePresentedFrameBuffer(std::vector<unsigned char>& rgba, int* width, int* height, std::string* error)
+{
+    if (!gInitialized) return false;
+    int drawableWidth = 0;
+    int drawableHeight = 0;
+    SDL_GL_GetDrawableSize(gWindow, &drawableWidth, &drawableHeight);
+    if (drawableWidth <= 0 || drawableHeight <= 0) return false;
+    if (!readBackBuffer(rgba, drawableWidth, drawableHeight, error)) return false;
+    if (width != nullptr) *width = drawableWidth;
+    if (height != nullptr) *height = drawableHeight;
     return true;
 }
 

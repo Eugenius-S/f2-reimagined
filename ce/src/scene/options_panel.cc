@@ -560,7 +560,7 @@ void OptionsPanel::buildRowLayout()
         int group = 3;
         if (key == "enabled" || key == "clean_edges" || key == "sharp_text" || key == "scale_factor"
             || key == "mouse_sensitivity") group = 0;
-        else if (key == "resolution_mode" || key == "windowed") group = 0;
+        else if (key == "resolution_mode" || key == "windowed" || key == "vsync") group = 0;
         else if (key == "sun" || key == "shadows" || key == "cloud_shadows" || key == "shadow_pixel_size" || key == "shadow_density"
             || key == "sun_swing" || key == "lights" || key == "glow" || key == "glow_strength") group = 1;
         else if (key == "camera_rotation" || key == "camera_rotation_unlimited" || key == "sprite_sides" || key == "zoom" || key == "zoom_min" || key == "zoom_max") group = 2;

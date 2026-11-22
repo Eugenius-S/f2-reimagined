@@ -29,6 +29,7 @@
 #include "loadsave.h"
 #include "map_defs.h"
 #include "map_edge.h"
+#include "map_scroll_step.h"
 #include "memory.h"
 #include "object.h"
 #include "party_member.h"
@@ -636,10 +637,7 @@ int mapScroll(int dx, int dy)
 
     gIsoWindowScrollTimestamp = getTicks();
 
-    int screenDx = dx * 32;
-    int screenDy = dy * 24;
-
-    if (screenDx == 0 && screenDy == 0) {
+    if (dx == 0 && dy == 0) {
         return -1;
     }
 
@@ -648,17 +646,20 @@ int mapScroll(int dx, int dy)
     int centerScreenX;
     int centerScreenY;
     tileToScreenXY(gCenterTile, &centerScreenX, &centerScreenY);
-    centerScreenX += screenDx + 16;
-    centerScreenY += screenDy + 8;
-
-    int newCenterTile = tileFromScreenXY(centerScreenX, centerScreenY);
-    if (newCenterTile == -1) {
-        return -1;
-    }
-
-    if (tileSetCenter(newCenterTile, TILE_SET_CENTER_FLAG_MANUAL_SCROLL) == -1) {
-        return -1;
-    }
+    const MapScrollResult accepted = chooseMapScrollStep({ dx * 32, dy * 24 },
+        tileSceneOverlayActive() && !mapEdgeIsMapperMode(), [&](MapScrollStep step) {
+            const int tile = tileFromScreenXY(centerScreenX + step.x + 16,
+                centerScreenY + step.y + 8);
+            if (tile == -1) return MapScrollAttempt::Blocked;
+            bool redrawn = false;
+            const int status = tileSetCenter(tile, TILE_SET_CENTER_FLAG_MANUAL_SCROLL, &redrawn);
+            if (redrawn) return MapScrollAttempt::Redrawn;
+            return status == -1 ? MapScrollAttempt::Blocked : MapScrollAttempt::Blit;
+        });
+    // Preserve the edge cursor response when tileSetCenter redrew an EDG boundary.
+    if (accepted.attempt != MapScrollAttempt::Blit) return -1;
+    const int screenDx = accepted.step.x;
+    const int screenDy = accepted.step.y;
 
     Rect r1;
     rectCopy(&r1, &gIsoWindowRect);

@@ -163,6 +163,11 @@ struct TextRecord {
     TextBufferId ownerWitnessGeneration = 0;
 };
 
+// Zero when the cursor cannot cover tracked text. Opaque cursor colors do not
+// affect the glyph mask; only its geometry and transparency matter.
+std::uint64_t textCursorCoverageKey(TextPixels cursor, unsigned char transparent,
+    const std::vector<TextRecord>& records);
+
 struct TextRestorePixel {
     int x = 0;
     int y = 0;

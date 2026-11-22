@@ -105,6 +105,8 @@ const std::vector<Translation>& catalog()
         { "Fullscreen", cp1251(u8"Полный экран") },
         { "Window", cp1251(u8"Окно") },
         { "Borderless", cp1251(u8"Без рамки") },
+        { "Vertical sync", cp1251(u8"Вертикальная синхронизация") },
+        { "Synchronize frames with the display to reduce tearing.", cp1251(u8"Синхронизировать кадры с экраном, чтобы уменьшить разрывы изображения.") },
         { "Requires restart", cp1251(u8"Нужен перезапуск игры") },
         { "Camera rotation", cp1251(u8"Поворот камеры от −30° до +30°") },
         { "[ and ] turn the camera up to 30 degrees left or right. Return to the original view to control the game with the mouse.", cp1251(u8"Клавиши [ и ] поворачивают камеру в пределах 30 градусов влево и вправо. Верните камеру в исходное положение, чтобы управлять игрой мышью.") },

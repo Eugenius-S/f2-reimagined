@@ -145,7 +145,16 @@ bool mouseDeviceGetData(MouseData* mouseState)
     }
     mouseState->buttons[0] = (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
     mouseState->buttons[1] = (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) != 0;
-    devtools::scriptedInputMouse(&mouseState->x, &mouseState->y, &mouseState->buttons[0], &mouseState->buttons[1]);
+    if (devtools::scriptedInputMouse(&mouseState->x, &mouseState->y, &mouseState->buttons[0], &mouseState->buttons[1])
+        && mouseDeviceUsesRelativeMode()) {
+        // Scripted mouse actions specify a logical position, not a motion
+        // delta. A held position must not move again on each relative poll.
+        int currentX = 0;
+        int currentY = 0;
+        mouseGetPosition(&currentX, &currentY);
+        mouseState->x -= currentX;
+        mouseState->y -= currentY;
+    }
     mouseState->wheelX = gMouseWheelDeltaX;
     mouseState->wheelY = gMouseWheelDeltaY;
 

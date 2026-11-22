@@ -885,9 +885,8 @@ int _SavePrefs(bool save)
 
     if (save) {
         settingsSave();
-        // 209: the display mode takes effect the moment the menu closes. The
-        // resolution and the interface scale still need the restart the panel
-        // notes on their rows.
+        // Resize physical output when the preferences close. The existing
+        // logical game canvas and camera stay intact.
         applyWindowModeLive();
     }
 
@@ -1394,9 +1393,6 @@ int doPreferences(bool animated)
         case KEY_MINUS:
         case KEY_UNDERSCORE:
             brightnessDecrease();
-            break;
-        case KEY_F12:
-            takeScreenshot();
             break;
         case 527:
             preferencesSetDefaults(true);

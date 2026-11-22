@@ -18,6 +18,8 @@ namespace owner_shot {
 // keep their devshot format), so this handler runs after devtools::handleKey
 // and only answers the keys left over.
 bool handleKey(int key);
+void requestPresentedShot();
+void captureRequestedPresentedShot();
 int observeKeyRelease(int scancode);
 void observeKeyPress(int scancode, int effectiveScancode);
 void observeKeyVeto(int scancode);

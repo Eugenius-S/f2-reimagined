@@ -336,12 +336,14 @@ void addObjectCard(Object* object, void* context)
     }
     const int pickId = static_cast<int>(gPickObjects.size());
     gPickObjects.push_back({ object, object->tile });
+    const bool exitGrid = isExitGridProtoId(ProtoId(object->pid));
+    const bool flyCamera = scene_renderer::staticFlyCameraActive();
     // walls.bin draws it: its card is only picked, and the game's count of
     // sprites on its hex does not include it.
-    // Keep exit grids pickable so movement still finds the live transition,
-    // but do not draw their translucent boundary markers into the 3D map.
+    // Ordinary play needs the 2D game's exit cue. The inspection camera still
+    // hides these navigation overlays, and clipping remains untouched.
     const bool pickOnly = scene_renderer::staticObjectBaked(object->tile, object->fid)
-        || isExitGridProtoId(ProtoId(object->pid));
+        || (exitGrid && flyCamera);
     const EffectEmission emission = effectEmission(object->fid); // calibrated material tag, independent of local light
     if (pickOnly && emission.sign) scene_renderer::markStaticWallEmissive(object->tile, object->fid);
     // The game shows the hero through walls and scenery he stands behind.
@@ -355,7 +357,8 @@ void addObjectCard(Object* object, void* context)
     if (pickOnly && scene_renderer::staticObjectFlyOnly(object->tile, object->fid)) {
         scene_renderer::markStaticWallFullLight(object->tile, object->fid);
     }
-    const int stack = pickOnly ? (object->tile == pass.lastTile ? pass.onTile : 0) : nextStackOnTile(pass, object);
+    const int stack = exitGrid ? 0
+        : pickOnly ? (object->tile == pass.lastTile ? pass.onTile : 0) : nextStackOnTile(pass, object);
     if (object == gDude) {
         gHeroStack = stack; // the hero card is drawn on its own
         gHeroPickId = pickId;
@@ -380,13 +383,13 @@ void addObjectCard(Object* object, void* context)
     // 157: an object whose cheap state is unchanged reuses the card built
     // before - the art locks, the decodes and the projection rebuild only
     // ran for the things that moved, turned or changed frame.
-    const bool flatNow = (object->flags & OBJECT_FLAT) != OBJECT_NONE
+    const bool flatNow = exitGrid || (object->flags & OBJECT_FLAT) != OBJECT_NONE
         || scene_renderer::staticObjectFlat(object->tile, object->fid);
     const scene_renderer::StaticObjectSnapshot snapshot = {
         static_cast<unsigned int>(object->fid), object->frame, object->rotation,
         object->tile, object->x, object->y, object->pid,
         static_cast<unsigned int>(object->flags), stack, seeThrough, flatNow,
-        scene_renderer::staticFlyCameraActive(), scene_renderer::staticShownRotation(0),
+        flyCamera, scene_renderer::staticShownRotation(0),
         settings.scene3d.shadows, settings.scene3d.sprite_sides,
         scene_renderer::staticMapClip().enabled,
     };

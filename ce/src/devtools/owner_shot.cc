@@ -118,6 +118,7 @@ std::string shownPath(const std::filesystem::path& path)
 // bar reads off the window that contains the shot). A failed attempt retries
 // on the next frames and gives up after about ten seconds of presents.
 bool gShotPending = false;
+bool gPresentedShotRequested = false;
 int gShotAttempts = 0;
 Uint32 gShotReadyAt = 0;
 int gShotDelaySeconds = 0;
@@ -269,20 +270,24 @@ std::string jsonText(const char* text)
 bool readFrame(std::vector<unsigned char>& pixels, std::vector<unsigned char>& indexed,
     std::vector<unsigned char>& palette, int* width, int* height, std::string* failure)
 {
+    if (gSdlSurface == nullptr || gSdlSurface->pixels == nullptr) {
+        if (failure != nullptr) *failure = "no framebuffer";
+        return false;
+    }
     const bool sceneLive = scene_renderer::isActive() && scene::shouldPresent()
         && scene::activeView() == scene::View::Full;
     if (sceneLive) {
         return scene_renderer::captureStaticPreviewBuffer(true, true, true, pixels, width, height, failure);
     }
     if (scene_renderer::isActive()) {
+        if (gSdlTextureSurface == nullptr || gSdlTextureSurface->pixels == nullptr) {
+            if (failure != nullptr) *failure = "no OpenGL transfer surface";
+            return false;
+        }
         SDL_BlitSurface(gSdlSurface, nullptr, gSdlTextureSurface, nullptr);
         return scene_renderer::captureFrameBuffer(static_cast<const unsigned char*>(gSdlTextureSurface->pixels),
             gSdlTextureSurface->w, gSdlTextureSurface->h, gSdlTextureSurface->pitch,
             pixels, width, height, failure);
-    }
-    if (gSdlSurface == nullptr || gSdlSurface->pixels == nullptr) {
-        if (failure != nullptr) *failure = "no framebuffer";
-        return false;
     }
     indexed.resize(static_cast<size_t>(gSdlSurface->w) * static_cast<size_t>(gSdlSurface->h));
     if (!devtools::copySnapshotRowsTightly(static_cast<const unsigned char*>(gSdlSurface->pixels),
@@ -359,7 +364,7 @@ void assembleContext(ShotContext& out)
     out.mapJson = "unknown";
     out.cityJson = "unknown";
     const Map currentMap = mapGetCurrentMap();
-    if (currentMap >= 0) {
+    if (gMapHeader.name[0] != '\0' && currentMap >= 0) {
         out.mapJson = jsonText(mapGetName(currentMap, static_cast<MapElevation>(out.elevation)));
         out.cityJson = jsonText(mapGetCityName(currentMap));
     }
@@ -500,7 +505,7 @@ void writeShotFiles(const std::string& imagePath, const std::string& sidecarPath
     launchEncodeThread(std::move(worker));
 }
 
-bool takeShot()
+bool takeShot(bool presented = false)
 {
     namespace fs = std::filesystem;
 
@@ -558,7 +563,13 @@ bool takeShot()
     int width = 0;
     int height = 0;
     std::string captureError;
-    if (!readFrame(pixels, indexed, palette, &width, &height, &captureError)) {
+    if (presented && scene_renderer::isActive()) {
+        if (!scene_renderer::capturePresentedFrameBuffer(pixels, &width, &height, &captureError)) return false;
+    } else if (presented && gSdlRenderer != nullptr) {
+        if (SDL_GetRendererOutputSize(gSdlRenderer, &width, &height) != 0 || width <= 0 || height <= 0) return false;
+        pixels.resize(static_cast<std::size_t>(width) * height * 4);
+        if (SDL_RenderReadPixels(gSdlRenderer, nullptr, SDL_PIXELFORMAT_RGBA32, pixels.data(), width * 4) != 0) return false;
+    } else if (!readFrame(pixels, indexed, palette, &width, &height, &captureError)) {
         return false;
     }
 
@@ -965,6 +976,20 @@ void handleMarkMouse()
 }
 
 } // namespace
+
+void requestPresentedShot()
+{
+    gPresentedShotRequested = true;
+}
+
+void captureRequestedPresentedShot()
+{
+    if (!gPresentedShotRequested) return;
+    gPresentedShotRequested = false;
+    if (!takeShot(true)) {
+        displayMonitorAddMessage(scene::menuStatusText("shot failed", settings.system.language).c_str());
+    }
+}
 
 bool handleKey(int key)
 {

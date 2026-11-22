@@ -3765,6 +3765,7 @@ static void runDialogFixtureFrame()
             }
             if (gDialogCursorCheckRequested) {
                 auto failCursorCheck = [](const char* reason) {
+                    scriptedInputSetExternalMouse(false);
                     printf("DIALOG_CURSOR_CHECK FAIL map=%s script=%s speaker=%d speaker_tile=%d hero=%d reason=%s\n",
                         gMapHeader.name, gDialogFixtureScript, gDialogFixtureSpeakerId,
                         gDialogFixtureSpeakerTile, gDude != nullptr ? gDude->tile : -1, reason);
@@ -3783,6 +3784,7 @@ static void runDialogFixtureFrame()
 
                 const scene_renderer::PreparedSharpTextFrame& frame = scene_renderer::preparedSharpTextFrame();
                 if (gDialogCursorCheckStage == 2) {
+                    scriptedInputSetExternalMouse(false);
                     if (!frame.active || !frame.drawn || frame.overlay.pixels.empty()
                         || frame.width <= 0 || frame.height <= 0
                         || frame.overlay.width <= 0 || frame.overlay.height <= 0
@@ -3849,6 +3851,9 @@ static void runDialogFixtureFrame()
                         || gDialogCursorCheckTransparentLogicalY >= cursor.y + cursor.height
                         || cursor.pixels[static_cast<std::size_t>(gDialogCursorCheckTransparentLogicalY - cursor.y) * cursor.pitch
                             + gDialogCursorCheckTransparentLogicalX - cursor.x] != cursor.transparentIndex) {
+                        printf("DIALOG_CURSOR_INPUT actual=%d,%d size=%d,%d pitch=%d visible=%d transparent_index=%u\n",
+                            cursor.x, cursor.y, cursor.width, cursor.height, cursor.pitch,
+                            cursor.visible ? 1 : 0, static_cast<unsigned>(cursor.transparentIndex));
                         failCursorCheck("engine-cursor-opaque-and-transparent-cells-mismatch");
                         return;
                     }
@@ -3866,6 +3871,10 @@ static void runDialogFixtureFrame()
                     if (preparedOffset >= frame.originalIndices.size()
                         || static_cast<const unsigned char*>(gSdlSurface->pixels)[indexedOffset] != gDialogCursorCheckCursorIndex
                         || frame.originalIndices[preparedOffset] != gDialogCursorCheckCursorIndex) {
+                        printf("DIALOG_CURSOR_INDEX live=%u prepared=%d expected=%u cached=%d\n",
+                            static_cast<unsigned>(static_cast<const unsigned char*>(gSdlSurface->pixels)[indexedOffset]),
+                            preparedOffset < frame.originalIndices.size() ? frame.originalIndices[preparedOffset] : -1,
+                            static_cast<unsigned>(gDialogCursorCheckCursorIndex), frame.cached ? 1 : 0);
                         failCursorCheck("cursor-not-drawn-at-target-in-indexed-frame");
                         return;
                     }
@@ -3916,7 +3925,12 @@ static void runDialogFixtureFrame()
                         gDialogFixtureFinished = true;
                         return;
                     }
-                    printf("DIALOG_CURSOR_CHECK PASS map=%s script=%s speaker=%d speaker_tile=%d hero=%d reply_offset=%d reply_bytes=%zu reply_window=%d reply_y=%d opaque_logical=%d,%d opaque_physical=%d,%d transparent_logical=%d,%d transparent_physical=%d,%d cursor_index=%u expected_rgb=%u,%u,%u opaque_alpha=%u->%u transparent_alpha=%u->%u same_run_ink_pixels=%u->%u\n",
+                    constexpr char snapshotPrefix[] = "snapshot: ";
+                    if (strncmp(gStatus, snapshotPrefix, sizeof(snapshotPrefix) - 1) != 0) {
+                        failCursorCheck("cursor-snapshot-path-unavailable");
+                        return;
+                    }
+                    printf("DIALOG_CURSOR_CHECK PASS map=%s script=%s speaker=%d speaker_tile=%d hero=%d reply_offset=%d reply_bytes=%zu reply_window=%d reply_y=%d opaque_logical=%d,%d opaque_physical=%d,%d transparent_logical=%d,%d transparent_physical=%d,%d cursor_index=%u expected_rgb=%u,%u,%u opaque_alpha=%u->%u transparent_alpha=%u->%u same_run_ink_pixels=%u->%u snapshot=%s\n",
                         gMapHeader.name, gDialogFixtureScript, gDialogFixtureSpeakerId,
                         gDialogFixtureSpeakerTile, gDude != nullptr ? gDude->tile : -1,
                         gameDialogGetReplyTextOffset(), gDialogCursorCheckRecord.run.text.size(), replyOwnerId, replyOwnerY,
@@ -3926,7 +3940,8 @@ static void runDialogFixtureFrame()
                         gDialogCursorCheckTransparentPhysicalX, gDialogCursorCheckTransparentPhysicalY,
                         gDialogCursorCheckCursorIndex,
                         gDialogCursorCheckCursorRed, gDialogCursorCheckCursorGreen, gDialogCursorCheckCursorBlue,
-                        targetBefore, targetAfter, transparentBefore, transparentAfter, beforeInkPixels, afterInkPixels);
+                        targetBefore, targetAfter, transparentBefore, transparentAfter, beforeInkPixels, afterInkPixels,
+                        gStatus + sizeof(snapshotPrefix) - 1);
                     fflush(stdout);
                     gDialogFixtureFinished = true;
                     return;
@@ -4092,8 +4107,21 @@ static void runDialogFixtureFrame()
                 gDialogCursorCheckRecord = *replyRecord;
                 gDialogCursorCheckOverlayBefore = frame.overlay.pixels;
                 gDialogCursorCheckCursorMoveInProgress = true;
+                const int cursorX = targetLogicalX - cursorPixelX + hotX;
+                const int cursorY = targetLogicalY - cursorPixelY + hotY;
+                // The next input pump rereads absolute mouse state. Feed
+                // the fixture's virtual device as well as moving the engine
+                // cursor, so the host pointer cannot reset this probe.
+                SDL_Event motion = {};
+                motion.type = SDL_MOUSEMOTION;
+                motion.motion.which = kScriptMouse;
+                motion.motion.x = cursorX;
+                motion.motion.y = cursorY;
+                scriptedInputSetExternalMouse(true);
+                scriptedInputObserveEvent(motion);
+                mouseResetAbsoluteSensitivityTracking();
                 mouseHideCursor();
-                _mouse_set_position(targetLogicalX - cursorPixelX + hotX, targetLogicalY - cursorPixelY + hotY);
+                _mouse_set_position(cursorX, cursorY);
                 mouseShowCursor();
                 gDialogCursorCheckCursorMoveInProgress = false;
                 TextCursorSnapshot movedCursor = {};
