@@ -13,6 +13,12 @@ class VSyncSettingsTest(unittest.TestCase):
         self.assertIn("SETTING(vsync);", registry)
         self.assertIn("vsyncDescriptor.applyPolicy = SettingApplyPolicy::Restart", registry)
 
+    def test_vsync_is_on_the_actual_display_panel(self):
+        model = (ROOT / "ce/src/options_panel_model.cc").read_text(encoding="utf-8")
+        layout = (ROOT / "ce/src/scene/options_panel.cc").read_text(encoding="utf-8")
+        self.assertIn('descriptor.id == "screen.vsync"', model)
+        self.assertIn('key == "vsync") group = 0', layout)
+
     def test_both_renderers_consume_the_same_setting(self):
         opengl = (ROOT / "ce/src/scene_renderer/context.cc").read_text(encoding="utf-8")
         fallback = (ROOT / "ce/src/svga.cc").read_text(encoding="utf-8")
