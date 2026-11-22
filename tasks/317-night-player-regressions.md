@@ -42,3 +42,5 @@ Claimed the first packet from the owner's overnight batch. Owner-visible symptom
 The published Windows candidate shows the orange random bridge and green Arroyo bridge exit cues after actual F12, with matching before and after scene-gl metadata. The sampled left edge is identical to the prior release. The Temple corner moves along the authored limit and away from it at 3440x1440 / 2x. The ordinary ARCAVES-to-ARTEMPLE click passes; additional reverse and world-map routes, full edge coverage, and the owner-specific door click remain open.
 
 [Native acceptance checks](../runs/325-night-checks/README.md).
+
+Follow-up: both normal-click Temple/foyer directions passed with real local 3D arrivals. The old failure was a probe-input timing issue, not a change to product walking or clip behavior. [Evidence](../runs/325-combat-and-exit/README.md).

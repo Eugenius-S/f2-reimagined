@@ -21,3 +21,5 @@ Windows acceptance: move across wallpaper, existing foreground strips, and butto
 The official 3440x1440 menu showed its art with a visible software cursor in the sampled position. A full sweep over the reported stripe and the death screen is still separate coverage.
 
 [Native acceptance checks](../runs/325-night-checks/README.md).
+
+Follow-up: six sampled positions at 3440x1440 / 2x with SharpText on changed only the 36x36 cursor footprint versus the hidden cursor. The first sample also passed with SharpText off; death art and an exhaustive sweep remain separate.
