@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import zipfile
+import unittest
 
 from launcher_install_test import LauncherFixture, LAUNCHER, read_lock, ART
 
@@ -125,6 +126,177 @@ class RpInstallTests(LauncherFixture):
         output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
         print(f"\n{self.id()}: exit {result.returncode}\n{output}", flush=True)
         return result.returncode, output
+
+    @unittest.skipUnless(os.environ.get("F2R_TRANSLATION_FIXTURES"), "external verified translation DATs not supplied")
+    def test_rp_install_removes_incompatible_translation_and_keeps_user_mod(self):
+        packs = Path(os.environ["F2R_TRANSLATION_FIXTURES"])
+        mods = self.root / "mods"
+        mods.mkdir(exist_ok=True)
+        for name in ("steam-1c-text.dat", "shared-legacy-fonts.dat"):
+            (mods / name).write_bytes((packs / name).read_bytes())
+        (mods / "f2r-text-choice.txt").write_text("1c\n")
+        (mods / "player.dat").write_bytes(b"player mod")
+        (mods / "mods_order.txt").write_bytes(b"steam-1c-text.dat\r\nshared-legacy-fonts.dat\r\nplayer.dat\r\n")
+        (self.root / "fallout2.cfg").write_bytes(b"[system]\r\nlanguage=russian\r\n")
+        self.rp["mods_order.txt"] = b"rpu.dat\r\n"
+        self.rp_package()
+        code, output = self.rp_run("--restoration-project")
+        self.assertEqual(code, 0, output)
+        self.assertTrue((mods / "rpu.dat").exists())
+        self.assertFalse((mods / "steam-1c-text.dat").exists())
+        self.assertFalse((mods / "shared-legacy-fonts.dat").exists())
+        self.assertEqual((mods / "player.dat").read_bytes(), b"player mod")
+        self.assertIn(b"player.dat", (mods / "mods_order.txt").read_bytes())
+        self.assertIn(b"language=english", (self.root / "fallout2.cfg").read_bytes())
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertEqual(code, 0, output)
+        order = (mods / "mods_order.txt").read_bytes()
+        self.assertNotIn(b"steam-1c-text.dat", order)
+        self.assertNotIn(b"shared-legacy-fonts.dat", order)
+        self.assertIn(b"player.dat", order)
+
+    @unittest.skipUnless(os.environ.get("F2R_TRANSLATION_FIXTURES"), "external verified translation DATs not supplied")
+    def test_rp_install_rolls_back_if_translation_cannot_be_switched(self):
+        packs = Path(os.environ["F2R_TRANSLATION_FIXTURES"])
+        mods = self.root / "mods"
+        mods.mkdir(exist_ok=True)
+        for name in ("steam-1c-text.dat", "shared-legacy-fonts.dat"):
+            (mods / name).write_bytes((packs / name).read_bytes())
+        (mods / "f2r-text-choice.txt").write_text("1c\n")
+        (mods / "mods_order.txt").write_bytes(b"steam-1c-text.dat\r\nshared-legacy-fonts.dat\r\nplayer.dat\r\n")
+        (self.root / "fallout2.cfg").write_bytes(b"[system]\r\nlanguage=russian\r\n")
+        self.rp["mods_order.txt"] = b"rpu.dat\r\n"
+        self.rp_package()
+        before = snapshot(self.root)
+        with read_lock(self.root / "fallout2.cfg"):
+            code, output = self.rp_run("--restoration-project")
+        self.assertNotEqual(code, 0, output)
+        self.assertEqual(snapshot(self.root), before)
+
+    def test_rp_order_keeps_unrelated_mods_and_official_after_rpu(self):
+        mods = self.root / "mods"
+        mods.mkdir(exist_ok=True)
+        for name in ("rpu_russian.dat", "player.dat"):
+            (mods / name).write_bytes(b"user file")
+        (mods / "mods_order.txt").write_bytes(b"rpu_russian.dat\r\nplayer.dat\r\n")
+        self.rp["mods_order.txt"] = b"rpu.dat\r\n"
+        self.rp_package()
+        code, output = self.rp_run("--restoration-project")
+        self.assertEqual(code, 0, output)
+        lines = (mods / "mods_order.txt").read_text().splitlines()
+        self.assertLess(lines.index("rpu.dat"), lines.index("rpu_russian.dat"))
+        self.assertIn("player.dat", lines)
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertEqual(code, 0, output)
+        self.assertEqual((mods / "mods_order.txt").read_bytes(), b"rpu_russian.dat\r\nplayer.dat\r\n")
+
+    @unittest.skipUnless(os.environ.get("F2R_TRANSLATION_FIXTURES"), "external verified translation DATs not supplied")
+    def test_rp_restore_preserves_computed_empty_order(self):
+        packs = Path(os.environ["F2R_TRANSLATION_FIXTURES"])
+        mods = self.root / "mods"
+        mods.mkdir(exist_ok=True)
+        for name in ("steam-1c-text.dat", "shared-legacy-fonts.dat"):
+            (mods / name).write_bytes((packs / name).read_bytes())
+        (mods / "f2r-text-choice.txt").write_text("1c\n")
+        (mods / "mods_order.txt").write_bytes(b"steam-1c-text.dat\r\nshared-legacy-fonts.dat\r\n")
+        (self.root / "fallout2.cfg").write_bytes(b"[system]\r\nlanguage=russian\r\n")
+        self.rp["mods_order.txt"] = b"rpu.dat\r\n"
+        self.rp_package()
+        code, output = self.rp_run("--restoration-project")
+        self.assertEqual(code, 0, output)
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertEqual(code, 0, output)
+        self.assertEqual((mods / "mods_order.txt").read_bytes(), b"")
+
+    @unittest.skipUnless(os.environ.get("F2R_OFFICIAL_FIXTURE"), "external verified official DAT not supplied")
+    def test_official_cli_and_rp_suppression_for_manual_and_owned(self):
+        data = Path(os.environ["F2R_OFFICIAL_FIXTURE"]).read_bytes()
+        (self.release / "rpu_russian.dat").write_bytes(data)
+        (self.release / "rpu-version.txt").write_bytes(b"2.4.34\n")
+        mods = self.root / "mods"
+        mods.mkdir(exist_ok=True)
+        (self.root / "fallout2.cfg").write_bytes(b"[system]\r\nlanguage=english\r\n")
+        (mods / "rpu_russian.dat").write_bytes(data)
+        (mods / "mods_order.txt").write_bytes(b"rpu_russian.dat\r\nplayer.dat\r\n")
+        (mods / "player.dat").write_bytes(b"player mod")
+        self.rp["mods_order.txt"] = b"rpu.dat\r\n"
+        self.rp_package()
+        for manual in (True, False):
+            if not manual:
+                (mods / "rpu_russian.dat").unlink()
+            code, output = self.rp_run("--russian")
+            self.assertEqual(code, 0, output)
+            code, output = self.rp_run("--restoration-project")
+            self.assertEqual(code, 0, output)
+            code, output = self.rp_run("--remove-russian")
+            self.assertEqual(code, 0, output)
+            self.assertEqual((mods / "rpu_russian.dat").exists(), manual)
+            if manual:
+                self.assertEqual((mods / "rpu_russian.dat").read_bytes(), data)
+            code, output = self.rp_run("--remove-restoration-project")
+            self.assertEqual(code, 0, output)
+            order = (mods / "mods_order.txt").read_bytes()
+            self.assertNotIn(b"rpu_russian.dat", order)
+            self.assertIn(b"player.dat", order)
+
+    @unittest.skipUnless(os.environ.get("F2R_OFFICIAL_FIXTURE"), "external verified official DAT not supplied")
+    def test_reselect_official_clears_rp_suppression(self):
+        data = Path(os.environ["F2R_OFFICIAL_FIXTURE"]).read_bytes()
+        mods = self.root / "mods"
+        mods.mkdir(exist_ok=True)
+        (mods / "rpu_russian.dat").write_bytes(data)
+        (mods / "mods_order.txt").write_bytes(b"rpu_russian.dat\r\nplayer.dat\r\n")
+        (self.root / "fallout2.cfg").write_bytes(b"[system]\r\nlanguage=russian\r\n")
+        self.rp["mods_order.txt"] = b"rpu.dat\r\n"
+        self.rp_package()
+        for args in (("--restoration-project",), ("--remove-russian",), ("--text-translation", "official"),
+                     ("--remove-restoration-project",)):
+            code, output = self.rp_run(*args)
+            self.assertEqual(code, 0, output)
+        self.assertIn(b"rpu_russian.dat", (mods / "mods_order.txt").read_bytes())
+        self.assertEqual((mods / "rpu_russian.dat").read_bytes(), data)
+
+    def test_rp_preserves_automatically_discovered_mods(self):
+        mods = self.root / "mods"
+        mods.mkdir(exist_ok=True)
+        (mods / "player.dat").write_bytes(b"player mod")
+        self.rp["mods_order.txt"] = b"rpu.dat\r\n"
+        self.rp_package()
+        code, output = self.rp_run("--restoration-project")
+        self.assertEqual(code, 0, output)
+        self.assertIn(b"player.dat", (mods / "mods_order.txt").read_bytes())
+        code, output = self.rp_run("--remove-restoration-project")
+        self.assertEqual(code, 0, output)
+        self.assertIn(b"player.dat", (mods / "mods_order.txt").read_bytes())
+
+    def test_failed_rp_install_restores_absent_autodiscovered_order(self):
+        mods = self.root / "mods"
+        mods.mkdir(exist_ok=True)
+        (mods / "player.dat").write_bytes(b"player mod")
+        (self.root / "zz-blocked").write_bytes(b"not a directory")
+        self.rp["mods_order.txt"] = b"rpu.dat\r\n"
+        self.rp["zz-blocked/file.txt"] = b"failure"
+        self.rp_package()
+        before = snapshot(self.root)
+        code, output = self.rp_run("--restoration-project")
+        self.assertNotEqual(code, 0, output)
+        self.assertEqual(snapshot(self.root), before)
+
+    @unittest.skipUnless(os.environ.get("F2R_TRANSLATION_FIXTURES"), "external verified translation DATs not supplied")
+    def test_rp_installed_with_interrupted_text_cleanup_recovers_before_play(self):
+        packs = Path(os.environ["F2R_TRANSLATION_FIXTURES"])
+        code, output = self.rp_run("--restoration-project")
+        self.assertEqual(code, 0, output)
+        mods = self.root / "mods"
+        for name in ("steam-1c-text.dat", "shared-legacy-fonts.dat"):
+            (mods / name).write_bytes((packs / name).read_bytes())
+        (mods / "f2r-text-choice.txt").write_bytes(b"1c\n")
+        (self.root / "fallout2.cfg").write_bytes(b"[system]\r\nlanguage=russian\r\n")
+        code, output = self.rp_run("--recover-text")
+        self.assertEqual(code, 0, output)
+        self.assertFalse((mods / "steam-1c-text.dat").exists())
+        self.assertFalse((mods / "shared-legacy-fonts.dat").exists())
+        self.assertTrue((mods / "rpu.dat").exists())
 
     def test_copy_failure_restores_originals(self):
         # The RP copy fails after moving originals and copying earlier package files.
@@ -245,6 +417,51 @@ class RpInstallTests(LauncherFixture):
                 self.assertIn("invalid installer manifest", output)
                 self.assertEqual(before, snapshot(self.root))
         manifest.write_text(valid, newline="\n")
+
+    def test_console_cannot_launch_with_pending_or_invalid_rp_receipt(self):
+        self.install_rp()
+        manifest = self.root / "backup/rpu/f2r-manifest.txt"
+        valid = manifest.read_bytes()
+        rp = self.root / "mods/rpu.dat"
+        rp_bytes = rp.read_bytes()
+        probe = self.base / "game-probe.log"
+        (self.root / "fallout2-ce.exe").write_bytes(LAUNCHER.with_name("launcher_rp_exporter_stub.exe").read_bytes())
+        (self.root / "Fallout 2 Reimagined.exe.old").write_bytes(b"keep")
+        for state, present in (("installing", False), ("installing", True), ("pending", True),
+                               ("invalid", True), ("installed", False), ("installed", "directory")):
+            with self.subTest(state=state, rp_present=present):
+                if rp.is_dir():
+                    rp.rmdir()
+                if present == "directory":
+                    rp.unlink(missing_ok=True)
+                    rp.mkdir()
+                elif present:
+                    rp.write_bytes(rp_bytes)
+                else:
+                    rp.unlink(missing_ok=True)
+                manifest.write_bytes(b"invalid receipt\n" if state == "invalid" else
+                    valid.replace(b"F2R-RP-1 installed", f"F2R-RP-1 {state}".encode()))
+                before = snapshot(self.root)
+                command = [str(LAUNCHER), "--game-root", str(self.root), "--update-url", self.url,
+                           "--mirror-url", self.url]
+                result = subprocess.run(command, capture_output=True, timeout=15,
+                    env={**os.environ, "F2R_RP_EXPORT_LOG": str(probe)})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b"finish Restoration Project recovery", result.stdout)
+                self.assertFalse(probe.exists())
+                self.assertEqual(snapshot(self.root), before)
+                if present == "directory":
+                    self.assertTrue(rp.is_dir())
+        manifest.unlink()
+        manifest.mkdir()
+        before = snapshot(self.root)
+        result = subprocess.run(command, capture_output=True, timeout=15,
+            env={**os.environ, "F2R_RP_EXPORT_LOG": str(probe)})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"finish Restoration Project recovery", result.stdout)
+        self.assertFalse(probe.exists())
+        self.assertTrue(manifest.is_dir())
+        self.assertEqual(snapshot(self.root), before)
 
     def test_duplicate_package_targets_are_rejected_before_mutation(self):
         self.rp["mods_order.txt"] = b"first"
