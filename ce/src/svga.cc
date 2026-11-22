@@ -675,6 +675,12 @@ void renderFpsCounter()
 
 static void renderPresentBody();
 
+static void swapSceneFrame()
+{
+    owner_shot::captureRequestedPresentedShot();
+    scene_renderer::swap();
+}
+
 void renderPresent()
 {
     // The file read progress handler (map.cc) presents the frame on the main
@@ -867,7 +873,7 @@ static void renderPresentBody()
                     owner_shot::drawSceneOverlay();
                     owner_shot::verifySceneOverlayPresented();
                     devtools::sceneLiveFrameReady();
-                    scene_renderer::swap();
+                    swapSceneFrame();
                     scene_renderer::perfEnd();
                     devtools::sceneOverlayPresented();
                     return;
@@ -884,7 +890,7 @@ static void renderPresentBody()
                     scene_renderer::drawSceneOverlay(
                         static_cast<const unsigned char*>(gSdlTextureSurface->pixels),
                         gSdlTextureSurface->w, gSdlTextureSurface->h, gSdlTextureSurface->pitch);
-                    scene_renderer::swap();
+                    swapSceneFrame();
                     scene_renderer::perfEnd();
                     devtools::sceneOverlayPresented();
                     return;
@@ -901,19 +907,19 @@ static void renderPresentBody()
                 // where the overlay has just landed.
                 owner_shot::verifySceneOverlayPresented();
                 devtools::sceneLiveFrameReady();
-                scene_renderer::swap();
+                swapSceneFrame();
                 scene_renderer::perfEnd();
                 devtools::sceneOverlayPresented();
                 return;
             }
             if (view == scene::View::Walls) {
                 scene_renderer::drawStaticWallPreview();
-                scene_renderer::swap();
+                swapSceneFrame();
                 return;
             }
             if (view == scene::View::Floor) {
                 scene_renderer::drawStaticFloor();
-                scene_renderer::swap();
+                swapSceneFrame();
                 return;
             }
         }
@@ -923,7 +929,7 @@ static void renderPresentBody()
         scene_renderer::presentFrameWithSharpText(gSdlSurface, gSdlTextureSurface, sharpTextReady);
         // render movie frame if present
         movieRenderDirectOverlay();
-        scene_renderer::swap();
+        swapSceneFrame();
         devtools::vanillaPresented();
         return;
     }
@@ -934,6 +940,7 @@ static void renderPresentBody()
     SDL_RenderCopy(gSdlRenderer, gSdlTexture, nullptr, nullptr);
     // render movie SDL texture if present
     movieRenderDirectOverlay();
+    owner_shot::captureRequestedPresentedShot();
     SDL_RenderPresent(gSdlRenderer);
     devtools::vanillaPresented();
 }

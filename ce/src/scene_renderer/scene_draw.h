@@ -34,6 +34,8 @@ bool capturePresentedFramePng(const std::filesystem::path& path, int* width, int
 // worker (183, the owner shot). Top-down RGBA rows at the window's size.
 bool captureStaticPreviewBuffer(bool withWalls, bool withHero, bool includeOverlay,
     std::vector<unsigned char>& rgba, int* width, int* height, std::string* error);
+bool capturePresentedFrameBuffer(std::vector<unsigned char>& rgba,
+    int* width, int* height, std::string* error);
 bool captureFrameBuffer(const unsigned char* rgba, int frameWidth, int frameHeight, int pitch,
     std::vector<unsigned char>& out, int* width, int* height, std::string* error);
 

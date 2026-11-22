@@ -12,11 +12,19 @@ class OwnerScreenshotRoutingTest(unittest.TestCase):
         shared = source.split("int inputGetInput()", 1)[1].split("void get_input_position", 1)[0]
         route = re.search(
             r"if\s*\(v3 == KEY_F12 && !owner_shot::markMode\(\)\)\s*"
-            r"\{\s*owner_shot::handleKey\(v3\);\s*return -1;",
+            r"\{\s*owner_shot::requestPresentedShot\(\);\s*return -1;",
             shared,
         )
         self.assertIsNotNone(route)
         self.assertLess(route.start(), shared.index("_GNW_check_menu_bars(v3)"))
+
+    def test_f12_captures_the_composited_frame_before_swap(self):
+        source = (SOURCE / "svga.cc").read_text(encoding="utf-8")
+        ogl = source.split("static void swapSceneFrame()", 1)[1].split("\n}", 1)[0]
+        self.assertLess(ogl.index("captureRequestedPresentedShot"), ogl.index("scene_renderer::swap"))
+        self.assertIn("captureRequestedPresentedShot();\n    SDL_RenderPresent", source)
+        shot = (SOURCE / "devtools" / "owner_shot.cc").read_text(encoding="utf-8")
+        self.assertIn("capturePresentedFrameBuffer(pixels", shot)
 
     def test_held_f12_does_not_create_new_requests(self):
         source = (SOURCE / "input.cc").read_text(encoding="utf-8")

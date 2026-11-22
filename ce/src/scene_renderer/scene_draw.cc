@@ -546,6 +546,19 @@ bool capturePresentedFramePng(const std::filesystem::path& path, int* width, int
     return true;
 }
 
+bool capturePresentedFrameBuffer(std::vector<unsigned char>& rgba, int* width, int* height, std::string* error)
+{
+    if (!gInitialized) return false;
+    int drawableWidth = 0;
+    int drawableHeight = 0;
+    SDL_GL_GetDrawableSize(gWindow, &drawableWidth, &drawableHeight);
+    if (drawableWidth <= 0 || drawableHeight <= 0) return false;
+    if (!readBackBuffer(rgba, drawableWidth, drawableHeight, error)) return false;
+    if (width != nullptr) *width = drawableWidth;
+    if (height != nullptr) *height = drawableHeight;
+    return true;
+}
+
 bool captureFrameBuffer(const unsigned char* rgba, int frameWidth, int frameHeight, int pitch,
     std::vector<unsigned char>& out, int* width, int* height, std::string* error)
 {

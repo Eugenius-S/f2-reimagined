@@ -3851,6 +3851,9 @@ static void runDialogFixtureFrame()
                         || gDialogCursorCheckTransparentLogicalY >= cursor.y + cursor.height
                         || cursor.pixels[static_cast<std::size_t>(gDialogCursorCheckTransparentLogicalY - cursor.y) * cursor.pitch
                             + gDialogCursorCheckTransparentLogicalX - cursor.x] != cursor.transparentIndex) {
+                        printf("DIALOG_CURSOR_INPUT actual=%d,%d size=%d,%d pitch=%d visible=%d transparent_index=%u\n",
+                            cursor.x, cursor.y, cursor.width, cursor.height, cursor.pitch,
+                            cursor.visible ? 1 : 0, static_cast<unsigned>(cursor.transparentIndex));
                         failCursorCheck("engine-cursor-opaque-and-transparent-cells-mismatch");
                         return;
                     }
