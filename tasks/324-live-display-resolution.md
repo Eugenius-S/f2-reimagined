@@ -21,3 +21,5 @@ Windows acceptance: toggle 1920x1080 and 3440x1440 in windowed or exclusive full
 Published with the first integration. The isolated settings fixture saved 1600x1200 and retained 2x. A hidden run does not prove physical resize, monitor mode changes or pointer alignment on a real display.
 
 [Native acceptance checks](../runs/325-night-checks/README.md).
+
+Follow-up: display-only Done now triggers the live resize. Native Windows isolated proof measured the actual window and drawable transition to 1600x1200, retained the logical canvas and OpenGL, and mapped one physical point to the same ground hex. The black band does not capture the point. [Evidence](../runs/325-live-resize/README.md). Visible display mode tests are separate.

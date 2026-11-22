@@ -3,6 +3,8 @@
 #include "debug.h"
 #include "devtools/preferences_probe.h"
 #include "settings.h"
+#include "scene_renderer/context.h"
+#include "scene_renderer/window_viewport.h"
 #include "mouse.h"
 #include "sfall_kb_helpers.h"
 #include "svga.h"
@@ -12,13 +14,8 @@ namespace fallout {
 
 static int gMouseWheelDeltaX = 0;
 static int gMouseWheelDeltaY = 0;
-static int mouseWindowMappingWindowWidth = 0;
-static int mouseWindowMappingWindowHeight = 0;
-static int mouseWindowMappingLogicalWidth = 0;
-static int mouseWindowMappingLogicalHeight = 0;
+static scene_renderer::WindowInputMapping mouseWindowMapping;
 static bool mouseRelativeMode = false;
-
-static void mouseDeviceMapWindowToLogicalPosition(int* x, int* y);
 
 // 0x4E0400
 bool directInputInit()
@@ -138,13 +135,14 @@ bool mouseDeviceGetData(MouseData* mouseState)
     Uint32 buttons = mouseDeviceUsesRelativeMode()
         ? SDL_GetRelativeMouseState(&(mouseState->x), &(mouseState->y))
         : SDL_GetMouseState(&(mouseState->x), &(mouseState->y));
+    bool overImage = true;
     if (!mouseDeviceUsesRelativeMode()) {
-        mouseDeviceMapWindowToLogicalPosition(&(mouseState->x), &(mouseState->y));
+        overImage = mouseWindowMapping.toLogical(mouseState->x, mouseState->y);
         gMouseLastX = mouseState->x;
         gMouseLastY = mouseState->y;
     }
-    mouseState->buttons[0] = (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
-    mouseState->buttons[1] = (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) != 0;
+    mouseState->buttons[0] = overImage && (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+    mouseState->buttons[1] = overImage && (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) != 0;
     if (devtools::scriptedInputMouse(&mouseState->x, &mouseState->y, &mouseState->buttons[0], &mouseState->buttons[1])
         && mouseDeviceUsesRelativeMode()) {
         // Scripted mouse actions specify a logical position, not a motion
@@ -224,46 +222,30 @@ void handleMouseEvent(SDL_Event* event)
     }
 }
 
-static void mouseDeviceMapWindowToLogicalPosition(int* x, int* y)
-{
-    if (mouseWindowMappingWindowWidth <= 0 || mouseWindowMappingWindowHeight <= 0) {
-        return;
-    }
-
-    *x = *x * mouseWindowMappingLogicalWidth / mouseWindowMappingWindowWidth;
-    *y = *y * mouseWindowMappingLogicalHeight / mouseWindowMappingWindowHeight;
-}
-
 void mouseDeviceRefreshWindowMapping()
 {
     mouseResetAbsoluteSensitivityTracking();
-    // When mouse is in "absolute mode" and scaling is > 1, we need to transform screen coordinates to game coordinates.
-    // Cache the window sizes so we have them available in mouseDeviceMapWindowToLogicalPosition.
-    // Note: if we add letterboxing or other more complex scaling, we'll have to account for it here.
-    mouseWindowMappingLogicalWidth = screenGetWidth();
-    mouseWindowMappingLogicalHeight = screenGetHeight();
-
-    if (gSdlWindow != nullptr) {
-        SDL_GetWindowSize(gSdlWindow, &mouseWindowMappingWindowWidth, &mouseWindowMappingWindowHeight);
-    } else {
-        mouseWindowMappingWindowWidth = 0;
-        mouseWindowMappingWindowHeight = 0;
+    mouseWindowMapping = {};
+    if (gSdlWindow == nullptr) return;
+    auto& m = mouseWindowMapping;
+    m.logicalWidth = screenGetWidth();
+    m.logicalHeight = screenGetHeight();
+    SDL_GetWindowSize(gSdlWindow, &m.windowWidth, &m.windowHeight);
+    const bool gl = scene_renderer::isActive();
+    if (gl) SDL_GL_GetDrawableSize(gSdlWindow, &m.drawableWidth, &m.drawableHeight);
+    else if (gSdlRenderer != nullptr) SDL_GetRendererOutputSize(gSdlRenderer, &m.drawableWidth, &m.drawableHeight);
+    if (m.drawableWidth <= 0 || m.drawableHeight <= 0) {
+        m.drawableWidth = m.windowWidth;
+        m.drawableHeight = m.windowHeight;
     }
+    m.area = scene_renderer::fitLogicalOutput(m.logicalWidth, m.logicalHeight, m.drawableWidth, m.drawableHeight, gl);
 }
 
 void mouseDeviceSetLogicalPosition(int x, int y)
 {
-    if (mouseDeviceUsesRelativeMode()
-        || gSdlWindow == nullptr
-        || mouseWindowMappingLogicalWidth <= 0
-        || mouseWindowMappingLogicalHeight <= 0
-        || mouseWindowMappingWindowWidth <= 0
-        || mouseWindowMappingWindowHeight <= 0) {
-        return;
-    }
-
-    int windowX = x * mouseWindowMappingWindowWidth / mouseWindowMappingLogicalWidth;
-    int windowY = y * mouseWindowMappingWindowHeight / mouseWindowMappingLogicalHeight;
+    if (mouseDeviceUsesRelativeMode() || gSdlWindow == nullptr || !mouseWindowMapping.valid()) return;
+    int windowX = 0, windowY = 0;
+    mouseWindowMapping.toWindow(x, y, windowX, windowY);
     SDL_WarpMouseInWindow(gSdlWindow, windowX, windowY);
     mouseResetAbsoluteSensitivityTracking();
 }

@@ -22,9 +22,6 @@ bool groundPickable(double worldX, double worldZ)
 bool pickStaticGroundTile(int logicalX, int logicalY, GroundPickResult* result)
 {
     if (!gInitialized || !gHeroProjectionLoaded || gWindow == nullptr || result == nullptr) return false;
-    SDL_GL_GetDrawableSize(gWindow, &gWindowWidth, &gWindowHeight);
-    int windowWidth = 0, windowHeight = 0;
-    SDL_GetWindowSize(gWindow, &windowWidth, &windowHeight);
     const GroundPickProjection projection = {
         { gHeroProjection.squ[0], gHeroProjection.squ[1] },
         { gHeroProjection.sqv[0], gHeroProjection.sqv[1] },
@@ -47,7 +44,8 @@ bool pickStaticGroundTile(int logicalX, int logicalY, GroundPickResult* result)
         { staticCamera.target[0], staticCamera.target[1], staticCamera.target[2] }, staticCamera.fovY,
         staticCamera.donorScreenRight,
     };
-    const GroundPickViewport viewport = { gLogicalWidth, gLogicalHeight, gWindowWidth, gWindowHeight, windowWidth, windowHeight };
+    // The input device has already mapped the letterbox to the logical view.
+    const GroundPickViewport viewport = { gLogicalWidth, gLogicalHeight, gLogicalWidth, gLogicalHeight, gLogicalWidth, gLogicalHeight };
     GameView view;
     if (!currentGameView(&view)) {
         return pickGroundTile(projection, camera, viewport, logicalX, logicalY, result)

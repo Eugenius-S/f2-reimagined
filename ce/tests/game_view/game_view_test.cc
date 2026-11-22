@@ -1,5 +1,6 @@
 #include "game_view.h"
 #include "sprite_card.h"
+#include "window_viewport.h"
 
 #include <cmath>
 #include <cstdio>
@@ -9,6 +10,27 @@ using namespace fallout::scene_renderer;
 int main()
 {
 #define CHECK(expr) do { if (!(expr)) { std::fprintf(stderr, "CHECK failed at %s:%d: %s\n", __FILE__, __LINE__, #expr); return 1; } } while (0)
+    const auto letterbox = fitLogicalOutput(960, 540, 1600, 1200, true);
+    CHECK(letterbox.x == 0 && letterbox.y == 150 && letterbox.width == 1600 && letterbox.height == 900);
+    WindowInputMapping mouse { 960, 540, 1600, 1200, 1600, 1200, letterbox };
+    int mx = 100, my = 300;
+    CHECK(mouse.toLogical(mx, my) && mx == 60 && my == 90);
+    int wx = -1, wy = -1;
+    mouse.toWindow(mx, my, wx, wy);
+    CHECK(wx == 100 && wy == 300);
+    mx = 100; my = 140;
+    CHECK(!mouse.toLogical(mx, my) && my == 0);
+    mx = 100; my = 1050;
+    CHECK(!mouse.toLogical(mx, my) && my == 539);
+    WindowInputMapping highDpi { 960, 540, 800, 600, 1600, 1200, letterbox };
+    mx = 50; my = 150;
+    CHECK(highDpi.toLogical(mx, my) && mx == 60 && my == 90);
+    highDpi.toWindow(mx, my, wx, wy);
+    CHECK(wx == 50 && wy == 150);
+    const auto nearFit = fitLogicalOutput(960, 540, 1920, 1085, true);
+    CHECK(nearFit.y == 0 && nearFit.height == 1085);
+    CHECK(fitLogicalOutput(960, 540, 1920, 1085, false).height == 1080);
+
     const double hpx = std::sqrt(48.0 * 48.0 + 32.0 * 32.0 - 12.0 * 12.0 - 24.0 * 24.0);
     GameView view = { { -48, 12 }, { 32, 24 }, { 4784, -1190 }, hpx, { 0, 0 }, 1710, 665, 100.0 };
     gameViewTilePixel(25075, view.centerPixel);
