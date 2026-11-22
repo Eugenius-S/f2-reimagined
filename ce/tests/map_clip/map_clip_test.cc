@@ -31,18 +31,36 @@ void pixelToWorld(double px, double py, const double squ[2], const double sqv[2]
 
 int main()
 {
+    using fallout::MapScrollAttempt;
     using fallout::MapScrollStep;
-    const auto legal = [](MapScrollStep step) { return step.x == 0 && step.y == -24; };
+    const auto legal = [](MapScrollStep step) {
+        return step.x == 0 && step.y == -24 ? MapScrollAttempt::Blit : MapScrollAttempt::Blocked;
+    };
     const auto testedCorner = fallout::chooseMapScrollStep({32, -24}, true, legal);
-    if (!check(testedCorner.x == 0 && testedCorner.y == -24,
+    if (!check(testedCorner.attempt == MapScrollAttempt::Blit
+            && testedCorner.step.x == 0 && testedCorner.step.y == -24,
             "3D diagonal requests slide along an edge when one axis is blocked")) return 1;
     const auto classicCorner = fallout::chooseMapScrollStep({32, -24}, false, legal);
-    if (!check(classicCorner.x == 0 && classicCorner.y == 0,
+    if (!check(classicCorner.attempt == MapScrollAttempt::Blocked,
             "classic scroll retains its existing blocked diagonals")) return 1;
-    const auto allLegal = [](MapScrollStep) { return true; };
+    const auto allLegal = [](MapScrollStep) { return MapScrollAttempt::Blit; };
     const auto diagonal = fallout::chooseMapScrollStep({-32, 24}, true, allLegal);
-    if (!check(diagonal.x == -32 && diagonal.y == 24,
+    if (!check(diagonal.step.x == -32 && diagonal.step.y == 24,
             "an available diagonal is preferred to either axis")) return 1;
+    int tries = 0;
+    const auto redraw = fallout::chooseMapScrollStep({32, -24}, true, [&](MapScrollStep) {
+        ++tries;
+        return MapScrollAttempt::Redrawn;
+    });
+    if (!check(tries == 1 && redraw.attempt == MapScrollAttempt::Redrawn,
+            "a committed diagonal REDRAW must stop before attempting a second move")) return 1;
+    tries = 0;
+    const auto axialRedraw = fallout::chooseMapScrollStep({32, -24}, true, [&](MapScrollStep step) {
+        ++tries;
+        return step.y == 0 ? MapScrollAttempt::Redrawn : MapScrollAttempt::Blocked;
+    });
+    if (!check(tries == 2 && axialRedraw.attempt == MapScrollAttempt::Redrawn,
+            "a committed horizontal REDRAW must stop before trying vertical")) return 1;
     const fallout::Rect bounds { 100, 20, 0, 80 };
     if (!check(fallout::mapEdgePastAuthoredBottom(bounds, 50, 90), "floor extension inside authored sides")) return 1;
     if (!check(!fallout::mapEdgePastAuthoredBottom(bounds, 110, 90), "expanded camera side does not expand the floor clip")) return 1;
