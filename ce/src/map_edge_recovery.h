@@ -6,6 +6,11 @@
 
 namespace fallout {
 
+inline bool mapEdgePastAuthoredBottom(const Rect& bounds, int x, int y)
+{
+    return x >= bounds.right && x <= bounds.left && y >= bounds.top && y > bounds.bottom;
+}
+
 inline bool mapEdgeRecoveryStep(const Rect& bounds, int oldX, int oldY, int newX, int newY,
     bool oldBottomAllowed, bool newBottomAllowed)
 {

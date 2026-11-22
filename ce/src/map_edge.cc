@@ -548,9 +548,8 @@ bool mapEdgeTilePastBottomStop(int tile)
     if (!tileIsValid(tile) || currentEdgeZone == nullptr) return false;
     int px, py;
     tileToPixelOffset(tile, px, py);
-    const Rect bounds = scrollBounds(*currentEdgeZone, tileSceneOverlayActive());
-    return px >= bounds.right && px <= bounds.left && py >= bounds.top
-        && py > currentEdgeZone->scrollBorderRect.bottom;
+    const Rect& bounds = currentEdgeZone->scrollBorderRect;
+    return mapEdgePastAuthoredBottom(bounds, px, py);
 }
 
 // Shared helper: set currentTileXAlignment if the pixel is on a scrollBorderRect edge.

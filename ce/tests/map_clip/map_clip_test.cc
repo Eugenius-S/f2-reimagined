@@ -31,6 +31,8 @@ void pixelToWorld(double px, double py, const double squ[2], const double sqv[2]
 int main()
 {
     const fallout::Rect bounds { 100, 20, 0, 80 };
+    if (!check(fallout::mapEdgePastAuthoredBottom(bounds, 50, 90), "floor extension inside authored sides")) return 1;
+    if (!check(!fallout::mapEdgePastAuthoredBottom(bounds, 110, 90), "expanded camera side does not expand the floor clip")) return 1;
     if (!check(fallout::mapEdgeRecoveryStep(bounds, 140, 10, 130, 10, true, true), "recover one corner axis")) return 1;
     if (!check(fallout::mapEdgeRecoveryStep(bounds, 140, 10, 140, 20, true, true), "recover the other corner axis")) return 1;
     if (!check(!fallout::mapEdgeRecoveryStep(bounds, 140, 10, 150, 20, true, true), "reject worsening another axis")) return 1;
