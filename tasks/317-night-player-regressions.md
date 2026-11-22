@@ -48,3 +48,12 @@ Follow-up: both normal-click Temple/foyer directions passed with real local 3D a
 Follow-up: ARBRIDGE tile 26734 also opened the world map by a normal click, after one legal movement step. The world map did not enable local 3D. The same normal-click check passed on the registered random encounter RNDWHALE, from 12715 to exit 12716 and then the 2D world map. The separate RNDBRIDG diagnostic had no reachable visible exit from the direct fixture spawn; do not close the RNDBRIDG or exact owner save acceptance on this evidence.
 
 Temple sanctuary door: at ARCAVES e2 view 22307, 3440x1440 at 2x and zoom 1.28, a native game-handler click on the selected visible door (19928) started the hero walking. After arrival the door advanced from frame 0 to 5 and set its open flag. Both snapshots retained local 3D and the same camera. This was an offscreen test at the original screen coordinate, not physical focus or the owner save.
+
+A separate exact release `65d374e8` check started the outer Temple
+fixture next to the native exit; a normal click on ARTEMPLE 21917 moved
+the hero from 21716 and reached ARVILLAG e0 at 11683. The watched first
+local frame presented in 3D. A separate exact build ARTEMPLE combat
+fixture captured targeting, attack, enemy turn and combat end in
+scene-gl at tile 17288. It used a spawned fixture critter, not the story
+challenge NPC. These independent checks do not prove the continuous
+post-challenge route from ARCAVES e2 on the owner's save.

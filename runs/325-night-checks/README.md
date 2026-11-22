@@ -25,3 +25,20 @@ The integration PR #562 was verified and published as 8d9e4de. Releasing the int
 - The round Temple door and ordinary combat F12 now have separate native checks on tasks 317 and 318. The SharpText inventory test restored all previously occupied cursor crops on the next presented frame (319). On ARBRIDGE and RNDBRIDG, clean and marked output files were written between paired camera-matched frames; each pair matched at all 86,430 sampled world pixels and none qualified as magenta. This does not reproduce the owner-only report.
 
 - The live dialogue close defect is covered in [a separate native comparison](../325-dialogue-close/README.md). A clean local build was necessary to establish the embedded commit: a locally cached Ninja dependency prefix in UTF-8 did not match raw CP866 MSVC output. The independent minimal stamp test reproduced this mismatch and restored dependency tracking by using the same output code page for configure and build. No mismatched local binary was staged.
+
+- The ground-bake allocation fix is published as `7667d33e` (#573).
+  Matching native frames show that it restores the actual floor texture
+  and preserves offscreen glow rendering. A hidden resize also kept
+  the first subsequent frame in local 3D. See [native ground checks](../306-ground-bake-current/README.md).
+- Opening trade via Sulik's actual B response used to fall back to flat
+  rendering during its only opening roll. The candidate instrumented
+  before and after the transition had 39/39 flat frames before and 0/39
+  after. The normal Escape return to dialogue remained local 3D.
+  The exact release `65d374e8` (#574) separately verified that the native
+  trade panel actually drew both item-value totals and stayed in 3D.
+- Two additional outdoor controls on the exact `65d374e8` build:
+  [The Den and Modoc at night and in the morning](den-modoc-controls.jpg).
+  At 22:00 and 02:00 the Den ground crop averaged 23.4/255 versus
+  88.2 at 09:00; Modoc averaged 18.3 versus 90.2. The HUD sample
+  was identical across all four hours on each map, and the character's
+  local light stayed visible. These are two extra scenes, not all maps.

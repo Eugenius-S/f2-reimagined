@@ -35,3 +35,16 @@ Cave lighting levels (262, 263).
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+
+- 2026-11-23 gpt: rechecked the stock DESERT5, DESERT6 and COAST2 map
+  headers against the actual isolated retail DAT files. All three use
+  flags `0x0c`: e1/e2 are absent, with no square blocks, no objects and
+  no local exit to either elevation. Their normal entrances are e0 at
+  21299, 20100 and 20100. The current exporter produced three complete
+  e0 scenes and no artificial upper caches. Exact Windows release
+  `65d374e8` showed local 3D with visible terrain at all three entrances;
+  under 0.7% near-black in each sampled viewport before the HUD.
+  [Native stock comparison](../runs/275-encounter-upper-floors-not-black/stock-e0-contact.jpg).
+  This conflicts with the old forced upper-level fixture, not with the
+  possibility of a valid upper floor in a different installed map pack.
+  No stock rendering change and no claim about untested modified maps.
