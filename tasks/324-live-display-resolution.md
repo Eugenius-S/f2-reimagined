@@ -23,3 +23,17 @@ Published with the first integration. The isolated settings fixture saved 1600x1
 [Native acceptance checks](../runs/325-night-checks/README.md).
 
 Follow-up: display-only Done now triggers the live resize. Native Windows isolated proof measured the actual window and drawable transition to 1600x1200, retained the logical canvas and OpenGL, and mapped one physical point to the same ground hex. The black band does not capture the point. [Evidence](../runs/325-live-resize/README.md). Visible display mode tests are separate.
+
+Additional isolated Windows coverage: a fresh configuration without display
+keys or scale detected the 3440x1440 desktop in physical pixels, with a
+3440x1440 drawable and 1720x720 logical surface at 2x. A saved custom
+1600x900 configuration retained that output instead of returning to desktop
+resolution. Its 1.5 entry became 1.6 according to the existing 0.2 step rule.
+These were offscreen windowed checks, not changes to the desktop mode.
+
+The options-panel probe selected the wrong row after the display rows were
+added. It now selects the 3D controls by ID and positions the legacy test
+coordinate inside the scrolled viewport. Native keyboard Cancel restored
+the staged zoom, 3D setting and legacy difficulty with an unchanged game
+configuration. This checks the shared cancellation path; a visible
+resolution-only Cancel and exclusive fullscreen remain unverified.

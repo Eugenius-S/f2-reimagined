@@ -691,11 +691,9 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
             printf("PREFERENCES_PROBE cursor speed slider armed row=%d before=%s\n", gCursorSpeedRow, gCursorSpeedBefore.c_str());
             return 600 + gCursorSpeedRow;
         }
-        if (gMode == ProbeMode::Toggle3d) {
-            // The display rows moved the General group's first slot to the
-            // scale row: select the toggle's row explicitly (211).
-            panel->selectRowForProbe("3d.enabled");
-        }
+        // The shared probe expects Space to stage the 3D toggle. The first
+        // General row can be a display setting, not the toggle under test.
+        panel->selectRowForProbe("3d.enabled");
         return KEY_SPACE;
     case 2:
         if (gMode == ProbeMode::CursorSpeed) {
@@ -810,7 +808,11 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
             return KEY_ESCAPE;
         }
         Window* window = windowGetWindow(windowId);
-        const int y = 170 + panel->legacyColumnOffset() - panel->scroll();
+        const int legacyY = 170 + panel->legacyColumnOffset();
+        if (legacyY < panel->scroll() || legacyY >= panel->scroll() + window->height) {
+            panel->setScroll(std::clamp(legacyY - window->height / 3, 1, panel->maxScroll()));
+        }
+        const int y = legacyY - panel->scroll();
         if (y < 0 || y >= window->height) {
             failProbe("scrolled legacy preference was outside the viewport");
             return KEY_ESCAPE;
@@ -846,6 +848,7 @@ int preferencesProbeNextEvent(int eventCode, scene::OptionsPanel* panel, int win
         const double maxZoom = zoomDescriptor->numericRange->maximum;
         const double targetRatio = std::abs(currentZoom - minZoom) > std::abs(maxZoom - currentZoom) ? 0.0 : 1.0;
         const int x = mouseXForWindow(window, pageOffsetX(window) + panel->sliderTrackTargetX(0.5));
+        panel->selectRowForProbe("3d.zoom");
         const int y = mouseYForWindow(window, panel->sliderTrackY(gZoomRow) - panel->scroll());
         if (y < window->rect.top || y > window->rect.bottom) {
             failProbe("registered 3D zoom slider is outside the viewport");
