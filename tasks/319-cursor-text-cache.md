@@ -21,3 +21,5 @@ Acceptance: verify a hover across dialogue replies and then away, with OpenGL sh
 Native Windows stock Sulik dialogue with SharpText on now has glyph alpha 27 to 0 under the opaque cursor and 255 to 255 under its transparent part; the test reads the exact hover PNG. The inventory trails and main-menu stripe have separate causes or remaining coverage.
 
 [Native acceptance checks](../runs/325-night-checks/README.md).
+
+Inventory with SharpText on: four successive true logical cursor placements sampled in the first presented frames. The current crops changed by 453, 496, 464 and 460 pixels against a hidden-cursor baseline; every other crop fully restored to its baseline on each move. Local 3D stayed active. This covers the stock Klamath stats panel at the test resolution, not every cursor animation or the owner save.

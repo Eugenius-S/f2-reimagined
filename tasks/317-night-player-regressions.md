@@ -46,3 +46,5 @@ The published Windows candidate shows the orange random bridge and green Arroyo 
 Follow-up: both normal-click Temple/foyer directions passed with real local 3D arrivals. The old failure was a probe-input timing issue, not a change to product walking or clip behavior. [Evidence](../runs/325-combat-and-exit/README.md).
 
 Follow-up: ARBRIDGE tile 26734 also opened the world map by a normal click, after one legal movement step. The world map did not enable local 3D. The same normal-click check passed on the registered random encounter RNDWHALE, from 12715 to exit 12716 and then the 2D world map. The separate RNDBRIDG diagnostic had no reachable visible exit from the direct fixture spawn; do not close the RNDBRIDG or exact owner save acceptance on this evidence.
+
+Temple sanctuary door: at ARCAVES e2 view 22307, 3440x1440 at 2x and zoom 1.28, a native game-handler click on the selected visible door (19928) started the hero walking. After arrival the door advanced from frame 0 to 5 and set its open flag. Both snapshots retained local 3D and the same camera. This was an offscreen test at the original screen coordinate, not physical focus or the owner save.
