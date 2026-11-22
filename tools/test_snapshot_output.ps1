@@ -130,6 +130,39 @@ try {
     Set-Content -LiteralPath $probe -Value @($pass.Replace('map=ARCAVES.MAP','map=ARBRIDGE.MAP'), 'probe done')
     Check ((Get-SnapshotExitProbeStatus $probe 'arcaves') -eq 'failed') 'the label of a target must not override the wrong actual arrival'
 
+    # A source and destination can share a map name on different floors.
+    $watch = Join-Path $testRoot 'watch.log'
+    $sidecar = Join-Path $testRoot 'devshot-arrival.json'
+    $arrivalImage = Join-Path $testRoot 'devhero-arrival.png'
+    Set-Content -LiteralPath $probe -Value @($pass, 'probe done')
+    Set-Content -LiteralPath $watch -Value @(
+        'first-3d-capture result=pass map=arcaves elevation=1 hero=30297 status=snapshot: devshot-source.json',
+        'first-3d-capture result=pass map=arcaves elevation=0 hero=28707 status=snapshot: devshot-arrival.json'
+    )
+    $arrivalMetadata = [ordered]@{map='ARCAVES.MAP'; elevation=0; hero=@{tile=28707}; scene_view='full'; scene_3d_enabled=$true; image='devhero-arrival.png'}
+    function Write-Arrival { $arrivalMetadata | ConvertTo-Json -Compress | Set-Content -LiteralPath $sidecar }
+    Write-Arrival
+    $candidate = Get-Item -LiteralPath $sidecar
+    Check ($null -eq (Find-SnapshotExitArrival $probe $watch 'arcaves' @())) 'log without a scanned capture passed'
+    Check ($null -eq (Find-SnapshotExitArrival $probe $watch 'arcaves' @($candidate))) 'arrival sidecar without its PNG passed'
+    Set-Content -LiteralPath $arrivalImage -Value 'synthetic capture'
+    $arrivalMetadata.elevation = 1
+    Write-Arrival
+    Check ($null -eq (Find-SnapshotExitArrival $probe $watch 'arcaves' @($candidate))) 'source floor masqueraded as arrival'
+    $arrivalMetadata.elevation = 0
+    $arrivalMetadata.hero.tile = 30297
+    Write-Arrival
+    Check ($null -eq (Find-SnapshotExitArrival $probe $watch 'arcaves' @($candidate))) 'wrong arrival tile passed'
+    $arrivalMetadata.hero.tile = 28707
+    $arrivalMetadata.image = '..\devhero-arrival.png'
+    Write-Arrival
+    Check ($null -eq (Find-SnapshotExitArrival $probe $watch 'arcaves' @($candidate))) 'a path outside the capture folder passed'
+    $arrivalMetadata.image = 'devhero-arrival.png'
+    Write-Arrival
+    Check ((Find-SnapshotExitArrival $probe $watch 'arcaves' @($candidate)).Name -eq $candidate.Name) 'the actual destination capture was not found'
+    Set-Content -LiteralPath $watch -Value 'first-3d-capture result=pass map=arcaves elevation=1 hero=30297 status=snapshot: devshot-arrival.json'
+    Check ($null -eq (Find-SnapshotExitArrival $probe $watch 'arcaves' @($candidate))) 'a same-map capture on another floor passed'
+
     Write-Host "snapshot-output: $script:checks checks passed"
     $global:LASTEXITCODE = 0
 } finally {
