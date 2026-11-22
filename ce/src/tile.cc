@@ -1225,6 +1225,13 @@ bool tileSceneOverlayActive()
 
 void tileRestoreAfterManual3dScroll()
 {
+    if (mapEdgeIsEnabled() && mapEdgeZoneIsSelected()) {
+        if (!mapEdgeTileInBounds(gCenterTile, false)) {
+            tileSetCenter(gCenterTile, TILE_SET_CENTER_REFRESH_WINDOW | TILE_SET_CENTER_FLAG_IGNORE_SCROLL_RESTRICTIONS);
+        }
+        gManual3dFloorScroll = false;
+        return;
+    }
     if (!gManual3dFloorScroll) return;
     gManual3dFloorScroll = false;
     if (gDude != nullptr && tileIsValid(gDude->tile)) tileSetCenter(gDude->tile, TILE_SET_CENTER_REFRESH_WINDOW);
