@@ -27,3 +27,7 @@ The copied owner save was also loaded as `ARCAVES.SAV` e2. Actual game scrolling
 On vanilla KLADWTWN e0, placing the hero on the existing world-map exit at tile 23454 opened the same 2D map on `6f5b82bf3` and `eb25945b8`. The captured windows matched pixel for pixel. Walking to the exit and returning from the world map were not verified. The EDG toggle test recovered from center 18743 to 24089 using normal scroll steps after switching to 2D.
 
 The projected-floor fallback is used only for the loaded local scene when its overlay is active. The two cached elevations with empty floors are ENCFITE e1 and e2. The attempted e1 load found no walkable tile and fell back to e0, so it does not prove what happens when the projection is temporarily unavailable on a playable map.
+
+### Switching back to 2D
+
+The earlier EDG toggle probe moved the camera manually after switching. A snapshot taken immediately after Ctrl+F10 exposed that the expanded center 18743 survived the switch to the classic view. `dfac39b5f` uses the existing forced EDG clamp if the current center exceeds the classic limits. On ARCAVES.MAP e2 at 3440x1440, 2x, zoom 1.28 and hero 21125, a real scroll from 22307 reached 18743 in 3D. Switching restored center 19930 in 2D immediately. In a separate test center 22307 inside the classic limits was preserved. At bottom corner 21753 the closest legacy center was 21134. These probes used the developer view toggle and the production camera functions. The separate 2D world-map capture does not prove the full route back to the local map.
