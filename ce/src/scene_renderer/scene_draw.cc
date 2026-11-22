@@ -172,9 +172,8 @@ void drawStaticPreview(bool withWalls, bool withHero)
 
     // 157: the ground's light and sun shadow bake at a quarter of the pixel
     // work; the tiles below sample it (uGroundBakeMode 2) instead of running
-    // the light loop and the 25-tap shadow disk per pixel. Same geometry,
-    // same uniforms, half-sized viewport with the same origin, so both passes
-    // share one normalized space.
+    // the light loop and the 25-tap shadow disk per pixel. Keep the same
+    // normalized space, but use the offscreen target's own zero-based origin.
     const bool bakeGround = lit && shadowed && gGroundBakeWidth >= 0
         && SDL_getenv("F2CE_NO_BAKE") == nullptr
         && ensureGroundBake(width / 2, height / 2);
@@ -183,7 +182,9 @@ void drawStaticPreview(bool withWalls, bool withHero)
         int previousFbo = 0;
         glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &previousFbo);
         glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, gGroundBakeFbo);
-        glViewport(x, y, width / 2, height / 2);
+        glViewport(0, 0, width / 2, height / 2);
+        glUniform4f(gSceneViewportLocation, 0.0f, 0.0f,
+            static_cast<float>(width / 2), static_cast<float>(height / 2));
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         glClear(kColorBufferBit);
         glDepthMask(0);
@@ -197,6 +198,8 @@ void drawStaticPreview(bool withWalls, bool withHero)
             (gFloorExtensionFirst > 0 ? gFloorExtensionFirst : gFloorVertexCount) - 6);
         glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, previousFbo);
         glViewport(x, y, width, height);
+        glUniform4f(gSceneViewportLocation, static_cast<float>(x), static_cast<float>(y),
+            static_cast<float>(width), static_cast<float>(height));
         glDepthMask(1);
         glUniform1f(gSceneCutoffLocation, 0.01f);
         // The bake map rides unit 7 for this frame's floor draw; the binding
