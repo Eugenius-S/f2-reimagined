@@ -155,6 +155,11 @@ class RpInstallTests(LauncherFixture):
         order = (mods / 'mods_order.txt').read_text().splitlines()
         self.assertLess(order.index('rpu.dat'), order.index('rpu_russian.dat'))
         self.assertLess(order.index('rpu_russian.dat'), order.index('steam-1c-text.dat'))
+        self.use_logging_exporter(fail=True)
+        code, output = self.rp_run('--remove-restoration-project')
+        self.assertNotEqual(code, 0, output)
+        self.assertFalse((mods / 'rpu.dat').exists())
+        self.export_fail.write_text('0')
         code, output = self.rp_run('--remove-restoration-project')
         self.assertEqual(code, 0, output)
         self.assertEqual(hashlib.sha256((mods / 'steam-1c-text.dat').read_bytes()).hexdigest(),
@@ -162,6 +167,17 @@ class RpInstallTests(LauncherFixture):
         self.assertEqual((mods / 'f2r-text-choice.txt').read_text().splitlines()[0], '1c')
         self.assertEqual(save.read_bytes(), before_save)
         self.assertEqual((mods / 'player.dat').read_bytes(), b'player')
+        code, output = self.rp_run('--restoration-project')
+        self.assertEqual(code, 0, output)
+        with read_lock(self.root / 'fallout2.cfg'):
+            code, output = self.rp_run('--remove-restoration-project')
+        self.assertNotEqual(code, 0, output)
+        self.assertFalse((mods / 'rpu.dat').exists())
+        self.assertFalse((self.root / 'backup/rpu/f2r-manifest.txt').exists())
+        code, output = self.rp_run('--remove-restoration-project')
+        self.assertEqual(code, 0, output)
+        self.assertEqual(hashlib.sha256((mods / 'steam-1c-text.dat').read_bytes()).hexdigest(),
+                         'a89666c64983553b55d042b8a24b46f07ebc8ab782e7e6b1514d902a71d9d5f6')
 
     @unittest.skipUnless(os.environ.get("F2R_VOICE_FIXTURE"), "fixture-configured voice launcher required")
     def test_voice_preflight_bad_hash_preserves_original_and_retry(self):

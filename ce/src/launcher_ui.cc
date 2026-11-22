@@ -23,6 +23,7 @@ namespace fs = std::filesystem;
 std::string findGameRootForUi();
 std::string ownGameRoot();
 bool supportedVoiceRp(const fs::path& root);
+bool translationRecoveryPending(const fs::path& root);
 bool knownActiveManualVoice(const fs::path& root);
 
 namespace {
@@ -374,16 +375,7 @@ bool validGameRoot(const fs::path& root)
 
 bool textRecoveryPending()
 {
-    std::error_code error;
-    bool present = fs::exists(chosenRoot() / L".f2r-text-transaction", error);
-    if (present || error) return true;
-    fs::path root = chosenRoot();
-    if (!fs::exists(root / L"mods/rpu.dat", error)) return bool(error);
-    std::ifstream receipt(root / L"mods/f2r-text-choice.txt");
-    std::string id;
-    std::getline(receipt, id);
-    if (!id.empty() && id.back() == '\r') id.pop_back();
-    return launcher_translations::find(id) != nullptr;
+    return translationRecoveryPending(chosenRoot());
 }
 
 // The translation counts as installed when its file is there and the game language is Russian.

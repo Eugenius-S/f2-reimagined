@@ -14,6 +14,48 @@ ROOT = os.environ.get('F2R_RP_TEXT_PACKS')
 
 @unittest.skipUnless(ROOT, 'external DAT fixtures not supplied')
 class RpTextSwitch(unittest.TestCase):
+    def test_manual_rp_removal_is_noop_and_excluded_rp_is_rejected(self):
+        packs = Path(ROOT)
+        with tempfile.TemporaryDirectory(prefix='f2r-manual-rp-') as temp:
+            root = Path(temp)
+            mods = root / 'mods'
+            mods.mkdir()
+            for name in ('master.dat', 'critter.dat'):
+                (root / name).write_bytes(b'fixture')
+            (root / 'fallout2.cfg').write_bytes(b'[system]\r\nlanguage=russian\r\n')
+            shutil.copyfile(packs / 'proof/rpu-2.4.34/mods/rpu.dat', mods / 'rpu.dat')
+            shutil.copyfile(packs / 'for-google-drive-rp-text/rp-1c-text.dat', mods / 'steam-1c-text.dat')
+            shutil.copyfile(packs / 'prepared-v4/shared-legacy-fonts.dat', mods / 'shared-legacy-fonts.dat')
+            (mods / 'f2r-text-choice.txt').write_text('1c\n')
+            order = mods / 'mods_order.txt'
+            order.write_bytes(b'rpu.dat\r\nsteam-1c-text.dat\r\n')
+            proc = subprocess.run([str(EXE), '--game-root', str(root), '--remove-restoration-project'], capture_output=True, timeout=20)
+            self.assertEqual(proc.returncode, 0, proc.stdout.decode('utf8', errors='replace'))
+            self.assertTrue((mods / 'rpu.dat').exists())
+            self.assertEqual(order.read_bytes(), b'rpu.dat\r\nsteam-1c-text.dat\r\n')
+            order.write_bytes(b'steam-1c-text.dat\r\nplayer.dat\r\n')
+            proc = subprocess.run([str(EXE), '--game-root', str(root), '--text-translation', '1c'], capture_output=True, timeout=20)
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn(b'excluded from mods_order.txt', proc.stdout)
+            self.assertEqual(order.read_bytes(), b'steam-1c-text.dat\r\nplayer.dat\r\n')
+            proc = subprocess.run([str(EXE), '--game-root', str(root), '--voice-translation', 'rp-1c'], capture_output=True, timeout=20)
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertEqual(order.read_bytes(), b'steam-1c-text.dat\r\nplayer.dat\r\n')
+            proc = subprocess.run([str(EXE), '--game-root', str(root), '--recover-text'], capture_output=True, timeout=20)
+            self.assertEqual(proc.returncode, 0, proc.stdout.decode('utf8', errors='replace'))
+            self.assertEqual(order.read_bytes(), b'player.dat\r\n')
+            self.assertIn(b'language=english', (root / 'fallout2.cfg').read_bytes())
+            proc = subprocess.run([str(EXE), '--game-root', str(root), '--voice-translation', 'rp-1c'], capture_output=True, timeout=20)
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertEqual(order.read_bytes(), b'player.dat\r\n')
+            (mods / 'steam-1c-text.dat').write_bytes(b'player file')
+            (mods / 'f2r-text-choice.txt').write_text('1c\n')
+            order.write_bytes(b'steam-1c-text.dat\r\nplayer.dat\r\n')
+            proc = subprocess.run([str(EXE), '--game-root', str(root), '--recover-text'], capture_output=True, timeout=20)
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertEqual((mods / 'steam-1c-text.dat').read_bytes(), b'player file')
+            self.assertEqual(order.read_bytes(), b'steam-1c-text.dat\r\nplayer.dat\r\n')
+
     def test_unsupported_rp_drops_adapted_text(self):
         packs = Path(ROOT)
         with tempfile.TemporaryDirectory(prefix='f2r-rp-unsupported-') as temp:

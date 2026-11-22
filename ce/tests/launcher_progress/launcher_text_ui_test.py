@@ -1,4 +1,5 @@
 import ctypes
+import hashlib
 import os
 from ctypes import wintypes
 import pathlib
@@ -24,6 +25,89 @@ user.EnumWindows.argtypes = (CALLBACK, wintypes.LPARAM)
 
 
 class TestUi(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('F2R_RP_TEXT_PACKS'), 'external pinned RP and text DATs required')
+    def test_play_with_adapted_rp_text(self):
+        packs = pathlib.Path(os.environ['F2R_RP_TEXT_PACKS'])
+        with tempfile.TemporaryDirectory(prefix='f2r-rp-ui-') as temp:
+            root = pathlib.Path(temp)
+            mods = root / 'mods'
+            mods.mkdir()
+            for name in ('master.dat', 'critter.dat'):
+                (root / name).write_bytes(b'fixture')
+            (root / 'fallout2.cfg').write_bytes(b'[system]\r\nlanguage=russian\r\n')
+            shutil.copyfile(pathlib.Path(EXE).with_name('launcher_routes_tests.exe'), root / 'fallout2-ce.exe')
+            shutil.copyfile(packs / 'proof/rpu-2.4.34/mods/rpu.dat', mods / 'rpu.dat')
+            shutil.copyfile(packs / 'for-google-drive-rp-text/rp-1c-text.dat', mods / 'steam-1c-text.dat')
+            (mods / 'f2r-text-choice.txt').write_text('1c\n')
+            (mods / 'mods_order.txt').write_bytes(b'rpu.dat\r\nsteam-1c-text.dat\r\n')
+            settings = root / 'ui.ini'
+            settings.write_text('[launcher]\nlanguage=en\nauto_updates=0\n')
+            proc = subprocess.Popen([EXE, '--ui', '--no-activate', '--game-root', str(root),
+                                     '--settings-file', str(settings), '--update-url', 'http://127.0.0.1:1',
+                                     '--release-info-url', 'http://127.0.0.1:1'], creationflags=subprocess.CREATE_NO_WINDOW)
+            window = None
+            try:
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline and not window:
+                    found = []
+                    @CALLBACK
+                    def enumerate_window(hwnd, _):
+                        pid = wintypes.DWORD()
+                        user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                        if pid.value == proc.pid and user.GetDlgItem(hwnd, 1014): found.append(hwnd)
+                        return True
+                    user.EnumWindows(enumerate_window, 0)
+                    window = found[0] if found else None
+                    if not window: time.sleep(0.05)
+                self.assertTrue(window)
+                user.SendMessageW(window, 0x111, 1014, user.GetDlgItem(window, 1014))
+                status = user.GetDlgItem(window, 1008)
+                message = ctypes.create_unicode_buffer(512)
+                user.SendMessageW(status, 0xD, len(message), ctypes.addressof(message))
+                self.assertIn('running', message.value.lower())
+                (mods / 'mods_order.txt').write_bytes(b'steam-1c-text.dat\r\n')
+                user.SetWindowTextW(user.GetDlgItem(window, 1002), str(root))
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline and user.SendMessageW(user.GetDlgItem(window, 1004), 0x146, 0, 0) != 2:
+                    time.sleep(0.05)
+                self.assertEqual(user.SendMessageW(user.GetDlgItem(window, 1004), 0x146, 0, 0), 2)
+                self.assertEqual(user.SendMessageW(user.GetDlgItem(window, 1017), 0x146, 0, 0), 1)
+                user.SendMessageW(window, 0x111, 1014, user.GetDlgItem(window, 1014))
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline and (mods / 'f2r-text-choice.txt').read_text().splitlines()[0] != 'original':
+                    time.sleep(0.05)
+                self.assertEqual((mods / 'f2r-text-choice.txt').read_text().splitlines()[0], 'original')
+                self.assertEqual((mods / 'mods_order.txt').read_bytes(), b'')
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline and (root / '.f2r-text-transaction').exists(): time.sleep(0.05)
+                deadline = time.monotonic() + 20
+                while True:
+                    try:
+                        (mods / 'rpu.dat').unlink()
+                        break
+                    except PermissionError:
+                        if time.monotonic() >= deadline: raise
+                        time.sleep(0.1)
+                shutil.copyfile(packs / 'for-google-drive-rp-text/rp-1c-text.dat', mods / 'steam-1c-text.dat')
+                (mods / 'f2r-text-choice.txt').write_text('1c\n')
+                (mods / 'mods_order.txt').write_bytes(b'steam-1c-text.dat\r\n')
+                (root / 'fallout2.cfg').write_bytes(b'[system]\r\nlanguage=russian\r\n')
+                user.SetWindowTextW(user.GetDlgItem(window, 1002), str(root))
+                user.SendMessageW(window, 0x111, 1014, user.GetDlgItem(window, 1014))
+                deadline = time.monotonic() + 90
+                expected = 'a89666c64983553b55d042b8a24b46f07ebc8ab782e7e6b1514d902a71d9d5f6'
+                while time.monotonic() < deadline:
+                    dat = mods / 'steam-1c-text.dat'
+                    if dat.exists() and hashlib.sha256(dat.read_bytes()).hexdigest() == expected: break
+                    time.sleep(0.1)
+                self.assertEqual(hashlib.sha256((mods / 'steam-1c-text.dat').read_bytes()).hexdigest(), expected)
+            finally:
+                if window: user.PostMessageW(window, 0x10, 0, 0)
+                try: proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.terminate()
+                    proc.wait(timeout=5)
+
     @unittest.skipUnless(os.environ.get("F2R_VOICE_KNOWN_DAT"), "verified BGforge DAT required")
     def test_manual_voice_visible_and_original_disables_it(self):
         with tempfile.TemporaryDirectory() as temp:
