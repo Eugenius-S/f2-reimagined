@@ -33,6 +33,7 @@ unsigned int gGroundBakeFbo = 0;
 unsigned int gGroundBakeTexture = 0;
 int gGroundBakeWidth = 0;
 int gGroundBakeHeight = 0;
+constexpr unsigned int kDrawFramebuffer = 0x8CA9;
 
 void destroyGroundBake()
 {
@@ -53,6 +54,12 @@ bool ensureGroundBake(int width, int height)
     destroyGroundBake();
     while (glGetError() != 0) {
     }
+    // Creation is mid-draw: keep the floor atlas on the current texture
+    // unit and the caller's draw target (including the glow framebuffer).
+    int previousTexture = 0;
+    int previousFbo = 0;
+    glGetIntegerv(0x8069 /* GL_TEXTURE_BINDING_2D */, &previousTexture);
+    glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &previousFbo);
     glGenTextures(1, &gGroundBakeTexture);
     glBindTexture(kTexture2D, gGroundBakeTexture);
     glTexImage2D(kTexture2D, 0, kRgba8, width, height, 0, kRGBA, kUnsignedByte, nullptr);
@@ -61,11 +68,12 @@ bool ensureGroundBake(int width, int height)
     glTexParameteri(kTexture2D, kTextureWrapS, kClampToEdge);
     glTexParameteri(kTexture2D, kTextureWrapT, kClampToEdge);
     glGenFramebuffers(1, &gGroundBakeFbo);
-    glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, gGroundBakeFbo);
-    glFramebufferTexture2D(0x8D40 /* GL_FRAMEBUFFER */, 0x8CE0 /* GL_COLOR_ATTACHMENT0 */, kTexture2D, gGroundBakeTexture, 0);
+    glBindFramebuffer(kDrawFramebuffer, gGroundBakeFbo);
+    glFramebufferTexture2D(kDrawFramebuffer, 0x8CE0 /* GL_COLOR_ATTACHMENT0 */, kTexture2D, gGroundBakeTexture, 0);
     const bool complete = glGetError() == 0
-        && glCheckFramebufferStatus(0x8D40 /* GL_FRAMEBUFFER */) == 0x8CD5 /* GL_FRAMEBUFFER_COMPLETE */;
-    glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, 0);
+        && glCheckFramebufferStatus(kDrawFramebuffer) == 0x8CD5 /* GL_FRAMEBUFFER_COMPLETE */;
+    glBindFramebuffer(kDrawFramebuffer, previousFbo);
+    glBindTexture(kTexture2D, previousTexture);
     if (!complete) {
         destroyGroundBake();
         return false;
@@ -181,7 +189,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
     if (bakeGround) {
         int previousFbo = 0;
         glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &previousFbo);
-        glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, gGroundBakeFbo);
+        glBindFramebuffer(kDrawFramebuffer, gGroundBakeFbo);
         glViewport(0, 0, width / 2, height / 2);
         glUniform4f(gSceneViewportLocation, 0.0f, 0.0f,
             static_cast<float>(width / 2), static_cast<float>(height / 2));
@@ -196,7 +204,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
         glUniform1i(gSceneTexturedLocation, 1);
         glDrawArrays(kTriangles, 6,
             (gFloorExtensionFirst > 0 ? gFloorExtensionFirst : gFloorVertexCount) - 6);
-        glBindFramebuffer(0x8D40 /* GL_FRAMEBUFFER */, previousFbo);
+        glBindFramebuffer(kDrawFramebuffer, previousFbo);
         glViewport(x, y, width, height);
         glUniform4f(gSceneViewportLocation, static_cast<float>(x), static_cast<float>(y),
             static_cast<float>(width), static_cast<float>(height));

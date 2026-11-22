@@ -40,3 +40,5 @@ Floor geometry/exporter changes, a blanket bake-disable workaround, new performa
 ## Log
 
 - 2026-11-15 gpt: split the missing renderer prerequisite from PR #504's blocked Log. The exact renderer cause still needs reproduction and diagnosis.
+
+- 2026-11-23 gpt: reproduced on current main and ported the missing texture and draw framebuffer restoration from the old diagnosis without importing its other renderer changes. Matches direct lighting at KLAMALL and preserves the glow render at ARVILLAG. [Current native evidence](../runs/306-ground-bake-current/README.md).
