@@ -1,4 +1,5 @@
 #include "map_edge.h"
+#include "map_edge_recovery.h"
 
 #include "db.h"
 #include "debug.h"
@@ -465,6 +466,7 @@ static Rect scrollBounds(const EdgeZone& zone)
         bounds.left += extraX;
         bounds.right -= extraX;
         bounds.top -= extraY;
+        bounds.bottom += extraY;
     }
     return bounds;
 }
@@ -480,16 +482,19 @@ bool mapEdgeTileInBounds(int tile)
     }
 
     const Rect bounds = scrollBounds(*zone);
-    // X is inverted; retain the existing ground-based bottom stop.
+    // X is inverted; the existing ground-based bottom extension still applies.
     const bool withinHorizontalAndTopBounds = px >= bounds.right && px <= bounds.left && py >= bounds.top;
-    if (!withinHorizontalAndTopBounds) return false;
-    if (py <= bounds.bottom) {
+    const bool bottomAllowed = py <= bounds.bottom
+        || (tileSceneOverlayActive() && scene::bottomViewHasDrawnGround(tile));
+    if (withinHorizontalAndTopBounds && bottomAllowed) {
         return true;
     }
-
-    // The 3D bottom stop follows the actual floor cut: keep moving while the
-    // map window's last visible row still lands on drawn ground.
-    return tileSceneOverlayActive() && scene::bottomViewHasDrawnGround(tile);
+    if (!tileIsValid(gCenterTile)) return false;
+    int oldX, oldY;
+    tileToPixelOffset(gCenterTile, oldX, oldY);
+    const bool oldBottomAllowed = oldY <= bounds.bottom
+        || (tileSceneOverlayActive() && scene::bottomViewHasDrawnGround(gCenterTile));
+    return mapEdgeRecoveryStep(bounds, oldX, oldY, px, py, oldBottomAllowed, bottomAllowed);
 }
 
 bool mapEdgeTilePastBottomStop(int tile)
@@ -498,7 +503,8 @@ bool mapEdgeTilePastBottomStop(int tile)
     int px, py;
     tileToPixelOffset(tile, px, py);
     const Rect bounds = scrollBounds(*currentEdgeZone);
-    return px >= bounds.right && px <= bounds.left && py >= bounds.top && py > bounds.bottom;
+    return px >= bounds.right && px <= bounds.left && py >= bounds.top
+        && py > currentEdgeZone->scrollBorderRect.bottom;
 }
 
 // Shared helper: set currentTileXAlignment if the pixel is on a scrollBorderRect edge.

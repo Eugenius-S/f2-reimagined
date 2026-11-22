@@ -1,4 +1,5 @@
 #include "map_clip.h"
+#include "../../src/map_edge_recovery.h"
 
 #include <algorithm>
 #include <cmath>
@@ -29,6 +30,14 @@ void pixelToWorld(double px, double py, const double squ[2], const double sqv[2]
 
 int main()
 {
+    const fallout::Rect bounds { 100, 20, 0, 80 };
+    if (!check(fallout::mapEdgeRecoveryStep(bounds, 140, 10, 130, 10, true, true), "recover one corner axis")) return 1;
+    if (!check(fallout::mapEdgeRecoveryStep(bounds, 140, 10, 140, 20, true, true), "recover the other corner axis")) return 1;
+    if (!check(!fallout::mapEdgeRecoveryStep(bounds, 140, 10, 150, 20, true, true), "reject worsening another axis")) return 1;
+    if (!check(!fallout::mapEdgeRecoveryStep(bounds, 140, 50, 150, 50, true, true), "reject outward movement after shrinking")) return 1;
+    if (!check(!fallout::mapEdgeRecoveryStep(bounds, 140, 50, 130, 90, true, false), "reject a new bottom violation")) return 1;
+    if (!check(!fallout::mapEdgeRecoveryStep(bounds, 90, 30, 110, 30, true, true), "reject new outward travel")) return 1;
+    if (!check(fallout::mapEdgeRecoveryStep(bounds, 50, 110, 50, 100, false, false), "recover past bottom")) return 1;
     using namespace fallout::scene_renderer;
 
     // EDG v2's format may store X backwards (for example left=99,right=0).
