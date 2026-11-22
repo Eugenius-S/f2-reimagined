@@ -18,6 +18,6 @@ int main()
     check(!available("1c", true, "https://example.org/1c", "https://example.org/fonts"));
     check(!available("1c", false, "", "https://example.org/fonts"));
     check(!available("1c", false, "http://example.org/1c", "https://example.org/fonts"));
-    check(!validUrl("http://127.0.0.1:80@example.org/1c"));
+    check(!validUrl("http://127.0.0.1:80" "@example.org/1c"));
     check(!available("unknown", false, "https://example.org/1", "https://example.org/fonts"));
 }
