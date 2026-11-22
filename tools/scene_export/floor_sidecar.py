@@ -6,7 +6,7 @@ import struct
 from scene_check import one_map_elevation
 
 MAGIC = b"F2FL"
-VERSION = 7  # 2: a roof layer follows the floor layer; 3: a roof fringe list follows the cells; 4: the list is wall-top runs; 5: each run names its wall; 6: a list of roof squares with a cut cell of their own follows the runs; 7: the flat water colour (3 bytes RGB) and a byte per square follow the patches: 1 open water, 2 the shore - these squares continue past a map edge (168)
+VERSION = 8  # 2: a roof layer follows the floor layer; 3: a roof fringe list follows the cells; 4: the list is wall-top runs; 5: each run names its wall; 6: a list of roof squares with a cut cell of their own follows the runs; 7: the flat water colour (3 bytes RGB) and a byte per square follow the patches: 1 open water, 2 the shore - these squares continue past a map edge (168); 8: per-atlas desert edge continuation flags
 GRID_WIDTH = 100
 GRID_HEIGHT = 100
 CELL_SIZE = 88
@@ -28,7 +28,7 @@ def cell_content_rect(cell, image_size):
             x + CELL_MARGIN + CELL_SIZE, y + CELL_MARGIN + CELL_SIZE)
 
 
-def encode_floor_sidecar(scene, fringe=(), patches=(), water=None, water_color=None):
+def encode_floor_sidecar(scene, fringe=(), patches=(), water=None, water_color=None, desert_cells=None):
     """Encode floor and roof atlas indices and tile cells from one format-6 scene.
 
     fringe: (edge, plane, start, count, x, y, width, height, face, top, lo, hi) of each run of roof
@@ -43,7 +43,8 @@ def encode_floor_sidecar(scene, fringe=(), patches=(), water=None, water_color=N
     1 open water, 2 the shore line, 0 land or nothing. water_color: the flat
     water colour, 0..1 RGB (SceneBuilder.water_color). Given water, the
     sidecar is version 7 and carries the colour (3 bytes) and the flags (a
-    byte per square) after the patches; without it, version 6.
+    byte per square) after the patches; without it, version 6. Version 8 adds
+    one desert continuation flag per atlas cell when desert_cells is provided.
     """
     if scene.get("format") != 6 or not one_map_elevation(scene):
         raise ValueError("floor sidecar expects one map elevation in scene format 6")
@@ -107,7 +108,11 @@ def encode_floor_sidecar(scene, fringe=(), patches=(), water=None, water_color=N
         if not isinstance(colour, (list, tuple)) or len(colour) != 3 or any(not isinstance(v, (int, float)) or not 0 <= v <= 1 for v in colour):
             raise ValueError("water colour must be three 0..1 floats")
         trailer += bytes(round(v * 255) for v in colour) + flags
-    version = VERSION if water is not None else 6
+    if desert_cells is not None:
+        if water is None or len(desert_cells) != len(cells) or any(flag not in (0, 1) for flag in desert_cells):
+            raise ValueError("desert cell flags must match the atlas and require water flags")
+        trailer += bytes(desert_cells)
+    version = 8 if desert_cells is not None else 7 if water is not None else 6
     header = HEADER.pack(MAGIC, version, GRID_WIDTH, GRID_HEIGHT, len(cells),
                          image_width, image_height, CELL_SIZE, CELL_MARGIN)
     return header + floor_bytes + roof_bytes + bytes(encoded_cells) + trailer
@@ -118,7 +123,7 @@ def decode_floor_sidecar(data):
     if len(data) < HEADER.size + 2 * FLOOR_BYTES:
         raise ValueError("truncated floor sidecar")
     magic, version, grid_w, grid_h, tile_count, image_w, image_h, cell_size, margin = HEADER.unpack_from(data)
-    if magic != MAGIC or version not in (5, 6, VERSION):
+    if magic != MAGIC or version not in (5, 6, 7, VERSION):
         raise ValueError("unsupported floor sidecar magic/version")
     if (grid_w, grid_h, cell_size, margin) != (GRID_WIDTH, GRID_HEIGHT, CELL_SIZE, CELL_MARGIN):
         raise ValueError("unsupported floor sidecar geometry")
@@ -135,7 +140,7 @@ def decode_floor_sidecar(data):
     else:
         patch_count = 0
         body_end = patches_at
-    expected = body_end + ((3 + GRID_WIDTH * GRID_HEIGHT) if version >= 7 else 0)
+    expected = body_end + ((3 + GRID_WIDTH * GRID_HEIGHT) if version >= 7 else 0) + (tile_count if version >= 8 else 0)
     if len(data) < expected:
         raise ValueError("truncated floor sidecar")
     if len(data) != expected or image_w == 0 or image_h == 0:
@@ -160,12 +165,16 @@ def decode_floor_sidecar(data):
     colour = [v / 255 for v in data[body_end:body_end + 3]] if version >= 7 else None
     if water is not None and any(f not in (0, 1, 2) for f in water):
         raise ValueError("water flags must be one 0, 1 or 2 byte per square")
+    desert = list(data[body_end + 3 + GRID_WIDTH * GRID_HEIGHT:]) if version >= 8 else None
+    if desert is not None and any(flag not in (0, 1) for flag in desert):
+        raise ValueError("invalid desert cell flags")
     return {
         "version": version,
         "fringe": fringe,
         "patches": patches,
         "water": water,
         "waterColor": colour,
+        "desertCells": desert,
         "grid_size": (grid_w, grid_h),
         "image_size": (image_w, image_h),
         "cell_size": cell_size,

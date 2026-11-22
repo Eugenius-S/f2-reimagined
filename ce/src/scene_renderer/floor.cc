@@ -207,10 +207,10 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
     const size_t patchCount = version >= 6 && sidecar.size() >= patchesAt + 2 ? readU16(sidecar.data() + patchesAt) : 0;
     const size_t waterAt = patchesAt + (version >= 6 ? 2 + patchCount * kPatchEntryBytes : 0);
     constexpr size_t kGridSquares = 100 * 100;
-    const size_t expectedSize = waterAt + (version >= 7 ? 3 + kGridSquares : 0);
+    const size_t expectedSize = waterAt + (version >= 7 ? 3 + kGridSquares : 0) + (version >= 8 ? tileCount : 0);
     // tileCount 0 is a tile-less elevation (171): the map's squares are all
     // the nothing tile, the scene draws no tiles and the void carries it.
-    if ((version < 1 || version > 7) || gridWidth != 100 || gridHeight != 100
+    if ((version < 1 || version > 8) || gridWidth != 100 || gridHeight != 100
         || cellSize != 88 || cellMargin != 6 || imageWidth == 0 || imageHeight == 0
         || imageWidth > 8192 || imageHeight > 8192
         || sidecar.size() != expectedSize) {
@@ -306,6 +306,65 @@ bool loadStaticFloor(const std::filesystem::path& cacheDirectory, std::string* e
             const float z0 = static_cast<float>(row) - kHalfMap;
             quad(x0 - grow, 0.0f, z0 - grow, x0 + 1.0f + grow, z0 + 1.0f + grow, u0, v0, u1, v1);
         }
+    }
+
+
+    // Continue only connected runs of named desert tiles at the outer grid.
+    // The real occupancy and map clip remain based solely on authored cells.
+    if (version >= 8) {
+        const unsigned char* desert = sidecar.data() + waterAt + 3 + kGridSquares;
+        const unsigned char* water = sidecar.data() + waterAt + 3;
+        if (std::any_of(desert, desert + tileCount, [](unsigned char flag) { return flag > 1; }))
+            return fail("floor.bin contains invalid desert continuation flags");
+        const int first = static_cast<int>(vertices.size());
+        bool hasWater = false;
+        for (size_t i = 0; i < kGridSquares; ++i) {
+            if (water[i] == 2 || (floorOccupancy[i] && water[i] != 0)) { hasWater = true; break; }
+        }
+        std::vector<unsigned char> continued(kGridSquares, 0);
+        for (int side = 0; side < 4 && !hasWater; ++side) {
+            auto indexAt = [&](int along, int depth) {
+                const int row = side < 2 ? along : (side == 2 ? depth : 99 - depth);
+                const int col = side < 2 ? (side == 0 ? depth : 99 - depth) : along;
+                return row * 100 + col;
+            };
+            int depths[100];
+            for (int along = 0; along < 100; ++along) {
+                int depth = 0;
+                while (depth < 3 && floorOccupancy[indexAt(along, depth)] == 0
+                    && water[indexAt(along, depth)] != 2) ++depth;
+                const int index = indexAt(along, depth);
+                const unsigned short cell = readU16(floorData + index * 2);
+                depths[along] = cell > 0 && cell <= tileCount && desert[cell - 1] == 1 && water[index] == 0 ? depth : -1;
+            }
+            for (int start = 0; start < 100;) {
+                if (depths[start] < 0) { ++start; continue; }
+                int end = start;
+                bool touchesEdge = false;
+                while (end < 100 && depths[end] >= 0) { touchesEdge |= depths[end] == 0; ++end; }
+                for (int along = start; touchesEdge && along < end; ++along) {
+                    const int depth = depths[along];
+                    const int source = indexAt(along, depth);
+                    const unsigned short cellIndex = readU16(floorData + source * 2);
+                    const unsigned char* cell = cellData + (cellIndex - 1) * 4;
+                    const float u0 = static_cast<float>(readU16(cell)) / imageWidth;
+                    const float v0 = static_cast<float>(readU16(cell + 2)) / imageHeight;
+                    const float u1 = (readU16(cell) + cellSize + 2.0f * cellMargin) / imageWidth;
+                    const float v1 = (readU16(cell + 2) + cellSize + 2.0f * cellMargin) / imageHeight;
+                    const float grow = static_cast<float>(cellMargin) / cellSize;
+                    for (int d = 0; d < depth; ++d) {
+                        const int index = indexAt(along, d);
+                        if (continued[index]) continue;
+                        continued[index] = 1;
+                        const float x = static_cast<float>(index % 100) - kHalfMap;
+                        const float z = static_cast<float>(index / 100) - kHalfMap;
+                        quad(x - grow, 0.0f, z - grow, x + 1.0f + grow, z + 1.0f + grow, u0, v0, u1, v1);
+                    }
+                }
+                start = end;
+            }
+        }
+        std::rotate(vertices.begin() + 6, vertices.begin() + first, vertices.end());
     }
 
     // The wall-top runs (roof_fringe.png) become pieces of the squares they cross.
