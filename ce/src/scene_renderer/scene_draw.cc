@@ -130,6 +130,18 @@ void drawStaticPreview(bool withWalls, bool withHero)
     // above their plane hides as the game's roof picture hides it.
     const bool roofsDrawn = withHero && staticSoloKeeps(-1);
     auto roofClip = [&]() { glUniform2f(gSceneRoofClipLocation, roofClipHeight(), roofsDrawn ? 1.0f : 0.0f); };
+    auto drawObjectCard = [&](const ObjectDraw& draw) {
+        // The exterior canopies of Desperado and Shark Club cross their
+        // own roof grids. Keep the normal depth test and the roof mesh;
+        // skip only the clip mask for these two fascia cards.
+        constexpr int kDesperadoMarquee = 0x020005D4; // CASENT06.FRM
+        constexpr int kSharkClubMarquee = 0x020005DC; // CASENT26.FRM
+        const bool fascia = roofsDrawn && !draw.flat
+            && (draw.artFile == kDesperadoMarquee || draw.artFile == kSharkClubMarquee);
+        if (fascia) glUniform2f(gSceneRoofClipLocation, 0.0f, 0.0f);
+        glDrawArrays(kTriangles, draw.firstVertex, 6);
+        if (fascia) roofClip();
+    };
     // The game shows the hero through the walls and scenery he stands behind,
     // inside its egg: they are drawn without the egg's part first, and that
     // part blended over the hero and what lies behind at the end.
@@ -325,7 +337,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
             lightSprite(draw.tile);
             shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX, draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
             glBindTexture(kTexture2D, draw.texture);
-            glDrawArrays(kTriangles, draw.firstVertex, 6);
+            drawObjectCard(draw);
         }
     }
     perfMark("objects");
@@ -377,7 +389,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
                 shadowAtFeet(draw.anchorX, draw.anchorZ, draw.groundShadow, draw.groundY, draw.wallNormalX,
                     draw.wallNormalZ, draw.feetShadow, draw.shadowGroup);
                 glBindTexture(kTexture2D, draw.texture);
-                glDrawArrays(kTriangles, draw.firstVertex, 6);
+                drawObjectCard(draw);
             }
         }
         glDisable(kScissorTest);
@@ -403,7 +415,7 @@ void drawStaticPreview(bool withWalls, bool withHero)
             glUniform3f(gSceneTintLocation, draw.tint[0], draw.tint[1], draw.tint[2]);
             glUniform1i(gSceneGlassGrayLocation, draw.glassGray ? 1 : 0);
             glBindTexture(kTexture2D, draw.texture);
-            glDrawArrays(kTriangles, draw.firstVertex, 6);
+            drawObjectCard(draw);
         }
         glUniform1i(gSceneTranslucentLocation, 0);
         glDepthMask(1);
