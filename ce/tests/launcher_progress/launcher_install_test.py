@@ -196,10 +196,37 @@ class InstallTests(LauncherFixture):
         code, output = self.run_launcher()
         self.assert_failed(code, output, "fallout2.cfg")
 
-    def test_present_optional_tree_failure(self):
+    def test_present_optional_tree_failure_changes_nothing(self):
         (self.root / "user-assets").write_bytes(b"blocks the destination directory")
-        code, output = self.run_launcher()
+        before = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        code, output = self.run_launcher("ru")
         self.assert_failed(code, output, "user-assets")
+        after = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        differing = sorted(str(p) for p in before.keys() | after.keys() if before.get(p) != after.get(p))
+        self.assertEqual(differing, [])
+        self.assertFalse((self.root / "f2reimagined-backups").exists())
+
+    def test_file_at_parent_of_optional_splash_prevents_core_writes(self):
+        (self.root / "data").mkdir()
+        parent = self.root / "data" / "art"
+        parent.write_bytes(b"kept existing file")
+        self.payload["data/art/splash/test.frm"] = b"fixture splash"
+        self.package()
+        code, output = self.run_launcher()
+        self.assert_failed(code, output, "data/art/splash")
+        self.assertEqual(parent.read_bytes(), b"kept existing file")
+        self.assertEqual((self.root / REQUIRED[0]).read_bytes(), b"old-build")
+        self.assertFalse((self.root / "f2reimagined-backups").exists())
+
+    def test_absent_optional_tree_does_not_touch_unmanaged_file(self):
+        original = self.root / "user-assets"
+        original.write_bytes(b"the player's file")
+        self.payload.pop(ART)
+        self.package()
+        code, output = self.run_launcher()
+        self.assertEqual(code, 0, output)
+        self.assertEqual(original.read_bytes(), b"the player's file")
+        self.assertEqual((self.root / REQUIRED[0]).read_bytes(), b"new-build")
 
     def test_present_optional_launcher_failure(self):
         name = "Fallout 2 Reimagined.exe"

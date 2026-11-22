@@ -74,6 +74,8 @@ inline constexpr Entry kTable[] = {
     { "  version.txt: write failed", "  version.txt: не удалось записать версию" },
     { "version.txt cannot be replaced; no game files were changed",
         "Не удалось подготовить замену version.txt. Файлы игры не изменены." },
+    { "optional art folder is unavailable (%s); no game files were changed",
+        "Папка оформления недоступна (%s). Файлы игры не изменены." },
     { "the downloaded package is damaged (the game is not in it); try the install again",
         "скачанный пакет повреждён (игры в нём нет); повторите установку" },
     { "could not save the current build before updating; nothing was changed",

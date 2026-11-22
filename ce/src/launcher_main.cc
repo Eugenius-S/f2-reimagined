@@ -755,6 +755,24 @@ bool copyLauncher(const fs::path& source, const fs::path& target)
     return !error;
 }
 
+// Do not start copying a package if one of its optional directory roots
+// already conflicts with an ordinary file. An absent optional tree doesn't
+// require any destination to exist. This is not a test of future write locks.
+bool canInstallTreeIfPresent(const fs::path& stage, const char* name, const fs::path& root)
+{
+    const fs::path source = stage / name;
+    std::error_code error;
+    if (!fs::exists(source, error)) return !error;
+    if (!fs::is_directory(source, error) || error) return false;
+    fs::path target = root;
+    for (const fs::path& part : fs::path(name)) {
+        target /= part;
+        if (!fs::exists(target, error)) return !error;
+        if (!fs::is_directory(target, error) || error) return false;
+    }
+    return true;
+}
+
 // The wide menu, death and loading art ships as folders next to the exe.
 bool copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& destination)
 {
@@ -2798,6 +2816,14 @@ int runConsole(Options options)
             die("version.txt cannot be replaced; no game files were changed");
         }
 
+        constexpr const char* kOptionalTrees[] = {"user-assets", "data/art/splash", "data/art/russian/splash"};
+        for (const char* name : kOptionalTrees) {
+            if (!canInstallTreeIfPresent(stage, name, root)) {
+                fs::remove_all(work, error);
+                die("optional art folder is unavailable (%s); no game files were changed", name);
+            }
+        }
+
         std::string keptBackup;
         // A refill of the wide art at the same version is no update: the older build stays the one to roll back to.
         if (installedGamePresent && packageVersion != installedVersion && !backupInstalledBuild(root,
@@ -2822,9 +2848,9 @@ int runConsole(Options options)
         } else {
             stopUpdate();
         }
-        if (!copyTreeIfPresent(stage, "user-assets", root)
-            || !copyTreeIfPresent(stage, "data/art/splash", root)
-            || !copyTreeIfPresent(stage, "data/art/russian/splash", root)) stopUpdate();
+        for (const char* name : kOptionalTrees) {
+            if (!copyTreeIfPresent(stage, name, root)) stopUpdate();
+        }
         if (fs::exists(root / kCfg)) {
             log("  fallout2.cfg: kept (the player's file is never overwritten)");
         } else {
