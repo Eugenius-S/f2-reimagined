@@ -36,3 +36,7 @@ The owner requested one urgent batch. [Inbox PR #552](https://github.com/Eugeniu
 Changes to the owner's installation, localization, movement, door clickability, rendered map boundaries or the 2D world map.
 
 ## Log
+
+### 2026-11-22 gpt
+
+The draft contains region capture and camera travel candidates. [The investigation](../runs/316-windows-hotfix/README.md) records each report, the copied Windows fixtures, the observations and the open checks. No acceptance status was changed.
