@@ -1,0 +1,7 @@
+# 316 camera scroll candidate
+
+The local 3D EDG scroll check allowed only the contracted 2D viewport bounds. This candidate extends the horizontal and top scroll limits by approximately one third of the logical viewport divided by zoom, snapped to the hex grid. The existing floor-based bottom stop remains in use. EDG data, forced positioning, map clipping and movement geometry are unchanged.
+
+`camera-left.jpg` compares the old and candidate left stops in copies of the owner's ARCAVES.SAV e2, with hero tile 21125, initial center tile 22307, zoom 1.28 and logical 1720 x 720. The test uses a background window and a preview hero, not the owner's borderless window. The left stop moved from tile 19930 to 18743, or 416 logical pixels. The right limit moved by the same amount; the top moved 144 pixels; the straight bottom stop stayed at tile 24916. At logical 960 x 540 the left limit moved 224 pixels. Sequential left-then-up and left-then-down probes reached stable corners; the latter still used the floor stop.
+
+Not established: the original inability to move from center tile 22307 in the owner's borderless session, the actual door click at the new position, 2D or world-map behavior in a successful runtime comparison, and a separate third-viewport extension at the bottom. Classic 2D scroll probes were unstable both before and after and do not validate equivalence. These gaps remain open; this candidate is not a release approval.

@@ -454,6 +454,21 @@ int mapEdgeSelectZoneAndClamp(int tile, MapElevation elevation)
     return pixelToTile(cx, cy);
 }
 
+static Rect scrollBounds(const EdgeZone& zone)
+{
+    Rect bounds = zone.scrollBorderRect;
+    if (tileSceneOverlayActive()) {
+        const Size size = getIsoWindowSize();
+        const double zoom = settings.scene3d.zoom > 0.0 ? settings.scene3d.zoom : 1.0;
+        const int extraX = static_cast<int>(size.width / (3.0 * zoom * kTileWidth)) * kTileWidth;
+        const int extraY = static_cast<int>(size.height / (3.0 * zoom * kTileHeight)) * kTileHeight;
+        bounds.left += extraX;
+        bounds.right -= extraX;
+        bounds.top -= extraY;
+    }
+    return bounds;
+}
+
 bool mapEdgeTileInBounds(int tile)
 {
     int px, py;
@@ -464,11 +479,11 @@ bool mapEdgeTileInBounds(int tile)
         return false;
     }
 
-    // Note: X is inverted (left > right), so check px in [right, left].
-    const bool withinHorizontalAndTopBounds = px >= zone->scrollBorderRect.right && px <= zone->scrollBorderRect.left
-        && py >= zone->scrollBorderRect.top;
+    const Rect bounds = scrollBounds(*zone);
+    // X is inverted; retain the existing ground-based bottom stop.
+    const bool withinHorizontalAndTopBounds = px >= bounds.right && px <= bounds.left && py >= bounds.top;
     if (!withinHorizontalAndTopBounds) return false;
-    if (py <= zone->scrollBorderRect.bottom) {
+    if (py <= bounds.bottom) {
         return true;
     }
 
@@ -482,9 +497,8 @@ bool mapEdgeTilePastBottomStop(int tile)
     if (!tileIsValid(tile) || currentEdgeZone == nullptr) return false;
     int px, py;
     tileToPixelOffset(tile, px, py);
-    const EdgeZone* zone = currentEdgeZone;
-    return px >= zone->scrollBorderRect.right && px <= zone->scrollBorderRect.left
-        && py >= zone->scrollBorderRect.top && py > zone->scrollBorderRect.bottom;
+    const Rect bounds = scrollBounds(*currentEdgeZone);
+    return px >= bounds.right && px <= bounds.left && py >= bounds.top && py > bounds.bottom;
 }
 
 // Shared helper: set currentTileXAlignment if the pixel is on a scrollBorderRect edge.
@@ -518,7 +532,9 @@ bool mapEdgeSetBoundaryMods(int tile)
 
     const int oldModW = currentTileXAlignment;
     const int oldModH = currentTileYAlignment;
-    updateTileAlignment(zone, px, py);
+    EdgeZone scrollZone = *zone;
+    scrollZone.scrollBorderRect = scrollBounds(*zone);
+    updateTileAlignment(&scrollZone, px, py);
     return currentTileXAlignment != oldModW || currentTileYAlignment != oldModH;
 }
 
