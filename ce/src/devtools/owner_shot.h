@@ -18,6 +18,7 @@ namespace owner_shot {
 // keep their devshot format), so this handler runs after devtools::handleKey
 // and only answers the keys left over.
 bool handleKey(int key);
+void observeKeyRelease(int scancode);
 
 // The teleport (step 3): dev-teleport.txt next to the exe, one line
 // "map.elev" (the safe pick) or "map.elev.hex" (the named hex), is consumed

@@ -12,6 +12,7 @@
 #include "dev_output.h"
 #include "dinput.h"
 #include "devtools/devtools.h"
+#include "devtools/owner_shot.h"
 #include "devtools/preferences_probe.h"
 #include "draw.h"
 #include "game.h"
@@ -1029,6 +1030,9 @@ void _GNW95_process_message()
             break;
         case SDL_KEYDOWN:
         case SDL_KEYUP: {
+            if (e.type == SDL_KEYDOWN && e.key.repeat && e.key.keysym.scancode == SDL_SCANCODE_F12
+                && owner_shot::markMode()) break;
+            if (e.type == SDL_KEYUP) owner_shot::observeKeyRelease(e.key.keysym.scancode);
             keyboardData.key = e.key.keysym.scancode;
             keyboardData.down = (e.key.state & SDL_PRESSED) != 0;
             bool syntheticSfallKey = sfall_kb_consume_synthetic_key_event(keyboardData.key, keyboardData.down);
@@ -1088,6 +1092,7 @@ void _GNW95_process_message()
 
         for (int key = 0; key < SDL_NUM_SCANCODES; key++) {
             RepeatInfo* ptr = &(_GNW95_key_time_stamps[key]);
+            if (key == SDL_SCANCODE_F12 && owner_shot::markMode()) continue;
             if (ptr->tick != -1) {
                 int elapsedTime = ptr->tick > tick ? INT_MAX : tick - ptr->tick;
                 int delay = ptr->repeatCount == 0 ? gKeyboardKeyRepeatDelay : gKeyboardKeyRepeatRate;
