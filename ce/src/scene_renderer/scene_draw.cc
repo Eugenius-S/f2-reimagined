@@ -188,6 +188,9 @@ void drawStaticPreview(bool withWalls, bool withHero)
         glClear(kColorBufferBit);
         glDepthMask(0);
         glUniform1i(gSceneGroundBakeModeLocation, 1);
+        // Use the same floor lighting as the direct draw: mode 0 bakes
+        // full white and never queries the ambient light or local lights.
+        glUniform1i(gSceneLightModeLocation, 1);
         glUniform1f(gSceneCutoffLocation, -1.0f);
         glUniform1i(gSceneTexturedLocation, 1);
         glDrawArrays(kTriangles, 6,

@@ -26,6 +26,10 @@ constexpr double kSunSwingDefault = 40.0;
 // Step the debug clock one hour without discarding its day or minute.
 unsigned int stepClockHour(unsigned int gameTime, int direction);
 
+// Day-night grade for 3D outdoor ambient only, in the engine's light units.
+// Do not feed this into the native engine lights or the 2D/UI render.
+int outdoorAmbientForTime(unsigned int gameTime, int ambient, bool exterior);
+
 // Where the sun is at `gameTime` with the map's ambient light (0 to 1, the
 // engine's LIGHT_INTENSITY_MAX is 1) on a map under the sky (`daylight`).
 Sun sunAt(unsigned int gameTime, double ambient, bool daylight,

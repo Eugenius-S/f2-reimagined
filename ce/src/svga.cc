@@ -21,6 +21,7 @@
 #include "memory.h"
 #include "mouse.h"
 #include "movie.h"
+#include "rgba_background_cursor.h"
 #include "scan_unimplemented.h"
 #include "settings.h"
 #include "scene/text_capture.h"
@@ -89,22 +90,37 @@ void renderClearRgbaBackground()
     gRgbaBackgroundHeight = 0;
 }
 
-static void renderApplyRgbaBackground()
+void renderCompositeRgbaBackground(unsigned char* pixels, int width, int height, int pitch)
 {
-    if (gSdlTextureSurface == nullptr || gRgbaBackground.empty()
-        || gSdlTextureSurface->w != gRgbaBackgroundWidth || gSdlTextureSurface->h != gRgbaBackgroundHeight) {
+    if (pixels == nullptr || gRgbaBackground.empty()
+        || width != gRgbaBackgroundWidth || height != gRgbaBackgroundHeight) {
         return;
     }
 
-    for (int y = 0; y < gRgbaBackgroundHeight; y++) {
-        unsigned char* dst = static_cast<unsigned char*>(gSdlTextureSurface->pixels) + y * gSdlTextureSurface->pitch;
-        const unsigned char* src = gRgbaBackground.data() + static_cast<size_t>(y) * gRgbaBackgroundWidth * 4;
-        const unsigned char* mask = gRgbaBackgroundMask.data() + static_cast<size_t>(y) * gRgbaBackgroundWidth;
-        for (int x = 0; x < gRgbaBackgroundWidth; x++) {
-            if (mask[x] != 0) {
+    TextCursorSnapshot snapshot = {};
+    const bool cursorVisible = textCaptureGetCursorSnapshot(&snapshot) && snapshot.visible;
+    const RgbaBackgroundCursor cursor { cursorVisible ? snapshot.pixels : nullptr,
+        snapshot.x, snapshot.y, snapshot.width, snapshot.height, snapshot.pitch, snapshot.transparentIndex };
+    for (int y = 0; y < height; y++) {
+        unsigned char* dst = pixels + static_cast<size_t>(y) * pitch;
+        const unsigned char* src = gRgbaBackground.data() + static_cast<size_t>(y) * width * 4;
+        const unsigned char* mask = gRgbaBackgroundMask.data() + static_cast<size_t>(y) * width;
+        const bool cursorRow = cursorVisible && y >= cursor.y && y < cursor.y + cursor.height;
+        for (int x = 0; x < width; x++) {
+            // The cursor is already on the indexed foreground. Paint the
+            // wallpaper only where it cannot replace an opaque cursor pixel.
+            if (mask[x] != 0 && (!cursorRow || !cursor.covers(x, y))) {
                 memcpy(dst + x * 4, src + x * 4, 4);
             }
         }
+    }
+}
+
+static void renderApplyRgbaBackground()
+{
+    if (gSdlTextureSurface != nullptr) {
+        renderCompositeRgbaBackground(static_cast<unsigned char*>(gSdlTextureSurface->pixels),
+            gSdlTextureSurface->w, gSdlTextureSurface->h, gSdlTextureSurface->pitch);
     }
 }
 
@@ -496,7 +512,12 @@ bool screenIsExclusiveFullscreen()
 
 static bool createRenderer(int width, int height)
 {
-    gSdlRenderer = SDL_CreateRenderer(gSdlWindow, -1, 0);
+    const Uint32 flags = settings.screen.vsync ? SDL_RENDERER_PRESENTVSYNC : 0;
+    gSdlRenderer = SDL_CreateRenderer(gSdlWindow, -1, flags);
+    if (gSdlRenderer == nullptr && flags != 0) {
+        // Do not block startup on a driver without a synchronized renderer.
+        gSdlRenderer = SDL_CreateRenderer(gSdlWindow, -1, 0);
+    }
     if (gSdlRenderer == nullptr) {
         return false;
     }
@@ -562,9 +583,9 @@ void handleWindowSizeChanged()
     mouseDeviceRefreshWindowMapping();
 }
 
-// 209: the display-mode pick applies the moment the menu closes. The picture
-// itself keeps its size and letterboxes, so the engine buffers stay intact;
-// only the resolution and the interface scale still need a restart.
+// Apply window mode and physical resolution when the menu closes. A
+// borderless window continues to use the desktop's physical resolution.
+// Keep the logical canvas intact so local 3D, UI and input stay live.
 void applyWindowModeLive()
 {
     if (gSdlWindow == nullptr || SDL_getenv("F2CE_DEV_BACKGROUND") != nullptr) {
@@ -900,7 +921,6 @@ static void renderPresentBody()
         // path performs every frame, so palette fades and cycling behave
         // identically under the OpenGL presentation.
         scene_renderer::presentFrameWithSharpText(gSdlSurface, gSdlTextureSurface, sharpTextReady);
-        renderApplyRgbaBackground();
         // render movie frame if present
         movieRenderDirectOverlay();
         scene_renderer::swap();

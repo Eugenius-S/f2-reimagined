@@ -13,6 +13,7 @@
 #include "../scene/scene_view.h"
 #include "../scene/text_capture.h"
 #include "../settings.h"
+#include "../svga.h"
 #include "../window_manager.h"
 #include "context.h"
 #include "post.h"
@@ -26,7 +27,7 @@ bool gSharpTextFailureLogged = false;
 // 219: the keys of the two cached layers and whether one is stored.
 // - The static layer (the masked game picture) changes only when the shown
 //   pixels' indices or the non-cycling palette colors do.
-// - The glyph layer changes only when the captured text records do.
+// - The glyph layer changes when captured text or cursor occlusion changes.
 // The palette's cycling entries (cycle.cc recolors 229-254, the bar's
 // pulsing lights) change color every frame while their indices stay; those
 // pixels ride the dynamic box instead of the keys.
@@ -303,6 +304,15 @@ unsigned long long sharpGlyphKey(unsigned long long staticKey, const std::vector
             hash = (hash ^ bytes[index]) * 1099511628211ull;
         }
     };
+    // The base overlay patches mouse movement separately, but the cached
+    // glyph texture contains the cursor's old per-pixel clipping mask.
+    TextCursorSnapshot cursor = {};
+    const std::uint64_t cursorCoverage = textCaptureGetCursorSnapshot(&cursor) && cursor.visible
+        ? scene::textCursorCoverageKey(
+              { cursor.pixels, cursor.width, cursor.height, cursor.pitch, cursor.x, cursor.y },
+              cursor.transparentIndex, records)
+        : 0;
+    mix(&cursorCoverage, sizeof(cursorCoverage));
     const size_t recordCount = records.size();
     mix(&recordCount, sizeof(recordCount));
     for (const scene::TextRecord& record : records) {
@@ -713,13 +723,16 @@ void presentFrameWithSharpText(SDL_Surface* indexedSurface, SDL_Surface* rgbaSur
         }
     }
     if (ready) {
-        const PreparedSharpTextFrame& frame = preparedSharpTextFrame();
+        PreparedSharpTextFrame& frame = preparedFrameStorage();
+        renderCompositeRgbaBackground(frame.restoredRgba.data(), frame.width, frame.height, frame.rgbaPitch);
         presentFrame(frame.restoredRgba.data(), frame.width, frame.height, frame.rgbaPitch);
         if (drawPreparedSharpTextOverlay()) return;
         disableSharpText("OpenGL draw failed");
     }
 
     SDL_BlitSurface(indexedSurface, nullptr, rgbaSurface, nullptr);
+    renderCompositeRgbaBackground(static_cast<unsigned char*>(rgbaSurface->pixels),
+        rgbaSurface->w, rgbaSurface->h, rgbaSurface->pitch);
     presentFrame(static_cast<const unsigned char*>(rgbaSurface->pixels),
         rgbaSurface->w, rgbaSurface->h, rgbaSurface->pitch);
 }

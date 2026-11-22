@@ -269,20 +269,24 @@ std::string jsonText(const char* text)
 bool readFrame(std::vector<unsigned char>& pixels, std::vector<unsigned char>& indexed,
     std::vector<unsigned char>& palette, int* width, int* height, std::string* failure)
 {
+    if (gSdlSurface == nullptr || gSdlSurface->pixels == nullptr) {
+        if (failure != nullptr) *failure = "no framebuffer";
+        return false;
+    }
     const bool sceneLive = scene_renderer::isActive() && scene::shouldPresent()
         && scene::activeView() == scene::View::Full;
     if (sceneLive) {
         return scene_renderer::captureStaticPreviewBuffer(true, true, true, pixels, width, height, failure);
     }
     if (scene_renderer::isActive()) {
+        if (gSdlTextureSurface == nullptr || gSdlTextureSurface->pixels == nullptr) {
+            if (failure != nullptr) *failure = "no OpenGL transfer surface";
+            return false;
+        }
         SDL_BlitSurface(gSdlSurface, nullptr, gSdlTextureSurface, nullptr);
         return scene_renderer::captureFrameBuffer(static_cast<const unsigned char*>(gSdlTextureSurface->pixels),
             gSdlTextureSurface->w, gSdlTextureSurface->h, gSdlTextureSurface->pitch,
             pixels, width, height, failure);
-    }
-    if (gSdlSurface == nullptr || gSdlSurface->pixels == nullptr) {
-        if (failure != nullptr) *failure = "no framebuffer";
-        return false;
     }
     indexed.resize(static_cast<size_t>(gSdlSurface->w) * static_cast<size_t>(gSdlSurface->h));
     if (!devtools::copySnapshotRowsTightly(static_cast<const unsigned char*>(gSdlSurface->pixels),
@@ -359,7 +363,7 @@ void assembleContext(ShotContext& out)
     out.mapJson = "unknown";
     out.cityJson = "unknown";
     const Map currentMap = mapGetCurrentMap();
-    if (currentMap >= 0) {
+    if (gMapHeader.name[0] != '\0' && currentMap >= 0) {
         out.mapJson = jsonText(mapGetName(currentMap, static_cast<MapElevation>(out.elevation)));
         out.cityJson = jsonText(mapGetCityName(currentMap));
     }

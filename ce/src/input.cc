@@ -208,6 +208,12 @@ int inputGetInput()
     _process_bk();
 
     v3 = dequeueInputEvent();
+    // Plain F12 takes the current frame regardless of the active menu.
+    // Region marking still owns its save/cancel keys in the gameplay loop.
+    if (v3 == KEY_F12 && !owner_shot::markMode()) {
+        owner_shot::handleKey(v3);
+        return -1;
+    }
     if (v3 == -1 && mouseGetEvent() & 0x33) {
         mouseGetPosition(&_input_mx, &_input_my);
         return -2;

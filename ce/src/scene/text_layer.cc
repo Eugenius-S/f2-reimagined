@@ -137,6 +137,30 @@ void traceRun(const char* stage, TextBufferId buffer, const TextRunInfo& run, co
 
 } // namespace
 
+std::uint64_t textCursorCoverageKey(TextPixels cursor, unsigned char transparent,
+    const std::vector<TextRecord>& records)
+{
+    if (!validPixels(cursor)) return 0;
+    const auto intersects = [&](const TextRecord& record) {
+        const auto& box = record.bounds;
+        return box.width > 0 && box.height > 0
+            && cursor.originX < box.x + box.width && box.x < cursor.originX + cursor.width
+            && cursor.originY < box.y + box.height && box.y < cursor.originY + cursor.height;
+    };
+    if (std::none_of(records.begin(), records.end(), intersects)) return 0;
+    std::uint64_t hash = 1469598103934665603ull;
+    for (int value : { cursor.originX, cursor.originY, cursor.width, cursor.height }) {
+        hash = (hash ^ static_cast<std::uint32_t>(value)) * 1099511628211ull;
+    }
+    for (int y = 0; y < cursor.height; ++y) {
+        const auto* row = cursor.data + static_cast<std::size_t>(y) * cursor.pitch;
+        for (int x = 0; x < cursor.width; ++x) {
+            hash = (hash ^ (row[x] != transparent)) * 1099511628211ull;
+        }
+    }
+    return hash == 0 ? 1 : hash;
+}
+
 bool setFont101PreviewScale(double scale, int ownerWindow)
 {
     if (scale != 1.0 && scale != 1.08 && scale != 1.15 && scale != 1.22 && scale != 1.29) return false;

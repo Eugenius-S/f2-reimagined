@@ -2,6 +2,7 @@
 #include "../../src/devtools/snapshot_palette.h"
 #include "../../src/devtools/mark_repeat_guard.h"
 #include "../../src/devtools/mark_rect.h"
+#include "../../src/rgba_background_cursor.h"
 
 #include <cstdio>
 #include <vector>
@@ -10,6 +11,12 @@ using fallout::devtools::copySnapshotRowsTightly;
 
 int main()
 {
+    const unsigned char shape[] = { 9, 0, 99, 0, 9, 99 };
+    const fallout::RgbaBackgroundCursor cursor { shape, -1, 10, 2, 2, 3, 0 };
+    if (!cursor.covers(-1, 10) || cursor.covers(0, 10)
+        || cursor.covers(-1, 11) || !cursor.covers(0, 11)
+        || cursor.covers(1, 10) || cursor.covers(0, 12)
+        || fallout::RgbaBackgroundCursor {}.covers(0, 0)) return 23;
     fallout::owner_shot::MarkRepeatGuard<4> guard;
     const unsigned char pressed[] = { 1, 0, 0, 0 };
     guard.begin(pressed);

@@ -83,6 +83,24 @@ bool capture(TextLayer& layer, TextBufferId id, bool orphan,
 int main()
 {
     int failures = 0;
+    TextRecord cursorRun;
+    cursorRun.bounds = { 20, 12, 20, 8 };
+    const std::vector<TextRecord> cursorRuns { cursorRun };
+    unsigned char cursorPixels[] = { 1, 0, 0, 2 };
+    const auto cursorKey = [&](int x, int y) {
+        return fallout::scene::textCursorCoverageKey({ cursorPixels, 2, 2, 2, x, y }, 0, cursorRuns);
+    };
+    failures += !check(cursorKey(5, 5) == 0 && cursorKey(6, 6) == 0,
+        "cursor outside glyphs does not invalidate the text cache");
+    const auto entered = cursorKey(20, 12);
+    failures += !check(entered != 0 && entered != cursorKey(21, 12),
+        "moving across an unchanged glyph run changes the occlusion key");
+    cursorPixels[0] = 3;
+    failures += !check(entered == cursorKey(20, 12), "cursor palette change preserves glyph cache");
+    cursorPixels[0] = 0;
+    failures += !check(entered != cursorKey(20, 12), "animated transparency changes glyph cache");
+    failures += !check(cursorKey(50, 12) == 0,
+        "leaving glyphs invalidates clipping and restores their unobscured coverage");
     failures += !check(fallout::scene::sharpTextLinePitch(9, true) == 12
             && fallout::scene::sharpTextLinePitch(10, true) == 13
             && fallout::scene::sharpTextLinePitch(9, false) == 9
