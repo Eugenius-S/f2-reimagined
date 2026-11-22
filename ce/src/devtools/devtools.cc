@@ -17,6 +17,7 @@
 #include <string>
 
 #include <algorithm>
+#include <bitset>
 #include <exception>
 #include <filesystem>
 #include <string>
@@ -2670,6 +2671,11 @@ void update()
         const bool edgeClick = gPickProbeOutsideClick;
         const int heroTileBefore = gDude->tile;
         const bool busyBefore = animationIsBusy(gDude) == -1;
+        if (gPickProbeExitPending) {
+            // The walk handler reads the live cursor, not just the event's
+            // coordinates. Resample at dispatch after the intervening input.
+            _mouse_set_position(gPickProbeClick[0], gPickProbeClick[1]);
+        }
         _gmouse_handle_event(gPickProbeClick[0], gPickProbeClick[1], MOUSE_EVENT_LEFT_BUTTON_UP);
         if (gPickProbeExitPending) {
             if (FILE* log = fopen(devLogPath("devprobe.log").c_str(), "a")) {
@@ -3264,6 +3270,20 @@ void runPickProbe()
             finishPickProbe();
         }
     } else if (stage == 500 && gExitProbeDestination[0] != '\0') {
+        // Let scripted entry motion finish before repositioning the hero.
+        if (animationIsBusy(gDude) == -1) {
+            gPickProbeStage = stage;
+            return;
+        }
+        // An exit grid does not block movement. Standing on a neighboring
+        // grid would trigger a transition before this probe can take a step.
+        std::bitset<HEX_GRID_SIZE> exitTiles;
+        for (Object* grid = objectFindFirstAtElevation(gElevation); grid != nullptr;
+             grid = objectFindNextAtElevation()) {
+            if (hexGridTileIsValid(grid->tile) && isExitGridProtoId(ProtoId(grid->pid))) {
+                exitTiles.set(grid->tile);
+            }
+        }
         Object* chosen = nullptr;
         int approachTile = -1;
         int chosenDistance = 1 << 30;
@@ -3281,7 +3301,8 @@ void runPickProbe()
             int nearTile = -1;
             for (int direction = ROTATION_FIRST; direction <= ROTATION_LAST; direction++) {
                 const int candidate = tileGetTileInDirection(object->tile, static_cast<Rotation>(direction), 1);
-                if (candidate >= 0 && elevationTileFree(candidate, gElevation)) {
+                if (hexGridTileIsValid(candidate) && !exitTiles.test(candidate)
+                    && elevationTileFree(candidate, gElevation)) {
                     nearTile = candidate;
                     break;
                 }
@@ -4276,6 +4297,9 @@ double cloudPhaseRequested()
 
 bool handleKey(int key)
 {
+    // During combat Ctrl+F12 belongs to the player's region capture, not
+    // the developer fly shortcut. The game handles it below this layer.
+    if (key == KEY_CTRL_F12 && isInCombat()) return false;
     if (!gEnabled) {
         // A flying camera owns the keyboard in normal play too; Ctrl+F11
         // lands it through the game's own hotkey.
