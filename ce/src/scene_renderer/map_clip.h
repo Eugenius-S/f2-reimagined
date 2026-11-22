@@ -49,6 +49,10 @@ MapClip makeProjectedFloorMapClip(const unsigned char* occupied, int width, int 
 
 bool mapClipContains(const MapClip& clip, double x, double z);
 
+// Floor envelope in donor game pixels, contracted to keep the view near the map.
+bool floorScrollPixelBounds(const MapClip& clip, const double squ[2], const double sqv[2],
+    const double origin[2], int width, int height, double zoom, double bounds[4]);
+
 // Extend one authored clip plane to an aligned floor plane. If the floor has
 // no plane with the same inward normal, leave the clip unchanged.
 bool extendMapClipPlaneToFloor(MapClip& clip, const MapClip& floor, int planeIndex);

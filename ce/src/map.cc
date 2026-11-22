@@ -656,7 +656,7 @@ int mapScroll(int dx, int dy)
         return -1;
     }
 
-    if (tileSetCenter(newCenterTile, 0) == -1) {
+    if (tileSetCenter(newCenterTile, TILE_SET_CENTER_FLAG_MANUAL_SCROLL) == -1) {
         return -1;
     }
 

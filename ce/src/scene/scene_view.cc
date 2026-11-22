@@ -637,6 +637,7 @@ bool disable()
     if (gView == View::Off) return false;
     gView = View::Off;
     tileSetFreeScroll(false);
+    tileRestoreAfterManual3dScroll();
     resetHeroLog();
     scene_renderer::clearStaticHero();
     scene_renderer::clearStaticObjects();

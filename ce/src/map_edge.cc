@@ -9,6 +9,11 @@
 #include "platform_compat.h"
 #include "settings.h"
 #include "scene/scene_view.h"
+#include "scene_renderer/camera.h"
+#include "scene_renderer/game_view.h"
+#include "scene_renderer/map_clip.h"
+#include "scene_renderer/sprite_card.h"
+#include "scene_renderer/static_scene.h"
 #include "svga.h"
 #include "tile.h"
 #include "window_manager.h"
@@ -455,10 +460,10 @@ int mapEdgeSelectZoneAndClamp(int tile, MapElevation elevation)
     return pixelToTile(cx, cy);
 }
 
-static Rect scrollBounds(const EdgeZone& zone)
+static Rect scrollBounds(const EdgeZone& zone, bool expanded)
 {
     Rect bounds = zone.scrollBorderRect;
-    if (tileSceneOverlayActive()) {
+    if (expanded) {
         const Size size = getIsoWindowSize();
         const double zoom = settings.scene3d.zoom > 0.0 ? settings.scene3d.zoom : 1.0;
         const int extraX = static_cast<int>(size.width / (3.0 * zoom * kTileWidth)) * kTileWidth;
@@ -471,7 +476,7 @@ static Rect scrollBounds(const EdgeZone& zone)
     return bounds;
 }
 
-bool mapEdgeTileInBounds(int tile)
+bool mapEdgeTileInBounds(int tile, bool manual3d)
 {
     int px, py;
     tileToPixelOffset(tile, px, py);
@@ -481,7 +486,7 @@ bool mapEdgeTileInBounds(int tile)
         return false;
     }
 
-    const Rect bounds = scrollBounds(*zone);
+    const Rect bounds = scrollBounds(*zone, manual3d);
     // X is inverted; the existing ground-based bottom extension still applies.
     const bool withinHorizontalAndTopBounds = px >= bounds.right && px <= bounds.left && py >= bounds.top;
     const bool bottomAllowed = py <= bounds.bottom
@@ -497,12 +502,53 @@ bool mapEdgeTileInBounds(int tile)
     return mapEdgeRecoveryStep(bounds, oldX, oldY, px, py, oldBottomAllowed, bottomAllowed);
 }
 
+bool mapEdgeFloorScrollBounds(Rect* bounds)
+{
+    using namespace scene_renderer;
+    if (bounds == nullptr || !scene::showsCurrentMap()) return false;
+    SpriteCardProjection projection;
+    const Size size = getIsoWindowSize();
+    double pixels[4];
+    if (!currentGameProjection(&projection) || !floorScrollPixelBounds(staticFloorMapClip(), projection.squ, projection.sqv, projection.origin,
+            size.width, size.height, settings.scene3d.zoom, pixels)) {
+        // Tile-less scenes have no floor envelope: the finite hex grid is the last domain.
+        int x, y;
+        tileToPixelOffset(0, x, y);
+        *bounds = { x, y, x, y };
+        for (int tile : { HEX_GRID_WIDTH - 1, HEX_GRID_WIDTH * (HEX_GRID_HEIGHT - 1), HEX_GRID_SIZE - 1 }) {
+            tileToPixelOffset(tile, x, y);
+            bounds->left = std::max(bounds->left, x); bounds->right = std::min(bounds->right, x);
+            bounds->top = std::min(bounds->top, y); bounds->bottom = std::max(bounds->bottom, y);
+        }
+        return true;
+    }
+    int edgeX, edgeY;
+    tileToPixelOffset(0, edgeX, edgeY);
+    double game[2];
+    gameViewTilePixel(0, game);
+    bounds->left = static_cast<int>(edgeX + game[0] - pixels[0]);
+    bounds->right = static_cast<int>(edgeX + game[0] - pixels[2]);
+    bounds->top = static_cast<int>(edgeY + pixels[1] - game[1]);
+    bounds->bottom = static_cast<int>(edgeY + pixels[3] - game[1]);
+    return true;
+}
+
+bool mapEdgeFloorScrollAllows(int tile, const Rect& bounds)
+{
+    int x, y, oldX, oldY;
+    tileToPixelOffset(tile, x, y);
+    if (x >= bounds.right && x <= bounds.left && y >= bounds.top && y <= bounds.bottom) return true;
+    if (!tileIsValid(gCenterTile)) return false;
+    tileToPixelOffset(gCenterTile, oldX, oldY);
+    return mapEdgeRecoveryStep(bounds, oldX, oldY, x, y, oldY <= bounds.bottom, y <= bounds.bottom);
+}
+
 bool mapEdgeTilePastBottomStop(int tile)
 {
     if (!tileIsValid(tile) || currentEdgeZone == nullptr) return false;
     int px, py;
     tileToPixelOffset(tile, px, py);
-    const Rect bounds = scrollBounds(*currentEdgeZone);
+    const Rect bounds = scrollBounds(*currentEdgeZone, tileSceneOverlayActive());
     return px >= bounds.right && px <= bounds.left && py >= bounds.top
         && py > currentEdgeZone->scrollBorderRect.bottom;
 }
@@ -524,7 +570,7 @@ static void updateTileAlignment(const EdgeZone* zone, int px, int py)
     }
 }
 
-bool mapEdgeSetBoundaryMods(int tile)
+bool mapEdgeSetBoundaryMods(int tile, bool manual3d)
 {
     int px, py;
     tileToPixelOffset(tile, px, py);
@@ -539,7 +585,7 @@ bool mapEdgeSetBoundaryMods(int tile)
     const int oldModW = currentTileXAlignment;
     const int oldModH = currentTileYAlignment;
     EdgeZone scrollZone = *zone;
-    scrollZone.scrollBorderRect = scrollBounds(*zone);
+    scrollZone.scrollBorderRect = scrollBounds(*zone, manual3d);
     updateTileAlignment(&scrollZone, px, py);
     return currentTileXAlignment != oldModW || currentTileYAlignment != oldModH;
 }

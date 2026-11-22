@@ -12,6 +12,7 @@ namespace fallout {
 #define TILE_SET_CENTER_FLAG_IGNORE_SCROLL_RESTRICTIONS 0x02
 // Developer snapshots may inspect a precise hex outside normal camera bounds.
 #define TILE_SET_CENTER_FLAG_IGNORE_BOUNDS 0x04
+#define TILE_SET_CENTER_FLAG_MANUAL_SCROLL 0x08
 
 #define TILE_MAX_DISTANCE 9999
 
@@ -70,6 +71,7 @@ typedef bool(TileSceneShiftProc)(int tile, int* dx, int* dy);
 typedef int(TileScenePickProc)(int x, int y);
 void tileSetSceneOverlay(TileSceneShiftProc* shift, TileScenePickProc* pick);
 bool tileSceneOverlayActive();
+void tileRestoreAfterManual3dScroll();
 void tileSceneShift(int tile, int* dx, int* dy);
 // The hex the player points at with the mouse at a screen point: where the
 // 3D scene shows the world, the hex it shows there.

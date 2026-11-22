@@ -95,6 +95,15 @@ int main()
     pixelToWorld(14.1, 1.0, squ, sqv, origin, &outsideX, &outsideZ);
     if (!check(projectedFloor.enabled && projectedFloor.source == MapClipSource::Floor,
             "diamond floor mask produces a projected four-sided floor cut")) return 1;
+    double floorBounds[4], zoomBounds[4];
+    if (!check(floorScrollPixelBounds(projectedFloor, squ, sqv, origin, 6, 6, 1.0, floorBounds)
+            && floorScrollPixelBounds(projectedFloor, squ, sqv, origin, 6, 6, 1.28, zoomBounds),
+            "floor scroll bounds use the actual projection")) return 1;
+    if (!check(zoomBounds[0] > floorBounds[0] && zoomBounds[2] < floorBounds[2]
+            && zoomBounds[1] > floorBounds[1] && zoomBounds[3] < floorBounds[3],
+            "zoom-in contracts both floor scroll axes")) return 1;
+    if (!check(!floorScrollPixelBounds({}, squ, sqv, origin, 6, 6, 1.0, floorBounds),
+            "missing floor does not produce unbounded scrolling")) return 1;
     if (!check(mapClipContains(projectedFloor, insideX, insideZ)
             && !mapClipContains(projectedFloor, outsideX, outsideZ),
             "projected cell centers and half-cell inset produce the straight pixel rectangle")) return 1;

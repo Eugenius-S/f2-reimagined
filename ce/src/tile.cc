@@ -77,6 +77,7 @@ static bool gTileScrollBlockingEnabled = true;
 
 // 0x51D958 scroll_limiting_on
 static bool gTileScrollLimitingEnabled = true;
+static bool gManual3dFloorScroll = false;
 
 // Dev 3D view: screen-edge scrolling ignores map-edge and scroll-blocker bounds.
 static bool gTileFreeScroll = false;
@@ -567,7 +568,30 @@ int tileSetCenter(int tile, int flags)
 
     const bool ignoreBounds = (flags & TILE_SET_CENTER_FLAG_IGNORE_BOUNDS) != 0;
     const bool edgeActive = mapEdgeIsEnabled() && !ignoreBounds;
-    const bool isScroll = flags == 0;
+    const bool manualScroll = (flags & TILE_SET_CENTER_FLAG_MANUAL_SCROLL) != 0;
+    const bool isScroll = flags == 0 || manualScroll;
+    const bool manual3d = manualScroll && !gTileFreeScroll && tileSceneOverlayActive() && !mapEdgeIsMapperMode();
+    Rect floorBounds;
+    const bool floorScroll = manual3d && (!edgeActive || !mapEdgeZoneIsSelected())
+        && mapEdgeFloorScrollBounds(&floorBounds);
+    bool bypassesLegacy = false;
+    if (floorScroll) {
+        if (gTileScrollLimitingEnabled) {
+            int x, y, heroX, heroY;
+            tileToScreenXY(tile, &x, &y);
+            tileToScreenXY(gDude->tile, &heroX, &heroY);
+            const int dx = abs(heroX - x), dy = abs(heroY - y);
+            bypassesLegacy = (dx > abs(heroX - _tile_offx) || dy > abs(heroY - _tile_offy))
+                && (dx >= 480 || dy >= 400);
+        }
+        if (gTileScrollBlockingEnabled) {
+            const int x = gHexGridWidth - 1 - tile % gHexGridWidth;
+            const int y = tile / gHexGridWidth;
+            bypassesLegacy |= _obj_scroll_blocking_at(tile, gElevation) == 0
+                || (gTileBorderInitialized && (x <= gTileBorderMinX || x >= gTileBorderMaxX
+                    || y <= gTileBorderMinY || y >= gTileBorderMaxY));
+        }
+    }
 
     if (edgeActive && !isScroll) {
         // Forced positioning (teleport, load): clamp to edge boundary.
@@ -577,7 +601,7 @@ int tileSetCenter(int tile, int flags)
 
     bool boundaryModsSet = false;
     if ((flags & TILE_SET_CENTER_FLAG_IGNORE_SCROLL_RESTRICTIONS) == 0) {
-        if (gTileScrollLimitingEnabled) {
+        if (gTileScrollLimitingEnabled && !(manual3d && ((edgeActive && mapEdgeZoneIsSelected()) || floorScroll))) {
             int tileScreenX;
             int tileScreenY;
             tileToScreenXY(tile, &tileScreenX, &tileScreenY);
@@ -607,14 +631,16 @@ int tileSetCenter(int tile, int flags)
         } else if (edgeActive && isScroll && mapEdgeZoneIsSelected()) {
             // Block instead of clamp: clamping would shift the center and make
             // mapScroll's buffer copy produce artifacts.
-            if (!mapEdgeTileInBounds(tile)) {
+            if (!mapEdgeTileInBounds(tile, manual3d)) {
                 return -1;
             }
             // On a boundary edge: set sub-tile mods and force a full redraw.
-            if (mapEdgeSetBoundaryMods(tile)) {
+            if (mapEdgeSetBoundaryMods(tile, manual3d)) {
                 boundaryModsSet = true;
                 flags |= TILE_SET_CENTER_REFRESH_WINDOW;
             }
+        } else if (floorScroll) {
+            if (!mapEdgeFloorScrollAllows(tile, floorBounds)) return -1;
         } else if ((!edgeActive || !mapEdgeZoneIsSelected()) && gTileScrollBlockingEnabled) {
             // Object scroll-blocker only applies when EDG isn't enforcing the boundary.
             if (_obj_scroll_blocking_at(tile, gElevation) == 0) {
@@ -628,7 +654,7 @@ int tileSetCenter(int tile, int flags)
 
     // Legacy global borders are for maps without EDG data. EDG maps use their
     // own boundary/clamp logic above, which can validly land on this border.
-    if (!ignoreBounds && (!edgeActive || !mapEdgeZoneIsSelected()) && gTileBorderInitialized && gTileScrollBlockingEnabled) {
+    if (!ignoreBounds && !floorScroll && (!edgeActive || !mapEdgeZoneIsSelected()) && gTileBorderInitialized && gTileScrollBlockingEnabled) {
         if (tile_x <= gTileBorderMinX || tile_x >= gTileBorderMaxX || tile_y <= gTileBorderMinY || tile_y >= gTileBorderMaxY) {
             return -1;
         }
@@ -655,6 +681,9 @@ int tileSetCenter(int tile, int flags)
     }
 
     gCenterTile = tile;
+
+    if (floorScroll && bypassesLegacy) gManual3dFloorScroll = true;
+    else if (!isScroll) gManual3dFloorScroll = false;
 
     tile_hires_stencil_on_center_tile_or_elevation_change();
 
@@ -1192,6 +1221,13 @@ int tileUnderMouse(int x, int y)
 bool tileSceneOverlayActive()
 {
     return gTileSceneShift != nullptr;
+}
+
+void tileRestoreAfterManual3dScroll()
+{
+    if (!gManual3dFloorScroll) return;
+    gManual3dFloorScroll = false;
+    if (gDude != nullptr && tileIsValid(gDude->tile)) tileSetCenter(gDude->tile, TILE_SET_CENTER_REFRESH_WINDOW);
 }
 
 void tileSceneShift(int tile, int* dx, int* dy)
