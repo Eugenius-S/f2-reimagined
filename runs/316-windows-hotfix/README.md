@@ -16,7 +16,8 @@ The investigation started from main `6f5b82bf3` with the Russian text choices fr
 ## Verification
 
 - The previous combined Windows Release build at `dfac39b5f` passed CTest 34/34, exporter tests 155/155 and regression harness tests 12/12. The floor sidecar and Pip-Boy changes are in code commit `4728b08ed`. Regenerate the scene cache to apply the floor continuation; existing sidecars remain readable.
-- The RP smoke test booted the copied Temple caves, Temple exterior and Arroyo on `eb25945b8` (3/3).
+- Windows Release at `9035e82d9` passed CTest 34/34, exporter tests 156/156, regression harness tests 12/12 and RP smoke 3/3. The checked Pip-Boy, inventory, character, dialogue and combat frames all present local 3D. The narrow late update to this report adds evidence only.
+- The New Reno fly tour compared the old and new scene caches using the same Windows executable. Eleven of twelve views matched. At tile 24105 and +45 degrees, 259 pixels changed on a distant desert edge. [Changed view sheet](changed.jpg).
 - The full pixel gate ran 154 spots on the first candidate in an isolated vanilla fixture. It reported 151 differences against the references and three wrong-map errors. Repeating three controls on clean main `6f5b82bf3` produced pixel-identical frames with the same reference mismatch and the same wrong map for the Den upstairs control. The full gate remains red.
 
 The draft includes candidate fixes for region capture, cursor trails, camera travel and the held action menu. The immediate review covers local 3D continuity, cursor trails and camera travel and clipping. The separately listed next batch includes silhouettes, prop depth, fades, the physical input checks for capture and the held menu, and the performance stall. [Review scope](../../tasks/316-owner-windows-hotfix.md).
