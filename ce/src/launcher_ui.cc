@@ -23,6 +23,7 @@ namespace fs = std::filesystem;
 std::string findGameRootForUi();
 std::string ownGameRoot();
 bool supportedVoiceRp(const fs::path& root);
+bool translationRecoveryPending(const fs::path& root);
 bool knownActiveManualVoice(const fs::path& root);
 
 namespace {
@@ -374,16 +375,7 @@ bool validGameRoot(const fs::path& root)
 
 bool textRecoveryPending()
 {
-    std::error_code error;
-    bool present = fs::exists(chosenRoot() / L".f2r-text-transaction", error);
-    if (present || error) return true;
-    fs::path root = chosenRoot();
-    if (!fs::exists(root / L"mods/rpu.dat", error)) return bool(error);
-    std::ifstream receipt(root / L"mods/f2r-text-choice.txt");
-    std::string id;
-    std::getline(receipt, id);
-    if (!id.empty() && id.back() == '\r') id.pop_back();
-    return launcher_translations::find(id) != nullptr;
+    return translationRecoveryPending(chosenRoot());
 }
 
 // The translation counts as installed when its file is there and the game language is Russian.
@@ -435,9 +427,11 @@ std::wstring installedVoiceChoice()
 
 void updateVoiceWarning()
 {
-    SetWindowTextW(GetDlgItem(g_window, ID_VOICE_WARNING),
-        launcher_translations::voiceTextMayDiffer(wideToUtf8(g_textChoice), wideToUtf8(g_voiceChoice))
-            ? tr(L"Voice lines may differ from the text.", L"Озвучка может отличаться от текста.").c_str() : L"");
+    bool adapted = (g_rpInstall || rpOnDisk()) && launcher_translations::find(wideToUtf8(g_textChoice));
+    bool voice = launcher_translations::voiceTextMayDiffer(wideToUtf8(g_textChoice), wideToUtf8(g_voiceChoice));
+    std::wstring warning = adapted ? tr(L"RP: new and changed lines use RPU. ", L"RP: новые и изменённые реплики от RPU. ") : L"";
+    if (voice) warning += tr(L"Voice lines may differ from the text.", L"Озвучка может отличаться от текста.");
+    SetWindowTextW(GetDlgItem(g_window, ID_VOICE_WARNING), warning.c_str());
 }
 
 void refreshTextChoices()
@@ -448,8 +442,8 @@ void refreshTextChoices()
     bool rp = g_rpInstall || rpOnDisk();
     bool voiceRp = rp && (!rpOnDisk() || supportedVoiceRp(chosenRoot()));
     std::string id = wideToUtf8(wanted);
-    const char* url = id == "1c" ? url1c : id == "fargus" ? urlFargus : urlLevy;
-    if (!available(id, rp, url, urlFonts)) {
+    const char* url = textUrl(id, rp);
+    if (!available(id, rp, url, urlFonts) || (rp && !voiceRp && find(id))) {
         wanted = L"original";
         g_textWish = wanted;
         setStatus(tr(L"The saved text is unavailable with the current RP or download settings; original text selected.",
@@ -465,11 +459,12 @@ void refreshTextChoices()
     };
     add(tr(L"Original (English)", L"Оригинал (английский)").c_str(), L"original");
     add(tr(L"Official RPU", L"Официальный RPU").c_str(), L"official");
-    if (available("1c", rp, url1c, urlFonts)) add(L"1C", L"1c");
-    if (available("fargus", rp, urlFargus, urlFonts)) add(L"Fargus / Фаргус", L"fargus");
-    if (available("levy", rp, urlLevy, urlFonts)) add(L"Levy / Левая Корпорация", L"levy");
+    if ((!rp || voiceRp) && available("1c", rp, textUrl("1c", rp), urlFonts)) add(L"1C", L"1c");
+    if ((!rp || voiceRp) && available("fargus", rp, textUrl("fargus", rp), urlFonts)) add(L"Fargus / Фаргус", L"fargus");
+    if ((!rp || voiceRp) && available("levy", rp, textUrl("levy", rp), urlFonts)) add(L"Levy / Левая Корпорация", L"levy");
     SendMessageW(g_voice, CB_RESETCONTENT, 0, 0);
     std::wstring voiceWanted = g_installed && !g_voicePendingRp ? installedVoiceChoice() : (g_voiceWish.empty() ? installedVoiceChoice() : g_voiceWish);
+    if (rp != rpOnDisk()) voiceWanted = utf8ToWide(voiceForMode(wideToUtf8(voiceWanted), rp));
     if (voiceWanted != L"manual-bgforge" && (!voiceAvailable(wideToUtf8(voiceWanted), rp) || (rp && voiceWanted != L"original" && !voiceRp))) voiceWanted = L"original";
     g_voiceChoice = voiceWanted;
     auto addVoice = [&](const wchar_t* name, const wchar_t* value) {
@@ -752,7 +747,7 @@ std::vector<std::wstring> workerArguments(Operation operation)
     } else if (operation == Operation::RecoverText) {
         args = {L"--game-root", g_args.gameRoot, L"--recover-text", L"--ui-language", g_uiLanguage};
     } else {
-        if (installedTextChoice() != g_textChoice) {
+        if (installedTextChoice() != g_textChoice || (g_rpInstall && !rpOnDisk() && launcher_translations::find(wideToUtf8(g_textChoice)))) {
             args.push_back(L"--text-translation");
             args.push_back(g_textChoice);
             args.push_back(L"--text-with-install");

@@ -811,8 +811,11 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
     set(F2R_TEXT_1C_URL "https://drive.usercontent.google.com/download?id=1CYsykbLD8_7abn_vO_rC7H-hmgl9E7b5&export=download&confirm=t" CACHE STRING "1C text DAT URL")
     set(F2R_TEXT_FARGUS_URL "https://drive.usercontent.google.com/download?id=1xnTnMjvY44LxbNJvqEHJp2logm0xERJq&export=download&confirm=t" CACHE STRING "Fargus text DAT URL")
     set(F2R_TEXT_LEVY_URL "https://drive.usercontent.google.com/download?id=16VQ-LjZsBZ92DdSU5KTbeCpHA2JptzXx&export=download&confirm=t" CACHE STRING "Levy text DAT URL")
+    set(F2R_TEXT_RP_1C_URL "https://drive.usercontent.google.com/download?id=1xNCskczmQ8N3Pe4AErtTg2mJJ6U4SNGo&export=download&confirm=t" CACHE STRING "RP 1C text DAT URL")
+    set(F2R_TEXT_RP_FARGUS_URL "https://drive.usercontent.google.com/download?id=1qyKT7QWqOaFBlFJqsqFuF5iukO91e88l&export=download&confirm=t" CACHE STRING "RP Fargus text DAT URL")
+    set(F2R_TEXT_RP_LEVY_URL "https://drive.usercontent.google.com/download?id=18-rb63pI6MYyubqaI2Uj-pdO7_aXcPga&export=download&confirm=t" CACHE STRING "RP Levy text DAT URL")
     set(F2R_TEXT_FONTS_URL "https://drive.usercontent.google.com/download?id=1R2Hq2ndvZGE0Q63Tcmq8ocnqZYw7ZbYR&export=download&confirm=t" CACHE STRING "Shared font DAT URL")
-    foreach(url F2R_TEXT_1C_URL F2R_TEXT_FARGUS_URL F2R_TEXT_LEVY_URL F2R_TEXT_FONTS_URL)
+    foreach(url F2R_TEXT_1C_URL F2R_TEXT_FARGUS_URL F2R_TEXT_LEVY_URL F2R_TEXT_RP_1C_URL F2R_TEXT_RP_FARGUS_URL F2R_TEXT_RP_LEVY_URL F2R_TEXT_FONTS_URL)
         if("${${url}}" MATCHES "[\"\r\n]")
             message(FATAL_ERROR "Invalid URL in ${url}")
         endif()
@@ -869,6 +872,10 @@ if((NOT ANDROID) AND (NOT IOS) AND (NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten"))
         add_test(NAME launcher_text_ui_tests COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_text_ui_test.py"
             "$<TARGET_FILE:fallout2-ce-3d-launcher>")
+        add_test(NAME launcher_rp_text_external_tests COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_rp_text_external_test.py"
+            "$<TARGET_FILE:fallout2-ce-3d-launcher>")
+        set_tests_properties(launcher_rp_text_external_tests PROPERTIES TIMEOUT 300)
         add_test(NAME launcher_install_tests COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/launcher_progress/launcher_install_test.py"
             "$<TARGET_FILE:fallout2-ce-3d-launcher>")

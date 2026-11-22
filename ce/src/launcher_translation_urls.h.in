@@ -4,7 +4,16 @@ namespace launcher_translations {
 inline constexpr const char* url1c = R"F2R(@F2R_TEXT_1C_URL@)F2R";
 inline constexpr const char* urlFargus = R"F2R(@F2R_TEXT_FARGUS_URL@)F2R";
 inline constexpr const char* urlLevy = R"F2R(@F2R_TEXT_LEVY_URL@)F2R";
+inline constexpr const char* urlRp1c = R"F2R(@F2R_TEXT_RP_1C_URL@)F2R";
+inline constexpr const char* urlRpFargus = R"F2R(@F2R_TEXT_RP_FARGUS_URL@)F2R";
+inline constexpr const char* urlRpLevy = R"F2R(@F2R_TEXT_RP_LEVY_URL@)F2R";
 inline constexpr const char* urlFonts = R"F2R(@F2R_TEXT_FONTS_URL@)F2R";
+inline const char* textUrl(const std::string& id, bool rp)
+{
+    if (id == "1c") return rp ? urlRp1c : url1c;
+    if (id == "fargus") return rp ? urlRpFargus : urlFargus;
+    return rp ? urlRpLevy : urlLevy;
+}
 inline constexpr const char* voiceVANILLA_1CURL = R"F2R(@F2R_VOICE_VANILLA_1C_URL@)F2R";
 inline constexpr const char* voiceVANILLA_1CSHA256 = R"F2R(@F2R_VOICE_VANILLA_1C_SHA256@)F2R";
 inline constexpr const char* voiceVANILLA_1CSIZE = R"F2R(@F2R_VOICE_VANILLA_1C_SIZE@)F2R";

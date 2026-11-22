@@ -15,7 +15,8 @@ int main()
     check(available("original", true, "", "") && available("official", true, "", ""));
     check(available("1c", false, "https://example.org/1c", "https://example.org/fonts"));
     check(available("levy", false, "http://127.0.0.1:8080/levy", "http://localhost:8080/fonts"));
-    check(!available("1c", true, "https://example.org/1c", "https://example.org/fonts"));
+    check(available("1c", true, "https://example.org/1c", "https://example.org/fonts"));
+    check(find("1c", true) && std::string(find("1c", true)->sha256) != find("1c")->sha256);
     check(!available("1c", false, "", "https://example.org/fonts"));
     check(!available("1c", false, "http://example.org/1c", "https://example.org/fonts"));
     check(!validUrl("http://127.0.0.1:80" "@example.org/1c"));
