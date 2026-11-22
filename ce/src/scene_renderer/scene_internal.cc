@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "gl_api.h"
+#include "window_viewport.h"
 
 namespace fallout {
 namespace scene_renderer {
@@ -62,31 +63,12 @@ unsigned int compileShader(unsigned int type, const char* source)
 
 bool fitRect(int imageWidth, int imageHeight, int windowWidth, int windowHeight, int* outX, int* outY, int* outW, int* outH)
 {
-    if (imageWidth <= 0 || imageHeight <= 0 || windowWidth <= 0 || windowHeight <= 0) {
-        return false;
-    }
-
-    // SDL_RenderSetLogicalSize equivalent: scale to fit, center, letterbox.
-    int w = windowWidth;
-    int h = windowWidth * imageHeight / imageWidth;
-    if (h > windowHeight) {
-        h = windowHeight;
-        w = windowHeight * imageWidth / imageHeight;
-    }
-    // A fractional window scale (a 125% DPI desktop resizes the requested
-    // window behind the game's back) leaves a few-pixel rounding gap per
-    // axis. Letterboxing that gap shows as a dark or uninitialized strip at
-    // the screen edge, so a near-fit stretches to fill instead.
-    int gapX = windowWidth - w;
-    int gapY = windowHeight - h;
-    if (gapX >= 0 && gapY >= 0 && gapX <= 12 && gapY <= 12) {
-        w = windowWidth;
-        h = windowHeight;
-    }
-    *outW = std::max(w, 1);
-    *outH = std::max(h, 1);
-    *outX = (windowWidth - *outW) / 2;
-    *outY = (windowHeight - *outH) / 2;
+    const auto rect = fitLogicalOutput(imageWidth, imageHeight, windowWidth, windowHeight, true);
+    if (rect.width == 0 || rect.height == 0) return false;
+    *outX = rect.x;
+    *outY = rect.y;
+    *outW = rect.width;
+    *outH = rect.height;
     return true;
 }
 
