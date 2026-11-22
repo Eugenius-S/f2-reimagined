@@ -577,9 +577,7 @@ int pipboyOpen(int intent)
             break;
         }
 
-        if (keyCode == KEY_F12) {
-            takeScreenshot();
-        } else if (keyCode >= 500 && keyCode <= 504) {
+        if (keyCode >= 500 && keyCode <= 504) {
             // CE: Save previous tab selected so that the underlying handlers
             // (alarm clock in particular) can fallback if something goes wrong.
             gPipboyPrevTab = gPipboyTab;

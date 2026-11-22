@@ -1395,9 +1395,6 @@ int doPreferences(bool animated)
         case KEY_UNDERSCORE:
             brightnessDecrease();
             break;
-        case KEY_F12:
-            takeScreenshot();
-            break;
         case 527:
             preferencesSetDefaults(true);
             break;

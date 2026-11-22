@@ -483,9 +483,6 @@ void automapShow(bool isInGame, bool isUsingScanner)
         case KEY_F10:
             showQuitConfirmationDialog();
             break;
-        case KEY_F12:
-            takeScreenshot();
-            break;
         }
 
         if (_game_user_wants_to_quit != GAME_QUIT_REQUEST_NONE) {
