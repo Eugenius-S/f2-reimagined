@@ -777,6 +777,22 @@ bool copyTreeIfPresent(const fs::path& stage, const char* name, const fs::path& 
     return true;
 }
 
+// Refuse a stamp we already know cannot be replaced before copying a
+// payload. A newly acquired lock can still race the final atomic rename.
+bool canReplaceBuildVersion(const fs::path& root)
+{
+    const fs::path target = root / kVersionTxt;
+    HANDLE file = CreateFileW(target.c_str(), DELETE | FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return GetLastError() == ERROR_FILE_NOT_FOUND;
+    BY_HANDLE_FILE_INFORMATION info {};
+    const bool writable = GetFileInformationByHandle(file, &info)
+        && (info.dwFileAttributes & (FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_DIRECTORY)) == 0;
+    CloseHandle(file);
+    return writable;
+}
+
 bool writeBuildVersion(const fs::path& root, const std::string& version)
 {
     fs::path target = root / kVersionTxt;
@@ -2776,6 +2792,11 @@ int runConsole(Options options)
             die("the downloaded package has an invalid version.txt; nothing was changed");
         }
         versionFile.close();
+
+        if (!canReplaceBuildVersion(root)) {
+            fs::remove_all(work, error);
+            die("version.txt cannot be replaced; no game files were changed");
+        }
 
         std::string keptBackup;
         // A refill of the wide art at the same version is no update: the older build stays the one to roll back to.
