@@ -37,3 +37,12 @@ coordinate inside the scrolled viewport. Native keyboard Cancel restored
 the staged zoom, 3D setting and legacy difficulty with an unchanged game
 configuration. This checks the shared cancellation path; a visible
 resolution-only Cancel and exclusive fullscreen remain unverified.
+
+Windows display-only Cancel follow-up: the exact 94f5b988d executable
+opened the real Resolution option at 1920x1080 and staged 1600x1200 with
+the normal Right event. The staged selection was present in the captured
+options frame. A normal SDL Escape ended the options script, returned
+to native local 3D and left the test configuration byte-identical,
+including 1920x1080 and 2x. The window stayed out of focus and did not
+switch the monitor mode. This covers display-only Cancel, but not
+physical fullscreen or a real keyboard.

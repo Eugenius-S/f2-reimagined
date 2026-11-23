@@ -10,3 +10,5 @@ Windows QA red: choosing 1600x1200 from 1920x1080 saved the value, but the old a
     mouse logical=480/216 inside=1 tile=28906 oldTile=28906 barInside=0
 
 The fixture kept its window off screen and hidden during the resize, never changed the monitor's display mode, and is not part of the shipped change. The game-view, ground-pick and options model suites passed. The test does not certify focus, fullscreen, physical display synchronization or every real mouse device.
+
+[Display-only Cancel evidence](display-cancel-stage.jpg): exact Windows build 94f5b988d stages 1600x1200, then Escape leaves the original 1920x1080 at 2x and the whole isolated configuration unchanged.
