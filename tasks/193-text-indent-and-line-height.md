@@ -219,3 +219,13 @@ new message; the real log never does that. Fixture artifact, recorded here.
 - 2026-11-12 glm (bookkeeping): status doing: the log edge half is merged
   (#410); part A's dialogue answers' hanging indent and parts B and C
   remain.
+
+Stock-language boundary from the exact Windows follow-up: the isolated
+installation had English editor messages and no Russian editor or
+preferences resources. Forcing Russian displayed the built-in 3D
+options rows correctly with the embedded SharpText overlay, but the
+legacy font-103 title still used incompatible bitmap glyphs. With
+SharpText off the legacy body had the same limitation. This is evidence
+for an English-data/Russian-setting compatibility case, not a result
+for an installation with Russian assets. Do not silently change the
+selected language or alter external translation files as a workaround.
