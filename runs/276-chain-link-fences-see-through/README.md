@@ -47,3 +47,30 @@ scene.py), after = this branch's.
 - scene_export suite: 152/152.
 - The fence arts' faces keep their holes: the denbus1 atlas pages measure
   53.9%/55.8% transparent texels (the holes; before the fix they filled).
+
+## Follow-up: keep the mesh upright in a turned camera
+
+The holes fix is unrelated to a second issue: a broad horizontal wall
+cap reprojected the mesh art beside the fence when the camera turned.
+On stock KLAMALL at hex 27336, removing the whole row's horizontal
+triangles in a disposable diagnostic cache removed the ribbons. Removing
+the nearby rear faces alone did not. The exporter now treats open stock
+fence01 through fence23 as an upright plane in the free camera. It
+retains the original front geometry for the fixed game camera and does
+not change solid replacements or non-fence faces.
+
+[Native before and after](planar-native-before-after.jpg) uses the same
+exact game (94f5b988d) with fresh matched caches that differ only in wall
+geometry and its manifest. The fixed camera was pixel-identical in The Den
+and Klamath; at the NCR entrance three fence-edge pixels changed at one
+screen column. The turned camera removed the false slabs in Klamath and
+at the NCR entrance while retaining transparent wire; The Den was an
+unchanged control.
+
+The mandatory fly comparison covered 12 stock elevation-zero spots
+and three turns per side (72 images). [Changes](planar-fly-changed.jpg),
+[continuation](planar-fly-changed-2.jpg) and
+[difference audit](planar-fly-difference-audit.jpg) show that the flagged
+nearby building viewpoints changed where their frames include fences,
+not on the roofs. This is a representative check, not a claim that all
+30 mapped locations were played. The full exporter suite passed 158/158.
