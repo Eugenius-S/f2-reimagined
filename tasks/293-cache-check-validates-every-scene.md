@@ -2,8 +2,8 @@
 id: 293
 title: The existing cache check rejects missing or damaged scene artifacts
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: glm
 priority: high
 tier: 1
@@ -34,3 +34,26 @@ Changing renderer behavior, cache publication (294), new diagnostic services, or
 ## Log
 
 - 2026-11-15 gpt: cut from the tooling and verification follow-up to the existing batches; source observations above are scoped gaps, not unverified game bug claims.
+
+### 2026-11-23 Windows candidate
+
+Reused the draft from [PR #523](https://github.com/Eugenius-S/f2-reimagined/pull/523)
+on current main, retaining floor-receiver output support. Reject unsupported
+manifest names before artifact access, reject links and reparse points in
+cache paths, and continue reporting other elevations after an invalid path.
+
+- Exporter suite: `py -3 -m unittest discover -s tools/scene_export -p 'test*.py'`,
+  177 passed. Includes authored e1 and e2 without e0 and malformed cache fixtures.
+- Standalone CLI on an isolated stock Windows game root: three maps
+  (`arcaves,arvillag,denbus1`), six authored scenes. Complete cache returned
+  0 in 1.09 s. With the ARCAVES e2 cache withheld and DENBUS1 e0 tiles.png
+  truncated, check returned 3 and named both failures. The ordinary exporter
+  rebuilt exactly those two scenes in 15.97 s, kept four current, then check
+  returned 0 in 1.07 s and a repeat export rebuilt nothing.
+- Read-only coverage on a warm existing cache: 111 maps, 162 authored scenes;
+  detected the changed exporter in all 162, without rewriting any scene
+  (12.91 s first check; 6.90 s in a second profiled run excluding startup).
+  This is stock test data, not a full Restoration Project check. An exporter
+  update intentionally invalidates existing cached input fingerprints, so the
+  first update can rebuild the scenes. The launcher still asks the exporter
+  to repair on any nonzero check status.
