@@ -2,7 +2,7 @@
 id: 324
 title: Apply physical display resolution from preferences
 milestone: M1
-status: doing
+status: todo
 owner: gpt
 priority: normal
 tier: 2
@@ -46,3 +46,7 @@ to native local 3D and left the test configuration byte-identical,
 including 1920x1080 and 2x. The window stayed out of focus and did not
 switch the monitor mode. This covers display-only Cancel, but not
 physical fullscreen or a real keyboard.
+
+### 2026-11-23 release reconciliation
+
+Released in `039d25da3`. The native windowed Done/Cancel checks proved output size, pointing and preserved local 3D; desktop detection and configured resolution were checked in isolation. Remaining: visible exclusive/fullscreen and borderless mode coverage, including an unsupported mode.

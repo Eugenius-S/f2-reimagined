@@ -2,7 +2,7 @@
 id: 318
 title: Take owner screenshots from every menu
 milestone: M1
-status: doing
+status: done
 owner: gpt
 priority: high
 tier: 1
@@ -14,7 +14,7 @@ reviewed: no
 
 # 318: Take owner screenshots from every menu
 
-Status: in review. Parent queue: #317 / PR #554.
+Status: released. Parent queue: #317 / PR #554.
 
 Route plain F12 through shared input without changing F9, Ctrl+F12, or the active mark's keys.
 
@@ -31,3 +31,7 @@ Follow-up: the dev flight binding used to consume Ctrl+F12 during combat. The pa
 Additional plain F12 checks covered visible Main Menu, 2D world map, Inventory, Pip-Boy, Character and NPC dialogue via the standard SDL queue. Each press produced precisely one normal player PNG and one JSON, retained and validated. This does not certify physical keyboard focus or an additional plain F12 press during combat.
 
 Separate follow-up: tapping plain F12 by the standard SDL queue in the active ARCAVES player turn wrote exactly one validated player PNG and JSON. The same fixture then reached the player attack, enemy action and normal battle exit with local 3D available.
+
+### 2026-11-23 release reconciliation
+
+Released in `039d25da3`. Native Windows checks covered the named menus, world map and combat: plain F12 wrote one PNG/JSON pair; Ctrl+F12 saved the combat region without consuming Enter. Physical keyboard focus is not part of the automated proof.

@@ -2,7 +2,7 @@
 id: 316
 title: Cumulative Windows hotfix for the owner's Temple reports
 milestone: M1
-status: doing
+status: todo
 owner: gpt
 priority: high
 tier: 0
@@ -50,3 +50,7 @@ The draft contains region capture, cursor cache, manual camera travel and held a
 ### 2026-11-22 gpt, narrowed hotfix
 
 The owner restricted the release review to 3D continuity, cursor trails and camera travel and clipping. The latest code keeps 3D visible in Pip-Boy and continues the dry desert floor at the reported New Reno left edge. The original camera limits and the tile data used by movement and picking are preserved. The full walking route and live borderless door check still need evidence. The next-batch items above are outside this review.
+
+### 2026-11-23 release reconciliation
+
+The Windows hotfix shipped through the cumulative release `039d25da3`. Local 3D under overlays, native combat region capture, cursor trails, the Temple pot and outlines have separate landed fixes. Remaining: the continuous post-duel Temple to Arroyo route on a suitable save, and the round-door/edge sweep in 3440x1440 borderless at 2x. Do not rerun the shipped work as an unreleased batch.

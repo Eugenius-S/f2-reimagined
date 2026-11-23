@@ -2,7 +2,7 @@
 id: 321
 title: Enable vertical sync for player builds
 milestone: M1
-status: doing
+status: todo
 owner: gpt
 priority: high
 tier: 1
@@ -23,3 +23,7 @@ Published with the first integration. The setting is routed to both video paths 
 [Native acceptance checks](../runs/325-night-checks/README.md).
 
 The Windows Display panel saved VSync using its real key and Done paths. The isolated restarted build kept the setting and the native OpenGL driver returned interval 1 instead of 0. This does not certify physical monitor behavior, fullscreen, or unsupported hardware.
+
+### 2026-11-23 release reconciliation
+
+The setting shipped in `039d25da3`, and the native restart test confirmed OpenGL interval 1. Remaining: physical-display tearing while panning, exclusive and borderless checks, Russian UI and unsupported driver fallback.
