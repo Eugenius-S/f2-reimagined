@@ -45,3 +45,5 @@ Other fence kinds that already look right.
   by art id fence01/04/15/18). Evidence: before|after crops, game camera
   and one turned view, denbus1 hex 14532, same camera, only the scene cache
   differs. Tests: test_mesh_face.py 4; scene_export suite 152/152.
+
+- Follow-up: removed the separate displaced mesh ribbons in the turned camera. See the [matched native and fly evidence](../runs/276-chain-link-fences-see-through/README.md#follow-up-keep-the-mesh-upright-in-a-turned-camera). Coverage remains representative and the full map survey is not closed.

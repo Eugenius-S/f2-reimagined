@@ -10,6 +10,7 @@ from io import StringIO
 from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
 import numpy as np
 from PIL import Image
@@ -1068,6 +1069,37 @@ class WallSidecarTests(unittest.TestCase):
             "trims": [],
             "doors": [[0, 5.0, 6.0, 7.0, 6.0, 0.0, 1.0, 46, 400]],
         }
+
+    def test_open_stock_chain_link_is_upright_only_in_the_free_camera(self):
+        scene = self.sample_scene()
+        atlas = np.zeros((100, 100, 4), np.uint8)
+        atlas[20:40:2, 10:20, 3] = 255
+        objects = [SimpleNamespace(tile=0, fid=0), SimpleNamespace(tile=27336, fid=0x0300015c)]
+
+        def batches():
+            payload = encode_wall_sidecar(scene, map_objects=objects, atlas=[atlas])
+            return decode_wall_sidecar(payload)["batches"]
+
+        def game_faces(rows):
+            return sorted(v for b in rows if not b["fly_only"] for v in b["vertices"])
+
+        # Same opacity on a non-fence must not change solid-wall handling.
+        objects[1].fid = 0x03000100
+        regular = batches()
+        objects[1].fid = 0x0300015c
+        fence = batches()
+        self.assertEqual(game_faces(fence), game_faces(regular))
+        fly = [v for b in fence if not b["game_only"] for v in b["vertices"]]
+        self.assertEqual(len(fly), 6)
+        self.assertEqual({v[2] for v in fly}, {-48.0})
+        self.assertEqual({v[1] for v in fly}, {0.0, 2.0})
+        self.assertEqual({v[8] for v in fly}, {0.0})
+
+        # A solid replacement of the same art ID must keep its own geometry.
+        atlas[20:40, 10:20, 3] = 255
+        solid_fence = batches()
+        objects[1].fid = 0x03000100
+        self.assertEqual(solid_fence, batches())
 
     def test_a_fixed_fly_rest_is_one_fly_only_plane(self):
         scene = self.sample_scene()

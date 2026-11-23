@@ -1544,6 +1544,19 @@ def _mirror_back_atlases(scene, atlas):
     return packed, row_sprite, generated_sprites
 
 
+def _open_chain_link(row, map_objects, sprites, atlas):
+    """Stock fence01 through fence23 with an actual open mesh, not a solid replacement."""
+    serial = row[8]
+    if atlas is None or map_objects is None or not isinstance(serial, int) or not 0 <= serial < len(map_objects):
+        return False
+    fid = int(map_objects[serial].fid)
+    if (fid >> 24) & 0xF != 3 or not 334 <= fid & 0xFFF <= 356:
+        return False
+    page, x, y, width, height = sprites[row[0]][:5]
+    alpha = atlas[page][y:y + height, x:x + width, 3]
+    return alpha.size > 0 and np.count_nonzero(alpha) < 0.7 * alpha.size
+
+
 def encode_wall_sidecar(scene, skip_props=frozenset(), skip_rests=frozenset(), map_objects=None, atlas=None, tiles=None,
                         wall_back_pages=None, water=None):
     """Build the donor game view's wall triangles for one scene: what the game's
@@ -1628,8 +1641,11 @@ def encode_wall_sidecar(scene, skip_props=frozenset(), skip_rests=frozenset(), m
     corners = _corner_fits(walls, hidden_walls, toward_camera,
                            lambda index: _int(sprites[_int(walls[index][0], "wall sprite")][3], "wall sprite width"), px)
     post_homes = _corner_post_homes(walls, sprites, atlas, proj.toward)
+    chain_link = {i for i, row in enumerate(walls)
+                  if row[10] > 0 and row[6] > row[9] and _open_chain_link(row, map_objects, sprites, atlas)}
     for index, row in enumerate(walls):
         batches.object = game.object = fly.object = owner(row[8])
+        planar = index in chain_link
         if row[10] > 0 and index in corners.keep:
             # A corner sets this wall's end: the game's camera keeps the row
             # whole, the free camera draws what stays. A corner piece (096) is
@@ -1647,17 +1663,18 @@ def encode_wall_sidecar(scene, skip_props=frozenset(), skip_rests=frozenset(), m
                 corner = fly_corner = None
             _wall_front(game, proj, sprites, pages, row, toward_camera, continuations[index], corner=corner,
                         post_homes=post_homes.get(index))
-            _wall_front(fly, proj, sprites, pages, row, toward_camera, continuations[index], corners.keep[index],
-                        corners.top_keep[index], None if index in hidden_walls else fly, atlas,
-                        corner=fly_corner, post_homes=post_homes.get(index))
+            if not planar:
+                _wall_front(fly, proj, sprites, pages, row, toward_camera, continuations[index], corners.keep[index],
+                            corners.top_keep[index], None if index in hidden_walls else fly, atlas,
+                            corner=fly_corner, post_homes=post_homes.get(index))
         elif row[10] > 0:
             # A thin wall (a fence) whose span crosses the line it corners
             # with (096): the stretch past that line takes the face it
             # continues, as a corner piece does.
             cut = corners.thin_cuts.get(index)
             corner = (cut[0], cut[1], proj.toward) if cut is not None else None
-            _wall_front(batches, proj, sprites, pages, row, toward_camera, continuations[index],
-                        foot=None if index in hidden_walls else fly, atlas=atlas, corner=corner,
+            _wall_front(game if planar else batches, proj, sprites, pages, row, toward_camera, continuations[index],
+                        foot=None if planar or index in hidden_walls else fly, atlas=atlas, corner=corner,
                         post_homes=post_homes.get(index))
         else:
             _record(row, 7, f"thin wall {index}")
@@ -1665,11 +1682,16 @@ def encode_wall_sidecar(scene, skip_props=frozenset(), skip_rests=frozenset(), m
             if not 0 <= sprite < len(sprites):
                 raise ValueError(f"thin wall sprite index {index} is outside scene.sprites")
             _upright(batches, sprites, pages, sprite, *row[1:7], *sprites[sprite][1:5])
+        if planar:
+            # The painted top is wire, not a broad flat slab. Keep the whole
+            # mesh on its own plane only in the free/turned camera.
+            sprite = _int(row[0], "chain-link sprite index")
+            _upright(fly, sprites, pages, sprite, *row[1:7], *sprites[sprite][1:5])
 
     # Backs of the solid walls (not those a solid or a form stands for in first
     # person) and the strips that close their ends and bridge where they meet.
     for index, row in enumerate(walls):
-        if row[10] > 0 and index not in hidden_walls:
+        if row[10] > 0 and index not in hidden_walls and index not in chain_link:
             fly.object = owner(row[8])
             _wall_back(fly, sprites, pages, row, hpx, corners.back_keep.get(index, (0.0, 1.0)), wall_atlas,
                        row_back_sprite.get(index))
@@ -1678,22 +1700,32 @@ def encode_wall_sidecar(scene, skip_props=frozenset(), skip_rests=frozenset(), m
     decor_ends = {key for index in decor for slab, out, twin, twin_out, _, _ in [corners.pieces[index]]
                   for key in ((id(slab), out), (id(twin), twin_out))}
     for slab, pool, s0, s1, back in corners.fills:
+        if pool[0] in chain_link:
+            continue
         fly.object = owner(walls[pool[0]][8])
         _corner_fill(fly, proj, sprites, pages, hpx, px, walls, pool, slab, s0, s1, back, atlas,
                      (id(slab), 1 if s1 > s0 else -1) in decor_ends)
     for index in decor:
+        if index in chain_link:
+            continue
         slab, out, twin, twin_out, _, _ = corners.pieces[index]
         fly.object = owner(walls[index][8])
         _corner_decor(fly, proj, sprites, pages, toward_camera, walls[index], slab, out, twin, twin_out)
     for slab, out, at, pool in corners.ends:
+        if pool[0] in chain_link:
+            continue
         fly.object = owner(walls[pool[0]][8])
         _corner_end(fly, proj, sprites, pages, hpx, px, toward_camera, walls, pool, slab, out, at, atlas)
     for slab, lender, s0, s1 in corners.caps:
+        if lender in chain_link:
+            continue
         fly.object = owner(walls[lender][8])
         _corner_cap(fly, proj, sprites, pages, hpx, walls[lender], slab, s0, s1, atlas)
     solidity = {}
     solid = lambda slab: solidity.setdefault(id(slab), _solidity(walls, sprites, hpx, atlas, slab))
     for slab, other, lender in corners.cores:
+        if lender in chain_link:
+            continue
         fly.object = owner(walls[lender][8])
         _corner_core(fly, proj, sprites, pages, hpx, toward_camera, walls[lender], slab, other, corners.extent,
                      solid, lambda wall: min(walls[index][9] for index in wall.rows), atlas)
