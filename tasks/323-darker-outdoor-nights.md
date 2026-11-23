@@ -2,7 +2,7 @@
 id: 323
 title: Lower unlit outdoor ambience at midnight
 milestone: M1
-status: doing
+status: done
 owner: gpt
 priority: normal
 tier: 2
@@ -29,3 +29,7 @@ face averaged 75.29, 64.92, and 42.32. The fire stayed visible. The paired
 still images on the indoor Temple map ARCAVES e0 at tile 29107 were
 pixel-identical at noon and midnight. These same-frame crops do not
 measure every outdoor map or the readability of the full HUD.
+
+### 2026-11-23 release reconciliation
+
+Released in `039d25da3`. Fixed-camera Arroyo noon, dusk and midnight plus the unchanged indoor control verify the tuning; lights and HUD remain readable. The owner approved the Windows night comparison.

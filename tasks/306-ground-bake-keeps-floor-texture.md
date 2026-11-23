@@ -53,3 +53,7 @@ Floor geometry/exporter changes, a blanket bake-disable workaround, new performa
   framebuffer and the atlas binding remained valid at both sizes.
   The four-map threshold passed; one recorded run was noisy. Do not
   treat that row as a hardware performance measurement.
+
+### 2026-11-23 release reconciliation
+
+The replacement fix shipped in PR #573 and release `039d25da3`. Do not revive the old draft #517 for the renderer fix. Remaining: comparative uncontended before/after performance and the full changed-view fly check; the last release's passing performance gate does not substitute for a paired measurement.

@@ -2,7 +2,7 @@
 id: 319
 title: Refresh sharp-text cursor occlusion
 milestone: M1
-status: doing
+status: done
 owner: gpt
 priority: high
 tier: 1
@@ -30,3 +30,7 @@ showed 806, 808, 1271 and 808 changed pixels against the no-cursor baseline.
 All other crops were restored exactly before the new frame presented.
 Local 3D stayed active. This checks the reported trail type on this
 native text fixture, not a physical cursor driver or every font layout.
+
+### 2026-11-23 release reconciliation
+
+Released in `039d25da3`. The native first-present checks above verify the scoped SharpText trail and cursor occlusion fix in dialogue and inventory. Main-menu layering is a separate card (#322).

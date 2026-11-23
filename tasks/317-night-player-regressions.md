@@ -2,7 +2,7 @@
 id: 317
 title: Restore 3D exit cues and predictable edge scrolling
 milestone: M1
-status: doing
+status: todo
 owner: gpt
 priority: high
 tier: 0
@@ -66,3 +66,7 @@ challenge path. The snapshot wrapper also now requires the destination
 floor and tile and copies the matching first-3D PNG and sidecar before
 marking a watched exit run complete. Tested this export for ARCAVES e1 to
 e0 and ARTEMPLE to ARCAVES e0 using the native Windows game.
+
+### 2026-11-23 release reconciliation
+
+Release `039d25da3` includes the exit-marker fix and the native destination checks above. Remaining: a continuous story-duel route, Arroyo and random-encounter transitions around screenshot capture, and matched diagonal scrolling and map clipping near the round Temple door.
