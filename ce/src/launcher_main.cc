@@ -2934,8 +2934,8 @@ int runConsole(Options options)
         bool needExport = options.forceExport || freshInstall || updated || rpInstalledNow;
         if (!needExport) {
             // The exporter owns the map groups: "all" is its name, only
-            // it knows which scene directories that covers.  Exit 0 = every
-            // base scene exists, anything else = make them.
+            // it knows which elevations are authored. Exit 0 = all scenes
+            // are complete and current; anything else = repair the cache.
             std::string command = "\"" + exporter.string() + "\" --game-root \"" + root.string()
                 + "\" --maps " + mapList + " --check";
             DWORD checkCode = 1;
