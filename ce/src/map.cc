@@ -172,6 +172,8 @@ static char _scratchStr[40];
 
 static int mapLoadTimerDepth = 0;
 static unsigned int mapLoadStartTime = 0;
+// Counts maps whose view and hero are in place (mapLoad).
+static int gMapLoadSerial = 0;
 
 // CE: Basically the same problem described in |gMapLocalPointers|, but this
 // time Olympus folks use global map variables to store objects (looks like
@@ -811,6 +813,11 @@ void mapNewMap()
     tileWindowRefresh();
 }
 
+int mapGetLoadSerial()
+{
+    return gMapLoadSerial;
+}
+
 // 0x482A68 map_load
 int mapLoadByName(char* fileName)
 {
@@ -1044,6 +1051,8 @@ static int mapLoad(File* stream)
     objectSetLocation(gDude, gEnteringTile, gElevation, nullptr);
     objectSetRotation(gDude, gEnteringRotation, nullptr);
     gMapHeader.index = wmMapMatchNameToIdx(gMapHeader.name);
+    // The view and the hero are on the loaded map from here on.
+    gMapLoadSerial++;
 
     if ((gMapHeader.flags & MAP_HEADER_SAVED) == MAP_HEADER_NONE) {
         char path[COMPAT_MAX_PATH];

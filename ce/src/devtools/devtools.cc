@@ -110,6 +110,9 @@ bool gTransitionMonitorInitialized = false;
 bool gTransitionArrivalCapturePending = false;
 bool gTransitionFirst2dCaptureDone = false;
 bool gTransitionFirst2dCapturePassed = false;
+char gTransitionFirst2dCaptureStatus[128] = {};
+bool gTransitionLiveCapturePending = false;
+int gTransitionMonitorSerial = 0;
 int gTransitionMonitorFrames = 0;
 int gTransitionMonitorPresentId = 0;
 int gTransitionArrivalFrameCount = 0;
@@ -522,6 +525,32 @@ void stripMapExtension(const char* name, char* out, size_t size)
     out[len] = '\0';
 }
 
+// `first3dLine` is the capture of the first 3D Full frame. A transition a map
+// load cuts short (the world map never shows one) passes nullptr: no frame
+// lists, since they would repeat the next transition's.
+static void writeTransitionBlock(const char* first3dLine)
+{
+    if (FILE* log = fopen(devLogPath("devtransitions.log").c_str(), "a")) {
+        fprintf(log, "change %s -> %s frames=%d\n", gTransitionMonitorPreviousKey,
+            gTransitionMonitorKey, gTransitionArrivalFrameCount);
+        if (first3dLine != nullptr) {
+            const int first = (gTransitionMonitorHistoryNext - gTransitionMonitorHistoryCount + 16) % 16;
+            for (int i = 0; i < gTransitionMonitorHistoryCount; ++i) {
+                fprintf(log, "before %s\n", gTransitionMonitorHistory[(first + i) % 16]);
+            }
+            for (int i = 0; i < gTransitionArrivalFrameCount; ++i) {
+                fprintf(log, "%s\n", gTransitionArrivalFrames[i]);
+            }
+        }
+        if (gTransitionFirst2dCaptureDone) {
+            fprintf(log, "first-2d-capture result=%s status=%s\n",
+                gTransitionFirst2dCapturePassed ? "pass" : "fail", gTransitionFirst2dCaptureStatus);
+        }
+        fprintf(log, "%s\n", first3dLine != nullptr ? first3dLine : "first-3d-capture result=none superseded=1");
+        fclose(log);
+    }
+}
+
 void observeTransitionFrame(const char* mode)
 {
     if (!gTransitionMonitor) return;
@@ -530,9 +559,10 @@ void observeTransitionFrame(const char* mode)
     stripMapExtension(gMapHeader.name, map, sizeof(map));
     std::transform(map, map + strlen(map), map,
         [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    const int serial = mapGetLoadSerial();
     char key[96];
-    snprintf(key, sizeof(key), "%s/e%d/gm%u", map, static_cast<int>(gElevation),
-        static_cast<unsigned int>(GameMode::getCurrentGameMode()));
+    snprintf(key, sizeof(key), "%s/e%d/gm%u#%d", map, static_cast<int>(gElevation),
+        static_cast<unsigned int>(GameMode::getCurrentGameMode()), serial);
     char line[224];
     snprintf(line, sizeof(line), "frame=%d ms=%u mode=%s key=%s state=%d iso=%d view=%s available=%s hero=%d",
         gTransitionMonitorPresentId++, SDL_GetTicks(), mode, key, static_cast<int>(gameGetState()), isoIsDisabled() ? 1 : 0,
@@ -544,18 +574,28 @@ void observeTransitionFrame(const char* mode)
     if (!gTransitionMonitorInitialized) {
         gTransitionMonitorInitialized = true;
         snprintf(gTransitionMonitorKey, sizeof(gTransitionMonitorKey), "%s", key);
+        gTransitionMonitorSerial = serial;
         if (FILE* log = fopen(devLogPath("devtransitions.log").c_str(), "a")) {
             fprintf(log, "baseline %s\n", line);
             fclose(log);
         }
     } else if (strcmp(gTransitionMonitorKey, key) != 0) {
-        snprintf(gTransitionMonitorPreviousKey, sizeof(gTransitionMonitorPreviousKey), "%s", gTransitionMonitorKey);
+        // A map load opens a transition once the view and the hero are in
+        // place. Any other key change joins the open one: the world map's
+        // mode flag outlives the load it starts, and the loaded map's first
+        // frame is the one to keep.
+        const bool loaded = serial != gTransitionMonitorSerial;
+        if (loaded || !gTransitionArrivalCapturePending) {
+            if (loaded && gTransitionArrivalCapturePending) writeTransitionBlock(nullptr);
+            snprintf(gTransitionMonitorPreviousKey, sizeof(gTransitionMonitorPreviousKey), "%s", gTransitionMonitorKey);
+            gTransitionMonitorFrames = 0;
+            gTransitionArrivalFrameCount = 0;
+            gTransitionFirst2dCaptureDone = false;
+            gTransitionFirst2dCapturePassed = false;
+            gTransitionArrivalCapturePending = true;
+        }
+        gTransitionMonitorSerial = serial;
         snprintf(gTransitionMonitorKey, sizeof(gTransitionMonitorKey), "%s", key);
-        gTransitionMonitorFrames = 0;
-        gTransitionArrivalFrameCount = 0;
-        gTransitionFirst2dCaptureDone = false;
-        gTransitionFirst2dCapturePassed = false;
-        gTransitionArrivalCapturePending = true;
     }
 
     if (gTransitionMonitorFrames < 120) gTransitionMonitorFrames++;
@@ -573,30 +613,19 @@ void observeTransitionFrame(const char* mode)
         && strcmp(mode, "2d") == 0) {
         gTransitionFirst2dCapturePassed = takeSnapshot();
         gTransitionFirst2dCaptureDone = true;
+        snprintf(gTransitionFirst2dCaptureStatus, sizeof(gTransitionFirst2dCaptureStatus), "%s", gStatus);
     }
 
     if (gTransitionArrivalCapturePending && strcmp(mode, "3d") == 0
         && sceneStartupReady() && scene::activeView() == scene::View::Full) {
         const bool captured = takeSnapshot();
-        if (FILE* log = fopen(devLogPath("devtransitions.log").c_str(), "a")) {
-            fprintf(log, "change %s -> %s frames=%d\n", gTransitionMonitorPreviousKey,
-                gTransitionMonitorKey, gTransitionArrivalFrameCount);
-            const int first = (gTransitionMonitorHistoryNext - gTransitionMonitorHistoryCount + 16) % 16;
-            for (int i = 0; i < gTransitionMonitorHistoryCount; ++i) {
-                fprintf(log, "before %s\n", gTransitionMonitorHistory[(first + i) % 16]);
-            }
-            for (int i = 0; i < gTransitionArrivalFrameCount; ++i) {
-                fprintf(log, "%s\n", gTransitionArrivalFrames[i]);
-            }
-            if (gTransitionFirst2dCaptureDone) {
-                fprintf(log, "first-2d-capture result=%s\n",
-                    gTransitionFirst2dCapturePassed ? "pass" : "fail");
-            }
-            fprintf(log, "first-3d-capture result=%s map=%s elevation=%d hero=%d status=%s\n",
-                captured ? "pass" : "fail", map, static_cast<int>(gElevation),
-                gDude != nullptr ? gDude->tile : -1, gStatus);
-            fclose(log);
-        }
+        char first3dLine[224];
+        snprintf(first3dLine, sizeof(first3dLine), "first-3d-capture result=%s map=%s elevation=%d hero=%d status=%s",
+            captured ? "pass" : "fail", map, static_cast<int>(gElevation),
+            gDude != nullptr ? gDude->tile : -1, gStatus);
+        writeTransitionBlock(first3dLine);
+        // Read the frame this present is about to show (sceneLiveFrameReady).
+        gTransitionLiveCapturePending = true;
         gTransitionArrivalCapturePending = false;
     }
 }
@@ -4188,6 +4217,13 @@ static void runDialogFixtureFrame()
 void vanillaPresented()
 {
     observeTransitionFrame("2d");
+    // The world map loops inside mapHandleTransition, where the main loop's
+    // update() never runs: its presented frames pump a scene script instead.
+    if (scriptedInputActive() && scriptedInputStarted()
+        && (GameMode::getCurrentGameMode() & GameMode::kWorldmap) != GameMode::kNone) {
+        scriptedInputPump();
+        if (scriptedInputTakeSnapshotRequest()) takeSnapshot();
+    }
     if (gClockLadder && gClassic) classicClockLadderFrame();
     if (gDialogCursorCheckCursorMoveInProgress) return;
     if (gCombatFixtureRequested && gCombatFixtureIsClassic) runCombatFixtureFrame();
@@ -4213,6 +4249,17 @@ void sceneOverlayPresented()
 
 void sceneLiveFrameReady()
 {
+    if (gTransitionLiveCapturePending) {
+        // The back buffer holds the frame about to be shown: read it back.
+        gTransitionLiveCapturePending = false;
+        gForceLiveSnapshot = true;
+        const bool captured = takeSnapshot();
+        gForceLiveSnapshot = false;
+        if (FILE* log = fopen(devLogPath("devtransitions.log").c_str(), "a")) {
+            fprintf(log, "first-3d-frame-capture result=%s status=%s\n", captured ? "pass" : "fail", gStatus);
+            fclose(log);
+        }
+    }
     if (!gLiveSnapshotOncePending || !scene_renderer::isActive() || !scene::shouldPresent()
         || scene::activeView() != scene::View::Full || gSdlTextureSurface == nullptr
         || gSdlTextureSurface->pixels == nullptr) return;

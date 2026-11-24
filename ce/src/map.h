@@ -89,6 +89,8 @@ void isoEnable();
 bool isoDisable();
 bool isoIsDisabled();
 bool mapIsTransitioning();
+// Counts maps whose view and hero are in place.
+int mapGetLoadSerial();
 int mapSetElevation(MapElevation elevation);
 int mapSetGlobalVar(int var, ProgramValue& value);
 int mapGetGlobalVar(int var, ProgramValue& value);

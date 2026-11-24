@@ -172,3 +172,92 @@ the mall route's walk-based probe, the stairs' driver, the world map
 out/in, save on another map) and the arrival-crop table for every row.
 Next: teach the probe to walk onto the exit tile (the player's mechanic),
 which also covers the mall; a stairs/ladder driver; then the full table.
+
+### 2026-11-24 glm: the world map out and back from KLADWTWN shows 3D first; the watch records the hand-off frame
+
+Done: the route the camera note left open (`runs/316-windows-hotfix/camera-notes.md`:
+walk onto exit grid 23454, return from the world map) is driven end to end by
+the player's own input, as a scene script on a separate install. No game logic
+is changed on this branch: the test exe (sha256
+`1bc2799cdf14f3c3ab1181768c37534621b80bd00758affce761985ba81a954d`) is main
+`1c893f5af` plus the three test-tool fixes below. The untouched exe cannot run
+this route: its script driver has two defects (a script cannot act on the
+world map, and a scripted click lands in the screen corner of a background
+window), so the clean-main proof is this exe, not a byte-identical build.
+
+Evidence is in `runs/147-map-transitions-keep-3d/world-map-return-kladwtwn/`:
+the route script `route-kladwtwn-worldmap.txt`, the frame log
+`world-map-return-kladwtwn-transition.log` and a four panel sheet
+`world-map-return-kladwtwn-sheet.jpg` (start, world map, hand-off frame, first
+local frame).
+
+| Transition | First frame on arrival | 2D frame, old scene, loading screen |
+| --- | --- | --- |
+| KLADWTWN/e0 -> world map | The world map, 2D: every logged frame while it is up is `mode=2d ... iso=1` (sheet, panel 2) | No 3D frame under the world map flag (0 in the log); the block ends `first-3d-capture result=none superseded=1`. |
+| world map -> KLADWTWN/e0, entering tile 25075 | Frame 1030: 3D, `kladwtwn/e0/gm0#3`, view full, scene available, read back from the back buffer: `world-map-return-kladwtwn-first-3d-frame.jpg` and `.json`; the preview sidecar beside it has hero 25075 and `view_tile` 24678, the engine's centre for that tile, the same as a fresh load at the spawn (sheet, panel 4). | One 2D present between the click and it (frame 1029, 34 ms after the last world map frame): the map is loaded and the hero already on 25075, and the screen is still the world map with the party on Klamath (`world-map-return-kladwtwn-handoff-frame.json`, sheet, panel 3). No loading screen, no local map in 2D, no old 3D scene. The first 3D frame comes 222 ms after the last world map frame (188 ms in the second run); the watched run's own capture is part of that time. |
+
+Steps (twice on the final exe, the harness exiting 0 both times; the second
+run numbers the two frames 1030 and 1031): `dev-snapshot.ps1 -Map kladwtwn
+-Elevation 0 -HeroTile 23455 -ViewTile 23059 -GameRoot <isolated install>
+-CaptureConsole -SceneInput route-kladwtwn-worldmap.txt -DevInputShots 12
+-TransitionWatch`. The script waits 1.2 s, snapshots, clicks (640,220): the
+exit grid 23454, one hex right of the hero, who walks onto it and the world
+map opens 2.5 s later; snapshots; clicks (557,176), the party hotspot on
+Klamath; 3 s later snapshots. The location was not yet marked visited after
+the dev start, so the click enters Klamath's first map directly and no town
+map opens. The hero returns at the map's own entering tile 25075, not at the
+exit grid (the game's rule). Five runs in all gave the same frame sequence.
+
+Test tools changed (no render policy, no game content):
+- `ce/src/devtools/devtools.cc`: the world map runs its own loop inside the
+  map transition, where the main loop's `devtools::update()` never runs, so a
+  scene script could not act on it. `vanillaPresented()` pumps the script
+  while the world map mode flag is set.
+- `ce/src/dinput.cc`: a scripted mouse position was applied as a step from the
+  physical pointer's last sample (the absolute sensitivity tracker), so a
+  scripted click in a background window landed at (959,490). The tracker now
+  resets when a scripted position applies.
+- The transition watch did not see the hand-off frame: its key changed only
+  at the first 3D frame. The key now ends with the map load serial (`#N`,
+  `mapGetLoadSerial()` in `ce/src/map.cc`, bumped once the view and the hero
+  are on the loaded map), so the loaded map's first presented frame opens the
+  arrival block and gets the first 2D capture; a key change that follows
+  before the first 3D frame joins that block. A transition a map load cuts
+  short is written as `first-3d-capture result=none superseded=1` instead of
+  being lost. `first-2d-capture` names its JSON. `first-3d-frame-capture` is
+  a readback of the back buffer of the first 3D Full frame, the frame about
+  to be shown; the older `first-3d-capture` is a static preview taken before
+  that frame is drawn.
+
+Found, not fixed (test tools): a snapshot JSON with non-ASCII text is written
+in the game's CP1251 (the world map's map name), which is not valid UTF-8:
+two of the twelve sidecars in each run. The readback JSON keeps the label
+`view: vanilla-framebuffer` (it is not a static preview;
+`tools/dev-snapshot.ps1` matches that label for `-Classic`, so it was left).
+
+Not verified: entering a different map or elevation from the world map (this
+route returns to the same map, so a wrong scene could not show by content;
+only the camera and the hero moved), the town map path (T on a visited
+location), travel across the world map and random encounters, and a visible
+window with a real mouse (background runs only). `perf-check` was not run.
+
+Next: the remaining rows (the klacanyn walk stage, the mall's walk-based
+probe, the stairs driver, the world map into another map, a save made on
+another map); then the full arrival table. Status stays `doing`.
+Check: `ctest --test-dir build --output-on-failure` 34/34; tools unit tests
+scene_export 177, regression 12, tour 18, shapes 15, tools 47 (1 skipped);
+`tools/tasks.ps1 -SelfTest` and `-CheckMetadata` ok; `tools/test_snapshot_output.ps1`
+54 checks passed; the route twice with harness exit 0.
+
+The pixel regression is red on main's own build, and not from this branch.
+`tools/regression.ps1` with this checkout's exporter (1.13.0) and the
+separate install passes 29 of 154 spots against the committed references
+(last changed 2026-11-08); the counts are in
+`world-map-return-kladwtwn-regression-summary.txt`. The clean main exe
+(`c0e10353`) and the branch exe give 0 changed pixels on 12 spots sampled
+across the failing and the passing ones, with one cache and one install for
+both, and both differ from the references by the same counts
+(`world-map-return-kladwtwn-pixel-ab.txt`). The export read the same bytes
+as the main checkout's game folder (its 15 archives, `ddraw.ini` and
+`mods_order.txt` by sha256), so the separate install is not the cause. Why
+the references no longer match main was not determined here.
