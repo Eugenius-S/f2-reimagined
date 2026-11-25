@@ -26,3 +26,13 @@ Narrow correctness follow-up to merged PR #590, separate from task 328's FPS wor
 - A real map at fixed pose exercises a change to effective clipping without depending on a camera move. Record baseline and candidate results, including whether the fault is visible.
 - The first frame after a change uses the correct bake, and a stable clip still reuses it. Account for changes to enabled planes as well as the on/off switch.
 - The fix leaves map boundaries, cameras, interaction and the image with unchanged settings intact. Use a matched still comparison with sun shadows enabled.
+
+## Log
+
+### 2026-11-26 gpt
+
+Done: the ground bake key includes the active clip enable and, when enabled, its four shader planes. It compares fields without structure padding or clip metadata. The scoped evidence is in `runs/331-ground-bake-map-clip/`.
+
+Check: Windows Release and CTest 34/34. Matched sun-shadow stills had zero differing pixels. A temporary renderer probe confirmed invalidation for a changed enabled plane and clip disable, followed by stable reuse; the probe is excluded from the commit.
+
+Next: independently review and run the actual Clean map edges toggle on a real map with floor beyond the authored clip. The tested New Reno edge had an all-white bake, so it did not establish a visible gameplay defect.
