@@ -2,7 +2,7 @@
 id: 280
 title: Geometry re-walk: Vault City, Gecko, Redding, Broken Hills, New Reno
 milestone: M1
-status: todo
+status: done
 owner: glm
 suggested: glm
 priority: normal
@@ -36,3 +36,4 @@ Speed, lighting levels and the UI.
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+- 2026-11-25 glm: walk complete at main 1284de3c (29 maps, 118 spots, game camera and +45 fly turn each; bhrndmtn, newr1a, newr2a covered with generated per-building views). No new geometry defects; chain-link fences re-confirmed as 276. Evidence: runs/280-rewalk-vault-city-gecko-redding-reno/.
