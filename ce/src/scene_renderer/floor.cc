@@ -36,6 +36,9 @@ struct FloorReceiver {
     float x = 0, y = 0, width = 0, height = 0;
 };
 FloorReceiver gFloorReceiver;
+// The group the last bindFloorReceiver set: the ground bake samples one frame
+// behind, so its cache reads this (326).
+int gBoundReceiverGroup = -1;
 
 void loadFloorReceiver(const std::filesystem::path& cacheDirectory)
 {
@@ -95,6 +98,7 @@ void bindFloorReceiver(bool enabled)
         }
     }
     glUniform1i(gSceneFloorReceiverGroupLocation, group);
+    gBoundReceiverGroup = group;
     if (group < 0) return;
     glActiveTexture(kTexture0 + 10);
     glBindTexture(kTexture2D, gFloorReceiver.texture);
@@ -102,6 +106,11 @@ void bindFloorReceiver(bool enabled)
     glUniform4f(gSceneFloorReceiverRectLocation, gFloorReceiver.x, gFloorReceiver.y,
         gFloorReceiver.width, gFloorReceiver.height);
     glActiveTexture(kTexture0);
+}
+
+int boundFloorReceiverGroup()
+{
+    return gBoundReceiverGroup;
 }
 
 void destroyStaticFloor()

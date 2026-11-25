@@ -1,7 +1,8 @@
 #include "scene_draw.h"
 
 #include <algorithm>
-#include <stdio.h>
+#include <cstdio>
+#include <cstring>
 #include <vector>
 
 #include <lodepng.h>
@@ -10,8 +11,10 @@
 #include "gl_api.h"
 #include "perf.h"
 #include "post.h"
+#include "../scene/scene_lights.h"
 #include "../scene/scene_overlay.h"
 #include "../scene/scene_view.h"
+#include "../settings.h"
 #include "text_present.h"
 #include "scene_internal.h"
 #include "shadow.h"
@@ -199,29 +202,78 @@ void drawStaticPreview(bool withWalls, bool withHero)
         && ensureGroundBake(width / 2, height / 2);
     int unit7Texture = 0;
     if (bakeGround) {
-        int previousFbo = 0;
-        glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &previousFbo);
-        glBindFramebuffer(kDrawFramebuffer, gGroundBakeFbo);
-        glViewport(0, 0, width / 2, height / 2);
-        glUniform4f(gSceneViewportLocation, 0.0f, 0.0f,
-            static_cast<float>(width / 2), static_cast<float>(height / 2));
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        glClear(kColorBufferBit);
-        glDepthMask(0);
-        glUniform1i(gSceneGroundBakeModeLocation, 1);
-        // Use the same floor lighting as the direct draw: mode 0 bakes
-        // full white and never queries the ambient light or local lights.
-        glUniform1i(gSceneLightModeLocation, 1);
-        glUniform1f(gSceneCutoffLocation, -1.0f);
-        glUniform1i(gSceneTexturedLocation, 1);
-        glDrawArrays(kTriangles, 6,
-            (gFloorExtensionFirst > 0 ? gFloorExtensionFirst : gFloorVertexCount) - 6);
-        glBindFramebuffer(kDrawFramebuffer, previousFbo);
-        glViewport(x, y, width, height);
-        glUniform4f(gSceneViewportLocation, static_cast<float>(x), static_cast<float>(y),
-            static_cast<float>(width), static_cast<float>(height));
-        glDepthMask(1);
-        glUniform1f(gSceneCutoffLocation, 0.01f);
+        // 328: the bake's picture only changes when the camera, the sun, the
+        // shadow map, the light or the shadow knobs (the cloud mode, the
+        // density and the pixel size) did. Between those frames the tiles
+        // sample the last bake bit for bit and the quarter-of-the-pixels pass
+        // (most of the floor's cost at a standstill) is skipped.
+        struct GroundBakeKey {
+            float mvp[16];
+            int width, height;
+            int floorTexture;
+            int receiverGroup;
+            bool cloudShadows;
+            float shadowDensity;
+            float shadowPixelSize;
+            float sunDirection[3];
+            float sunStrength;
+        };
+        static GroundBakeKey bakedKey = {};
+        static bool bakedValid = false;
+        GroundBakeKey key = {};
+        for (int i = 0; i < 16; i++) key.mvp[i] = mvp[i];
+        key.width = gGroundBakeWidth;
+        key.height = gGroundBakeHeight;
+        key.floorTexture = static_cast<int>(gFloorTexture);
+        // The bake renders before the floor draw binds the receiver, so it
+        // reads the group the previous frame set (the same one at a standstill).
+        key.receiverGroup = boundFloorReceiverGroup();
+        key.cloudShadows = settings.scene3d.cloud_shadows;
+        key.shadowDensity = static_cast<float>(settings.scene3d.shadow_density);
+        key.shadowPixelSize = static_cast<float>(settings.scene3d.shadow_pixel_size);
+        const scene::Sun& sun = scene::currentSun();
+        key.sunDirection[0] = sun.direction[0];
+        key.sunDirection[1] = sun.direction[1];
+        key.sunDirection[2] = sun.direction[2];
+        key.sunStrength = sun.strength;
+        // The shadow-map redraw and the light change are pulses, not identity:
+        // a pulse forces this frame's bake even when the last one also forced
+        // one (two changes on consecutive frames would compare true to true
+        // inside the key and skip the second). Cloud shadows move every frame,
+        // so cloud frames keep the old every-frame bake, and the cloud flag in
+        // the key re-renders once when the mode goes off.
+        const bool shadowRedrawn = shadowMapRendered();
+        const bool lightChanged = bakeLightInputsChanged();
+        const bool reuse = bakedValid && !shadowRedrawn && !lightChanged
+            && !key.cloudShadows
+            && std::memcmp(&key, &bakedKey, sizeof(GroundBakeKey)) == 0;
+        if (!reuse) {
+            int previousFbo = 0;
+            glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &previousFbo);
+            glBindFramebuffer(kDrawFramebuffer, gGroundBakeFbo);
+            glViewport(0, 0, width / 2, height / 2);
+            glUniform4f(gSceneViewportLocation, 0.0f, 0.0f,
+                static_cast<float>(width / 2), static_cast<float>(height / 2));
+            glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+            glClear(kColorBufferBit);
+            glDepthMask(0);
+            glUniform1i(gSceneGroundBakeModeLocation, 1);
+            // Use the same floor lighting as the direct draw: mode 0 bakes
+            // full white and never queries the ambient light or local lights.
+            glUniform1i(gSceneLightModeLocation, 1);
+            glUniform1f(gSceneCutoffLocation, -1.0f);
+            glUniform1i(gSceneTexturedLocation, 1);
+            glDrawArrays(kTriangles, 6,
+                (gFloorExtensionFirst > 0 ? gFloorExtensionFirst : gFloorVertexCount) - 6);
+            glBindFramebuffer(kDrawFramebuffer, previousFbo);
+            glViewport(x, y, width, height);
+            glUniform4f(gSceneViewportLocation, static_cast<float>(x), static_cast<float>(y),
+                static_cast<float>(width), static_cast<float>(height));
+            glDepthMask(1);
+            glUniform1f(gSceneCutoffLocation, 0.01f);
+            bakedKey = key;
+            bakedValid = true;
+        }
         // The bake map rides unit 7 for this frame's floor draw; the binding
         // restores right after the tiles (the roof grid owns the unit later in
         // the frame, and the next frame's shadow pass must not see the bake).

@@ -56,6 +56,15 @@ struct StaticPointLight {
     float intensity = 0.0f; // the object's lightIntensity / 65536
     int distance = 0; // the object's lightDistance, hexes
     std::vector<int> reach; // the hexes its light reaches as the engine spreads it
+    // Field-wise: the ground bake's cache keys on whether the light changed (326).
+    bool operator==(const StaticPointLight& other) const
+    {
+        return tile == other.tile && objectX == other.objectX && objectY == other.objectY
+            && right == other.right && down == other.down
+            && color[0] == other.color[0] && color[1] == other.color[1] && color[2] == other.color[2]
+            && intensity == other.intensity && distance == other.distance && reach == other.reach;
+    }
+    bool operator!=(const StaticPointLight& other) const { return !(*this == other); }
 };
 
 // The game's light: the ambient level (65536 full); the light of the many
