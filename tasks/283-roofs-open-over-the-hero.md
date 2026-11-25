@@ -2,7 +2,7 @@
 id: 283
 title: The roof opens when the hero is inside, in every kind of building
 milestone: M1
-status: todo
+status: done
 owner: glm
 suggested: glm
 priority: normal
@@ -34,3 +34,4 @@ Roof geometry seen from outside (190's finds).
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+- 2026-11-26 glm: done. 38 buildings across every town (Arroyo, Klamath, Den, Modoc, Vault City, Gecko, Redding, Broken Hills, New Reno, NCR, San Francisco, Vaults 13/15, Mariposa, Navarro, Enclave, Ghost Farm), hero inside and outside, classic | 3D pairs each. The 3D roof state matches the original in all 128 captures; no finds. Confirmed: the classic hides roofs at the hero's screen point (a hero against a wall keeps the roof open in both engines); the SFSHUTL2 floor's UNUSED ART tiles draw in both engines (distinct from the one-sided CLOSED ART object defect of 329); NAVARRO e0 28694 is the south-edge gas station, matching in both. Evidence: `runs/283-roofs-open-over-the-hero/README.md` + 5 pair JPEGs.
