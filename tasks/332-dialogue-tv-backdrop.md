@@ -2,7 +2,7 @@
 id: 332
 title: Dialogue has a black TV opening and a smoothly fading backdrop
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: gpt
 priority: high
@@ -10,7 +10,7 @@ tier: 3
 claude-only: no
 user-check: yes
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -57,3 +57,5 @@ CI Verify 45667652641 passed for code commit 28245c10, including Windows
 Release and CTest 35/35. Repeat opening, barter and classic-view runtime
 comparisons remain open. Two earlier temporary exit probes using Escape and
 _dialogQuit did not close this dialogue; neither established exit behavior.
+
+The independent Terra review found no code issues at 009f0a0c. The same clean Windows Release binary passed CTest 35/35 and the Klamath Sulik dialogue cursor and real dialogue-to-barter fixtures. A repeated open and a classic-view comparison were not run. Gameplay fade timings use the instrumented captures above.
