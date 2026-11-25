@@ -2,7 +2,7 @@
 id: 282
 title: Geometry re-walk: random and special encounters, the Restoration Project maps
 milestone: M1
-status: todo
+status: done
 owner: glm
 suggested: glm
 priority: normal
@@ -36,3 +36,4 @@ Speed, lighting levels and the UI.
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+- 2026-11-25 glm: done. The walk covered 57 base maps (82 spots: caves, city, coast, desert and mountain encounters, depot, raiders, Enclave specials, every rnd* special) and 19 Restoration Project maps (36 spots), each in the game camera and a +45 fly turn. No new geometry defects; fly-only void wedges and roof-block at tour distance 8 were re-confirmed, not new. RP pass ran on the isolated RP install with -SkipScriptBlocking (enter scripts leave a pending dialogue). Evidence: `runs/282-rewalk-encounters-and-rp-maps/README.md`.
