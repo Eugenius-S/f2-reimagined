@@ -41,6 +41,8 @@ float gPos[kMaxLights * 4];
 float gColor[kMaxLights * 4];
 float gWindowOrigin[kMaxLights * 2];
 int gShown = 0;
+// The light the ground bake captures changed since the bake last looked (326).
+bool gLightInputsChanged = true;
 
 // GL ground point (x, z) of a game pixel; false before the projection is known.
 bool groundAt(double pixelX, double pixelY, double* x, double* z)
@@ -132,6 +134,13 @@ bool lightShown()
 float lightAmbient()
 {
     return lightShown() ? static_cast<float>(gAmbient) : 1.0f;
+}
+
+bool bakeLightInputsChanged()
+{
+    const bool changed = gLightInputsChanged;
+    gLightInputsChanged = false;
+    return changed;
 }
 
 void setLightAnchor(int tile)
@@ -273,19 +282,26 @@ void destroyStaticLight()
 void setStaticLight(int ambient, std::vector<int> hexLight, std::vector<float> hexColor,
     std::vector<StaticPointLight> lights)
 {
+    const double newAmbient = std::clamp(ambient / kFullLight, 0.0, 1.0);
+    // 326: the ground bake's cache re-renders only when the light it bakes changed.
+    if (!gLightOn || newAmbient != gAmbient || lights != gLights
+        || hexLight != gHexLight || hexColor != gHexColor) {
+        gLightInputsChanged = true;
+    }
     if (hexLight != gHexLight || hexColor != gHexColor) {
         gHexLight = std::move(hexLight);
         gHexColor = std::move(hexColor);
         gHexStale = true;
     }
     gLights = std::move(lights);
-    gAmbient = std::clamp(ambient / kFullLight, 0.0, 1.0);
+    gAmbient = newAmbient;
     gLightOn = true;
 }
 
 void clearStaticLight()
 {
     gLightOn = false;
+    gLightInputsChanged = true;
 }
 
 } // namespace scene_renderer

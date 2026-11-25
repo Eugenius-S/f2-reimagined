@@ -169,6 +169,8 @@ unsigned int gRenderedGeneration = 0;
 float gRenderedDirection[3] = {};
 float gRenderedMatrix[16] = {};
 float gRenderedTexel = 0.0f;
+// The depth map drew for the current frame: its content changed (326).
+bool gShadowMapRedrawn = false;
 float gRenderedPad = 0.0f;
 // The last frame's shadow pass, for the dev perf log.
 bool gShadowRendered = false;
@@ -644,6 +646,7 @@ void drawShadowMap(const float* matrix)
 bool bindStaticShadows(const float* sceneMvp)
 {
     gShadowRendered = false;
+    gShadowMapRedrawn = false;
     glUniform1i(gSceneCloudOnLocation, 0);
     if (sceneMvp == nullptr) return false;
     const scene::Sun& sun = scene::currentSun();
@@ -747,7 +750,10 @@ bool bindStaticShadows(const float* sceneMvp)
     glUniform1i(gSceneShadowIdsLocation, 6);
     glActiveTexture(kTexture0);
 
-    if (!reuse) drawShadowMap(matrix);
+    if (!reuse) {
+        drawShadowMap(matrix);
+        gShadowMapRedrawn = true;
+    }
     glUniformMatrix4fv(gSceneMvpLocation, 1, 0, sceneMvp);
     glUniform1i(gScenePickLocation, 0);
     glColorMask(1, 1, 1, 1);
@@ -767,6 +773,11 @@ void shadowFrameStats(bool* rendered, double* seconds)
     *seconds = gShadowSeconds;
     gShadowSeconds = 0.0;
     gShadowRendered = false;
+}
+
+bool shadowMapRendered()
+{
+    return gShadowMapRedrawn;
 }
 
 } // namespace internal

@@ -46,6 +46,9 @@ void destroyStaticShadows();
 // restore. False (with them switched off) when the setting is off, the sun
 // is down, or the casters or the depth map are missing.
 bool bindStaticShadows(const float* sceneMvp);
+// Whether the depth map was drawn for the current frame: the ground bake's
+// cache must re-render with it (326).
+bool shadowMapRendered();
 
 } // namespace internal
 } // namespace scene_renderer
