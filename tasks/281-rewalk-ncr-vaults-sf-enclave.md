@@ -2,7 +2,7 @@
 id: 281
 title: Geometry re-walk: NCR, the Vaults, San Francisco, Navarro, the Enclave
 milestone: M1
-status: todo
+status: done
 owner: glm
 suggested: glm
 priority: normal
@@ -36,3 +36,4 @@ Speed, lighting levels and the UI.
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+- 2026-11-25 glm: walk complete at main cf4c2f5d (21 maps, 60 spots, game camera and +45 fly turn each). One defect: sfshutl2 e0 around tile 20985 shows a field of red CLOSED ART! placeholder cards in 3D where the classic 2D draws an empty black picture; evidence and repro in runs/281-rewalk-ncr-vaults-sf-enclave/, the find is cut as task 329. Everything else clean.
