@@ -1,4 +1,5 @@
 #include "owner_shot.h"
+#include "snapshot_json.h"
 #include "mark_repeat_guard.h"
 #include "mark_rect.h"
 
@@ -189,62 +190,14 @@ void baseMapName(const char* name, char* out, size_t size)
     if (used == 0) snprintf(out, size, "map");
 }
 
-void jsonEscape(const char* in, std::string& out)
-{
-    for (const char* p = in; *p != '\0'; p++) {
-        const unsigned char ch = static_cast<unsigned char>(*p);
-        if (ch == '"' || ch == '\\') {
-            out += '\\';
-            out += static_cast<char>(ch);
-        } else if (ch < 0x20) {
-            char piece[8];
-            snprintf(piece, sizeof(piece), "\\u%04x", ch);
-            out += piece;
-        } else {
-            out += static_cast<char>(ch);
-        }
-    }
-}
-
-// 217: the game's strings arrive in the game's own encoding (cp1251 on a
-// Russian install); the JSON is UTF-8, so convert instead of keeping raw
-// bytes that read as mojibake ("╓хэЄЁ уюЁюфр" for "Центр города").
-void cp1251ToUtf8(const char* in, std::string& out)
-{
-    for (const unsigned char* p = reinterpret_cast<const unsigned char*>(in); *p != 0; p++) {
-        unsigned int code = *p;
-        if (code >= 0xC0 && code <= 0xFF) {
-            code = 0x410 + (code - 0xC0); // А-я
-        } else if (code == 0xA8) {
-            code = 0x401; // Ё
-        } else if (code == 0xB8) {
-            code = 0x451; // ё
-        } else if (code == 0x96) {
-            code = 0x2013; // –
-        } else if (code == 0x97) {
-            code = 0x2014; // —
-        }
-        if (code < 0x80) {
-            out += static_cast<char>(code);
-        } else if (code < 0x800) {
-            out += static_cast<char>(0xC0 | (code >> 6));
-            out += static_cast<char>(0x80 | (code & 0x3F));
-        } else {
-            out += static_cast<char>(0xE0 | (code >> 12));
-            out += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
-            out += static_cast<char>(0x80 | (code & 0x3F));
-        }
-    }
-}
-
 std::string protoNameOf(const Object* object)
 {
     std::string name;
     char* text = protoGetName(object);
     if (text != nullptr && text[0] != '\0') {
         std::string utf8;
-        cp1251ToUtf8(text, utf8);
-        jsonEscape(utf8.c_str(), name);
+        snapshot_json::cp1251ToUtf8(text, utf8);
+        snapshot_json::jsonEscape(utf8.c_str(), name);
     } else {
         name = "unnamed";
     }
@@ -256,8 +209,8 @@ std::string jsonText(const char* text)
     std::string out;
     if (text != nullptr && text[0] != '\0') {
         std::string utf8;
-        cp1251ToUtf8(text, utf8);
-        jsonEscape(utf8.c_str(), out);
+        snapshot_json::cp1251ToUtf8(text, utf8);
+        snapshot_json::jsonEscape(utf8.c_str(), out);
         return out;
     }
     return "unknown";

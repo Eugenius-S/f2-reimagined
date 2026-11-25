@@ -1,4 +1,5 @@
 #include "../../src/devtools/snapshot_rows.h"
+#include "../../src/devtools/snapshot_json.h"
 #include "../../src/devtools/snapshot_palette.h"
 #include "../../src/devtools/mark_repeat_guard.h"
 #include "../../src/devtools/mark_rect.h"
@@ -11,6 +12,9 @@ using fallout::devtools::copySnapshotRowsTightly;
 
 int main()
 {
+    if (fallout::snapshot_json::gameText("(\xed\xe5\xf2)") != "(\xd0\xbd\xd0\xb5\xd1\x82)"
+        || fallout::snapshot_json::gameText("\x80\x98\xa8\xb8") != "\xd0\x82\xef\xbf\xbd\xd0\x81\xd1\x91"
+        || fallout::snapshot_json::gameText("A\"\\\n\x01") != "A\\\"\\\\\\u000a\\u0001") return 24;
     const unsigned char shape[] = { 9, 0, 99, 0, 9, 99 };
     const fallout::RgbaBackgroundCursor cursor { shape, -1, 10, 2, 2, 3, 0 };
     if (!cursor.covers(-1, 10) || cursor.covers(0, 10)

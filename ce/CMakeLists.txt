@@ -345,6 +345,7 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/scene/scene_settings.h"
     "src/devtools/devtools.h"
     "src/devtools/fixed_screen_options.h"
+    "src/devtools/snapshot_json.h"
     "src/devtools/snapshot_rows.h"
     "src/devtools/snapshot_palette.h"
     "src/devtools/preferences_probe.h"
