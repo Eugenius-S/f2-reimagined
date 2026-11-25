@@ -1,0 +1,77 @@
+DIALOG_FIXTURE BASELINE saved: snapshot: devshot-20261126-010725-000.json
+DIALOG_FIXTURE START map=KLADWTWN.MAP elevation=0 script=KCMaida.int speaker=88 speaker_tile=22678 hero=22676 talk_result=0
+DIALOG_FADE OPEN tick=9565
+DIALOG_FADE FRAME tick=9594 fade=0.115 world_rgb_sum=9103 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9603 fade=0.165 world_rgb_sum=8789 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9619 fade=0.250 world_rgb_sum=7958 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9637 fade=0.335 world_rgb_sum=7080 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9653 fade=0.415 world_rgb_sum=5900 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9668 fade=0.495 world_rgb_sum=4830 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9686 fade=0.575 world_rgb_sum=3732 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9701 fade=0.655 world_rgb_sum=2662 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9717 fade=0.735 world_rgb_sum=1674 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9734 fade=0.820 world_rgb_sum=831 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9750 fade=0.900 world_rgb_sum=337 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9767 fade=0.985 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9785 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9802 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9817 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9835 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9852 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9868 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9886 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9902 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9917 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9933 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9950 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9967 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=9984 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10000 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10017 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10033 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10051 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10068 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10084 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10101 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FIXTURE CAPTURE map=KLADWTWN.MAP elevation=0 script=KCMaida.int speaker=88 speaker_tile=22678 hero=22676 dialog_owners=2,6 eligible_runs=11
+DIALOG_FADE FRAME tick=10560 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10603 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10647 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10691 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10735 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10779 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10822 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10865 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10909 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10952 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=10995 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=11038 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=11082 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=11125 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=11170 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=11213 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=11256 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=11298 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE FRAME tick=11341 fade=1.000 world_rgb_sum=0 ui_rgb_sum=5056
+DIALOG_FADE CLOSE tick=11341
+DIALOG_FADE FRAME tick=11358 fade=0.945 world_rgb_sum=145 ui_rgb_sum=48
+DIALOG_FADE FRAME tick=11370 fade=0.880 world_rgb_sum=349 ui_rgb_sum=378
+DIALOG_FADE FRAME tick=11379 fade=0.835 world_rgb_sum=686 ui_rgb_sum=618
+DIALOG_FADE FRAME tick=11389 fade=0.785 world_rgb_sum=1180 ui_rgb_sum=1050
+DIALOG_FADE FRAME tick=11399 fade=0.735 world_rgb_sum=1674 ui_rgb_sum=1482
+DIALOG_FADE FRAME tick=11408 fade=0.690 world_rgb_sum=2168 ui_rgb_sum=1908
+DIALOG_FADE FRAME tick=11418 fade=0.640 world_rgb_sum=2854 ui_rgb_sum=2532
+DIALOG_FADE FRAME tick=11428 fade=0.590 world_rgb_sum=3540 ui_rgb_sum=3150
+DIALOG_FADE FRAME tick=11438 fade=0.540 world_rgb_sum=4191 ui_rgb_sum=3768
+DIALOG_FADE FRAME tick=11448 fade=0.490 world_rgb_sum=4912 ui_rgb_sum=4392
+DIALOG_FADE FRAME tick=11458 fade=0.440 world_rgb_sum=5563 ui_rgb_sum=5010
+DIALOG_FADE FRAME tick=11468 fade=0.390 world_rgb_sum=6249 ui_rgb_sum=5628
+DIALOG_FADE FRAME tick=11478 fade=0.335 world_rgb_sum=7080 ui_rgb_sum=6300
+DIALOG_FADE FRAME tick=11488 fade=0.290 world_rgb_sum=7574 ui_rgb_sum=6732
+DIALOG_FADE FRAME tick=11498 fade=0.245 world_rgb_sum=8068 ui_rgb_sum=7158
+DIALOG_FADE FRAME tick=11509 fade=0.185 world_rgb_sum=8609 ui_rgb_sum=7728
+DIALOG_FADE FRAME tick=11519 fade=0.135 world_rgb_sum=8946 ui_rgb_sum=7968
+DIALOG_FADE FRAME tick=11529 fade=0.085 world_rgb_sum=9248 ui_rgb_sum=8208
+DIALOG_FADE FRAME tick=11539 fade=0.035 world_rgb_sum=9440 ui_rgb_sum=8400
+DIALOG_FADE FRAME tick=11548 fade=0.000 world_rgb_sum=9440 ui_rgb_sum=8400
+DIALOG_FIXTURE PASS fade-complete

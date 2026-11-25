@@ -314,6 +314,7 @@ set(FALLOUT_PLATFORM_SOURCES
     "src/scene/preview_policy.h"
     "src/scene/dialogue_backdrop.cc"
     "src/scene/dialogue_backdrop.h"
+    "src/scene/dialogue_fade.h"
     "src/scene/dialogue_layout.cc"
     "src/scene/dialogue_layout.h"
     "src/scene/scene_lights.cc"
@@ -496,6 +497,10 @@ if(BUILD_TESTING)
     )
     target_include_directories(preview_policy_tests PRIVATE "src/scene")
     add_test(NAME preview_policy_tests COMMAND preview_policy_tests)
+
+    add_executable(dialogue_fade_tests "tests/dialogue_fade/dialogue_fade_test.cc")
+    target_include_directories(dialogue_fade_tests PRIVATE "src/scene")
+    add_test(NAME dialogue_fade_tests COMMAND dialogue_fade_tests)
 
     add_executable(ground_pick_tests
         "src/scene_renderer/ground_pick.cc"
