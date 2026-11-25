@@ -1,5 +1,6 @@
 #include "devtools.h"
 #include "owner_shot.h"
+#include "snapshot_json.h"
 #include "snapshot_rows.h"
 #include "snapshot_palette.h"
 #include "preferences_probe.h"
@@ -4990,7 +4991,7 @@ bool takeSnapshot()
         imageFile.c_str(),
         heroPreview ? "static-wall-plus-hero-preview" : wallPreview ? "static-wall-preview"
             : preview ? "static-floor-preview" : "vanilla-framebuffer",
-        mapName,
+        snapshot_json::gameText(mapName).c_str(),
         static_cast<int>(gElevation),
         stillSnapshotRequested() ? "true" : "false",
         combatPhase,
@@ -5054,7 +5055,7 @@ bool takeSnapshot()
         ((windowFlags & SDL_WINDOW_BORDERLESS) != 0
                 || (windowFlags & SDL_WINDOW_FULLSCREEN_DESKTOP) == SDL_WINDOW_FULLSCREEN_DESKTOP) ? "true" : "false",
         _BUILD_HASH,
-        gToolsCommit,
+        snapshot_json::gameText(gToolsCommit).c_str(),
         exeSha,
         stamp);
     const bool metadataOk = fclose(f) == 0;
