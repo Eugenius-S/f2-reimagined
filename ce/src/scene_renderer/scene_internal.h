@@ -249,6 +249,9 @@ extern int gSceneFloorReceiverRectLocation;
 extern int gSceneFloorReceiverMaskLocation;
 // Only the final floor draw uses an authored receiver.
 void bindFloorReceiver(bool enabled);
+// The group bindFloorReceiver set for the frames' draws (-1 none): the ground
+// bake reads it one frame behind, so its cache keys on the same value.
+int boundFloorReceiverGroup();
 
 bool createSceneShader(std::string* error);
 void destroySceneShader();
@@ -326,6 +329,10 @@ void bindRoofGrid(int unit);
 
 bool lightShown();
 float lightAmbient();
+// Whether the light the ground bake captures (the ambient, the lights, the
+// per-hex map) changed since the bake last looked; read and cleared once
+// a frame (326).
+bool bakeLightInputsChanged();
 // Sets the hex a sprite is lit at (uLightAnchor).
 void setLightAnchor(int tile);
 // The ground point a sprite's hex is lit at; false off the grid.
