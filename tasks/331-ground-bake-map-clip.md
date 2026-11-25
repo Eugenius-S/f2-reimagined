@@ -2,7 +2,7 @@
 id: 331
 title: Ground lighting follows changes to the active map clip
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: gpt
 priority: normal
@@ -10,7 +10,7 @@ tier: 2
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -36,3 +36,5 @@ Done: the ground bake key includes the active clip enable and, when enabled, its
 Check: Windows Release and CTest 34/34. Matched sun-shadow stills had zero differing pixels. A temporary renderer probe confirmed invalidation for a changed enabled plane and clip disable, followed by stable reuse; the probe is excluded from the commit.
 
 Next: independently review and run the actual Clean map edges toggle on a real map with floor beyond the authored clip. The tested New Reno edge had an all-white bake, so it did not establish a visible gameplay defect.
+
+Review: Independent Terra/high verified the shader inputs, raw bake buffers, static A/B and existing CTest log. The fixed cache behavior is confirmed by a controlled clip change on KLADWTWN. The actual Clean map edges menu effect and a visible player-facing defect remain unconfirmed.
