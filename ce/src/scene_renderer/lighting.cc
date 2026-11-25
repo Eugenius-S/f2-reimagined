@@ -283,7 +283,7 @@ void setStaticLight(int ambient, std::vector<int> hexLight, std::vector<float> h
     std::vector<StaticPointLight> lights)
 {
     const double newAmbient = std::clamp(ambient / kFullLight, 0.0, 1.0);
-    // 326: the ground bake's cache re-renders only when the light it bakes changed.
+    // 328: the ground bake's cache re-renders only when the light it bakes changed.
     if (!gLightOn || newAmbient != gAmbient || lights != gLights
         || hexLight != gHexLight || hexColor != gHexColor) {
         gLightInputsChanged = true;

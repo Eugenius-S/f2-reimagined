@@ -202,18 +202,19 @@ void drawStaticPreview(bool withWalls, bool withHero)
         && ensureGroundBake(width / 2, height / 2);
     int unit7Texture = 0;
     if (bakeGround) {
-        // 326: the bake's picture only changes when the camera, the sun, the
-        // shadow map or the light did. Between those frames the tiles sample
-        // the last bake bit for bit and the quarter-of-the-pixels pass (most
-        // of the floor's cost at a standstill) is skipped. Cloud shadows move
-        // every frame, so they keep the old every-frame bake.
+        // 328: the bake's picture only changes when the camera, the sun, the
+        // shadow map, the light or the shadow knobs (the cloud mode, the
+        // density and the pixel size) did. Between those frames the tiles
+        // sample the last bake bit for bit and the quarter-of-the-pixels pass
+        // (most of the floor's cost at a standstill) is skipped.
         struct GroundBakeKey {
             float mvp[16];
             int width, height;
             int floorTexture;
             int receiverGroup;
-            bool shadowRedrawn;
-            bool lightChanged;
+            bool cloudShadows;
+            float shadowDensity;
+            float shadowPixelSize;
             float sunDirection[3];
             float sunStrength;
         };
@@ -227,14 +228,24 @@ void drawStaticPreview(bool withWalls, bool withHero)
         // The bake renders before the floor draw binds the receiver, so it
         // reads the group the previous frame set (the same one at a standstill).
         key.receiverGroup = boundFloorReceiverGroup();
-        key.shadowRedrawn = shadowMapRendered();
-        key.lightChanged = bakeLightInputsChanged();
+        key.cloudShadows = settings.scene3d.cloud_shadows;
+        key.shadowDensity = static_cast<float>(settings.scene3d.shadow_density);
+        key.shadowPixelSize = static_cast<float>(settings.scene3d.shadow_pixel_size);
         const scene::Sun& sun = scene::currentSun();
         key.sunDirection[0] = sun.direction[0];
         key.sunDirection[1] = sun.direction[1];
         key.sunDirection[2] = sun.direction[2];
         key.sunStrength = sun.strength;
-        const bool reuse = !settings.scene3d.cloud_shadows && bakedValid
+        // The shadow-map redraw and the light change are pulses, not identity:
+        // a pulse forces this frame's bake even when the last one also forced
+        // one (two changes on consecutive frames would compare true to true
+        // inside the key and skip the second). Cloud shadows move every frame,
+        // so cloud frames keep the old every-frame bake, and the cloud flag in
+        // the key re-renders once when the mode goes off.
+        const bool shadowRedrawn = shadowMapRendered();
+        const bool lightChanged = bakeLightInputsChanged();
+        const bool reuse = bakedValid && !shadowRedrawn && !lightChanged
+            && !key.cloudShadows
             && std::memcmp(&key, &bakedKey, sizeof(GroundBakeKey)) == 0;
         if (!reuse) {
             int previousFbo = 0;

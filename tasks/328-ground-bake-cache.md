@@ -81,3 +81,19 @@ KLAMALL e0, byte-identical against a saved clean-main exe). Windows Release
 green, CTest 34/34, exporter tool tests green, CI green on the branch.
 Leaving the draft for the owner's review.
 Check: PR 590, `runs/328-ground-bake-cache/README.md`.
+
+### 2026-11-25 glm
+Review round done (three remarks on the first push): the change pulses
+(shadow-map redraw, light inputs) moved out of the memcmp key into forced
+refreshes; the cloud mode, the shadow density and the shadow pixel size
+joined the key. Evidence in `runs/328-ground-bake-cache/README.md`: bake
+counts 474 to 330 for the same pulse tide, a still scene through three
+density flips re-baked each one (4 vs 2), the cloud-off flip re-baked and
+re-cached inside one perf window (5.96 to 3.23 ms), still A/B pairs
+byte-identical against clean main on both maps. `perf.cc` toggles take
+float values and gained `density` and `pixel` keys for the mid-run knob
+scenarios. CTest 34/34, exporter and regression tool tests green. Walking
+disclosed honestly in the README: the pinned-camera walk probe held the
+floor at 3.2 ms; the camera-follow cost is unchanged by code analysis and
+stays below 60 FPS of frame budget, background measurements only.
+Check: PR 590, `runs/328-ground-bake-cache/README.md`.

@@ -35,7 +35,7 @@ struct Slot {
 
 struct Toggle {
     std::string key;
-    int value;
+    double value;
     double at;
     bool done;
 };
@@ -76,14 +76,14 @@ double seconds(Uint64 ticks)
 
 void parseToggles(const char* text)
 {
-    // "shadows=0@3,glow=1@6": key, value, seconds into the run.
+    // "shadows=0@3,density=1.2@6": key, value, seconds into the run.
     const char* p = text;
     while (*p != '\0') {
         char key[32] = {};
-        int value = 0;
+        double value = 0.0;
         double at = 0.0;
         int used = 0;
-        if (std::sscanf(p, "%31[a-z_]=%d@%lf%n", key, &value, &at, &used) < 3 || used <= 0) break;
+        if (std::sscanf(p, "%31[a-z_]=%lf@%lf%n", key, &value, &at, &used) < 3 || used <= 0) break;
         gToggles.push_back({ key, value, at, false });
         p += used;
         if (*p == ',') p++;
@@ -92,11 +92,13 @@ void parseToggles(const char* text)
 
 void applyToggle(const Toggle& toggle)
 {
-    if (toggle.key == "shadows") settings.scene3d.shadows = toggle.value != 0;
-    else if (toggle.key == "glow") settings.scene3d.glow = toggle.value != 0;
-    else if (toggle.key == "clouds") settings.scene3d.cloud_shadows = toggle.value != 0;
-    else if (toggle.key == "lights") settings.scene3d.lights = toggle.value != 0;
-    else if (toggle.key == "sun") settings.scene3d.sun = toggle.value != 0;
+    if (toggle.key == "shadows") settings.scene3d.shadows = toggle.value != 0.0;
+    else if (toggle.key == "glow") settings.scene3d.glow = toggle.value != 0.0;
+    else if (toggle.key == "clouds") settings.scene3d.cloud_shadows = toggle.value != 0.0;
+    else if (toggle.key == "lights") settings.scene3d.lights = toggle.value != 0.0;
+    else if (toggle.key == "sun") settings.scene3d.sun = toggle.value != 0.0;
+    else if (toggle.key == "density") settings.scene3d.shadow_density = toggle.value;
+    else if (toggle.key == "pixel") settings.scene3d.shadow_pixel_size = toggle.value;
 }
 
 void writeLog(const std::string& line)
@@ -235,7 +237,7 @@ void perfBegin()
         toggle.done = true;
         applyToggle(toggle);
         char note[96];
-        std::snprintf(note, sizeof note, "%s%s=%d", gToggleNote.empty() ? "" : " ", toggle.key.c_str(), toggle.value);
+        std::snprintf(note, sizeof note, "%s%s=%g", gToggleNote.empty() ? "" : " ", toggle.key.c_str(), toggle.value);
         gToggleNote += note;
     }
     gCurrent = (gCurrent + 1) % kRing;

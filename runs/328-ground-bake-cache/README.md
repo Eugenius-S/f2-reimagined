@@ -59,3 +59,68 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev-snapshot.ps1 `
 (the owner's logical 1720x720 at scale 2.0 renders the same 3440x1440
 backing; dev-snapshot's minimum logical framebuffer is 640x480, so the
 equivalent screen form is used)
+
+## Review round (2026-11-25, second push)
+
+Three review remarks on the first push, all fixed in `scene_draw.cc`:
+
+1. **Change signals compared as key fields (P1).** `shadowRedrawn` and
+   `lightChanged` sat inside the memcmp key: two changes on consecutive
+   frames compared `true == true` and the second change could skip the
+   re-bake. Now they are read as pulses before the comparison and force the
+   refresh (`reuse` requires both pulses clear); the key keeps only identity
+   fields. Measured at the repro framing (fixed camera, instrumented count
+   of bake renders, discarded instrumentation): the reviewed build rendered
+   474 bakes over 189 light pulses and 2 shadow-map redraws (render, skip,
+   settle churn per change); the fixed build renders 330 over the same
+   195 pulses and 2 redraws. A still scene forced through three density
+   changes 5 frames apart: the fixed build re-baked on every one of the
+   three frames (4 bakes total with warmup), the reviewed build was blind
+   to the knob and stayed at its warmup pair.
+2. **Cloud shadows off left the last cloudy bake in place (P2).** The key
+   now carries the cloud mode, so the off flip re-renders the bake on the
+   flip frame and then caches. With `F2CE_PERF_TOGGLE=clouds=0@6` the floor
+   windows fall 5.99 / 5.97 / 5.96 / 5.96 ms (clouds on, bake per frame)
+   to 3.23 / 3.21 / 3.26 ms the window after the flip and stay there.
+3. **Shadow density and softness were not part of the key (P2).** The bake
+   captures them (`uShadowDensity`, the `shadow_pixel_size` tap ring), so
+   the key now carries both floats; the walls re-read the uniforms every
+   frame and needed no change. `perf.cc` toggles take float values now and
+   gained the `density` and `pixel` keys, which is how the scenarios above
+   flip the knobs mid-run.
+
+Instrumented runs disclose: the bake/redraw/pulse counts came from two
+throwaway exes with one `fprintf` each in the render branches; the counts
+above are from those, every frame-time and pixel hash from the committed
+builds.
+
+## Walking
+
+The review asked for the standing spot and walking with VSync on. The
+background harness is the only measurement available here (no live window),
+and walking stays below 60 FPS of frame budget by code analysis: while the
+camera follows, the view matrix changes every frame, the bake key changes
+every frame, and the floor pays the full per-frame bake again. Measured
+pieces: the harness's own walk probe (hero walked 18479 to 17273, pinned
+camera) held the floor at 3.20-3.28 ms windows; standing OwnerShot windows
+at the owner's settings read 82.9 / 83.7 / 86.5 FPS (11.56-12.07 ms, 1% low
+16.3-17.8 ms); two more standing windows caught machine noise and were
+rerun per the noisy-mark rule. The camera-follow frame is unchanged by this
+task and stays a candidate for a world-anchored bake in a separate task.
+
+## Picture (second push)
+
+Same-flag still pairs (ambient pinned, `-Still -SunShadows`), clean main exe
+vs this branch, byte-identical PNGs (sha256):
+
+- KLADWTWN e0 hero 18479 view 18271 zoom 1.024:
+  `a455a17eeb5fc9a68126d61a1a838b55d0afe2c4814a7221017fbc8665ddd0fa`
+- KLAMALL e0 hero 15450 view 15450:
+  `219814c825aca2105489630385111b6a2135580bb45d45c909216070c18e7354`
+
+Cross-run frame hashes are only comparable between runs with the same flag
+set: the sun direction steps per game minute and frame-count-driven
+animation (the lamp and sign flicker) phases with the run's frame count, so
+a clouds-on-then-off run legitimately differs from a never-clouds run by
+one game minute of sun. Pairs above share flags exactly.
+
