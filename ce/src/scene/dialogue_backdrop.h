@@ -6,6 +6,7 @@ namespace scene {
 
 int createDialogueBackgroundWindow(int x, int y, int width, int height);
 void destroyDialogueBackgroundWindow(int window);
+void drawDialogueBackdrop();
 
 } // namespace scene
 } // namespace fallout

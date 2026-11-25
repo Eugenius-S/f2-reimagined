@@ -25,6 +25,7 @@
 #include "scan_unimplemented.h"
 #include "settings.h"
 #include "scene/text_capture.h"
+#include "scene/dialogue_backdrop.h"
 #include "devtools/devtools.h"
 #include "devtools/owner_shot.h"
 #include "scene/scene_overlay.h"
@@ -906,6 +907,7 @@ static void renderPresentBody()
                     devtools::sceneOverlayPresented();
                     return;
                 }
+                scene::drawDialogueBackdrop();
                 // The game's interface, mouse cursor and floating text over it.
                 scene_renderer::drawSceneOverlayWithSharpText(gSdlSurface, gSdlTextureSurface, sharpTextReady);
                 scene_renderer::perfMark("overlay");
