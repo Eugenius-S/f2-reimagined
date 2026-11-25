@@ -44,7 +44,16 @@ there and its code was left unchanged. The surroundings were not black.
 An instrumented candidate showed a smooth darkening on entry in a 16:9
 presented-frame readback; the standalone timer test passed with MSVC.
 
-Next: capture Maida's normal exit through her Goodbye option, 21:9 candidate,
-and a talking-head control. Check repeat opening, barter, classic view and
-the final clean build with CTest. Two temporary exit probes using Escape and
-_dialogQuit did not close this dialogue; neither establishes exit behavior.
+An instrumented build of the candidate then selected Maida's Goodbye option
+through the normal dialogue input. Both formats showed a fade in and out in
+the actual composed framebuffer. The logs in `runs/332-dialogue-tv-backdrop/`
+record ticks and RGB sums for an 8x8 scene area and a panel area before swap;
+on entry the panel sample stays constant. The 16:9 and 21:9 before/after
+sheets show the presented frame; the Sulik sheet shows a talking head with
+the backdrop. Sulik's Goodbye option also reached the fade-out completion.
+The extra diagnostic capture and input were temporary, not part of the PR.
+
+CI Verify 45667652641 passed for code commit 28245c10, including Windows
+Release and CTest 35/35. Repeat opening, barter and classic-view runtime
+comparisons remain open. Two earlier temporary exit probes using Escape and
+_dialogQuit did not close this dialogue; neither established exit behavior.
