@@ -2,7 +2,7 @@
 id: 279
 title: Geometry re-walk: Arroyo, Klamath, the Den, Modoc
 milestone: M1
-status: todo
+status: done
 owner: glm
 suggested: glm
 priority: normal
@@ -36,3 +36,4 @@ Speed, lighting levels and the UI.
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+- 2026-11-25 glm: walk complete at main 12992e533 (26 maps, 109 spots, game camera and +45 fly turn each; every dark or odd cell re-checked at full resolution against the classic 2D view at the same tile). No new geometry defects: the upper-floor bare look of denbus1 e1/e2, denbus2 e1 and gstcav2 e1 matches the original 2D. arvill2 skipped: not in the worldmap registry, the dev tour cannot enter it (a fixture job of its own). Known finds re-confirmed on main: the Den chain-link fences (191 find 1, task 276 draft), flat cliffs edge-on in the fly view. Evidence: runs/279-rewalk-arroyo-klamath-den-modoc/ (README has a line per spot).
