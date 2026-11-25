@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <cstring>
 #include <vector>
 
 #include <lodepng.h>
@@ -217,6 +216,8 @@ void drawStaticPreview(bool withWalls, bool withHero)
             float shadowPixelSize;
             float sunDirection[3];
             float sunStrength;
+            bool clipEnabled;
+            float clipPlanes[12];
         };
         static GroundBakeKey bakedKey = {};
         static bool bakedValid = false;
@@ -236,6 +237,15 @@ void drawStaticPreview(bool withWalls, bool withHero)
         key.sunDirection[1] = sun.direction[1];
         key.sunDirection[2] = sun.direction[2];
         key.sunStrength = sun.strength;
+        const MapClip clip = staticMapClip();
+        key.clipEnabled = clip.enabled;
+        if (clip.enabled) {
+            for (int i = 0; i < 4; i++) {
+                key.clipPlanes[i * 3] = clip.planes[i].x;
+                key.clipPlanes[i * 3 + 1] = clip.planes[i].z;
+                key.clipPlanes[i * 3 + 2] = clip.planes[i].offset;
+            }
+        }
         // The shadow-map redraw and the light change are pulses, not identity:
         // a pulse forces this frame's bake even when the last one also forced
         // one (two changes on consecutive frames would compare true to true
@@ -246,7 +256,14 @@ void drawStaticPreview(bool withWalls, bool withHero)
         const bool lightChanged = bakeLightInputsChanged();
         const bool reuse = bakedValid && !shadowRedrawn && !lightChanged
             && !key.cloudShadows
-            && std::memcmp(&key, &bakedKey, sizeof(GroundBakeKey)) == 0;
+            && std::equal(key.mvp, key.mvp + 16, bakedKey.mvp)
+            && key.width == bakedKey.width && key.height == bakedKey.height
+            && key.floorTexture == bakedKey.floorTexture && key.receiverGroup == bakedKey.receiverGroup
+            && key.cloudShadows == bakedKey.cloudShadows && key.shadowDensity == bakedKey.shadowDensity
+            && key.shadowPixelSize == bakedKey.shadowPixelSize
+            && std::equal(key.sunDirection, key.sunDirection + 3, bakedKey.sunDirection)
+            && key.sunStrength == bakedKey.sunStrength && key.clipEnabled == bakedKey.clipEnabled
+            && std::equal(key.clipPlanes, key.clipPlanes + 12, bakedKey.clipPlanes);
         if (!reuse) {
             int previousFbo = 0;
             glGetIntegerv(0x8CA6 /* GL_DRAW_FRAMEBUFFER_BINDING */, &previousFbo);
