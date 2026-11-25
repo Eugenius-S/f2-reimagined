@@ -2,7 +2,7 @@
 id: 284
 title: Open and closed doors stand right in 3D, every kind of door
 milestone: M1
-status: todo
+status: done
 owner: glm
 suggested: glm
 priority: normal
@@ -34,3 +34,4 @@ Door sounds and scripts.
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+- 2026-11-26 glm: done. 26 door kinds over 26 spots (way beyond the seven kinds the card names), closed and open (`-OpenDoors`) in classic | 3D plus an open 3D turned +30 - 145 captures, zero failures. No defects: every open/closed state matches the original; the leaves sit in their frames and swing like the classic (security door into its wall pocket, submarine hatch lid up, VC gate under the arch). The 2026-10-25 item 10 broken corner does not show (full-res checks on four open leaves). Kinds whose art has no open frame change nothing in either engine - the 3D replicates the original one-sided exactly. Evidence: `runs/284-open-doors-stand-right/README.md` + 6 leaf JPEGs.
