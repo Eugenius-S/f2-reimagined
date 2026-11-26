@@ -101,8 +101,12 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
     waits for its worktree's test slot itself, so never poll for it;
   - open a snapshot image only when numbers or JSON cannot answer, one at a
     time, cropped or scaled down; every image stays in the thread.
-- Evidence in `runs/` is a few JPEG sheets or crops of at most 1 MB each
-  (CI refuses more); raw captures stay in `game/shots/`.
+- Keep small evidence sheets or crops in `runs/`: CI limits each changed file
+  to 1 MiB and the PR total of added or changed images to 2 MiB. Raw captures
+  stay in `game/shots/`. For larger proof, put an indexed ZIP with capture
+  metadata in the separate GitHub release `evidence`, using a unique task-based
+  asset name. Never use `latest` or `--clobber` existing assets. Link the ZIP
+  from the task Log; do not rewrite or delete existing evidence history.
 - After two consecutive failed background attempts at the same required
   capture, stop repeating that capture. If the code and automated checks are
   complete and only owner-visible evidence remains, close the task and move
@@ -110,12 +114,12 @@ in `tools/shapes/eval/` (`eval.py shoot | sheets | score`), the fly tour
   leave the task `todo` and name the missing code or fixture in its Log.
 - A task that changed what the game, a tool or a folder looks like ends with
   at most 4 outcome screenshots attached in the chat when the task is done
-  (and committed under its `runs/NNN-slug/` folder), so the owner sees the
+  (stored under `runs/NNN-slug/` or in a linked evidence ZIP), so the owner sees the
   result without running anything. Pure code or numbers work needs none.
 - A change to what the 3D scene shows (the exporter, its caches, the
   renderer) runs the fly tour against main (`py -3 tools/tour/tour.py
   --before <main's scene cache or checkout>`) and attaches its
-  `changed.jpg` to the PR (in `runs/NNN-slug/`); a spot that should change
+  `changed.jpg` to the PR (in `runs/NNN-slug/` or a linked evidence ZIP); a spot that should change
   and did not, or changed and should not, is fixed before the merge.
 - A renderer change to the flight/turned passes runs
   `tools/tour/tour.py` as its acceptance evidence: the game-camera
@@ -271,7 +275,8 @@ parts while its next part is under way (186); otherwise it is set back.
 4. A task that turns out wrong or too big: say so in the `Log` and split it
    into new task files with the next free ids, in the same branch.
 5. Finish: every `Acceptance` line holds, the build, tests and regression
-   pass, visual changes have snapshots in `runs/<NNN-slug>/`. Set `status:
+   pass, visual changes have snapshots in `runs/<NNN-slug>/` or a linked
+   evidence ZIP. Set `status:
    done` and `reviewed` (below) in the last commit, `gh pr create` with the
    template, `gh pr merge --squash --delete-branch`. Docs and new task files
    ride in the same PR; no separate commits to `main` for bookkeeping.
