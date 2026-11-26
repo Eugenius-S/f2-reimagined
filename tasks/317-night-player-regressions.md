@@ -216,3 +216,17 @@ HP nor quest flags were modified. The encounter and the remaining route are
 unverified. Raw record and diagnostic patch: `build/317-route-opponent` and
 `build/317-route-opponent-qa.patch`. Next investigate normal picking and the
 camera for attacker 152; do not reuse a pointer from the previous combat.
+
+### 2026-11-26 second encounter, composited frame
+
+One more isolated attempt confirmed the story victory text and walked to
+ARCAVES e2 hero 20926. The next real attacker was 154, tile 21530, instead of
+152 in the prior run. The capture is the actual composited 1920x1080 frame at
+the player's turn, before aiming: mouse mode 0 (move), 3D active. Native `M`
+input cycled mode 0 -> 1 -> 2 (crosshair); a 4-pixel-grid search for the actual
+opponent found no pick hit (`cardHits=0`, player AP 9). No attack was
+sent. The test could not identify a visible target; the precise reason remains
+unproven. Its own process was stopped, so e1 and the continuous route remain
+open. [Composited frame](../runs/317-native-acceptance/second-combat-present.jpg).
+Raw image, console and temporary driver: `build/317-second-composited.png`,
+`build/317-second-opponent/` and `build/317-second-opponent-qa.patch`.
