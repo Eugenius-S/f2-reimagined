@@ -2,7 +2,7 @@
 id: 316
 title: Cumulative Windows hotfix for the owner's Temple reports
 milestone: M1
-status: todo
+status: doing
 owner: gpt
 priority: high
 tier: 0
@@ -54,3 +54,7 @@ The owner restricted the release review to 3D continuity, cursor trails and came
 ### 2026-11-23 release reconciliation
 
 The Windows hotfix shipped through the cumulative release `039d25da3`. Local 3D under overlays, native combat region capture, cursor trails, the Temple pot and outlines have separate landed fixes. Remaining: the continuous post-duel Temple to Arroyo route on a suitable save, and the round-door/edge sweep in 3440x1440 borderless at 2x. Do not rerun the shipped work as an unreleased batch.
+
+### 2026-11-26 gpt
+
+Reconcile the shipped packet with the remaining acceptance in task 317.
