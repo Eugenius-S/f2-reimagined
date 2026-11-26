@@ -50,8 +50,38 @@ F3 marquee card/cap); none is a small in-224 fix.
 - vctyvlt e2: the spiky black blob behind the hero is in 2D too —
   vanilla art.
 - Low-confidence leftover: artemple e0 right-edge boulders (2D shows
-  grey rocks at the right edge, 3D looks bare there) — needs a zoomed
-  probe before claiming.
+  grey rocks at the right edge, 3D looks bare there) — probed 2026-11-27,
+  see "The right-edge boulders pair" below: the top grey pile renders in
+  3D; the pair's cameras do not pixel-align, so the claim stays closed
+  as inconclusive rather than a find.
+
+### The right-edge boulders pair (2026-11-27)
+
+One narrow control pair from a separate stock install (no owner game or
+saves): artemple e0, view tile 17288, hour 12, 1920x1080 both sides,
+the same centre-tile intent. Files here: `boulders-pair-classic-edge.png`
+/ `boulders-pair-3d-edge.png` (the x 1600-1920 strip) and the full frames
+as JPG. Exact frames and SHA-256:
+
+- classic `scr00000.png` sha256 e90522aa4cb362dcb8b3effe2ef3c9a1183d55656686715fa4cd4d8d11fb6318
+- 3D `devhero-20261127-060018-000.png` sha256 01680412191bc91fa77c3be3a5a885f41cfd5dd82dbfc27e27c096fd4af6ee0f
+
+Findings:
+
+- The grey rock pile at the strip's top (roks3.frm on tiles 17103, 17104,
+  17106 and 17304) renders in BOTH engines - the 3D shows it as shaded
+  cards. The original "3D looks bare" claim does not reproduce there.
+- The classic's bottom-right grey rock (the roks/roks2/rock07/rock10
+  objects on tiles 17513..18915) has no clear in-frame 3D counterpart:
+  the 3D static preview's camera is wider and shifted versus the
+  classic's centre-tile camera, so the same screen coordinates do not
+  name the same world points.
+- Verdict: the pair's cameras do not align, so per the review criterion
+  this stays inconclusive - no rule change, no mask change, no find
+  registered. The data linkage stands on its own: the rocks at the
+  entrance's right edge are roks3.frm (6 objects) plus
+  roks/roks2/rock07/rock10 (5 objects), plain scenery the export does
+  carry.
 
 ## Harness
 
