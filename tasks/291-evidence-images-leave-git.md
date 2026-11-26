@@ -2,8 +2,8 @@
 id: 291
 title: New evidence images stop growing the repository
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: any
 priority: normal
 tier: 3
@@ -35,3 +35,5 @@ Shrinking the existing history.
 ## Log
 
 - 2026-11-15 claude: cut from the repo audit of 2026-11-15 (find 7).
+
+- 2026-11-27 gpt: use an evidence release separate from Latest, with one uniquely named ZIP per larger task capture. Keep small inline crops in Git with a 2 MiB image total per PR and the existing 1 MiB per-file cap.
