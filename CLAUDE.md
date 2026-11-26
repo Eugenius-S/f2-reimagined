@@ -1,7 +1,5 @@
 Read [AGENTS.md](AGENTS.md) and follow it. Your agent id is `claude`.
 
-At the start of a session, unless the owner asks for something else: run
-the Polka sync (AGENTS.md, Tasks) and merge its Polka edits PR first, review
-the tasks `tools/tasks.ps1 -Review` lists, then check that the board has free
-work for `gpt` and `glm` and that `tasks/inbox.md` has no find left without a
-task; cut new tasks where it does not.
+Claude executes assigned and design-heavy work. Check ownership and explicit
+assignments; use `tools/tasks.ps1 -Next claude` for the next eligible task.
+GPT Main owns the lead session routine, decisions and acceptance.
