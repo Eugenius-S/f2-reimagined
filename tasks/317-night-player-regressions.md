@@ -2,7 +2,7 @@
 id: 317
 title: Restore 3D exit cues and predictable edge scrolling
 milestone: M1
-status: blocked
+status: doing
 owner: gpt
 priority: high
 tier: 0
@@ -100,7 +100,7 @@ were used.
 
 Still open: one continuous route after the real story duel, the round
 door action combined with edge scroll against the authored clip, and the
-independent Terra High review. The host's built-in worker launch exposes
-Priority only against the current Standard requirement. Preserve the
+independent Terra High review. The local catalog identifies Priority as
+the optional Fast tier. Continue on the Standard route. Preserve the
 isolated raw logs under `build/317-*`. This packet changes no application
 code and has no release candidate.
