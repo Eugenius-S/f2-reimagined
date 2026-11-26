@@ -25,7 +25,8 @@ without the interface strip; every pair's sidecar game_time checked.
 
 The ground heuristic (commonest floor tile darker than 40 and no roofs ->
 underground) called dark deserts underground, and an underground scene never
-dims: at 22:00 cardesrt was 2.52x, raiders1 2.47x and ncr4 2.75x the classic's
+dims: at 22:00 cardesrt was 2.52x and raiders1 2.47x the classic's, and ncr4
+was 2.75x at midnight
 brightness. The map script's own `set_light_level` literals are the engine's
 proof of the sky: a day level (>= 70) together with a night level (<= 60)
 keeps the map outdoor whatever the ground looks like.
@@ -83,7 +84,7 @@ thing to try if anyone picks this up.
 
 ## Gates
 
-- Exporter unit tests 182 OK (5 new), ctest 35/35.
+- Exporter unit tests 183 OK (6 new), ctest 35/35.
 - Scoped fly tour (4 flip maps + 4 controls) in `tour/`: 0 of 39 spots
   changed. The tour shoots still at full ambient, where the daylight channel
   the fix adds is invisible by design; the night deltas stand in the fix
