@@ -45,9 +45,8 @@ Shrinking the existing history.
   when the result is an evidence file. Unchanged evidence and exact moves
   keep their existing allowance. Four focused tests passed; independent
   Terra High reviewed the corrected checker at `0d0ba04c`.
-- The first real archive is the [322 cursor captures]
-  (https://github.com/Eugenius-S/f2-reimagined/releases/download/evidence/322-cursor-qa-c2f5a723.zip),
-  linked in the 322 Log in PR #607. It holds six frames and their capture
+- The [322 cursor captures](https://github.com/Eugenius-S/f2-reimagined/releases/download/evidence/322-cursor-qa-c2f5a723.zip)
+  are linked in the 322 Log in PR #607. The ZIP holds six frames and their capture
   timing notes. The downloaded SHA-256 is
   `c1d78168f66456acac24a4a695495b6892c8cbff9d81cb22843231da357d51dd`.
   The default player release stays Latest at `a414e39d`. No existing
