@@ -2,7 +2,7 @@
 id: 317
 title: Restore 3D exit cues and predictable edge scrolling
 milestone: M1
-status: doing
+status: blocked
 owner: gpt
 priority: high
 tier: 0
@@ -237,3 +237,46 @@ Accept the verified 3D state fix as a bounded packet. Keep task 317 open for the
 ### 2026-11-26 next route check
 
 Continue with a normal-input round trip without the challenge combat. The separate post-duel encounter and interactive borderless checks stay open.
+
+### 2026-11-26 no-combat round-trip fixture check
+
+No continuous round trip was established. The isolated stock installation and
+ARCAVES, ARTEMPLE and ARVILLAG scene caches were copied from the archived
+317 worktree. The unmodified Windows Release executable identifies commit
+`5e8738eab` and SHA256
+`c1cc0353f123be55b82edd207265bf9315e51f59692dcbc5a5f990aa68334ad7`.
+No owner game or saves were used.
+
+Two background attempts used `tools/dev-snapshot.ps1 -Map artemple -Elevation
+0 -HeroTile 21915 -ViewTile 21915 -SceneInput <script> -TransitionWatch
+-GameRoot build/317-release-game -BuildExecutable build/fallout2-ce.exe
+-SceneCache build/scene-cache -CaptureConsole`; setup placed the hero once.
+Attempt 1 (`2d7b7c492e83`, `build/317-route-input.txt`) used 926,464,
+twice the probe's logical click position. The cursor reached an edge and the
+camera moved to 39914; this was incorrect test input. The wrapper rejected
+its snapshot count because TransitionWatch added a capture.
+
+Attempt 2 (`bfeea67b3c58`, `build/317-route-input2.txt`) waited 2500 ms,
+then sent `gmove`, SDL `move`, `down`, and `up` at 463,232, followed by
+10 seconds of waiting. The input log records the button events but the hero
+remained at 21915, camera 21915 and map ARTEMPLE e0; no exit transition was
+observed. The watcher recorded the initial map's first 3D present at frame
+354, not a destination arrival. Its PNG is a reconstructed preview, not the
+actual presented buffer. These attempts do not establish whether the click
+reached the game action handler and do not prove a product regression. The
+older exit probe directly calls that handler and relocates the hero before
+its single transition; it cannot establish a continuous round trip.
+
+Raw input, logs and captures are in `build/317-route-attempt1`,
+`build/317-route-attempt2`, and their retained `build/test-run/runs/` folders.
+Next: provide a background driver that sends verified native game-handler clicks
+across successive maps without repositioning, and captures the actual first
+presented destination buffers and camera. Start near an exit once, then walk
+Temple to Arroyo and back in one process. The post-duel route and interactive
+borderless checks remain open; no application code changed.
+
+Blocked: a safe interactive test copy or a verified normal-movement driver
+that passes this exit is needed before attempting the continuous route.
+Initial hero placement is permitted for setup; calling the game handler directly
+or relocating the hero after the route starts does not demonstrate continuous
+ordinary input.
