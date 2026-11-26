@@ -53,7 +53,7 @@ game presentation, changing release or performance gates.
   algorithm change. `py -3 runs/334-devshot-exe-hash-padding/check_sha256.py <CI-exe>`
   compiles the actual source routine with the local MSVC toolchain and compares
   it to Python hashlib: 0, 1, 55-64, 119-121, 127, 128, 184 and 1024 bytes
-  pass. Baseline `facbdb671` fails each 56-63 byte case. The read-only
+  pass. Baseline `5489f0ff` fails each 56-63 byte case. The read-only
   `f2r-291-evidence-images-leave-git/build/rule1-9f54f368/ci/fallout2-ce.exe`
   (11387576 bytes, remainder 56) changes from the reported `b5d667ebe0812c27a9d37978fab57ad3ca4cb198b734815cad51e2f311f50cd9`
   to the standard `87a6e21031a9c3825b6fd99ecdd7498cf6ac92c1ad5e19aeb670e88dae5d8a0f`.

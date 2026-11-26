@@ -1,7 +1,7 @@
 import hashlib, os, pathlib, subprocess, sys, tempfile
 root = pathlib.Path.cwd()
 exe = pathlib.Path(sys.argv[1])
-old = subprocess.check_output(['git', 'show', 'facbdb671:ce/src/devtools/devtools.cc'], text=True)
+old = subprocess.check_output(['git', 'show', '5489f0ff:ce/src/devtools/devtools.cc'], text=True)
 new = (root / 'ce/src/devtools/devtools.cc').read_text(encoding='utf-8')
 msvc = pathlib.Path(os.environ['ProgramFiles(x86)']) / r'Microsoft Visual Studio\18\BuildTools\VC\Tools\MSVC\14.40.33807'
 sdk = pathlib.Path(os.environ['ProgramFiles(x86)']) / r'Windows Kits\10'
