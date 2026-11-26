@@ -2,14 +2,14 @@
 id: 317
 title: Restore 3D exit cues and predictable edge scrolling
 milestone: M1
-status: doing
+status: todo
 owner: gpt
 priority: high
 tier: 0
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -230,3 +230,7 @@ unproven. Its own process was stopped, so e1 and the continuous route remain
 open. [Composited frame](../runs/317-native-acceptance/second-combat-present.jpg).
 Raw image, console and temporary driver: `build/317-second-composited.png`,
 `build/317-second-opponent/` and `build/317-second-opponent-qa.patch`.
+
+Independent Terra High reviewed the product diff at b5cef4e7 and found no code blockers. The clean Release executable from that commit also captured ARCAVES e2 at view 22307 in classic mode (scene view off, vanilla framebuffer, matching executable hash). This is a static classic control; the matched classic scroll input and full RP run remain open.
+
+Accept the verified 3D state fix as a bounded packet. Keep task 317 open for the continuous route and its first presented arrival frames. The second-fight picking failure is still a fixture observation with no established production cause.
