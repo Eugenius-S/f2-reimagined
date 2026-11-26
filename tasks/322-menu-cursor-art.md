@@ -2,7 +2,7 @@
 id: 322
 title: Preserve the cursor over menu wallpaper
 milestone: M1
-status: doing
+status: todo
 owner: gpt
 priority: high
 tier: 1
@@ -30,3 +30,11 @@ The main-menu cursor fix shipped in `039d25da3`; six native wallpaper spots pass
 ### 2026-11-26 gpt
 
 Check additional native cursor positions and capture the limits of the shipped startup and death background paths.
+
+### 2026-11-26 gpt: bounded acceptance stopped
+
+Done: inspected the shipped composition path in `ce/src/svga.cc`: it preserves opaque cursor cells while replacing masked wallpaper pixels. The archived `snapshot_rows_tests.exe` returned exit 0, including the cursor bounds, pitch, transparent-cell and null checks in `ce/tests/snapshot_rows/snapshot_rows_test.cc`. This is a helper test, not proof of a presented menu frame. The archived test executable SHA-256 is `84dd4d7e92b69b6064bf4c3c21de2fca25437eca0196273466ea9b0e67b41811`; its exact build provenance was not established. No new defect is claimed.
+
+Blocked: the stock `--dev-menu-snapshot` shows the cursor and immediately captures and exits before the menu input loop; it has no cursor position or sweep control. The existing `tools/game-input.ps1` selects the first matching game process or window and cannot safely target only an isolated test process; it also has no move-only command. No existing death-screen cursor fixture was found. No background captures were attempted because neither path can produce the required controlled positions safely. The six historical wallpaper samples remain valid, but do not establish stripe, button edge, moving-away or death-screen coverage.
+
+Next: provide a narrowly scoped in-process menu/death fixture that moves the software cursor to specified logical coordinates, presents successive frames over the reported stripe and button edges and after moving away, and captures the actual presented frames with SharpText on and off. Run against the exact Release `5e8738eab40dc770617f561a14230db35d6f8c6c` (EXE SHA-256 `c1cc0353f123be55b82edd207265bf9315e51f59692dcbc5a5f990aa68334ad7`) in an isolated copy with packaged wide art. For death, supply an isolated reachable death fixture with current art. Keep this task open until those checks pass.
