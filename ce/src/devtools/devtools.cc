@@ -446,7 +446,7 @@ struct Sha256 {
         }
         if (!shortPad) {
             transform(data);
-            datalen = 56;
+            memset(data, 0, 56);
         }
         for (int i = 7; i >= 0; i--) {
             data[56 + (7 - i)] = static_cast<unsigned char>((bits >> (i * 8)) & 0xFF);
