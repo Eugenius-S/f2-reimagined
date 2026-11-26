@@ -2,7 +2,7 @@
 id: 315
 title: Fallout 2 starts at 3440 x 1440 after a clean Windows install
 milestone: M1
-status: doing
+status: blocked
 owner: gpt
 priority: high
 tier: 0
@@ -14,12 +14,13 @@ reviewed: no
 
 ## Goal
 
-The game reaches a usable main menu after the player chooses 3440 x 1440 in the Windows launcher on a clean install.
+On a clean Windows install, Play in the launcher starts the game and reaches a usable menu with the saved 3440 x 1440 mode.
 
 ## Context
 
 - The owner reports that after a clean Windows install, choosing 3440 x 1440 in the launcher and launching the game causes it to exit or crash before it is playable. Neither the exit type nor the cause is established.
 - This is a startup blocker in the installer/launch batch. Track it separately from 314, which covers launcher self-update, uninstall cleanup and UI presentation. It does not wait for 314.
+- The current launcher has no display selector. The game reads its saved resolution at startup.
 
 ## Acceptance
 
@@ -42,3 +43,5 @@ Launcher self-update, full uninstall and visual cleanup from 314.
 - The snapshot script reported `No snapshot within 90 s` on the second and control runs after about five seconds, but each unique run folder contained its own completed PNG and JSON with the correct run ID and executable hash. The frames were inspected; the report is a harness detection failure, not evidence of a game crash. The game was run directly with dev menu capture, which exits automatically; menu keyboard and mouse operation were not tested. The actual launcher start path and a real visible supported desktop mode remained unverified at this point: config editing plus off-screen rendering is not proof of those steps. The current launcher has no resolution selector; do not treat selecting a resolution there as an acceptance step. Do not mark done until that path is verified.
 
 - 2026-11-26 gpt, private desktop follow-up: created a separate Win32 desktop without switching to it, used direct `CreateProcessW` with `STARTUPINFO.lpDesktop`, and verified the packaged launcher window existed on that desktop before sending its Play control (1014). With auto-updates disabled and the isolated game root and settings, the real Play handler reported `The game is running.` and launched the exact installed `fallout2-ce.exe` above without dev arguments. Two 3440x1440/1x windowed launches used the same retained config; both produced the SDL game window on that desktop and logged `MAINMENU` after startup. A 1920x1080/1x control also produced the game window and logged `MAINMENU`. Game processes were stopped after inspection; this does not demonstrate graceful game exit or game-saved settings. `ImageGrab` failed for the game window on the inactive desktop, so those ordinary Play runs do not prove the rendered menu, actual drawable size or usable keyboard/mouse input. Background dev-capture results above remain separate evidence. The initial attempt used Python subprocess, which silently dropped the custom desktop field; its launcher could have appeared on the ordinary desktop with `--no-activate`, was stopped, and did not launch the game. The corrected runs used direct Win32 and enumerated the private desktop. Next: verify real menu and input on an isolated interactive desktop. Leave the task open.
+
+- 2026-11-26 gpt acceptance: blocked on a safe interactive session for the ordinary Play run. `MAINMENU` above is the background-art load diagnostic, before the menu input loop. The separate hidden captures show the menu and drawable at both sizes. Next, save 3440 x 1440 in the game settings on a disposable copy, exit normally, then start from Play and use the menu. Compare against 1920 x 1080.
