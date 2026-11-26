@@ -93,3 +93,24 @@ maps entering 3D (187), view-persistence (173, the owner's draft).
   runs/224-geometry-second-pass/f2-denbus2-e1-2d-vs-3d-now.jpg.
 - F3 newr2 e0 Shark Club marquee: still open, untouched this pass.
 - 2026-11-13 claude: finds F2 and F3 cut as 274 and 277; the full re-walk cut by region as 279-282. This file keeps the register and the finds of other kinds.
+- 2026-11-27 glm: the artemple e0 narrow cross-check, from existing artifacts only (the
+  Windows slot freed for Main's clean #285 release measurement; no captures this round).
+  The 243 base-ownership rule's shipped form is the ownership mask, not cards over the
+  base: the stairs and the two lower tower sections stay in the floor atlas (they are the
+  original floor art, runs/224-geometry-second-pass/temple-floor-shadow.md) and take the
+  scenery group's sun verdict through the authored mask - tools/scene_export/floor_receivers.json
+  key "artemple:0" (artFile 33555805, tile 16491, three floor guards 2156/2169/2225) baked
+  into the scene cache as floor-receiver.bin (magic F2FR, 251618 bytes), read by the renderer
+  at floor.cc:48. Export match: the walk-era scene cache (exporter 1.13.0) already carries
+  the receiver, so the export matches the current rule. Frame match: the 279 walk's own raw
+  capture of the entrance view (artemple e0 view tile 17288, game camera, shot 2026-11-25
+  21:33 on the walk build, raw PNG in build/walk/279/artemple-game/ per that run's README)
+  shows the stairs, lower towers and braziers as one shaded structure - the "clean" verdict
+  of the 279 walk holds for the base-ownership rule, and the 09:00 before/after
+  (temple-floor-shadow-09.jpg) covers the same base at a second hour. Remaining artemple e0
+  item: the low-confidence leftover in the register - the right-edge boulders (2D shows grey
+  rocks at the right edge of the entrance view, 3D looks bare). Pinned spot for the next
+  session, no capture taken: artemple e0, view tile 17288, hour 12, the right edge of the
+  frame (x about 1700-1920 of 1920); the control is the classic 2D frame at the same view
+  tile; the check is whether the grey rocks exist as objects/cards in the 3D export or are
+  missing; coverage limit is this one zoomed crop - no silhouette-metric hunting.
