@@ -276,7 +276,14 @@ class SceneBuilder:
             texture = sheet[y + TILE_MARGIN:y + TILE_MARGIN + TILE_RES, x + TILE_MARGIN:x + TILE_MARGIN + TILE_RES]
             colour = texture[texture[..., 3] > 0][:, :3].mean(axis=0) if texture[..., 3].any() else np.zeros(3)
             self.ground = {"cell": cell, "color": _round(colour / 255)}
-            self.indoor = bool(colour.mean() < DARK_TILE and not self.roof.any())
+            # A dark roofless floor is underground, unless the map's own script carries
+            # a day level and a night level: those literals are the game's own proof the
+            # map lies under the sky, whatever the ground's colour (285: NCR 4's dark
+            # desert, the slavers' camp and the Car out of gas lost their night to this
+            # heuristic, while the classic kept dimming them by the clock).
+            levels = self.script_light_levels()
+            under_the_sky = bool(levels) and max(levels) >= 70 and min(levels) <= 60
+            self.indoor = bool(colour.mean() < DARK_TILE and not self.roof.any() and not under_the_sky)
 
     def title(self):
         """The map's name in the game's own map table (data/maps.txt), else its file name."""
@@ -296,8 +303,8 @@ class SceneBuilder:
         return {key: text for key, number in (("nothing", 493), ("see", 490))
                 if (text := messages.text(number))}
 
-    def script_light(self):
-        """Ambient light 0.25..1 if the map script sets one fixed level, else None.
+    def script_light_levels(self):
+        """The set_light_level literals in the map's enter script, as a set.
 
         Maps under the sky call set_light_level with several literals (their day and
         night levels), caves and vaults with a single one. The script is not run:
@@ -307,13 +314,18 @@ class SceneBuilder:
         try:
             code = self.gf.read(f"scripts/{name}.int") if name else b""
         except (FileNotFoundError, KeyError):
-            return None
+            return set()
         levels = set()
         at = code.find(SET_LIGHT_LEVEL)
         while at >= 0:
             if at >= 6 and code[at - 6:at - 4] == PUSH_INT:
                 levels.add(int.from_bytes(code[at - 4:at], "big", signed=True))
             at = code.find(SET_LIGHT_LEVEL, at + 2)
+        return levels
+
+    def script_light(self):
+        """Ambient light 0.25..1 if the map script sets one fixed level, else None."""
+        levels = self.script_light_levels()
         if len(levels) != 1:
             return None
         level = min(max(levels.pop(), 0), 100)         # opSetLightLevel: 0 / 50 / 100 % = quarter / five eighths / full
