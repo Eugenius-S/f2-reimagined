@@ -24,6 +24,20 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+function Read-Header([string[]]$lines) {
+    $header = @{}
+    if ($lines.Count -eq 0 -or $lines[0] -ne '---') { return $null }
+    for ($i = 1; $i -lt $lines.Count -and $lines[$i] -ne '---'; $i++) {
+        if ($lines[$i] -match '^([a-z-]+):\s*(.*?)\s*(#.*)?$') { $header[$Matches[1]] = $Matches[2] }
+    }
+    return $header
+}
+
+# A terminal main card owns its entire body, including its Log.
+function Use-BranchTask([hashtable]$MainHeader) {
+    return $MainHeader -and $MainHeader['status'] -notin 'done', 'blocked'
+}
+
 # The one taken/stale decision for the whole script (also fed by -SelfTest).
 # A task is locked ("live") while an open PR carries its number or any
 # task/NNN-* branch committed within the last three days. Without a live
@@ -201,6 +215,22 @@ if ($SelfTest) {
             $failed = $true
         }
     }
+    # Test the same whole-card precedence used by the board, including Log.
+    foreach ($case in @(
+        @{ Main = 'blocked'; Branch = 'doing'; Want = 'blocked'; Log = 'main log' },
+        @{ Main = 'done'; Branch = 'doing'; Want = 'done'; Log = 'main log' },
+        @{ Main = 'todo'; Branch = 'blocked'; Want = 'blocked'; Log = 'branch log' },
+        @{ Main = 'todo'; Branch = 'doing'; Want = 'doing'; Log = 'branch log' }
+    )) {
+        $mainLines = @('---', "status: $($case.Main)", '---', 'main log')
+        $branchLines = @('---', "status: $($case.Branch)", '---', 'branch log')
+        $resolved = if (Use-BranchTask (Read-Header $mainLines)) { $branchLines } else { $mainLines }
+        $resolvedHeader = Read-Header $resolved
+        if ($resolvedHeader['status'] -ne $case.Want -or $resolved[-1] -ne $case.Log) {
+            Write-Output ("selftest: FAIL main={0} branch={1} precedence" -f $case.Main, $case.Branch)
+            $failed = $true
+        }
+    }
     # 300: the metadata validator against synthetic fixtures.
     function Assert-True([string]$what, [bool]$got) {
         if (-not $got) {
@@ -330,15 +360,6 @@ body
 
 $Root = Split-Path -Parent $PSScriptRoot
 
-function Read-Header([string[]]$lines) {
-    $header = @{}
-    if ($lines.Count -eq 0 -or $lines[0] -ne '---') { return $null }
-    for ($i = 1; $i -lt $lines.Count -and $lines[$i] -ne '---'; $i++) {
-        if ($lines[$i] -match '^([a-z-]+):\s*(.*?)\s*(#.*)?$') { $header[$Matches[1]] = $Matches[2] }
-    }
-    return $header
-}
-
 # Prefer origin/main (another agent may work on a branch in another
 # worktree); fall back to the working tree without a network.
 $source = 'origin/main'
@@ -409,7 +430,7 @@ $rows = foreach ($file in $files) {
         }
         if ($newest) { $branchFile = $newest }
     }
-    if ($branchFile -and $onMain -and $onMain['status'] -ne 'done') {
+    if ($branchFile -and (Use-BranchTask $onMain)) {
         $fromBranch = git show "origin/$branchFile`:$file" 2>$null
         if ($fromBranch) { $lines = $fromBranch }
     }

@@ -2,7 +2,7 @@
 id: 333
 title: The task picker respects a blocked card on main
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: gpt
 priority: high
@@ -43,3 +43,5 @@ changing Polka's priority and ownership controls.
 ## Log
 
 - 2026-11-27 gpt: reproduced on current main while preparing the next batch.
+
+- 2026-11-27 gpt: Main blocked and done cards retain their full body; open cards still use their branch. SelfTest covers both terminal statuses and open-to-blocked/doing precedence. `-SelfTest` passed; `-CheckMetadata` passed (326 tasks, 225 legacy gaps); live `-Next gpt` selected stale task 186, not 316. Independent review remains.
