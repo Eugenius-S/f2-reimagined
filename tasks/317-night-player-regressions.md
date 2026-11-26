@@ -2,7 +2,7 @@
 id: 317
 title: Restore 3D exit cues and predictable edge scrolling
 milestone: M1
-status: todo
+status: blocked
 owner: gpt
 priority: high
 tier: 0
@@ -70,3 +70,37 @@ e0 and ARTEMPLE to ARCAVES e0 using the native Windows game.
 ### 2026-11-23 release reconciliation
 
 Release `039d25da3` includes the exit-marker fix and the native destination checks above. Remaining: a continuous story-duel route, Arroyo and random-encounter transitions around screenshot capture, and matched diagonal scrolling and map clipping near the round Temple door.
+
+### 2026-11-26 Windows controls
+
+The new worktree is based on `f1f1d61e3`. The isolated test used the
+published `a414e39d7` Windows Release executable (SHA256
+`75caf366deea13d6a412abf1e89175cd9a1c77f2ba42b6568886f7ffe5fa05ac`).
+The runtime and tools trees are identical across those commits. The test
+installation contains disposable copies of stock data. No owner saves
+were used.
+
+- ARCAVES e2, hero 21125, camera 22307, zoom 1.28, an off-screen
+  3440x1440 window at 2x. The script drove the game's hover path to
+  the left edge, the upper-left corner and back. Camera positions were
+  22307, 22108, 21708 and 21907, matching the saved fd16a60e7 control.
+  All four frames remained 3D and the four clip planes matched the
+  reference exactly. This was a floor-envelope clip fixture. The separate
+  classic snapshot reported view off at the same starting camera.
+  [Edge captures](../runs/317-native-acceptance/temple-edge.jpg).
+- A separate injected press and release reached the input logger at the
+  round-door starting view. The camera moved and the hero stayed on
+  21125. The run did not establish a click on door 19928 or an open flag.
+- Normal click probes started beside two exits, with separate processes.
+  ARCAVES e2 exit 28511 reached e1 at 14722 after 20 frames; destination
+  frame 346 was 3D. ARTEMPLE exit 21916 reached ARVILLAG e0 at 11683
+  after 31 frames. The watcher recorded loading frames with iso disabled
+  and the first available local 3D frame at 742.
+  [First local 3D frames](../runs/317-native-acceptance/first-local-3d.jpg).
+
+Still open: one continuous route after the real story duel, the round
+door action combined with edge scroll against the authored clip, and the
+independent Terra High review. The host's built-in worker launch exposes
+Priority only against the current Standard requirement. Preserve the
+isolated raw logs under `build/317-*`. This packet changes no application
+code and has no release candidate.
