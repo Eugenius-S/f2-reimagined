@@ -2,7 +2,7 @@
 id: 286
 title: Animated scenery moves in 3D: fires, water, screens, signs
 milestone: M1
-status: todo
+status: doing
 owner: glm
 suggested: glm
 priority: normal
@@ -35,3 +35,4 @@ Critter animations and combat effects.
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+- 2026-11-27 glm: took the card (free, no duplicate PR; 265 left alone, 271 on stop). Plan: the static inventory first, from the game data only - the palette's colour cycles (pal.py) against each representative map's scenery pixels, plus FRM frame counts - one map per kind (fire: kladwtwn's barrels and Modoc's braziers; water: sfdock; slime: klatoxcv; monitors: vault13; signs: newr1). Then Classic/3D pairs, one map/tile/mode at a time, -CyclePalette/-HoldSeconds, movement measured inside the object's own region.
