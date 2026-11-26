@@ -82,6 +82,13 @@ Findings:
   entrance's right edge are roks3.frm (6 objects) plus
   roks/roks2/rock07/rock10 (5 objects), plain scenery the export does
   carry.
+- Scale and identity notes from the review: both fresh sides shot at
+  scale 2 (1920x1080, logical 960x540, turn 0 - the sidecar fields).
+  The specific rounded pile is not new to this pair: the 279 walk's own
+  3D frame (devhero-20261125-213322-000.png, top right) already shows
+  the same group, so the 2026-11-10 "3D looks bare there" line
+  pre-dates evidence that contradicts it. The inconclusive part stays
+  the classic's bottom-right rock only.
 
 ## Harness
 
