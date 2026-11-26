@@ -3,10 +3,14 @@ arvillag,20517,39.54,51.04,1.29,
 argarden,21871,25.94,32.6,1.26,
 artemple,18492,27.51,35.86,1.3,
 arbridge,16686,35.56,46.24,1.3,
-ardead,16686,,48.08,,classic capture failed: imeException
-    + FullyQualifiedErrorId : Live check watchdog: step timeout after 30 s without progress. Diagnostics: E:\Projects\ 
-   f2r-285-glm\build\test-run\runs\c3e7258cf214\watchdog.txt
- 
+ardead,16686,,48.08,,classic capture failed: imeException
+
+    + FullyQualifiedErrorId : Live check watchdog: step timeout after 30 s without progress. diagnostics in the run watchdog file. 
+
+   f2r-285-glm\build\test-run\runs\c3e7258cf214\watchdog.txt
+
+ 
+
 
 denbus1,23895,22.12,25.01,1.13,
 denbus2,20100,27.13,29.66,1.09,
@@ -25,10 +29,14 @@ modshit,20900,15.15,11.85,0.78,
 modwell,16710,16.05,11.89,0.74,
 vctydwtn,24117,44.86,51.69,1.15,
 vctyctyd,20100,38.14,46.98,1.23,
-vctycocl,19292,,60.21,,classic capture failed: imeException
-    + FullyQualifiedErrorId : Live check watchdog: step timeout after 30 s without progress. Diagnostics: E:\Projects\ 
-   f2r-285-glm\build\test-run\runs\670090818b61\watchdog.txt
- 
+vctycocl,19292,,60.21,,classic capture failed: imeException
+
+    + FullyQualifiedErrorId : Live check watchdog: step timeout after 30 s without progress. diagnostics in the run watchdog file. 
+
+   f2r-285-glm\build\test-run\runs\670090818b61\watchdog.txt
+
+ 
+
 
 vctyvlt,17095,56.41,55.6,0.99,
 gecksetl,23909,36.0,48.28,1.34,
