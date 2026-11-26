@@ -70,6 +70,30 @@ class CheckRunsSizeTests(unittest.TestCase):
         self.assertIn('over the 2 MiB total limit', result.stdout)
         self.assertNotIn('per-file limit', result.stdout)
 
+    def test_type_changes_check_blobs_and_skip_gitlinks(self):
+        blob = self.git('hash-object', '-w', '--stdin').stdout.strip().decode()
+        self.git('update-index', '--add', '--cacheinfo', f'120000,{blob},runs/type.png')
+        self.git('commit', '-qm', 'add symlink to baseline')
+        self.git('branch', '-f', 'base')
+        self.write('runs/type.png', LIMIT + 1)
+        self.git('add', 'runs/type.png')
+        self.git('commit', '-qm', 'replace symlink with large file')
+        result = self.check()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('runs/type.png', result.stdout)
+        self.write('runs/type.png', LIMIT)
+        self.write('runs/other.png', LIMIT)
+        self.write('runs/extra.png', 1)
+        self.commit('type change over image total')
+        result = self.check()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn('over the 2 MiB total limit', result.stdout)
+        missing_commit = '1' * 40
+        self.git('update-index', '--cacheinfo', f'160000,{missing_commit},runs/type.png')
+        self.git('commit', '-qm', 'replace with gitlink')
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_modified_images_count_and_nul_delimited_paths(self):
         self.write('runs/old.png', LIMIT)
         self.write('runs/name with spaces and ü.png', LIMIT)

@@ -13,21 +13,22 @@ def git(*args):
 
 def main():
     base = sys.argv[1]
-    changes = iter(git('diff', '--name-status', '-z', '-M', '--diff-filter=AMR',
-                       f'{base}...HEAD').split(b'\0'))
+    changes = iter(git('diff', '--raw', '--no-abbrev', '-z', '-M',
+                       '--diff-filter=AMRT', f'{base}...HEAD').split(b'\0'))
     over = []
     image_total = 0
-    for status in changes:
-        if not status:
+    for entry in changes:
+        if not entry:
             break
+        _, mode, _, blob, status = entry.split()
         name = next(changes).decode('utf-8', 'surrogateescape')
         if status.startswith(b'R'):
             name = next(changes).decode('utf-8', 'surrogateescape')
             if status == b'R100':
                 continue
-        if not name.startswith('runs/'):
+        if not name.startswith('runs/') or mode == b'160000':
             continue
-        size = int(git('cat-file', '-s', f'HEAD:{name}'))
+        size = int(git('cat-file', '-s', blob.decode('ascii')))
         if size > LIMIT:
             over.append((size, name))
         if name.lower().endswith(IMAGE_EXTENSIONS):
