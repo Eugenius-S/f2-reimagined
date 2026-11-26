@@ -31,16 +31,26 @@ proof of the sky: a day level (>= 70) together with a night level (<= 60)
 keeps the map outdoor whatever the ground looks like.
 
 Change: vendor `fp/scene.py` (`build_ground`, `script_light_levels` extracted),
-exporter 1.13.0 -> 1.14.0, 5 unit tests in `tools/scene_export/test_ground_sky_rule.py`.
+exporter 1.13.0 -> 1.14.0, 6 unit tests in `tools/scene_export/test_ground_sky_rule.py`
+(the tests bind the real `script_light_levels`, so the byte-code reader runs for
+real, including the missing-script-file case).
 Flip set: 37 map elevations by the probe (dark deserts, coasts, mountains,
 random encounters; not one cave or vault); the trial export confirms
 ncr4/cardesrt/raiders1 and adds raiders1 e0, sfchina2 e1/e2.
 
 | map | classic | 3D before | 3D after | ratio before -> after |
 |---|---|---|---|---|
-| cardesrt (22:00) | 34.41 | 86.57 | 50.02 | 2.52 -> 1.45 |
-| raiders1 (22:00) | 30.13 | 74.47 | 41.89 | 2.47 -> 1.39 |
-| ncr4 (00:00 both) | 24.57 | 67.57 (22:00) | 37.53 | 2.75 -> 1.53 |
+| cardesrt, e0 t20100, 22:00 | 34.41 | 86.57 | 50.02 | 2.52 -> 1.45 |
+| raiders1, e0 t23305, 22:00 | 30.13 | 74.47 | 41.89 | 2.47 -> 1.39 |
+| ncr4, e0 t17699, 00:00 | 24.57 | 67.57 | 37.53 | 2.75 -> 1.53 |
+
+All three before shots and both after shots sit at the named map, hour and
+tile. ncr4's midnight is measured, not assumed: the old-cache 3D at 00:00
+draws 67.57 (the scene was underground and never dimmed at any hour), the
+classic 24.57 comes through the 22:00 clock ladder - the script's night
+`set_light_level` is a state the ladder sets and midnight keeps. A direct
+00:00 start never runs that trigger and stays full bright (64.48), so the
+ladder path is the faithful midnight.
 
 Controls hold byte-stable: klatoxcv (pinned interior) 17.52 = 17.52, kladwtwn
 (street) 29.38 = 29.38; their scene flags do not move. Sheets:
@@ -62,13 +72,14 @@ level as the 3D night ambient floor. Renderer lane, not cut here.
 - depolva 0.43 / depolvb 0.49: the Sierra surface at night (script night
   level 40); the 3D reads darker than the classic.
 
-## Missing rows
+## Missing rows, still open
 
 ardead and vctycocl: the classic capture stalls at the live-check watchdog
 step (30 s without progress) on four attempts each, including the walk's own
 tiles and the 2026-11-25 build. Their 3D sides are measured (48.08 and 60.21
-in the first-pass table). The classic sides stay missing; a live-window
-capture is the next thing to try if anyone picks this up.
+in the first-pass table). The classic sides stay missing and the rows stay
+open - they are not counted as resolved; a live-window capture is the next
+thing to try if anyone picks this up.
 
 ## Gates
 
@@ -81,3 +92,12 @@ capture is the next thing to try if anyone picks this up.
 - The trial export ran into `build/cache-285trial` (exporter 1.14.0); the
   shared cache was not touched before the merge. The owner's next export
   rebuilds every scene once: the fingerprint covers the vendor hashes.
+
+## Evidence storage
+
+Git keeps the seven pictures this README shows (about 0.9 MiB); everything
+else lives in the evidence release, per the 291 process:
+https://github.com/Eugenius-S/f2-reimagined/releases/download/evidence/285-towns-at-night-fa035bd8.zip
+(16 sheets: the remaining sweep pairs and the tour's per-map sheets).
+Downloaded SHA-256:
+a796ff2e558a97543ad36c0c62c607705e25ffc7931dddb8bb8941a4e1e35164.
