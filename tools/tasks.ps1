@@ -24,6 +24,33 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+function Read-Header([string[]]$lines) {
+    $header = @{}
+    if ($lines.Count -eq 0 -or $lines[0] -ne '---') { return $null }
+    for ($i = 1; $i -lt $lines.Count -and $lines[$i] -ne '---'; $i++) {
+        if ($lines[$i] -match '^([a-z-]+):\s*(.*?)\s*(#.*)?$') { $header[$Matches[1]] = $Matches[2] }
+    }
+    return $header
+}
+
+# Native stderr must not throw in Windows PowerShell when a branch lacks a file.
+$readBranchFromGit = {
+    param($branchName, $taskFile)
+    $ErrorActionPreference = 'Continue'
+    $result = @(git show "origin/$branchName`:$taskFile" 2>$null)
+    if ($LASTEXITCODE -eq 0) { $result }
+}
+
+# A terminal main card owns its entire body, including its Log.
+function Resolve-TaskLines([string[]]$MainLines, [string]$Branch, [string]$File, [scriptblock]$ReadBranch) {
+    $mainHeader = Read-Header $MainLines
+    if ($Branch -and $mainHeader -and $mainHeader['status'] -notin 'done', 'blocked') {
+        $fromBranch = @(& $ReadBranch $Branch $File)
+        if ($fromBranch.Count -gt 0) { return $fromBranch }
+    }
+    return $MainLines
+}
+
 # The one taken/stale decision for the whole script (also fed by -SelfTest).
 # A task is locked ("live") while an open PR carries its number or any
 # task/NNN-* branch committed within the last three days. Without a live
@@ -201,6 +228,35 @@ if ($SelfTest) {
             $failed = $true
         }
     }
+    # Exercise the board's card resolver, including its branch read and fallback.
+    foreach ($case in @(
+        @{ Main = 'blocked'; Branch = 'doing'; Want = 'blocked'; Log = 'main log'; Reads = 0 },
+        @{ Main = 'done'; Branch = 'doing'; Want = 'done'; Log = 'main log'; Reads = 0 },
+        @{ Main = 'todo'; Branch = 'blocked'; Want = 'blocked'; Log = 'branch log'; Reads = 1 },
+        @{ Main = 'todo'; Branch = 'doing'; Want = 'doing'; Log = 'branch log'; Reads = 1 },
+        @{ Main = 'todo'; Branch = ''; Want = 'todo'; Log = 'main log'; Reads = 1 }
+    )) {
+        $mainLines = @('---', "status: $($case.Main)", '---', 'main log')
+        $script:branchReads = 0
+        $reader = {
+            param($branch, $file)
+            $script:branchReads++
+            if ($case.Branch) { @('---', "status: $($case.Branch)", '---', 'branch log') }
+        }
+        $resolved = @(Resolve-TaskLines $mainLines 'task/fixture' 'tasks/fixture.md' $reader)
+        $resolvedHeader = Read-Header $resolved
+        if ($resolvedHeader['status'] -ne $case.Want -or $resolved[-1] -ne $case.Log -or $script:branchReads -ne $case.Reads) {
+            Write-Output ("selftest: FAIL main={0} branch={1} precedence" -f $case.Main, $case.Branch)
+            $failed = $true
+        }
+    }
+    $mainLines = @('---', 'status: todo', '---', 'main log')
+    $missing = 'tasks/selftest-missing-' + [guid]::NewGuid().ToString('N') + '.md'
+    $resolved = @(Resolve-TaskLines $mainLines 'main' $missing $readBranchFromGit)
+    if (($resolved -join "`n") -ne ($mainLines -join "`n") -or $ErrorActionPreference -ne 'Stop') {
+        Write-Output 'selftest: FAIL actual Git missing-file fallback'
+        $failed = $true
+    }
     # 300: the metadata validator against synthetic fixtures.
     function Assert-True([string]$what, [bool]$got) {
         if (-not $got) {
@@ -324,20 +380,11 @@ body
 
     Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
     if ($failed) { exit 1 }
-    Write-Output ("selftest: ok ({0} cases)" -f $cases.Count)
+    Write-Output ("selftest: ok ({0} lock cases and 5 card precedence cases and Git fallback)" -f $cases.Count)
     exit 0
 }
 
 $Root = Split-Path -Parent $PSScriptRoot
-
-function Read-Header([string[]]$lines) {
-    $header = @{}
-    if ($lines.Count -eq 0 -or $lines[0] -ne '---') { return $null }
-    for ($i = 1; $i -lt $lines.Count -and $lines[$i] -ne '---'; $i++) {
-        if ($lines[$i] -match '^([a-z-]+):\s*(.*?)\s*(#.*)?$') { $header[$Matches[1]] = $Matches[2] }
-    }
-    return $header
-}
 
 # Prefer origin/main (another agent may work on a branch in another
 # worktree); fall back to the working tree without a network.
@@ -409,10 +456,7 @@ $rows = foreach ($file in $files) {
         }
         if ($newest) { $branchFile = $newest }
     }
-    if ($branchFile -and $onMain -and $onMain['status'] -ne 'done') {
-        $fromBranch = git show "origin/$branchFile`:$file" 2>$null
-        if ($fromBranch) { $lines = $fromBranch }
-    }
+    $lines = @(Resolve-TaskLines @($lines) $branchFile $file $readBranchFromGit)
     if ($null -eq $lines -or @($lines).Count -eq 0) {
         $lines = Get-Content (Join-Path $Root ($file -replace '/', '\'))
     }
