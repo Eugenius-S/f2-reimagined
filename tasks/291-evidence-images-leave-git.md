@@ -2,7 +2,7 @@
 id: 291
 title: New evidence images stop growing the repository
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: any
 priority: normal
@@ -10,7 +10,7 @@ tier: 3
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -39,3 +39,16 @@ Shrinking the existing history.
 - 2026-11-27 gpt: use an evidence release separate from Latest, with one uniquely named ZIP per larger task capture. Keep small inline crops in Git with a 2 MiB image total per PR and the existing 1 MiB per-file cap.
 
 - 2026-11-27 gpt: implemented the 2 MiB changed-image total and retained the 1 MiB per-file check. Exact renames and untouched files do not count. Focused tests cover the limits and existing evidence. Next: Main publishes and verifies a real task ZIP in the separate evidence release, links it here or in that task Log, and completes review. Status remains doing.
+
+- 2026-11-27 gpt: CI checks the existing 1 MiB per-file limit and the 2 MiB
+  aggregate of changed images. The checks count changes to Git file type
+  when the result is an evidence file. Unchanged evidence and exact moves
+  keep their existing allowance. Four focused tests passed; independent
+  Terra High reviewed the corrected checker at `0d0ba04c`.
+- The first real archive is the [322 cursor captures]
+  (https://github.com/Eugenius-S/f2-reimagined/releases/download/evidence/322-cursor-qa-c2f5a723.zip),
+  linked in the 322 Log in PR #607. It holds six frames and their capture
+  timing notes. The downloaded SHA-256 is
+  `c1d78168f66456acac24a4a695495b6892c8cbff9d81cb22843231da357d51dd`.
+  The default player release stays Latest at `a414e39d`. No existing
+  evidence or Git history was moved.
