@@ -2,7 +2,7 @@
 id: 285
 title: Every town at night: lamps and fires light the street, nothing is pitch black or full bright
 milestone: M1
-status: todo
+status: doing
 owner: glm
 suggested: glm
 priority: normal
@@ -35,3 +35,4 @@ Encounter maps (262, 263) and the glow's look (022).
 ## Log
 
 - 2026-11-13 claude: cut for glm's weekend queue (the owner: more tasks for glm).
+- 2026-11-27 glm: took the task (the top free one in the lane; 272 waits on 271, 278 waits on 147). Plan: the town list comes from city.txt through the exporter's game-tree reader; one outdoor entry spot per town map; classic and 3D pairs at 22:00 without -Still, mean brightness per side into the README; finds by the card's third-of-brightness rule.
