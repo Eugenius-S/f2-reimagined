@@ -402,8 +402,10 @@ PreviewRuntimeState runtimeState()
     const bool modal = (mode & (GameMode::kInventory | GameMode::kEditor | GameMode::kDialog | GameMode::kPipboy)) != 0;
     const bool coveringTransition = (mode & (GameMode::kWorldmap | GameMode::kSaveGame | GameMode::kLoadGame)) != 0
         || mapIsTransitioning();
+    // Scripted dialogue can remain finished through combat and the return to the map.
     return {
-        gameGetState() == GameState::Normal || (dialog && gameGetState() == GameState::DialogActive),
+        gameGetState() == GameState::Normal || gameGetState() == GameState::DialogFinished
+            || (dialog && gameGetState() == GameState::DialogActive),
         gameModeShowsMap(mode),
         !isoIsDisabled(),
         _moviePlaying() == 0,

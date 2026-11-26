@@ -144,3 +144,42 @@ for the continuous route. Do not modify the shared watcher from PR #588.
 Status remains doing, reviewed no; no game fix or release decision is claimed.
 The clean Windows Release build after removing instrumentation passed, and
 CTest passed 35/35 (`build/317-final-build.log`, `build/317-ctest.log`).
+
+### 2026-11-26 story-duel diagnosis and narrow fix
+
+The previous report that the fight never started is superseded. The direct
+fixture called `actionTalk` just as the NPC also requested the real scripted
+dialogue, producing a second dialogue. With the extra fixture dispatch removed,
+the NPC naturally opened its dialogue: `Sure, let's party`, `I'm ready`,
+`[Done]`; the script then requested combat. A temporary background-only
+exception let that genuine combat request run. Native mouse-handler clicks
+and turn input fought the real challenge NPC without spawning an opponent or
+forcing combat completion. One run ended with the NPC's actual victory text,
+`You have defeated me. You are worthy, Chosen One.`
+
+Before the fix, `DialogFinished` persisted through the real fight: present
+callbacks logged state 2, scene view full but `shouldPresent=0` from frame 90
+at tick 14021 to at least frame 3510 at tick 75159, and after combat. The
+post-duel capture was `vanilla-framebuffer`, availability `game-state`.
+`runtimeState` rejected `DialogFinished`, so local 3D fell back to 2D even
+though the scene remained enabled. The production change permits precisely
+`DialogFinished`; game-mode, iso, movie and transition gates remain in place.
+After the fix, combat callbacks at frames 90 through 540 and the post-combat
+callback recorded state 2 and `shouldPresent=1`. A post-victory `takeSnapshot`
+shows the 3D preview. [Before and after](../runs/317-native-acceptance/duel-before-after.jpg).
+The QA binaries contained temporary observers and input drivers, removed from
+production; raw output is under `build/317-story-present-before`,
+`build/317-story-present-after`, and `build/317-story-route6`. The screenshot
+on the right is the preview capture, not an asserted back-buffer readback.
+
+For the continuous route, the victory line was floating text, with no response
+prompt. Immediately after combat no path to e1 existed; after waiting 12 seconds
+for the NPC's real scripted sequence, paths opened without forcing a door or
+changing game state. Normal mouse-handler clicks moved the hero 13527 -> 15725
+-> 17125 on ARCAVES e2, still in 3D. The automated driver then found no visible
+waypoint because the next segment was outside its current view. It did not
+reach e1 or capture any arrival; the full route and its present buffers remain
+open. Next, extend the disposable driver's normal edge-scroll input to follow
+the path, then capture each first actual present. This is a fixture limitation,
+not a claim that the player cannot walk further. Full RP and 2D controls remain
+open as stated above.
