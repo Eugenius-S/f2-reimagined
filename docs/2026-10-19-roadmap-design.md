@@ -40,15 +40,7 @@ face the camera).
 
 ## Team and process
 
-Three agents (Claude, GPT Sol 6.1, GLM 5.3) and the owner, who accepts the
-visuals. Agents work one at a time and any of them may run out of limits at
-any moment. How they take, hand off, finish and review tasks is in
-[AGENTS.md](../AGENTS.md), the only instruction for every agent.
-
-Split: Claude keeps the strategy (the board's order, cutting big tasks into
-bounded ones with script checks, the specs, reviews of risky PRs) and the
-design-heavy scene core; GPT takes large self-contained features; GLM takes
-well-bounded smaller tasks.
+GPT Main (Sol High) leads strategy, the board, Polka sync, inbox folding, task sizing, dispatch, acceptance, reviews and verified release checks. Claude executes assigned and design-heavy work; GPT and GLM share the `owner: any` pool, subject to explicit assignments and owner checks. The owner accepts visuals. Model routing, worker limits and handoff rules are in [AGENTS.md](../AGENTS.md).
 
 ## Milestones
 

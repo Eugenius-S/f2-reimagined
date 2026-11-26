@@ -2,7 +2,7 @@
 id: 305
 title: GPT owns the project strategy, board and follow-up reviews
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: gpt
 priority: high
@@ -10,7 +10,7 @@ tier: 1
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -20,9 +20,9 @@ The current rules name one project lead, GPT, and carry the owner's model routin
 ## Context
 
 - Standalone handover requested by the owner on 2026-11-15, not another board-tool task (248, 249, 300).
-- `AGENTS.md:11-24,195-207,252` still gives Claude strategy, Polka and follow-up reviews; `CLAUDE.md:3-7` gives it the lead's session routine. The team split in `docs/2026-10-19-roadmap-design.md` must agree too.
-- `AGENTS.md:14` requires exactly one Luna for code. The owner's current routing is: main Sol (`gpt-6.1-sol`) high; brainstorming Astra (`gpt-6-astra`) high; code Sol, Terra or Luna at an effort suited to the work; image generation Luna (`gpt-6-luna`) low. Above Luna, read Ponytail and use full unless the owner chooses otherwise. Never silently substitute an unavailable model or change the active chat's model.
-- Preserve the project's one-working-subagent limit; model routing does not create extra parallel slots. GPT keeps analysis, specs, decisions and acceptance. Claude executes critical fixes and design-heavy core work; GLM keeps the shared pool.
+- At handover, AGENTS and CLAUDE gave Claude the lead routine; the roadmap team split also needed alignment.
+- The 2026-11-24 owner policy supersedes earlier model versions: verify the newest available role-family identifier for new work, use Standard, and do not substitute silently. Sol High leads strategy, Astra High handles deep analysis, Terra High handles principal implementation and separate independent ordinary review when required, and Luna uses xhigh for code or checks and low for prepared image prompts. Preserve active jobs.
+- Run one worker at a time with a standalone brief and no inherited conversation. Use Ponytail full for coding and ponytail-review for acceptance when applicable; Luna is exempt. Use TryHard finish workflow for substantial work with the existing reviewer and release gates. GPT leads; Claude executes assigned and design-heavy work; GLM keeps the shared pool.
 
 ## Acceptance
 
@@ -38,3 +38,5 @@ Changing the roadmap's feature priorities, code, CI, task picker or historical r
 ## Log
 
 - 2026-11-15 gpt: cut from the owner's lead handover. One bounded rules PR; no approval gate added.
+
+- 2026-11-26 gpt: aligned active leadership, session routine, routing and review guidance across AGENTS, CLAUDE and the team split. Check: documentation diff, active role references and task metadata; no code or game checks required.
