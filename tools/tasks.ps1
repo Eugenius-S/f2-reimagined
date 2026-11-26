@@ -34,8 +34,13 @@ function Read-Header([string[]]$lines) {
 }
 
 # A terminal main card owns its entire body, including its Log.
-function Use-BranchTask([hashtable]$MainHeader) {
-    return $MainHeader -and $MainHeader['status'] -notin 'done', 'blocked'
+function Resolve-TaskLines([string[]]$MainLines, [string]$Branch, [string]$File, [scriptblock]$ReadBranch) {
+    $mainHeader = Read-Header $MainLines
+    if ($Branch -and $mainHeader -and $mainHeader['status'] -notin 'done', 'blocked') {
+        $fromBranch = @(& $ReadBranch $Branch $File)
+        if ($fromBranch.Count -gt 0) { return $fromBranch }
+    }
+    return $MainLines
 }
 
 # The one taken/stale decision for the whole script (also fed by -SelfTest).
@@ -215,18 +220,24 @@ if ($SelfTest) {
             $failed = $true
         }
     }
-    # Test the same whole-card precedence used by the board, including Log.
+    # Exercise the board's card resolver, including its branch read and fallback.
     foreach ($case in @(
-        @{ Main = 'blocked'; Branch = 'doing'; Want = 'blocked'; Log = 'main log' },
-        @{ Main = 'done'; Branch = 'doing'; Want = 'done'; Log = 'main log' },
-        @{ Main = 'todo'; Branch = 'blocked'; Want = 'blocked'; Log = 'branch log' },
-        @{ Main = 'todo'; Branch = 'doing'; Want = 'doing'; Log = 'branch log' }
+        @{ Main = 'blocked'; Branch = 'doing'; Want = 'blocked'; Log = 'main log'; Reads = 0 },
+        @{ Main = 'done'; Branch = 'doing'; Want = 'done'; Log = 'main log'; Reads = 0 },
+        @{ Main = 'todo'; Branch = 'blocked'; Want = 'blocked'; Log = 'branch log'; Reads = 1 },
+        @{ Main = 'todo'; Branch = 'doing'; Want = 'doing'; Log = 'branch log'; Reads = 1 },
+        @{ Main = 'todo'; Branch = ''; Want = 'todo'; Log = 'main log'; Reads = 1 }
     )) {
         $mainLines = @('---', "status: $($case.Main)", '---', 'main log')
-        $branchLines = @('---', "status: $($case.Branch)", '---', 'branch log')
-        $resolved = if (Use-BranchTask (Read-Header $mainLines)) { $branchLines } else { $mainLines }
+        $script:branchReads = 0
+        $reader = {
+            param($branch, $file)
+            $script:branchReads++
+            if ($case.Branch) { @('---', "status: $($case.Branch)", '---', 'branch log') }
+        }
+        $resolved = @(Resolve-TaskLines $mainLines 'task/fixture' 'tasks/fixture.md' $reader)
         $resolvedHeader = Read-Header $resolved
-        if ($resolvedHeader['status'] -ne $case.Want -or $resolved[-1] -ne $case.Log) {
+        if ($resolvedHeader['status'] -ne $case.Want -or $resolved[-1] -ne $case.Log -or $script:branchReads -ne $case.Reads) {
             Write-Output ("selftest: FAIL main={0} branch={1} precedence" -f $case.Main, $case.Branch)
             $failed = $true
         }
@@ -354,7 +365,7 @@ body
 
     Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
     if ($failed) { exit 1 }
-    Write-Output ("selftest: ok ({0} cases)" -f $cases.Count)
+    Write-Output ("selftest: ok ({0} lock cases and 5 card precedence cases)" -f $cases.Count)
     exit 0
 }
 
@@ -430,10 +441,10 @@ $rows = foreach ($file in $files) {
         }
         if ($newest) { $branchFile = $newest }
     }
-    if ($branchFile -and (Use-BranchTask $onMain)) {
-        $fromBranch = git show "origin/$branchFile`:$file" 2>$null
-        if ($fromBranch) { $lines = $fromBranch }
-    }
+    $lines = @(Resolve-TaskLines @($lines) $branchFile $file {
+        param($branchName, $taskFile)
+        git show "origin/$branchName`:$taskFile" 2>$null
+    })
     if ($null -eq $lines -or @($lines).Count -eq 0) {
         $lines = Get-Content (Join-Path $Root ($file -replace '/', '\'))
     }
