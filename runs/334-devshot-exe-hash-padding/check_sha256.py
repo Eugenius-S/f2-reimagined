@@ -34,5 +34,3 @@ with tempfile.TemporaryDirectory(prefix='f2r334-') as tmp:
     assert after == expected
     print('PASS vectors: 0, 1, 55-64, 119-121, 127, 128, 184, 1024; before fails 56-63')
     print('CI executable bytes:', exe.stat().st_size, 'before:', before, 'after/stdlib:', after)
-
-
