@@ -1,0 +1,27 @@
+{
+  "map": "SFDOCK",
+  "elevation": 0,
+  "view_tile": 8896,
+  "objects": "TANKER07, serial 9",
+  "tour_turn_degrees": [
+    -45,
+    0,
+    45
+  ],
+  "fly_distance": 30,
+  "resolution": "1920x1080",
+  "logical_resolution": "960x540",
+  "scale": 2,
+  "renderer": "scene-gl",
+  "scene_view": "full",
+  "still_snapshot": true,
+  "ce_commit": "e14e2e75",
+  "exe_sha256": "6a04273eeef7434bb85bccecd32906bbd119a816090f8c996cf0ab4d5f40958f",
+  "snapshot_run": "a6110ac9fade409381200df32daacfba",
+  "source_image_sha256": [
+    "a35e58e7ac68eac78109554c3e9c616b4edc28422fd1be0a09dab95416de6da7",
+    "4963852c67c70ce443209fb3be448ecc4363ca59a8daceb58d6925d1995dcaf2",
+    "b6e44d50f91c9791af334b5c4e9fabbf2fe7dc57c9b7c3432e96415ef223255e"
+  ],
+  "note": "Tour turn values are requested by each stop and visible in distinct frames. Snapshot camera field reports the fixed preview camera, not fly turn."
+}

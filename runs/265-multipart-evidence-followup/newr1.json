@@ -1,0 +1,27 @@
+{
+  "map": "NEWR1",
+  "elevation": 0,
+  "view_tile": 10896,
+  "objects": "renosgn6/renosgn4, serials 229/230",
+  "tour_turn_degrees": [
+    -45,
+    0,
+    45
+  ],
+  "fly_distance": 30,
+  "resolution": "1920x1080",
+  "logical_resolution": "960x540",
+  "scale": 2,
+  "renderer": "scene-gl",
+  "scene_view": "full",
+  "still_snapshot": true,
+  "ce_commit": "e14e2e75",
+  "exe_sha256": "6a04273eeef7434bb85bccecd32906bbd119a816090f8c996cf0ab4d5f40958f",
+  "snapshot_run": "aa0f1b0f4cee45939be528d43a797771",
+  "source_image_sha256": [
+    "c109a8da22a56f1fadf3c58202b4a3573e087ede17db9dfa909349cd8c3fa5e3",
+    "5e3b79276c83a53ac96cbe6f29f9ad66efa37841b6ed37f9fc969fe5edbbc30c",
+    "d3decf8ea3773b1372de848088d604951bc25d4b633f098cb8abe587d335e167"
+  ],
+  "note": "Tour turn values are requested by each stop and visible in distinct frames. Snapshot camera field reports the fixed preview camera, not fly turn."
+}
