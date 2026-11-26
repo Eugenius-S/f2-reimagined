@@ -200,3 +200,19 @@ frames remain unverified. The specific output and disposable observer patch are
 `build/317-route-scroll/process.stdout.log` and `build/317-route-scroll-qa.patch`.
 The prior victory screenshot belongs to a separate run; victory in this run
 was not independently captured.
+
+### 2026-11-26 verified victory and next combat
+
+A single further isolated process logged the real victory text from the game
+text handler after the challenge NPC 126 fought the player. With 3D active,
+normal movement and edge scrolling reached ARCAVES e2 hero 20725. The next
+combat request named attacker 152 and defender 18000 (the player); attacker 152
+was found in the live map's object list. The temporary driver replaced its old
+combat target with this actual attacker. It approached tile 20925 with HP 6,
+but the engine pick returned no target at the projected point 818,396 even
+though the 3D card list contained it. The driver could not act and repeatedly
+ended the player's turn, so only this disposable process was stopped. Neither
+HP nor quest flags were modified. The encounter and the remaining route are
+unverified. Raw record and diagnostic patch: `build/317-route-opponent` and
+`build/317-route-opponent-qa.patch`. Next investigate normal picking and the
+camera for attacker 152; do not reuse a pointer from the previous combat.
