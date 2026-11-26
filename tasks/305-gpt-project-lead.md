@@ -2,8 +2,8 @@
 id: 305
 title: GPT owns the project strategy, board and follow-up reviews
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: gpt
 priority: high
 tier: 1
