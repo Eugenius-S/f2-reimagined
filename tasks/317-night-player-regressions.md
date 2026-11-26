@@ -104,3 +104,43 @@ independent Terra High review. The local catalog identifies Priority as
 the optional Fast tier. Continue on the Standard route. Preserve the
 isolated raw logs under `build/317-*`. This packet changes no application
 code and has no release candidate.
+
+### 2026-11-26 authored edge and story fixture follow-up
+
+A temporary diagnostic build based on `ecb7e6138` used the normal game
+mouse handler to select the scenery door, with stock data plus only
+`maps/arcaves.edg` extracted unchanged from RPU `rpu.dat` (SHA256
+`27db830e0fb67d02b60e166e2acb772a92292f5f4dd88f733b740b406a0864ee`).
+No other RPU content was active. At ARCAVES e2, 3440x1440 / 2x, zoom
+1.28, hero 21125 and starting view 22307, input moved diagonally to 21907
+and back to 22307; the four authored clip planes stayed identical. The
+normal door handler then picked tile 19928 at logical 27,240, walked the
+hero to 20128 and changed the door open flag from 0 to 1 (frame 0 to 9).
+All captured states were local 3D. The reverse order also succeeded in a
+separate process. This is injected engine input, not physical Windows input,
+and does not prove all corners or a complete RP installation. The diagnostic
+instrumentation was removed. [Captures](../runs/317-native-acceptance/door-edg.jpg).
+Raw scripts, snapshots, sidecars and console logs are in
+`build/317-edg-scroll-then-door` and `build/317-edg-only-door-edge`.
+
+Loading the full RPU DAT with its mods order produced a real MAP_EDGE, but
+both the door-first and scroll-first probes stopped after their first input;
+the watchdog could not capture the engine. The stock-plus-EDG-only run
+above is a different fixture and does not clear the full-RP hang. A separate
+classic 2D scripted-scroll attempt did not start its scene-input script and
+is not a completed 2D control.
+
+The story probe's normal scripted fight request is suppressed by
+`skipScriptCombatRequest()` during background captures. A temporary, narrow
+exception removed that suppression for the challenge, but the run
+still did not reach observed combat: keys 2, 1, 1 were consumed and the
+snapshot remained in dialogue. This is a fixture blocker, not proof of a game
+regression. Next: trace the actual dialogue/script state and input lifecycle,
+then finish the real challenge and walk the entire route in one process.
+The earlier TransitionWatch numbers 346 and 742 count real presents, but
+`first-local-3d.jpg` comes from `takeSnapshot` with `static-wall-plus-hero-preview`;
+it is not necessarily a back-buffer readback. Capture actual present buffers
+for the continuous route. Do not modify the shared watcher from PR #588.
+Status remains doing, reviewed no; no game fix or release decision is claimed.
+The clean Windows Release build after removing instrumentation passed, and
+CTest passed 35/35 (`build/317-final-build.log`, `build/317-ctest.log`).
