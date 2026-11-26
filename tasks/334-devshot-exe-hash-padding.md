@@ -48,3 +48,16 @@ game presentation, changing release or performance gates.
 
 - 2026-11-27 gpt: grounded on the captured Klamath e0 sidecar under
   `build/rule1-9f54f368/smoke` in the isolated 291 verification worktree.
+- 2026-11-27 gpt: fixed the second SHA-256 padding block by clearing its
+  first 56 bytes after the first block is transformed. No capture format or
+  algorithm change. `py -3 runs/334-devshot-exe-hash-padding/check_sha256.py`
+  compiles the actual source routine with the local MSVC toolchain and compares
+  it to Python hashlib: 0, 1, 55-64, 119-121, 127, 128, 184 and 1024 bytes
+  pass. Baseline `facbdb671` fails each 56-63 byte case. The read-only
+  `E:/Projects/f2r-291-evidence-images-leave-git/build/rule1-9f54f368/ci/fallout2-ce.exe`
+  (11387576 bytes, remainder 56) changes from the reported `b5d667ebe0812c27a9d37978fab57ad3ca4cb198b734815cad51e2f311f50cd9`
+  to the standard `87a6e21031a9c3825b6fd99ecdd7498cf6ac92c1ad5e19aeb670e88dae5d8a0f`.
+  The script requires that executable and the local MSVC 14.40 / SDK 22621
+  paths. Next: native Windows devshot with an exact boundary-length executable,
+  Release build, capture checks and CI on the candidate; independent review.
+  Those checks remain pending and this task remains doing.
