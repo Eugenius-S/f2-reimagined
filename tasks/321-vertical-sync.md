@@ -2,7 +2,7 @@
 id: 321
 title: Enable vertical sync for player builds
 milestone: M1
-status: todo
+status: doing
 owner: gpt
 priority: high
 tier: 1
@@ -27,3 +27,6 @@ The Windows Display panel saved VSync using its real key and Done paths. The iso
 ### 2026-11-23 release reconciliation
 
 The setting shipped in `039d25da3`, and the native restart test confirmed OpenGL interval 1. Remaining: physical-display tearing while panning, exclusive and borderless checks, Russian UI and unsupported driver fallback.
+### 2026-11-26 gpt
+
+Check the remaining English and Russian menu paths and note the safe limits of off-screen display-driver verification.
