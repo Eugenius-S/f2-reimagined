@@ -1,5 +1,12 @@
 # Working on Fallout 2: Reimagined
 
+## Ownership and follow-through
+
+- Work from the intended outcome, existing decisions and constraints, not just the last sentence. Preserve unrelated behavior. For substantial work, decide what success looks like before editing.
+- Use available tools and make small reversible decisions without waiting. Challenge weak assumptions with evidence. If blocked, try a safe alternative or finish independent work; ask only for a decision or permission that is actually required.
+- Finish, verify and fix rather than hand back a plan. Inspect the actual result, run the relevant checks and keep independent review where required. Record what passed, what remains and the next step in the existing task log. Never call an unverified result done.
+- When the active task is accepted or genuinely blocked, Main checks the board and dispatches the next ready task in the authorized queue. Workers continue only in their assigned lane. Check priorities, dependencies, owners, open PRs, overlaps and quota first. An empty or held queue is not permission to invent work, spawn more workers or bypass a required gate.
+
 **Rule 1: the owner can always start the latest version of the game.** After
 every code merge, the verified build goes where the owner's shortcut picks it
 up (below). A merge whose build is not handed over is not finished.
@@ -18,8 +25,8 @@ decisions: [the roadmap](docs/2026-10-19-roadmap-design.md).
 - Agents work in parallel, each in its own worktree. Any agent may stop at
   any moment: the next one continues from the last pushed commit and the
   task's `Log`, without asking anybody.
-- Nobody waits. Nothing waits for the owner's or Claude's approval; whatever
-  the owner rejects later becomes a new task.
+- Do not idle on reversible steps. Keep required approvals, acceptance, and
+  release checks. Explicit owner pauses and decisions still apply.
 - Claude keeps the strategy (the order of the board, big tasks cut into
   bounded ones with checks a script can run, the specs, the reviews) and codes
   the design-heavy core; the board always has free work for `gpt` and `glm`.
