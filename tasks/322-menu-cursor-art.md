@@ -2,7 +2,7 @@
 id: 322
 title: Preserve the cursor over menu wallpaper
 milestone: M1
-status: todo
+status: doing
 owner: gpt
 priority: high
 tier: 1
@@ -27,3 +27,6 @@ Follow-up: six sampled positions at 3440x1440 / 2x with SharpText on changed onl
 ### 2026-11-23 release reconciliation
 
 The main-menu cursor fix shipped in `039d25da3`; six native wallpaper spots passed. Remaining: sweep the reported stripe and buttons with SharpText on and off, and run the separate death-screen comparison.
+### 2026-11-26 gpt
+
+Check additional native cursor positions and capture the limits of the shipped startup and death background paths.
