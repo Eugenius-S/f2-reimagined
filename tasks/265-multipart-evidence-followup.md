@@ -2,7 +2,7 @@
 id: 265
 title: Capture the remaining multipart groups from the live game
 milestone: M1
-status: doing
+status: blocked
 owner: gpt
 suggested: any
 priority: normal
@@ -49,4 +49,9 @@ Check: task 174 Log, task 192 Log, and task 224 evidence register.
   target at -45, 0 and +45. Preserve the old live-attempt evidence.
 
 - 2026-11-27 gpt: captured isolated stock background still tours at e0 on Windows Release `e14e2e75` (executable SHA-256 `6a04273eeef7434bb85bccecd32906bbd119a816090f8c996cf0ab4d5f40958f`), 1920x1080, logical 960x540, scale 2, `scene-gl`. Evidence: `runs/265-multipart-evidence-followup/newr1.jpg` and `sfdock.jpg`, with JSON sidecars. Each tour requested -45, 0 and +45 degrees at distance 30. At distance 8 the sign was cropped and the tanker camera was inside geometry; these raw runs remain ignored in `build/265-raw/`.
-  NEWR1 tile 10896: the sign appears together at 0 and +45, but is nearly edge-on at -45, so its seams cannot be checked there. SFDOCK tile 8896: the tanker is clipped by the frame and the -45 camera is obstructed; the full multipart group and seams cannot be judged at any of the three angles. Visible isolated hull pieces resemble the already tracked task 192 sliver; these captures do not establish a new grouping defect. The static camera field in snapshot JSON does not encode fly turn; the requested tour stops and visibly different frames establish the order, not independently measured angle metadata. Status remains doing, reviewed no: neither target meets the three-angle acceptance. Next: select a suitable camera target and distance that frame the complete group, verify the angle from runtime metadata or another independent mechanism, then inspect all seams; preserve these captures.
+  NEWR1 tile 10896: the sign appears together at 0 and +45, but is nearly edge-on at -45, so its seams cannot be checked there. SFDOCK tile 8896: the tanker is clipped by the frame and the -45 camera is obstructed; the full multipart group and seams cannot be judged at any of the three angles. Visible isolated hull pieces resemble the already tracked task 192 sliver; these captures do not establish a new grouping defect. The static camera field in snapshot JSON does not encode fly turn; the requested tour stops and visibly different frames establish the order, not independently measured angle metadata. Neither target meets the three-angle acceptance. Next: select a suitable camera target and distance that frame the complete group, verify the angle from runtime metadata or another independent mechanism, then inspect all seams; preserve these captures.
+
+- Blocked: two isolated runs produced partial views at distances 8 and 30.
+  Both sheets were inspected. Use a suitable independent fly fixture to
+  center the complete groups and capture the obscured joins before making
+  a geometry decision. Keep the existing tanker sliver report in task 192.
