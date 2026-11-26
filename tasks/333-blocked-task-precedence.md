@@ -10,7 +10,7 @@ tier: 1
 claude-only: no
 user-check: no
 depends-on: [249]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -49,3 +49,8 @@ changing Polka's priority and ownership controls.
 - 2026-11-27 gpt: Review follow-up shares the card-source resolver between board and SelfTest, including absent branch content and no branch read for blocked/done. SelfTest and metadata passed; live `-Next gpt` still selected stale task 186. Independent review remains.
 
 - 2026-11-27 gpt: Windows PowerShell 5 Git branch reads now handle a missing file without changing the caller error preference. SelfTest exercises an actual missing Git path through the board resolver; SelfTest and metadata passed, live `-Next gpt` selected stale task 186. Independent review remains.
+
+- 2026-11-27 gpt acceptance: independent Terra High accepted code at
+  `61e4ef6f`. Windows PowerShell 5 passed the shared resolver checks and
+  the real missing-file Git fallback. The live picker kept 316 blocked and
+  selected stale 186 instead. Existing assignment rules are unchanged.
