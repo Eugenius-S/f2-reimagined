@@ -10,7 +10,7 @@ tier: 1
 claude-only: no
 user-check: no
 depends-on: [330]
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -61,3 +61,10 @@ game presentation, changing release or performance gates.
   paths. Next: native Windows devshot with an exact boundary-length executable,
   Release build, capture checks and CI on the candidate; independent review.
   Those checks remain pending and this task remains doing.
+
+- 2026-11-27 gpt: independent Terra High accepted the padding change at
+  `af3a9710` and reproduced the standard vectors and the exact CI file hash.
+  Take the checked component through Windows CI. The local Release build
+  did not start because the shared Windows slot was occupied. Task 334
+  stays open for the native boundary devshot on the merged Release. This
+  pending test also stays ahead of publication of that build.
