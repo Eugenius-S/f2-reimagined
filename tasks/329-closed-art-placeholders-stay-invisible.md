@@ -35,3 +35,4 @@ Objects with art the 2D does draw (their class fixes live in 189/191).
 ## Log
 
 - 2026-11-25 glm: cut from the 281 re-walk find (see the 281 Log).
+- 2026-11-26 glm: took the task. First reproduction step: the 281 evidence sheet pairs a classic shot at tile 20985 with a 3D shot at tile 20695 (the walk's raw devshot sidecars in build/walk/281 name the different tiles). Re-shot both engines at each tile on the walk's own build and scene cache: tile 20695 shows the same red placeholder field in BOTH engines, tile 20985 is empty black in BOTH. The cards read UNUSED ART (shut058.frm, the floor art of 94 squares), not CLOSED ART; the 3D projection squashes the text. Verdict so far: no defect to fix; evidence and the placeholder sweep go into runs/329-closed-art-placeholders-stay-invisible/ before the verdict lands.
