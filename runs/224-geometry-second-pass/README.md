@@ -50,7 +50,7 @@ F3 marquee card/cap); none is a small in-224 fix.
 - vctyvlt e2: the spiky black blob behind the hero is in 2D too —
   vanilla art.
 - Low-confidence leftover: artemple e0 right-edge boulders (2D shows
-  grey rocks at the right edge, 3D looks bare there) — probed 2026-11-27,
+  grey rocks at the right edge, 3D looks bare there): probed 2026-11-27,
   see "The right-edge boulders pair" below: the top grey pile renders in
   3D; the pair's cameras do not pixel-align, so the claim stays closed
   as inconclusive rather than a find.
