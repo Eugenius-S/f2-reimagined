@@ -2,8 +2,8 @@
 id: 265
 title: Capture the remaining multipart groups from the live game
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: any
 priority: normal
 tier: 3
@@ -41,3 +41,9 @@ Next: owner captures the `NEWR1` signage and `SFDOCK` tanker from the live game.
 Check: task 174 Log, task 192 Log, and task 224 evidence register.
 
 - 2026-11-13 claude (review of gpt's run): plain captures, any agent can take them with the background test game; owner set to any. The owner's live game is not needed.
+
+- 2026-11-27 gpt: the isolated stock MAP data locates both targets on e0.
+  NEWR1 tile 10896 has serials 229 and 230 (renosgn6.frm and renosgn4.frm),
+  both part of a solid in the warm scene. SFDOCK tile 8896 has tanker
+  serial 9 (TANKER07.FRM). Use a standalone background fly tour for each
+  target at -45, 0 and +45. Preserve the old live-attempt evidence.
