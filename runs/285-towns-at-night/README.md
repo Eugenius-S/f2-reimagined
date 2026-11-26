@@ -73,9 +73,11 @@ capture is the next thing to try if anyone picks this up.
 ## Gates
 
 - Exporter unit tests 182 OK (5 new), ctest 35/35.
-- Scoped fly tour (4 flip maps + 4 controls) in `tour/`; the tour's changed
-  list is the expected one: only the flip maps' scenes move (their sun and
-  light channels change), the controls do not.
+- Scoped fly tour (4 flip maps + 4 controls) in `tour/`: 0 of 39 spots
+  changed. The tour shoots still at full ambient, where the daylight channel
+  the fix adds is invisible by design; the night deltas stand in the fix
+  table above. The zero matters as the unintended-change gate: the fix moves
+  no geometry, atlas or day-hour pixel.
 - The trial export ran into `build/cache-285trial` (exporter 1.14.0); the
   shared cache was not touched before the merge. The owner's next export
   rebuilds every scene once: the fingerprint covers the vendor hashes.
