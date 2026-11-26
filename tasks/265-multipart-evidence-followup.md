@@ -55,3 +55,21 @@ Check: task 174 Log, task 192 Log, and task 224 evidence register.
   Both sheets were inspected. Use a suitable independent fly fixture to
   center the complete groups and capture the obscured joins before making
   a geometry decision. Keep the existing tanker sliver report in task 192.
+
+- 2026-11-27 gpt checked a new isolated stock fixture on Windows Release
+  `903621f8`, 1920x1080 at scale 1, with the 1.14 scene cache. The map has 15
+  `TANKER*` parts and nine `renosgn*` parts. A higher fly view of the sign
+  centered at tile 10702 leaves its joins and actual turn unverified.
+  The export puts the tanker's 2028x529 composite on one waterline plane
+  at v=31. Its ground midpoint is near tile 12495. The earlier -45° request
+  is almost along this plane. A near face-on capture on SFDOCK e0 from
+  that midpoint shows the long composite strip and separated fragments
+  below it. Classic at the same tile shows a continuous side through the
+  boarding ramp. The entire assembly and three fly turns remain open.
+  Reproduce the new view with `tools/dev-snapshot.ps1 -Map sfdock -Elevation 0
+  -ViewTile 12495 -FlyTurn 33.69 -FlyPitch 35 -FlyDistance 70 -Still
+  -ScreenWidth 1920 -ScreenHeight 1080 -Scale 1` on the isolated stock cache.
+  For Classic use the same map, elevation, tile and resolution with
+  `-Classic` and omit the fly flags and `-Still`. The follow-up needs the
+  complete hull and boarding assembly in the air, with the actual angle
+  recorded. Keep the separate hull-sliver scope in task 192.
