@@ -2,7 +2,7 @@
 id: 293
 title: The existing cache check rejects missing or damaged scene artifacts
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: glm
 priority: high
@@ -57,3 +57,12 @@ cache paths, and continue reporting other elevations after an invalid path.
   update intentionally invalidates existing cached input fingerprints, so the
   first update can rebuild the scenes. The launcher still asks the exporter
   to repair on any nonzero check status.
+
+### Released
+
+Windows latest: `1c893f5af12230d72a73272f6844050c0b76f31b`. Clean Windows
+Release and CTest, all 177 exporter tests, and native 3D on the repaired
+ARCAVES e2 from the exact merged build passed. The release workflow finished
+successfully, and the public stamp, ZIP and installer were checked.
+Restoration Project was not run in full. The initial update rebuilds stale
+scene caches.
