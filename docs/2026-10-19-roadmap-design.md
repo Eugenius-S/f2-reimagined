@@ -40,7 +40,12 @@ face the camera).
 
 ## Team and process
 
-GPT Main (Sol High) leads strategy, the board, Polka sync, inbox folding, task sizing, dispatch, acceptance, reviews and verified release checks. Claude executes assigned and design-heavy work; GPT and GLM share the `owner: any` pool, subject to explicit assignments and owner checks. The owner accepts visuals. Model routing, worker limits and handoff rules are in [AGENTS.md](../AGENTS.md).
+GPT Main (Sol High) leads strategy, the board, Polka sync, inbox folding, task
+sizing, dispatch, acceptance, reviews and verified release checks. Claude
+executes assigned and design-heavy work; GPT and GLM share the `owner: any`
+pool, subject to explicit assignments and owner checks. The owner accepts
+visuals. Model routing, worker limits and handoff rules are in
+[AGENTS.md](../AGENTS.md).
 
 ## Milestones
 

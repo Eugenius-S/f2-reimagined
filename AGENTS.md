@@ -14,22 +14,43 @@ up (below). A merge whose build is not handed over is not finished.
 Three agents: `claude`, `gpt`, `glm`. The owner accepts the visuals and
 changes these rules as the work goes.
 
-- GPT Main (Sol High) leads strategy, prioritization, task sizing and specifications, Polka sync, inbox folding, dispatch, acceptance, reviews and follow-ups, and the verified release check. Claude executes assigned and design-heavy work; GLM and GPT share the `owner: any` pool. Respect explicit assignments and `owner: owner` checks.
-- For new work, verify the newest available identifier in the required model family before launch, use Standard, and never silently substitute. Use Terra High for principal code implementation and a separate Terra High for independent ordinary code review when required, after the implementation worker ends. Sol High handles strategy; Astra High handles deep analysis. Luna uses xhigh for coding or code checks and low for images from a prepared prompt. Run one worker at a time with a fresh, self-contained brief and no inherited conversation. Preserve active jobs and their settings.
-- Coding uses the installed `ponytail` skill in full mode; code acceptance uses `ponytail-review` when applicable. Luna is exempt. For substantial work use `tryhard:finish-the-job`, with the existing reviewer and existing scope and release gates. No Foundation intake gate applies.
+- GPT Main (Sol High) leads strategy, prioritization, task sizing and
+  specifications, Polka sync, inbox folding, dispatch, acceptance, reviews and
+  follow-ups, and the verified release check. Claude executes assigned and
+  design-heavy work; GLM works independently. GLM and GPT share the
+  `owner: any` pool. Respect explicit assignments and `owner: owner` checks.
+  Goals and
+  decisions are in [the roadmap](docs/2026-10-19-roadmap-design.md).
+- For new work, verify the newest available identifier in the required model
+  family before launch, use Standard, and never silently substitute. Main
+  delegates principal code implementation to Terra High and retains decisions
+  and acceptance. Use a separate Terra High for independent ordinary code
+  review when required,
+  after the implementation worker ends. Sol High handles strategy; Astra High
+  handles deep analysis. Luna uses xhigh for coding or code checks and low for
+  images from a prepared prompt. Run one worker at a time with a fresh,
+  self-contained brief and no inherited conversation. Preserve active jobs and
+  their settings.
+- Coding uses the installed `ponytail` skill in full mode; code acceptance
+  uses `ponytail-review` when applicable. Luna is exempt. For substantial work
+  use the Codex plugin `tryhard:finish-the-job`; in other environments follow
+  the same workflow manually. Use the existing reviewer and preserve scope and
+  release gates. No Foundation intake gate applies.
 
-- Agents work in their own worktrees, within the one-worker limit. Any agent may stop at
-  any moment: the next one continues from the last pushed commit and the
-  task's `Log`, without asking anybody.
+- Agents work in their own worktrees, within the one-worker limit. Any agent
+  may stop at any moment: the next one continues from the last pushed commit
+  and the task's `Log`, without asking anybody.
 - Do not idle on reversible steps. Keep required approvals, acceptance, and
   release checks. Explicit owner pauses and decisions still apply.
-- GPT Main keeps the board ordered and work bounded; Claude executes assigned and design-heavy work. Keep ready work for `gpt` and `glm` when the authorized queue permits.
-- The owner's finds from chat go to [tasks/inbox.md](tasks/inbox.md), not
-  into the current work, unless the owner says "now".
+- GPT Main keeps the board ordered and work bounded; Claude executes assigned
+  and design-heavy work. Keep ready work for `gpt` and `glm` when the
+  authorized queue permits.
+- The owner's finds from chat go to [tasks/inbox.md](tasks/inbox.md), not into
+  the current work, unless the owner says "now".
 - Fold first. A new find or task first goes through the open tasks and
   batches: if one fits, it joins that one (a Context line there); a new task
-  is cut only when nothing fits. Every new board entry (an inbox line, a
-  task) names the batch it joined, or says why it stands alone.
+  is cut only when nothing fits. Every new board entry (an inbox line, a task)
+  names the batch it joined, or says why it stands alone.
 
 Where things are: [shapes and camera rotation](docs/2026-10-20-shapes-and-rotation-design.md),
 [dev tools](docs/p1-devtools.md) (snapshots, tours, the fly camera, restarting
@@ -165,11 +186,18 @@ header carries it and `tools/tasks.ps1 -Next` sorts by it:
    owner's shots land); local-only tasks wait here.
 
 One batch is one PR in size. Speed work and geometry work run one after the
-other, never side by side (both touch the renderer). The one-worker limit also applies to work on other files.
+other, never side by side (both touch the renderer). The one-worker limit also
+applies to work on other files.
 
 ## Tasks
 
-At the start of a lead session, unless the owner directs otherwise, GPT Main syncs and merges owner Polka edits first, checks `tools/tasks.ps1 -Review`, reviews completed work against evidence and resolves blocked scopes, folds inbox finds into tasks, checks the ready queue and dispatches within its authorized limits. Verify Rule 1 handover and publication after code merges, and keep `README.md` and `README.ru.md` aligned when either changes. Do not treat missing evidence as acceptance.
+At the start of a lead session, unless the owner directs otherwise, GPT Main
+syncs and merges owner Polka edits first, checks `tools/tasks.ps1 -Review`,
+reviews completed work against evidence and resolves blocked scopes, folds
+inbox finds into tasks, checks the ready queue and dispatches within its
+authorized limits. Verify Rule 1 handover and publication after code merges,
+check that `README.md` and `README.ru.md` are current, and update both
+together when either changes. Do not treat missing evidence as acceptance.
 
 One task is one file `tasks/NNN-slug.md` with `Goal`, `Context`,
 `Acceptance`, `Out of scope` and `Log`. Its header:
@@ -250,14 +278,18 @@ parts while its next part is under way (186); otherwise it is set back.
 
 ## Review
 
-The one merge gate is green CI (build, tests, and the unit tests of the
-tools). The pixel regression (`tools/regression.ps1`) needs the game files,
-so CI does not run it: the author runs it by hand before the merge. The PR
-body says what it touched. The author merges when CI is green and all applicable review and acceptance requirements are met. The owner reviews each city later in a fly-through
-with 183's shots (tasks 175 on), and the pool turns the finds into fixes.
+Merge requires green CI (build, tests, and the unit tests of the tools) and
+all applicable checks under these rules. The pixel regression
+(`tools/regression.ps1`) needs the game files, so CI does not run it: the
+author runs it by hand before the merge. The PR body says what it touched. The
+author merges when CI is green and all applicable review and acceptance
+requirements are met. The owner reviews each city later in a fly-through with
+183's shots (tasks 175 on), and the pool turns the finds into fixes.
 
 The checks are the review. The author sets `reviewed: yes` on finishing,
 except when the PR retook regression references, changed a file format the
-engine reads (`walls.bin`, `baked.bin`, `scene.json`) or came from outside
-the three agents: then `reviewed: no`, and GPT Main arranges its review (`tools/tasks.ps1 -Review`): the reviewer reads the diff, runs the checks, sets `reviewed: yes`, and turns problems into new tasks. Outside PRs merge only after
-that review.
+engine reads (`walls.bin`, `baked.bin`, `scene.json`) or came from outside the
+three agents: then `reviewed: no`, and GPT Main arranges its review
+(`tools/tasks.ps1 -Review`): the reviewer reads the diff, runs the checks,
+sets `reviewed: yes`, and turns problems into new tasks. Outside PRs merge
+only after that review.
