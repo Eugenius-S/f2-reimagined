@@ -47,3 +47,5 @@ changing Polka's priority and ownership controls.
 - 2026-11-27 gpt: Main blocked and done cards retain their full body; open cards still use their branch. SelfTest covers both terminal statuses and open-to-blocked/doing precedence. `-SelfTest` passed; `-CheckMetadata` passed (326 tasks, 225 legacy gaps); live `-Next gpt` selected stale task 186, not 316. Independent review remains.
 
 - 2026-11-27 gpt: Review follow-up shares the card-source resolver between board and SelfTest, including absent branch content and no branch read for blocked/done. SelfTest and metadata passed; live `-Next gpt` still selected stale task 186. Independent review remains.
+
+- 2026-11-27 gpt: Windows PowerShell 5 Git branch reads now handle a missing file without changing the caller error preference. SelfTest exercises an actual missing Git path through the board resolver; SelfTest and metadata passed, live `-Next gpt` selected stale task 186. Independent review remains.

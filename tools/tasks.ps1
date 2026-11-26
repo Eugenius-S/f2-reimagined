@@ -33,6 +33,14 @@ function Read-Header([string[]]$lines) {
     return $header
 }
 
+# Native stderr must not throw in Windows PowerShell when a branch lacks a file.
+$readBranchFromGit = {
+    param($branchName, $taskFile)
+    $ErrorActionPreference = 'Continue'
+    $result = @(git show "origin/$branchName`:$taskFile" 2>$null)
+    if ($LASTEXITCODE -eq 0) { $result }
+}
+
 # A terminal main card owns its entire body, including its Log.
 function Resolve-TaskLines([string[]]$MainLines, [string]$Branch, [string]$File, [scriptblock]$ReadBranch) {
     $mainHeader = Read-Header $MainLines
@@ -242,6 +250,13 @@ if ($SelfTest) {
             $failed = $true
         }
     }
+    $mainLines = @('---', 'status: todo', '---', 'main log')
+    $missing = 'tasks/selftest-missing-' + [guid]::NewGuid().ToString('N') + '.md'
+    $resolved = @(Resolve-TaskLines $mainLines 'main' $missing $readBranchFromGit)
+    if (($resolved -join "`n") -ne ($mainLines -join "`n") -or $ErrorActionPreference -ne 'Stop') {
+        Write-Output 'selftest: FAIL actual Git missing-file fallback'
+        $failed = $true
+    }
     # 300: the metadata validator against synthetic fixtures.
     function Assert-True([string]$what, [bool]$got) {
         if (-not $got) {
@@ -365,7 +380,7 @@ body
 
     Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
     if ($failed) { exit 1 }
-    Write-Output ("selftest: ok ({0} lock cases and 5 card precedence cases)" -f $cases.Count)
+    Write-Output ("selftest: ok ({0} lock cases and 5 card precedence cases and Git fallback)" -f $cases.Count)
     exit 0
 }
 
@@ -441,10 +456,7 @@ $rows = foreach ($file in $files) {
         }
         if ($newest) { $branchFile = $newest }
     }
-    $lines = @(Resolve-TaskLines @($lines) $branchFile $file {
-        param($branchName, $taskFile)
-        git show "origin/$branchName`:$taskFile" 2>$null
-    })
+    $lines = @(Resolve-TaskLines @($lines) $branchFile $file $readBranchFromGit)
     if ($null -eq $lines -or @($lines).Count -eq 0) {
         $lines = Get-Content (Join-Path $Root ($file -replace '/', '\'))
     }
