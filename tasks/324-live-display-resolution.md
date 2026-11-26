@@ -2,7 +2,7 @@
 id: 324
 title: Apply physical display resolution from preferences
 milestone: M1
-status: todo
+status: blocked
 owner: gpt
 priority: normal
 tier: 2
@@ -50,3 +50,19 @@ physical fullscreen or a real keyboard.
 ### 2026-11-23 release reconciliation
 
 Released in `039d25da3`. The native windowed Done/Cancel checks proved output size, pointing and preserved local 3D; desktop detection and configured resolution were checked in isolation. Remaining: visible exclusive/fullscreen and borderless mode coverage, including an unsupported mode.
+
+### 2026-11-27 gpt: remaining display acceptance
+
+The released live resize and display-only Cancel already have native background
+evidence above. The separate clean launcher check in task 315 exercised
+3440 x 1440 and 1920 x 1080 windowed startup; that is startup evidence,
+not a live toggle or exclusive-mode test.
+
+Blocked: the remaining acceptance needs an isolated interactive Windows
+display session. Do not switch the owner's desktop or monitor with a
+background test. In that session, start a disposable copy in windowed mode,
+apply 3440 x 1440 and 1920 x 1080 in borderless and in supported exclusive
+mode, and check output size, camera, mouse alignment and restart persistence.
+Check one unsupported exclusive selection and Cancel. Compare local 3D and
+the 2D world map on the same copy. No new product failure or code change
+was found in this evidence review.
