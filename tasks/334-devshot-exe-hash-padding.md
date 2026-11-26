@@ -2,7 +2,7 @@
 id: 334
 title: Devshot reports the exact executable SHA-256 at every file length
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: gpt
 priority: high
@@ -68,3 +68,13 @@ game presentation, changing release or performance gates.
   did not start because the shared Windows slot was occupied. Task 334
   stays open for the native boundary devshot on the merged Release. This
   pending test also stays ahead of publication of that build.
+
+- 2026-11-27 gpt native acceptance: the stock Windows Release for exact
+  `e14e2e75` from [main CI](https://github.com/Eugenius-S/f2-reimagined/actions/runs/45875575636)
+  has 11387576 bytes, leaving 56 in its final SHA-256 block. The CI
+  payload, staged test executable and actual devshot all report
+  `6a04273eeef7434bb85bccecd32906bbd119a816090f8c996cf0ab4d5f40958f`.
+  In an isolated windowed 1920 x 1080 / 2x run, the snapshot shows
+  KLADWTWN e0 with scene-gl and Full 3D. The stock artifact exercised the
+  boundary case directly. Log and sidecar are under the verified scratch
+  worktree's `build/rule1-e14e2e75/smoke-stock`.
