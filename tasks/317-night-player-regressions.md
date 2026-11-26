@@ -183,3 +183,20 @@ open. Next, extend the disposable driver's normal edge-scroll input to follow
 the path, then capture each first actual present. This is a fixture limitation,
 not a claim that the player cannot walk further. Full RP and 2D controls remain
 open as stated above.
+
+### 2026-11-26 continuous route: normal edge scrolling
+
+The temporary route driver used the game's own cursor and edge handler when a
+waypoint left the screen. In one process after the scripted challenge and its
+12-second post-fight sequence, native clicks and edge scroll advanced from
+13527 through 15725, 17125, 17525, 17925, 18325, 19525 and 19727 on ARCAVES
+e2. The camera center changed 13927 to 16327 through normal scrolling; no
+hero or camera relocation was used after combat. The next click was accepted
+at target tile 19928, screen 737,438. A new scripted combat request followed;
+the temporary driver still targeted the previous combatant and could not play
+the new fight. The isolated test process was stopped. It did not reach e1;
+the origin and outcome of this second fight, the full route and destination
+frames remain unverified. The specific output and disposable observer patch are
+`build/317-route-scroll/process.stdout.log` and `build/317-route-scroll-qa.patch`.
+The prior victory screenshot belongs to a separate run; victory in this run
+was not independently captured.
