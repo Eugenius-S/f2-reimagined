@@ -2,7 +2,7 @@
 id: 316
 title: Cumulative Windows hotfix for the owner's Temple reports
 milestone: M1
-status: todo
+status: blocked
 owner: gpt
 priority: high
 tier: 0
@@ -54,3 +54,11 @@ The owner restricted the release review to 3D continuity, cursor trails and came
 ### 2026-11-23 release reconciliation
 
 The Windows hotfix shipped through the cumulative release `039d25da3`. Local 3D under overlays, native combat region capture, cursor trails, the Temple pot and outlines have separate landed fixes. Remaining: the continuous post-duel Temple to Arroyo route on a suitable save, and the round-door/edge sweep in 3440x1440 borderless at 2x. Do not rerun the shipped work as an unreleased batch.
+
+### 2026-11-26 gpt
+
+The hotfix has shipped. The remaining verification is blocked on the continuous story route and the interactive borderless check, tracked together in [317](317-night-player-regressions.md).
+
+PR #601 (`5e8738eab`) preserves local 3D during and after the scripted challenge. Its isolated Windows tests confirmed the round door and authored cut at 3440 x 1440 / 2x in a hidden window, plus separate normal-click arrivals in 3D. The continuous route reached a second scripted encounter on ARCAVES e2; the test driver could not select that opponent. It did not reach Arroyo in the same run. This does not establish a player picking failure.
+
+Next in 317: use a fixture that can continue through the second encounter with normal input, record the destination frames through Arroyo and back, and verify free scroll and the door in an isolated interactive borderless session. Do not take a second implementation of the shipped package or the separate world-map-return work in #588.
