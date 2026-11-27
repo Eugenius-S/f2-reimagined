@@ -137,3 +137,19 @@ Verifiable now with the scene view (the kind in the spawn frame): modmain
 fire, newr1 fire, klatoxcv slime (done), probably sfdock slime. Need the
 scene camera control first: kladwtwn fire, vault13/newr1/sfdock monitors,
 the sfdock shoreline.
+
+### The offscreen reproduction (a method note, not a substitute)
+
+The same slime pair re-run with `-Background` (the fully offscreen window,
+no focus pauses at all): the pool zone cycles at 28-72 px per 150 ms pair
+with the control zone at exactly 0 - the offscreen world does tick, just
+at a slower cadence than the visible window. Per the review criterion the
+presented-frame numbers above remain the ones that count; the offscreen
+reproduction is recorded as the method's fallback and as the explanation
+of the earlier frozen runs (the visible runs froze on lost focus during
+the double map load, which the -Background mode never hits).
+
+The modmain fire pair (classic+3D, visible) froze the same way mid-run
+(thirteen zero-diff pairs after the double load), so its frames stay out
+of the verdict; the fire kind waits for either a focus-holding visible
+run or the owner's word to accept offscreen evidence.
