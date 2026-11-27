@@ -258,10 +258,6 @@ bool gDialogFixtureSynthetic = false;
 bool gDialogFixtureStarted = false;
 bool gDialogFixtureFinished = false;
 bool gDialogFixtureBaselineCaptured = false;
-int gDialogFixtureAdvanceCount = 0;
-int gDialogFixtureFramesWaitingForAnswers = 0;
-int gDialogFixtureStableAnswerFrames = 0;
-std::vector<std::string> gDialogFixturePreviousAnswers;
 bool gDialogPageInspectRequested = false;
 int gDialogPageInspectStage = 0;
 std::vector<std::string> gDialogPageInspectInitialText;
@@ -2559,7 +2555,12 @@ void update()
         && sceneStartupReady() && !inBlockingGameState()) {
         if (!gDialogFixtureBaselineCaptured) {
             gDialogFixtureBaselineCaptured = true;
-            printf("DIALOG_FIXTURE WARMUP complete; waiting for the presented answer page\n");
+            if (gDialogFixtureSynthetic) {
+                printf("DIALOG_FIXTURE WARMUP complete; waiting for the presented answer page\n");
+            } else {
+                const bool captured = takeSnapshot();
+                printf("DIALOG_FIXTURE BASELINE %s: %s\n", captured ? "saved" : "failed", gStatus);
+            }
             fflush(stdout);
             return;
         }
@@ -3697,80 +3698,108 @@ static void runDialogFixtureFrame()
         // A full-screen backdrop can present while the dialogue is still
         // being built. Old world text is not a completed dialogue fixture.
         if (ownerCount >= 2 && gameDialogGetOptionCount() > 0) {
-            const int optionCount = gameDialogGetOptionCount();
-            const int lineHeight = fontGetLineHeight();
-            const int linePitch = scene::sharpTextLinePitch(lineHeight, settings.scene3d.sharp_text);
-            std::vector<GameDialogOptionLayout> layouts;
-            layouts.reserve(optionCount);
-            std::vector<std::string> currentReplyText;
-            int wrappedOptions = 0;
-            bool allOptionsLaidOut = true;
-            for (int index = 0; index < optionCount; index++) {
-                GameDialogOptionLayout layout = {};
-                if (!gameDialogGetOptionLayout(index, &layout)) {
-                    allOptionsLaidOut = false;
-                    break;
+            if (gDialogFixtureSynthetic) {
+                const int optionCount = gameDialogGetOptionCount();
+                const int lineHeight = fontGetLineHeight();
+                const int linePitch = scene::sharpTextLinePitch(lineHeight, settings.scene3d.sharp_text);
+                std::vector<GameDialogOptionLayout> layouts;
+                layouts.reserve(optionCount);
+                int wrappedOptions = 0;
+                bool allOptionsLaidOut = true;
+                for (int index = 0; index < optionCount; index++) {
+                    GameDialogOptionLayout layout = {};
+                    if (!gameDialogGetOptionLayout(index, &layout)) {
+                        allOptionsLaidOut = false;
+                        break;
+                    }
+                    if (layout.buttonRight <= layout.buttonLeft || layout.buttonBottom <= layout.buttonTop) {
+                        allOptionsLaidOut = false;
+                        break;
+                    }
+                    if (layout.textBottom - layout.textTop > linePitch + 1) wrappedOptions++;
+                    layouts.push_back(layout);
                 }
-                if (layout.buttonRight <= layout.buttonLeft || layout.buttonBottom <= layout.buttonTop) {
-                    allOptionsLaidOut = false;
-                    break;
-                }
-                if (layout.textBottom - layout.textTop > linePitch + 1) wrappedOptions++;
-                layouts.push_back(layout);
-            }
-            if (allOptionsLaidOut && static_cast<int>(layouts.size()) != optionCount) allOptionsLaidOut = false;
-            std::vector<std::pair<int, std::string>> orderedDialogText;
-            std::vector<int> firstLineY(optionCount, -1);
-            std::vector<bool> observedOption(optionCount, false);
-            bool observedWrappedLines = false;
-            int optionWindowId = -1;
-            for (int index = 0; index < windowCount; index++) {
-                TextWindowSnapshot window;
-                if (!textCaptureGetWindowSnapshot(index, &window, nullptr) || window.hidden || window.pixels == nullptr
-                    || (gDialogFixtureSynthetic && (window.width != 393 || window.height != 117))
-                    || layouts.empty() || layouts[0].buttonLeft < window.x || layouts[0].buttonTop < window.y
-                    || layouts[0].buttonRight > window.x + window.width
-                    || layouts[0].buttonBottom > window.y + window.height) {
-                    continue;
-                }
-                if (gDialogFixtureSynthetic) {
+                if (allOptionsLaidOut && static_cast<int>(layouts.size()) != optionCount) allOptionsLaidOut = false;
+                std::vector<int> firstLineY(optionCount, -1);
+                std::vector<bool> observedOption(optionCount, false);
+                bool observedWrappedLines = false;
+                int optionWindowId = -1;
+                for (int index = 0; index < windowCount; index++) {
+                    TextWindowSnapshot window;
+                    if (!textCaptureGetWindowSnapshot(index, &window, nullptr) || window.hidden || window.pixels == nullptr
+                        || window.width != 393 || window.height != 117
+                        || layouts.empty() || layouts[0].buttonLeft < window.x || layouts[0].buttonTop < window.y
+                        || layouts[0].buttonRight > window.x + window.width
+                        || layouts[0].buttonBottom > window.y + window.height) {
+                        continue;
+                    }
                     for (const GameDialogOptionLayout& layout : layouts) {
                         if (layout.buttonLeft < window.x || layout.buttonTop < window.y
                             || layout.buttonRight > window.x + window.width || layout.buttonBottom > window.y + window.height
                             || layout.textTop < 0 || layout.textBottom > window.height) allOptionsLaidOut = false;
                     }
-                }
-                optionWindowId = window.id;
-                const scene::TextBufferId buffer = textCaptureBufferId(window.pixels);
-                if (buffer == 0) continue;
-                const std::vector<scene::TextRecord> records = scene::textCaptureSharpRecords(buffer);
-                for (const scene::TextRecord& record : records) {
-                    if (record.ownerWindow == window.id) {
-                        orderedDialogText.emplace_back(record.run.y, record.run.text);
-                        if (gDialogFixtureSynthetic && !record.run.text.empty()) {
-                            for (int row = 0; row < static_cast<int>(layouts.size()); row++) {
-                                if (record.run.y >= layouts[row].textTop && record.run.y < layouts[row].textBottom) {
-                                    observedOption[row] = true;
-                                    if (firstLineY[row] == -1) firstLineY[row] = record.run.y;
-                                    else if (firstLineY[row] != record.run.y
-                                        && layouts[row].textBottom - layouts[row].textTop > linePitch + 1) observedWrappedLines = true;
-                                }
+                    optionWindowId = window.id;
+                    const scene::TextBufferId buffer = textCaptureBufferId(window.pixels);
+                    if (buffer == 0) continue;
+                    const std::vector<scene::TextRecord> records = scene::textCaptureSharpRecords(buffer);
+                    for (const scene::TextRecord& record : records) {
+                        if (record.ownerWindow != window.id || record.run.text.empty()) continue;
+                        for (int row = 0; row < static_cast<int>(layouts.size()); row++) {
+                            if (record.run.y >= layouts[row].textTop && record.run.y < layouts[row].textBottom) {
+                                observedOption[row] = true;
+                                if (firstLineY[row] == -1) firstLineY[row] = record.run.y;
+                                else if (firstLineY[row] != record.run.y
+                                    && layouts[row].textBottom - layouts[row].textTop > linePitch + 1) observedWrappedLines = true;
                             }
                         }
                     }
+                    break;
                 }
-                break;
+                if (!allOptionsLaidOut) return;
+                if (optionCount != 7 || optionWindowId < 0 || !npcReplyVisible
+                        || std::find(observedOption.begin(), observedOption.end(), false) != observedOption.end()
+                        || !observedWrappedLines || wrappedOptions == 0) {
+                    printf("DIALOG_FIXTURE FAIL reason=synthetic-page-incomplete options=%d wrapped=%d option_window=%d runs=%zu npc=%d\n",
+                        optionCount, wrappedOptions, optionWindowId, layouts.size(), npcReplyVisible ? 1 : 0);
+                    fflush(stdout);
+                    gDialogFixtureFinished = true;
+                    return;
+                }
+                const bool captured = takeSnapshot();
+                if (captured) {
+                    printf("DIALOG_FIXTURE PASS map=%s elevation=%d script=%s speaker=%d speaker_tile=%d hero=%d answers=%zu wrapped_answers=%d\n",
+                        gMapHeader.name, gDialogFixtureSpeakerElevation, gDialogFixtureScript,
+                        gDialogFixtureSpeakerId, gDialogFixtureSpeakerTile, gDude != nullptr ? gDude->tile : -1,
+                        layouts.size(), wrappedOptions);
+                } else {
+                    printf("DIALOG_FIXTURE FAIL reason=snapshot-failed status=%s\n", gStatus);
+                }
+                fflush(stdout);
+                gDialogFixtureFinished = true;
+                return;
             }
-            std::stable_sort(orderedDialogText.begin(), orderedDialogText.end(), [](const auto& lhs, const auto& rhs) {
-                return lhs.first < rhs.first;
-            });
-            for (const auto& entry : orderedDialogText) currentReplyText.push_back(entry.second);
             if (gDialogLayoutCheckRequested) {
+                const int optionCount = gameDialogGetOptionCount();
+                const int lineHeight = fontGetLineHeight();
+                std::vector<GameDialogOptionLayout> layouts;
+                layouts.reserve(optionCount);
+                int visibleOptions = 0;
+                int textRows = 0;
+                for (int index = 0; index < optionCount; index++) {
+                    GameDialogOptionLayout layout = {};
+                    if (gameDialogGetOptionLayout(index, &layout)) {
+                        visibleOptions++;
+                        textRows += std::max(1, (layout.textBottom - layout.textTop + lineHeight - 1) / lineHeight);
+                        layouts.push_back(layout);
+                    }
+                }
+
                 const int expectedOptionCount = 7;
+                const int expectedTextRows = 8;
                 const int requiredGroupGap = settings.scene3d.sharp_text ? 4 : 2;
-                bool layoutValid = allOptionsLaidOut && optionCount == expectedOptionCount;
-                printf("DIALOG_LAYOUT_CHECK PLAN sharp_setting=%d options=%d visible=%zu wrapped_options=%d line_height=%d line_pitch=%d required_group_gap=%d\n",
-                    settings.scene3d.sharp_text ? 1 : 0, optionCount, layouts.size(), wrappedOptions, lineHeight, linePitch, requiredGroupGap);
+                bool layoutValid = visibleOptions == expectedOptionCount && textRows == expectedTextRows;
+                printf("DIALOG_LAYOUT_CHECK PLAN sharp_setting=%d options=%d visible=%d text_rows=%d line_height=%d required_group_gap=%d\n",
+                    settings.scene3d.sharp_text ? 1 : 0, optionCount, visibleOptions, textRows, lineHeight, requiredGroupGap);
                 for (std::size_t row = 0; row < layouts.size(); row++) {
                     const GameDialogOptionLayout& layout = layouts[row];
                     const int gapFromPrevious = row == 0 ? 0 : layout.textTop - layouts[row - 1].textBottom;
@@ -3785,11 +3814,11 @@ static void runDialogFixtureFrame()
                 }
 
                 if (layoutValid) {
-                    printf("DIALOG_LAYOUT_CHECK PASS geometry=non-overlapping buttons=%zu wrapped_options=%d\n",
-                        layouts.size(), wrappedOptions);
+                    printf("DIALOG_LAYOUT_CHECK PASS geometry=non-overlapping buttons=%d text_rows=%d\n",
+                        visibleOptions, textRows);
                 } else {
-                    printf("DIALOG_LAYOUT_CHECK FAIL geometry=invalid buttons=%zu wrapped_options=%d\n",
-                        layouts.size(), wrappedOptions);
+                    printf("DIALOG_LAYOUT_CHECK FAIL geometry=invalid buttons=%d text_rows=%d\n",
+                        visibleOptions, textRows);
                 }
                 fflush(stdout);
                 gDialogLayoutCheckRequested = false;
@@ -3803,62 +3832,21 @@ static void runDialogFixtureFrame()
                     gDialogFixtureSpeakerTile, runCount);
                 return;
             }
-            if (!gDialogPageInspectRequested && !gDialogCursorCheckRequested && !allOptionsLaidOut) {
-                // Buttons may not exist yet while the real dialogue is being built.
-                return;
-            }
-            if (!gDialogPageInspectRequested && !gDialogCursorCheckRequested && wrappedOptions == 0) {
-                if (gDialogFixtureSynthetic) {
-                    printf("DIALOG_FIXTURE FAIL reason=synthetic-answer-not-wrapped\n");
-                    fflush(stdout);
-                    gDialogFixtureFinished = true;
-                    return;
-                }
-                if (optionWindowId < 0 || currentReplyText.empty()) {
-                    printf("DIALOG_FIXTURE FAIL map=%s script=%s speaker=%d reason=option-window-text-not-captured option_window=%d\n",
-                        gMapHeader.name, gDialogFixtureScript, gDialogFixtureSpeakerId, optionWindowId);
-                    fflush(stdout);
-                    gDialogFixtureFinished = true;
-                    return;
-                }
-                if (gDialogFixtureAdvanceCount >= 6) {
-                    printf("DIALOG_FIXTURE FAIL map=%s script=%s speaker=%d reason=no-wrapped-answer-after-six-natural-first-choice-pages options=%d\n",
-                        gMapHeader.name, gDialogFixtureScript, gDialogFixtureSpeakerId, optionCount);
-                    fflush(stdout);
-                    gDialogFixtureFinished = true;
-                    return;
-                }
-                const bool answerPageChanged = currentReplyText != gDialogFixturePreviousAnswers;
-                if (answerPageChanged) {
-                    gDialogFixturePreviousAnswers = currentReplyText;
-                    gDialogFixtureStableAnswerFrames = 0;
-                    gDialogFixtureFramesWaitingForAnswers = 0;
-                } else {
-                    ++gDialogFixtureStableAnswerFrames;
-                }
-                if (gDialogFixtureAdvanceCount > 0 && !answerPageChanged
-                    && gDialogFixtureStableAnswerFrames < 2) {
-                    if (++gDialogFixtureFramesWaitingForAnswers > 120) {
-                        printf("DIALOG_FIXTURE FAIL map=%s script=%s speaker=%d reason=answer-list-did-not-change-after-key-1 advances=%d\n",
-                            gMapHeader.name, gDialogFixtureScript, gDialogFixtureSpeakerId, gDialogFixtureAdvanceCount);
-                        fflush(stdout);
-                        gDialogFixtureFinished = true;
+            std::vector<std::string> currentReplyText;
+            if (gDialogPageInspectRequested || gDialogCursorCheckRequested) {
+                for (int index = 0; index < windowCount; index++) {
+                    TextWindowSnapshot window;
+                    if (!textCaptureGetWindowSnapshot(index, &window, nullptr) || window.hidden
+                        || window.pixels == nullptr || window.id != replyOwnerId) {
+                        continue;
                     }
-                    return;
+                    const scene::TextBufferId buffer = textCaptureBufferId(window.pixels);
+                    if (buffer == 0) continue;
+                    const std::vector<scene::TextRecord> records = scene::textCaptureSharpRecords(buffer);
+                    for (const scene::TextRecord& record : records) {
+                        if (record.ownerWindow == window.id) currentReplyText.push_back(record.run.text);
+                    }
                 }
-                if (gDialogFixtureStableAnswerFrames < 2) return;
-                gDialogFixtureFramesWaitingForAnswers = 0;
-                gDialogFixtureStableAnswerFrames = 0;
-                ++gDialogFixtureAdvanceCount;
-                printf("DIALOG_FIXTURE ADVANCE key=1 count=%d options=%d runs=%zu option_window=%d\n",
-                    gDialogFixtureAdvanceCount, optionCount, currentReplyText.size(), optionWindowId);
-                for (std::size_t index = 0; index < currentReplyText.size(); index++) {
-                    printf("DIALOG_FIXTURE TEXT run=%zu bytes=%zu text=%s\n",
-                        index, currentReplyText[index].size(), currentReplyText[index].c_str());
-                }
-                fflush(stdout);
-                enqueueInputEvent(KEY_1);
-                return;
             }
             if (gDialogPageInspectRequested) {
                 if (gDialogPageInspectStage == 0) {
@@ -4271,21 +4259,12 @@ static void runDialogFixtureFrame()
                 fflush(stdout);
                 return;
             }
-            if (gDialogFixtureSynthetic && (optionCount != 7 || optionWindowId < 0 || !npcReplyVisible
-                    || std::find(observedOption.begin(), observedOption.end(), false) != observedOption.end()
-                    || !observedWrappedLines || wrappedOptions == 0)) {
-                printf("DIALOG_FIXTURE FAIL reason=synthetic-page-incomplete options=%d wrapped=%d option_window=%d runs=%zu npc=%d\n",
-                    optionCount, wrappedOptions, optionWindowId, currentReplyText.size(), npcReplyVisible ? 1 : 0);
-                fflush(stdout);
-                gDialogFixtureFinished = true;
-                return;
-            }
             const bool captured = takeSnapshot();
             if (captured) {
-                printf("DIALOG_FIXTURE PASS map=%s elevation=%d script=%s speaker=%d speaker_tile=%d hero=%d dialog_owners=%d,%d eligible_runs=%d answers=%zu wrapped_answers=%d advances=%d\n",
+                printf("DIALOG_FIXTURE PASS map=%s elevation=%d script=%s speaker=%d speaker_tile=%d hero=%d dialog_owners=%d,%d eligible_runs=%d\n",
                     gMapHeader.name, gDialogFixtureSpeakerElevation, gDialogFixtureScript,
                     gDialogFixtureSpeakerId, gDialogFixtureSpeakerTile, gDude != nullptr ? gDude->tile : -1,
-                    ownerIds[0], ownerIds[1], runCount, layouts.size(), wrappedOptions, gDialogFixtureAdvanceCount);
+                    ownerIds[0], ownerIds[1], runCount);
             } else {
                 printf("DIALOG_FIXTURE FAIL map=%s script=%s speaker=%d speaker_tile=%d hero=%d reason=snapshot-failed status=%s\n",
                     gMapHeader.name, gDialogFixtureScript, gDialogFixtureSpeakerId,

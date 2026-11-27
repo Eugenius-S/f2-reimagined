@@ -555,7 +555,8 @@ $runId = [guid]::NewGuid().ToString('N')
 $runDirectory = Join-Path $exeDirectory "runs\$($runId.Substring(0, 12))"
 New-Item -ItemType Directory -Path $runDirectory -Force | Out-Null
 if ($syntheticDialogFixture) {
-    $fixtureLanguage = if ($Language) { $Language } else { 'english' }
+    $fixtureLanguage = (Get-TestConfigValue $configPath 'system' 'language').Trim().ToLowerInvariant()
+    if ($fixtureLanguage -notin @('english', 'russian')) { throw "Unsupported dialogue fixture language: '$fixtureLanguage'." }
     & py -3 (Join-Path $PSScriptRoot 'dialog_fixture_resource.py') $GameDir $runDirectory $fixtureLanguage
     if ($LASTEXITCODE -ne 0) { throw 'Could not stage the isolated dialogue fixture resource.' }
 }
@@ -1309,7 +1310,7 @@ if ($DialogFixture -and -not $DialogPageInspect -and -not $DialogCursorCheck) {
         throw "Dialog fixture timed out within $TimeoutSeconds s.`n$fixtureLog"
     }
     if (-not $probeHarnessStoppedProcess) { throw 'Dialog fixture was not stopped by its isolated helper harness.' }
-    if ($snapshots.Count -ne 1) { throw "Dialog fixture must save exactly one presented answer frame, got $($snapshots.Count)." }
+    if ($syntheticDialogFixture -and $snapshots.Count -ne 1) { throw "Dialog fixture must save exactly one presented answer frame, got $($snapshots.Count)." }
     if (-not $DialogLayoutCheck) {
         $dialogMetadata = Get-Content -Raw -LiteralPath $snapshots[0].FullName | ConvertFrom-Json
         $dialogAnswers = @($dialogMetadata.dialogue_answers.items)
@@ -1372,7 +1373,7 @@ if ($DialogCursorCheck) {
 }
 if ($DialogLayoutCheck) {
     $layoutLog = Get-Content -Raw -LiteralPath (Join-Path $OutputDirectory 'process.stdout.log')
-    if ($dialogFixtureFailed -or $layoutLog -notmatch '(?m)^DIALOG_LAYOUT_CHECK PASS geometry=non-overlapping buttons=\d+ wrapped_options=\d+') {
+    if ($dialogFixtureFailed -or $layoutLog -notmatch '(?m)^DIALOG_LAYOUT_CHECK PASS geometry=non-overlapping buttons=7 text_rows=8') {
         throw "Dialog layout geometry check failed or timed out within $TimeoutSeconds s.`n$layoutLog"
     }
 }

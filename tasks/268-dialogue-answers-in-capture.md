@@ -46,7 +46,7 @@ Next: after the shared Windows slot is free, build Release and run CTest and the
 Check (after build, from this worktree; use only the isolated RP copy):
 
 ```powershell
-$qa = 'E:\Projects\f2r-night-285-release\build\night285\rp-game'
+$qa = '<path to an isolated RP game copy>'
 foreach ($lang in 'english','russian') {
   foreach ($scale in 1,2) {
     powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev-snapshot.ps1 -DialogFixture -GameRoot $qa -Language $lang -Scale $scale -HeroTile 25075 -CaptureConsole -OutputDirectory "build/268-$lang-x$scale"
