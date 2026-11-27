@@ -2,7 +2,7 @@
 id: 268
 title: The dialogue fixture captures the reply list as the player sees it
 milestone: M1
-status: todo
+status: done
 owner: gpt
 suggested: gpt
 priority: high
@@ -10,7 +10,7 @@ tier: 2
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -34,3 +34,13 @@ Renderer and map data changes.
 ## Log
 
 - 2026-11-13 claude: cut from the review of gpt's run of 2026-11-12: the blocked evidence tasks share a few harness gaps.
+
+### 2026-11-13 gpt
+Done: removed the pre-dialogue baseline image from `-DialogFixture`; added logical answer rectangles from `gameDialogGetOptionLayout` to the snapshot sidecar; required every answer layout before capture; added a natural first-choice route when the current English list has no wrapped answer. The initial unmodified x2 English capture at `build/diag-268-before/scr00000.png` visibly contains Kcsulik's NPC line and all seven answers, but no answer wraps. It also exposed the cause of the misleading output: the tool returned a static preview without dialogue before the valid dialogue frame.
+Next: blocked. Kcsulik's first English answer list has seven unwrapped answers. Two modified-source English x2 captures did not find a natural wrapped page: `build/diag-268-after-en-x2/process.stdout.log` ended with `answer-list-did-not-change-after-key-1`; `build/diag-268-after2-en-x2/process.stdout.log` showed six first-choice advances with 7 and 2 options, then `no-wrapped-answer-after-six-natural-first-choice-pages`. No screenshot was produced by either attempt. The latest rectangle-based option-window lookup and sidecar output compile, but they have not been exercised at runtime. Need a reproducible English dialogue page with a naturally wrapped answer before completing the four-frame matrix.
+Check: `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release` passed after the latest source change; `ctest --test-dir build --output-on-failure` passed 27/27. `powershell -NoProfile -ExecutionPolicy Bypass -File tools/regression.ps1` began exporting all maps to `build/scene-cache` but did not reach comparisons or write a summary; stopped only this run's process tree after about four minutes so the next checked build can proceed. Pixel regression remains unverified. No game files or cache outside this worktree were changed.
+
+### 2026-11-27 gpt
+Done: the plain dialogue fixture lengthens Kcsulik answer 797 in its private EN/RU run data and reads the complete frame before presentation. Each of the four native Windows captures shows the full NPC reply and seven answers, including visible wrapping. The sidecars contain the actual seven logical option rectangles. [Frames, sidecars and reproduction](../runs/268-dialogue-answers-in-capture/README.md).
+Next: tasks 140 and 193 can use this fixture to inspect their dialogue text changes.
+Check: Windows Release `0f1570f37`, CTest 35/35, and independent Terra review after corrections. The ordinary live view, dialogue cursor probe and stock Klamath entrance match main pixel for pixel. The stock reference, legacy page-inspection timeout and legacy layout expectation give the same failing outcomes on main and the candidate. See the evidence for the exact controls.

@@ -119,6 +119,7 @@ void sceneOverlaySynced(bool on);
 void vanillaPresented();
 void sceneOverlayPresented();
 void sceneLiveFrameReady();
+void dialogFixtureBeforePresent();
 bool handleClick(int mouseX, int mouseY);
 
 // Draws the panel into the 8-bit framebuffer (before palette expansion).
