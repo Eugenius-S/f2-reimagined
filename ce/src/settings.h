@@ -139,6 +139,9 @@ struct UISettings {
     // 2 - Leather look Iface-bar side art used.
     int iface_bar_side_art = 2;
 
+    // 0 keeps the existing CE art, 1 selects the original metallic sides.
+    int hud_style = 0;
+
     // Iface-bar side graphics extend from the Screen edges to the Iface-Bar if true (otherwise from bar to edges).
     bool iface_bar_sides_ori = false;
 

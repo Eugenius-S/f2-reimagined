@@ -19,6 +19,7 @@
 #include "game_sound.h"
 #include "graph_lib.h"
 #include "input.h"
+#include "interface.h"
 #include "kb.h"
 #include "mainmenu.h"
 #include "message.h"
@@ -1319,6 +1320,7 @@ static int preferencesWindowFree()
 // 0x490798 do_prefscreen
 int doPreferences(bool animated)
 {
+    const int previousHudStyle = settings.ui.hud_style;
     ScopedGameMode gm(GameMode::kPreferences);
 
     if (preferencesWindowInit() == -1) {
@@ -1423,7 +1425,10 @@ int doPreferences(bool animated)
 
     preferencesWindowFree();
     // Modern display choices commit independently of legacy preferences.
-    if (rc == 1) applyWindowModeLive();
+    if (rc == 1) {
+        applyWindowModeLive();
+        if (settings.ui.hud_style != previousHudStyle) interfaceRefreshSidePanels();
+    }
 
     return rc;
 }

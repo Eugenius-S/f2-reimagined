@@ -19,6 +19,7 @@
 #include "../debug.h"
 #include "../game.h"
 #include "../input.h"
+#include "../interface.h"
 #include "../kb.h"
 #include "../mouse.h"
 #include "../scripts.h"
@@ -290,6 +291,9 @@ bool OptionsPanel::initialize(int windowId, unsigned char* surface, const unsign
     model_->configureChoice("screen.resolution_mode", resolutionChoices);
     model_->setValue("screen.resolution_mode", selectedResolution);
     updateScaleRange();
+    if (!interfaceOriginalHudAvailable()) {
+        model_->configureChoice("ui.hud_style", { { 1, "Original unavailable (CE)" }, { 0, "CE" } });
+    }
     rows_ = optionsPanelRows(model_->edits(), "3d");
     sliderTrackOffset_ = sliderTextCenterOffset(windowId_);
     buildRowLayout();
@@ -559,7 +563,7 @@ void OptionsPanel::buildRowLayout()
         const std::string key = separator == std::string::npos ? id : id.substr(separator + 1);
         int group = 3;
         if (key == "enabled" || key == "clean_edges" || key == "sharp_text" || key == "scale_factor"
-            || key == "mouse_sensitivity") group = 0;
+            || key == "mouse_sensitivity" || key == "hud_style") group = 0;
         else if (key == "resolution_mode" || key == "windowed" || key == "vsync") group = 0;
         else if (key == "sun" || key == "shadows" || key == "cloud_shadows" || key == "shadow_pixel_size" || key == "shadow_density"
             || key == "sun_swing" || key == "lights" || key == "glow" || key == "glow_strength") group = 1;
