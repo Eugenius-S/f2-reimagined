@@ -67,31 +67,40 @@ frames every 150 ms, diffs inside the pool's bbox - exactly protocol 4.
 Until then the kinds stay unproven in both directions; the inventory above
 is the deliverable this round adds.
 
-## 2026-11-27, the live-window round: the slime kind moves in BOTH engines
+## 2026-11-27, the live-window round: THIS pool moves in both engines
 
 The capture that works: the 239 live-window harness WITHOUT -Background (a
-visible focused window over the separate stock install: master.dat,
-critter.dat, sfall.dat, mods/, data/MAPS/AUTOMAP.DB and the fixed test cfg
-in build/stock-root; no owner game, saves or settings touched). Frames every
-150 ms via PrintWindow of the presented framebuffer, 12 s per engine.
-Klatoxcv e1, view tile 22924, hero 19291 (card 073's pool).
+visible focused window over the separate stock install - build/stock-root:
+master.dat, critter.dat, sfall.dat, mods/, data/MAPS/AUTOMAP.DB and the fixed
+test cfg; no owner game, saves or settings touched). PrintWindow of the
+presented framebuffer every 150 ms nominal; the actual gaps settled at
+245-278 ms (classic) and 249-305 ms (3D). Klatoxcv e1, view tile 22924, hero
+19291 (card 073's pool).
 
-- Classic positive control: from frame 3 on, the pool zone changes by a
-  steady 2300 px per frame pair while the neighbouring still-rock control
-  zone changes by exactly 0. The slime cycles.
-- 3D: the same run with a scripted Ctrl+F10 chord at 1.5 s (the input
-  pump's hold/key/release, waitms-based) flips the live game into the 3D
-  view; the pool zone then changes by 779/968/669 px per pair (frames 4-7)
-  with the control zone at 0. The pool quiets later (42/2/1 px) - the
-  capture spacing jitters around the cycle's step, so the cadence detail
-  needs a controlled-interval pass, but movement itself is proven.
+Transition frames excluded: the --dev-new-game start opens through the
+Temple of Trials map before the dev target loads, so frames 0-4 (classic)
+and 0-3 (3D) are the loader and another map; the stable ranges below start
+after the caves are on screen.
 
-Verdict for the water/slime kind: moves in both engines, no bug. The
-earlier frozen/offscreen numbers in this folder were fixture artefacts, not
-evidence either way. Sheets: `03-slime-classic-live-water-strip.jpg`,
-`04-slime-3d-live-water-strip.jpg` (the pool crop, 1.5x). Raw frames stay
-in build/walk-286/vis-slime-cl and vis-slime-3d.
+- Classic positive control (frames 5..16, eleven pairs at 245-278 ms):
+  the pool zone changes by a steady 2300 px per pair, eleven of eleven,
+  while the neighbouring still-rock control zone is 0 on every pair.
+- 3D positive result (frames 7..14 after the scripted Ctrl+F10 chord at
+  1.5 s; 249-305 ms): the pool zone changes by 779/968/669 px on the
+  first three pairs with the control zone at 0; the later pairs read
+  42/2/1/45 px - the sparse samples caught same-phase moments of the
+  discrete cycle.
 
-The other kinds (fire, monitors, shoreline, alarm, the frame-animated
-ambient list) still need this same live protocol per kind; the inventory
-above stands as the map of what to shoot.
+Verdict, scoped to THIS pool (klatoxcv e1, the goop pool by the barrel at
+view 22924): it animates in both engines; no bug. No pace or cadence claim
+is made - the classic steps every pair while the 3D samples straddle the
+cycle unevenly, and a pace comparison needs a controlled-interval pass.
+Nothing here speaks for other water, other maps or the other kinds; the
+inventory above remains the map of what to shoot next (fire, shoreline,
+monitors, alarm, the frame-animated ambient list).
+
+Sheets rebuilt from the stable frames only:
+`03-slime-classic-live-water-strip.jpg` (classic frames 5/7/9/11, the pool
+crop, the +px deltas named), `04-slime-3d-live-water-strip.jpg` (3D frames
+7/8/9/10, the pool crop at 1.5x). Raw frames and their mtimes stay in
+build/walk-286/vis-slime-cl and vis-slime-3d.
