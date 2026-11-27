@@ -66,3 +66,32 @@ frames every 150 ms, diffs inside the pool's bbox - exactly protocol 4.
 
 Until then the kinds stay unproven in both directions; the inventory above
 is the deliverable this round adds.
+
+## 2026-11-27, the live-window round: the slime kind moves in BOTH engines
+
+The capture that works: the 239 live-window harness WITHOUT -Background (a
+visible focused window over the separate stock install: master.dat,
+critter.dat, sfall.dat, mods/, data/MAPS/AUTOMAP.DB and the fixed test cfg
+in build/stock-root; no owner game, saves or settings touched). Frames every
+150 ms via PrintWindow of the presented framebuffer, 12 s per engine.
+Klatoxcv e1, view tile 22924, hero 19291 (card 073's pool).
+
+- Classic positive control: from frame 3 on, the pool zone changes by a
+  steady 2300 px per frame pair while the neighbouring still-rock control
+  zone changes by exactly 0. The slime cycles.
+- 3D: the same run with a scripted Ctrl+F10 chord at 1.5 s (the input
+  pump's hold/key/release, waitms-based) flips the live game into the 3D
+  view; the pool zone then changes by 779/968/669 px per pair (frames 4-7)
+  with the control zone at 0. The pool quiets later (42/2/1 px) - the
+  capture spacing jitters around the cycle's step, so the cadence detail
+  needs a controlled-interval pass, but movement itself is proven.
+
+Verdict for the water/slime kind: moves in both engines, no bug. The
+earlier frozen/offscreen numbers in this folder were fixture artefacts, not
+evidence either way. Sheets: `03-slime-classic-live-water-strip.jpg`,
+`04-slime-3d-live-water-strip.jpg` (the pool crop, 1.5x). Raw frames stay
+in build/walk-286/vis-slime-cl and vis-slime-3d.
+
+The other kinds (fire, monitors, shoreline, alarm, the frame-animated
+ambient list) still need this same live protocol per kind; the inventory
+above stands as the map of what to shoot.
