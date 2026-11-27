@@ -183,6 +183,7 @@ static void sidePanelsExit();
 static void sidePanelsHide();
 static void sidePanelsShow();
 static void sidePanelsDraw(Art* image, int win, bool isLeading, bool original);
+static bool originalSidePanelsValid(Art* left, Art* right);
 
 // 0x518F08 insideInit
 static bool gInterfaceBarInitialized = false;
@@ -3007,7 +3008,7 @@ static void sidePanelsInit()
     int sideArtId = settings.ui.iface_bar_side_art;
     ArtPtr originalLeft { settings.ui.hud_style == 1 ? artLoad("art\\intrface\\HR_IFACELFT1.frm") : nullptr };
     ArtPtr originalRight { settings.ui.hud_style == 1 ? artLoad("art\\intrface\\HR_IFACERHT1.frm") : nullptr };
-    bool original = originalLeft.get() != nullptr && originalRight.get() != nullptr;
+    bool original = originalSidePanelsValid(originalLeft.get(), originalRight.get());
     if (settings.ui.hud_style == 1 && !original) {
         debugPrint("INTRFACE: Original HUD side art is unavailable; using CE sides.\n");
     }
@@ -3074,11 +3075,19 @@ static void sidePanelsShow()
     }
 }
 
+static bool originalSidePanelsValid(Art* left, Art* right)
+{
+    return left != nullptr && right != nullptr
+        && artGetWidth(left) == 640 && artGetWidth(right) == 640
+        && artGetHeight(left) == 99 && artGetHeight(right) == 99
+        && artGetFrameData(left) != nullptr && artGetFrameData(right) != nullptr;
+}
+
 bool interfaceOriginalHudAvailable()
 {
     ArtPtr left { artLoad("art\\intrface\\HR_IFACELFT1.frm") };
     ArtPtr right { artLoad("art\\intrface\\HR_IFACERHT1.frm") };
-    return left.get() != nullptr && right.get() != nullptr;
+    return originalSidePanelsValid(left.get(), right.get());
 }
 
 void interfaceRefreshSidePanels()
@@ -3103,15 +3112,52 @@ static void sidePanelsDraw(Art* image, int win, bool isLeading, bool original)
     int windowWidth = windowGetWidth(win);
     int windowHeight = windowGetHeight(win);
 
-    // Both logos occupy the inner 150 source pixels; fit that region even
-    // when a narrow screen leaves less than 150 pixels for each side.
-    int width = std::min(imageWidth, original ? std::max(150, windowWidth) : windowWidth);
+    if (original) {
+        // The inner 150 columns contain the logo. Only the plain upper and
+        // lower bands are stretched vertically when the logo must shrink.
+        constexpr int logoWidth = 150;
+        constexpr int topBand = 22;
+        constexpr int logoHeight = 59;
+        constexpr int bottomBand = 18;
+        const int cropWidth = std::min(imageWidth, std::max(logoWidth, windowWidth));
+        const int logoDestHeight = std::max(1, std::min(windowHeight,
+            logoHeight * std::min(windowWidth, logoWidth) / logoWidth));
+        const int topDestHeight = (windowHeight - logoDestHeight) * topBand / (topBand + bottomBand);
+        const int bottomDestHeight = windowHeight - topDestHeight - logoDestHeight;
+        unsigned char* dest = windowGetBuffer(win);
+        for (int y = 0; y < windowHeight; ++y) {
+            int sourceY;
+            if (y < topDestHeight) {
+                sourceY = y * topBand / topDestHeight;
+            } else if (y < topDestHeight + logoDestHeight) {
+                sourceY = topBand + (2 * (y - topDestHeight) + 1) * logoHeight / (2 * logoDestHeight);
+            } else {
+                sourceY = topBand + logoHeight
+                    + (y - topDestHeight - logoDestHeight) * bottomBand / bottomDestHeight;
+            }
+            for (int x = 0; x < windowWidth; ++x) {
+                int sourceX;
+                if (windowWidth < logoWidth) {
+                    sourceX = (2 * x + 1) * logoWidth / (2 * windowWidth);
+                } else if (windowWidth > imageWidth) {
+                    sourceX = isLeading ? std::max(0, x - (windowWidth - imageWidth)) : std::min(x, imageWidth - 1);
+                } else {
+                    sourceX = x;
+                }
+                if (isLeading && windowWidth <= imageWidth) sourceX += imageWidth - cropWidth;
+                dest[y * windowWidth + x] = imageData[sourceY * imageWidth + sourceX];
+            }
+        }
+        return;
+    }
 
-    if ((original || !settings.ui.iface_bar_sides_ori) && isLeading) {
+    int width = std::min(imageWidth, windowWidth);
+
+    if (!settings.ui.iface_bar_sides_ori && isLeading) {
         imageData += imageWidth - width;
     }
 
-    if (!original && settings.ui.iface_bar_sides_ori && !isLeading) {
+    if (settings.ui.iface_bar_sides_ori && !isLeading) {
         imageData += imageWidth - width;
     }
 

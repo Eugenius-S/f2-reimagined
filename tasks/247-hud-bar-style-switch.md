@@ -50,3 +50,12 @@ Bundled game art, changes to the owner's installation and saves, and release.
   Save/Cancel/restart, absent-art fallback, Classic and 3D paired screenshots,
   normal and wide layouts, clicks and independent review. Check: static diff
   only so far; runtime and visual acceptance remain open.
+
+- 2026-11-27 gpt: review found the narrow Original logo was horizontally
+  squashed. The candidate now scales the logo band in both axes and fills the
+  remaining height from its outer bands; very wide sides extend the outermost
+  art without enlarging the emblem. The CE rendering path stays unchanged.
+  Check: a small arithmetic check covered both sides, widths 1..2000 at
+  representative boundaries, heights 1..200, source bounds, the final 80px
+  column and pixel-identical 99px-high crops when the logo fits. This is not
+  an image or game check; Windows build and paired runtime views remain open.
