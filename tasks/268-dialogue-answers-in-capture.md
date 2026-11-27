@@ -2,7 +2,7 @@
 id: 268
 title: The dialogue fixture captures the reply list as the player sees it
 milestone: M1
-status: blocked
+status: done
 owner: gpt
 suggested: gpt
 priority: high
@@ -10,7 +10,7 @@ tier: 2
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -40,18 +40,7 @@ Done: removed the pre-dialogue baseline image from `-DialogFixture`; added logic
 Next: blocked. Kcsulik's first English answer list has seven unwrapped answers. Two modified-source English x2 captures did not find a natural wrapped page: `build/diag-268-after-en-x2/process.stdout.log` ended with `answer-list-did-not-change-after-key-1`; `build/diag-268-after2-en-x2/process.stdout.log` showed six first-choice advances with 7 and 2 options, then `no-wrapped-answer-after-six-natural-first-choice-pages`. No screenshot was produced by either attempt. The latest rectangle-based option-window lookup and sidecar output compile, but they have not been exercised at runtime. Need a reproducible English dialogue page with a naturally wrapped answer before completing the four-frame matrix.
 Check: `powershell -NoProfile -ExecutionPolicy Bypass -File tools/configure-build.ps1 Release` passed after the latest source change; `ctest --test-dir build --output-on-failure` passed 27/27. `powershell -NoProfile -ExecutionPolicy Bypass -File tools/regression.ps1` began exporting all maps to `build/scene-cache` but did not reach comparisons or write a summary; stopped only this run's process tree after about four minutes so the next checked build can proceed. Pixel regression remains unverified. No game files or cache outside this worktree were changed.
 
-### 2026-11-27 gpt (implementation pending acceptance)
-Done: prepared a run-local Kcsulik message overlay for the plain dialogue fixture, with one long EN/RU answer and the other source messages preserved. The fixture captures the GL back buffer immediately before presentation and collects layouts at that boundary. The existing page, cursor, and layout checks keep their previous paths. Static staging against the isolated RP copy succeeded for both languages; this does not prove the game frames.
-Next: after the shared Windows slot is free, build Release and run CTest and the four native captures below. Inspect each NPC line and every answer, including the wrapped lines; verify the seven logical sidecar rectangles against the image, executable hash, commit, map, and scale. Run the three existing diagnostic modes and compare a matched ordinary view from the base and candidate pixel for pixel. Independent review and CI remain pending; status stays blocked.
-Check (after build, from this worktree; use only the isolated RP copy):
-
-```powershell
-$qa = '<path to an isolated RP game copy>'
-foreach ($lang in 'english','russian') {
-  foreach ($scale in 1,2) {
-    powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev-snapshot.ps1 -DialogFixture -GameRoot $qa -Language $lang -Scale $scale -HeroTile 25075 -CaptureConsole -OutputDirectory "build/268-$lang-x$scale"
-  }
-}
-```
-
-The historical Kcsulik first page has NPC message 796 and seven answers (797, 126, 798, 799, 800, 801, 803). Its unmodified 797 is 30 bytes in English and does not wrap, so repeatedly selecting its first option could not guarantee this test case. The overlay replaces 797 only inside the run's redirected state; no game source file is changed.
+### 2026-11-27 gpt
+Done: the plain dialogue fixture lengthens Kcsulik answer 797 in its private EN/RU run data and reads the complete frame before presentation. Each of the four native Windows captures shows the full NPC reply and seven answers, including visible wrapping. The sidecars contain the actual seven logical option rectangles. [Frames, sidecars and reproduction](../runs/268-dialogue-answers-in-capture/README.md).
+Next: tasks 140 and 193 can use this fixture to inspect their dialogue text changes.
+Check: Windows Release `0f1570f37`, CTest 35/35, and independent Terra review after corrections. The ordinary live view, dialogue cursor probe and stock Klamath entrance match main pixel for pixel. The stock reference, legacy page-inspection timeout and legacy layout expectation give the same failing outcomes on main and the candidate. See the evidence for the exact controls.
