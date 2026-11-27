@@ -2,7 +2,7 @@
 id: 247
 title: Switch the bottom HUD between Original and CE
 milestone: M1
-status: doing
+status: done
 owner: gpt
 suggested: any
 priority: medium
@@ -10,7 +10,7 @@ tier: 2
 claude-only: no
 user-check: no
 depends-on: []
-reviewed: no
+reviewed: yes
 ---
 
 ## Goal
@@ -20,8 +20,8 @@ existing CE appearance and player layout settings by default.
 
 ## Context
 
-- The owner chose the standard game-mounted HR_IFACELFT1/HR_IFACERHT1
-  metallic pair; do not add game art to the repository.
+- The standard game-mounted HR_IFACELFT1/HR_IFACERHT1 metallic pair matches
+  the owner's reference. Do not add game art to the repository.
 - The center, buttons, layout and existing CE side art configuration remain
   unchanged. Missing Original art falls back to CE with an explicit menu label.
 - The former RP/Original proposal is superseded; task 268 is separate.
@@ -59,3 +59,15 @@ Bundled game art, changes to the owner's installation and saves, and release.
   representative boundaries, heights 1..200, source bounds, the final 80px
   column and pixel-identical 99px-high crops when the logo fits. This is not
   an image or game check; Windows build and paired runtime views remain open.
+
+### 2026-11-27 gpt
+
+Done: The Original / CE selector saves and applies in game. The metallic
+pair shows both emblems in Classic and 3D at 1920x1080 and 3440x1440. In all
+four matched checks CE equals main, and the center strip equals CE in Original.
+Next: No further work on this card. This PR does not publish a release.
+Check: Windows Release `962f829ef`, CTest 35/35 and independent Terra review.
+In English Classic and Russian 3D, used the Preferences menu to save both
+styles, restarted into each, canceled a change and restored defaults. Checked
+the inventory button press, decorative side click and the stock CE fallback.
+[Paired game frames and raw capture metadata](../runs/247-hud-bar-style-switch/README.md).

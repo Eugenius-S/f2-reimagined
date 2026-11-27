@@ -1,0 +1,1546 @@
+[
+  {
+    "case": "classic-ordinary",
+    "main_ce_vs_candidate_ce_hud_differing_pixels": 0,
+    "original_vs_ce_center_differing_pixels": 0,
+    "base_ce": {
+      "source_sha256": "dfffd9c9cd82d44308292c82fcd4c8d2d59bd5886bb96ac41e6993f158531e18",
+      "capture": {
+        "image": "scr00000.png",
+        "view": "vanilla-framebuffer",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "not-requested"
+        },
+        "snapshot_run": "15d0a279b0c944d98f834253074f1a28",
+        "view_tile": 25075,
+        "preview_requested": false,
+        "scene_3d_enabled": true,
+        "scene_view": "off",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": false,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "disabled"
+        },
+        "camera": "center tile 25075",
+        "camera_turn": 0.0,
+        "wall_triangles": 0,
+        "wall_pages": 0,
+        "hero": null,
+        "egg": {
+          "shown": false,
+          "wall_rows_marked": 0,
+          "wall_rows_any": false
+        },
+        "objects": {
+          "drawn": 0,
+          "skipped": 0
+        },
+        "preview_availability": "not-requested",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": false,
+          "game_time": 432001,
+          "ambient": 65536,
+          "up": false,
+          "moon": false,
+          "height": 90.0,
+          "azimuth": 153.435,
+          "direction": [
+            -0.0,
+            1.0,
+            0.0
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 0.0
+        },
+        "resolution": "1920x1080",
+        "logical_resolution": "960x540",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "1920x1080",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "1920x1080",
+          "drawable_size": "1920x1080",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "611c00c",
+        "tools_commit": "-",
+        "exe_sha256": "512dd6962328c5ac237da34f9f31ce9b241d713e631f32e93c01a23c99f5f6e2",
+        "taken": "20261127-082924",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    },
+    "candidate_ce": {
+      "source_sha256": "3e58f805e6bc5d422762e5e64f85638285cb1ca9a8f9e2c84a32e8931151d8fe",
+      "capture": {
+        "image": "scr00000.png",
+        "view": "vanilla-framebuffer",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "not-requested"
+        },
+        "snapshot_run": "dde6a5dd78da4483b18206e95203e413",
+        "view_tile": 25075,
+        "preview_requested": false,
+        "scene_3d_enabled": true,
+        "scene_view": "off",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": false,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "disabled"
+        },
+        "camera": "center tile 25075",
+        "camera_turn": 0.0,
+        "wall_triangles": 0,
+        "wall_pages": 0,
+        "hero": null,
+        "egg": {
+          "shown": false,
+          "wall_rows_marked": 0,
+          "wall_rows_any": false
+        },
+        "objects": {
+          "drawn": 0,
+          "skipped": 0
+        },
+        "preview_availability": "not-requested",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": false,
+          "game_time": 432021,
+          "ambient": 65536,
+          "up": false,
+          "moon": false,
+          "height": 89.996,
+          "azimuth": 153.435,
+          "direction": [
+            -6e-05,
+            1.0,
+            3e-05
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 0.0
+        },
+        "resolution": "1920x1080",
+        "logical_resolution": "960x540",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "1920x1080",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "1920x1080",
+          "drawable_size": "1920x1080",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "962f829ef",
+        "tools_commit": "-",
+        "exe_sha256": "d682e8b4a469e826becff3b648d52c8bfc871d85310399a769dd629614bc218f",
+        "taken": "20261127-082940",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    },
+    "candidate_original": {
+      "source_sha256": "f113c2b7ab9e43f22cee9a01623ac4b44c2b05514598d82e7a9f6e3accbdf49f",
+      "capture": {
+        "image": "scr00000.png",
+        "view": "vanilla-framebuffer",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "not-requested"
+        },
+        "snapshot_run": "da670b04becc48eab120a12dadc4495b",
+        "view_tile": 25075,
+        "preview_requested": false,
+        "scene_3d_enabled": true,
+        "scene_view": "off",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": false,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "disabled"
+        },
+        "camera": "center tile 25075",
+        "camera_turn": 0.0,
+        "wall_triangles": 0,
+        "wall_pages": 0,
+        "hero": null,
+        "egg": {
+          "shown": false,
+          "wall_rows_marked": 0,
+          "wall_rows_any": false
+        },
+        "objects": {
+          "drawn": 0,
+          "skipped": 0
+        },
+        "preview_availability": "not-requested",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": false,
+          "game_time": 432021,
+          "ambient": 65536,
+          "up": false,
+          "moon": false,
+          "height": 89.996,
+          "azimuth": 153.435,
+          "direction": [
+            -6e-05,
+            1.0,
+            3e-05
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 0.0
+        },
+        "resolution": "1920x1080",
+        "logical_resolution": "960x540",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "1920x1080",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "1920x1080",
+          "drawable_size": "1920x1080",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "962f829ef",
+        "tools_commit": "-",
+        "exe_sha256": "d682e8b4a469e826becff3b648d52c8bfc871d85310399a769dd629614bc218f",
+        "taken": "20261127-082956",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    }
+  },
+  {
+    "case": "classic-wide",
+    "main_ce_vs_candidate_ce_hud_differing_pixels": 0,
+    "original_vs_ce_center_differing_pixels": 0,
+    "base_ce": {
+      "source_sha256": "825ff836fd85d48b046187871cc98cd966d956e884c89ca973668e0c07082085",
+      "capture": {
+        "image": "scr00000.png",
+        "view": "vanilla-framebuffer",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "not-requested"
+        },
+        "snapshot_run": "a4103018eeec4028bb7d2fc6c61205b6",
+        "view_tile": 25075,
+        "preview_requested": false,
+        "scene_3d_enabled": true,
+        "scene_view": "off",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": false,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "disabled"
+        },
+        "camera": "center tile 25075",
+        "camera_turn": 0.0,
+        "wall_triangles": 0,
+        "wall_pages": 0,
+        "hero": null,
+        "egg": {
+          "shown": false,
+          "wall_rows_marked": 0,
+          "wall_rows_any": false
+        },
+        "objects": {
+          "drawn": 0,
+          "skipped": 0
+        },
+        "preview_availability": "not-requested",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": false,
+          "game_time": 432021,
+          "ambient": 65536,
+          "up": false,
+          "moon": false,
+          "height": 89.996,
+          "azimuth": 153.435,
+          "direction": [
+            -6e-05,
+            1.0,
+            3e-05
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 0.0
+        },
+        "resolution": "3440x1440",
+        "logical_resolution": "1720x720",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "3440x1440",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "3440x1440",
+          "drawable_size": "3440x1440",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "611c00c",
+        "tools_commit": "-",
+        "exe_sha256": "512dd6962328c5ac237da34f9f31ce9b241d713e631f32e93c01a23c99f5f6e2",
+        "taken": "20261127-083011",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    },
+    "candidate_ce": {
+      "source_sha256": "1e508736527712c57e10dc50c4cd43d7334c7ca1ea666478aef8dcb376f53306",
+      "capture": {
+        "image": "scr00000.png",
+        "view": "vanilla-framebuffer",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "not-requested"
+        },
+        "snapshot_run": "1a1db848ca9b4ebbb0dd2e93a960e8df",
+        "view_tile": 25075,
+        "preview_requested": false,
+        "scene_3d_enabled": true,
+        "scene_view": "off",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": false,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "disabled"
+        },
+        "camera": "center tile 25075",
+        "camera_turn": 0.0,
+        "wall_triangles": 0,
+        "wall_pages": 0,
+        "hero": null,
+        "egg": {
+          "shown": false,
+          "wall_rows_marked": 0,
+          "wall_rows_any": false
+        },
+        "objects": {
+          "drawn": 0,
+          "skipped": 0
+        },
+        "preview_availability": "not-requested",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": false,
+          "game_time": 432021,
+          "ambient": 65536,
+          "up": false,
+          "moon": false,
+          "height": 89.996,
+          "azimuth": 153.435,
+          "direction": [
+            -6e-05,
+            1.0,
+            3e-05
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 0.0
+        },
+        "resolution": "3440x1440",
+        "logical_resolution": "1720x720",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "3440x1440",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "3440x1440",
+          "drawable_size": "3440x1440",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "962f829ef",
+        "tools_commit": "-",
+        "exe_sha256": "d682e8b4a469e826becff3b648d52c8bfc871d85310399a769dd629614bc218f",
+        "taken": "20261127-083028",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    },
+    "candidate_original": {
+      "source_sha256": "bcd5bea5615b9eb6c7618f96eb5d89df5b5c42c856b33c4bcab3bcba09ab81e4",
+      "capture": {
+        "image": "scr00000.png",
+        "view": "vanilla-framebuffer",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "not-requested"
+        },
+        "snapshot_run": "c42df6be21f6470c99224889a343f9ed",
+        "view_tile": 25075,
+        "preview_requested": false,
+        "scene_3d_enabled": true,
+        "scene_view": "off",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": false,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "disabled"
+        },
+        "camera": "center tile 25075",
+        "camera_turn": 0.0,
+        "wall_triangles": 0,
+        "wall_pages": 0,
+        "hero": null,
+        "egg": {
+          "shown": false,
+          "wall_rows_marked": 0,
+          "wall_rows_any": false
+        },
+        "objects": {
+          "drawn": 0,
+          "skipped": 0
+        },
+        "preview_availability": "not-requested",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": false,
+          "game_time": 432021,
+          "ambient": 65536,
+          "up": false,
+          "moon": false,
+          "height": 89.996,
+          "azimuth": 153.435,
+          "direction": [
+            -6e-05,
+            1.0,
+            3e-05
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 0.0
+        },
+        "resolution": "3440x1440",
+        "logical_resolution": "1720x720",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "3440x1440",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "3440x1440",
+          "drawable_size": "3440x1440",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "962f829ef",
+        "tools_commit": "-",
+        "exe_sha256": "d682e8b4a469e826becff3b648d52c8bfc871d85310399a769dd629614bc218f",
+        "taken": "20261127-083044",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    }
+  },
+  {
+    "case": "3d-ordinary",
+    "main_ce_vs_candidate_ce_hud_differing_pixels": 0,
+    "original_vs_ce_center_differing_pixels": 0,
+    "base_ce": {
+      "source_sha256": "9f889442970e167166446bf92b723a00c4e9ec6ea0602285ae2e13a5c264b23a",
+      "capture": {
+        "image": "devhero-20261127-083149-000.png",
+        "view": "static-wall-plus-hero-preview",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "available"
+        },
+        "snapshot_run": "17ca9c5f2a8d46f88adc6a567e79539a",
+        "view_tile": 24678,
+        "preview_requested": true,
+        "scene_3d_enabled": true,
+        "scene_view": "full",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": true,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "authored",
+          "world_bounds": [
+            -38.041667,
+            -34.5625,
+            35.958333,
+            34.4375
+          ],
+          "planes": [
+            [
+              0.4472136,
+              0.8944272,
+              29.1434193
+            ],
+            [
+              -0.8320503,
+              0.5547002,
+              22.4653587
+            ],
+            [
+              -0.4472136,
+              -0.8944272,
+              28.0999203
+            ],
+            [
+              0.8320503,
+              -0.5547002,
+              24.1294594
+            ]
+          ]
+        },
+        "camera": "fixed eye=(38.14466,46.23085,85.71700), target=(-11.04167,0.00000,11.93750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+        "camera_turn": 0.0,
+        "wall_triangles": 48321,
+        "wall_pages": 6,
+        "hero": {
+          "tile": 25075,
+          "fid": 16777278,
+          "frame": 0,
+          "rotation": 3,
+          "world_anchor": [
+            -12.541666667,
+            12.6875
+          ]
+        },
+        "egg": {
+          "shown": true,
+          "rect": [
+            513,
+            148,
+            129,
+            98
+          ],
+          "zoom": 1.0,
+          "wall_rows_marked": 409,
+          "wall_rows_any": true
+        },
+        "objects": {
+          "drawn": 4602,
+          "skipped": 0
+        },
+        "preview_availability": "available",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": true,
+          "game_time": 432016,
+          "ambient": 65536,
+          "up": true,
+          "moon": false,
+          "height": 89.997,
+          "azimuth": 153.435,
+          "direction": [
+            -5e-05,
+            1.0,
+            2e-05
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 1.0
+        },
+        "resolution": "1920x1080",
+        "logical_resolution": "960x540",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "1920x1080",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "1920x1080",
+          "drawable_size": "1920x1080",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "611c00c",
+        "tools_commit": "-",
+        "exe_sha256": "512dd6962328c5ac237da34f9f31ce9b241d713e631f32e93c01a23c99f5f6e2",
+        "taken": "20261127-083149",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    },
+    "candidate_ce": {
+      "source_sha256": "a335979b0724eb75dd7272e51c35e7ceaa8352bfc65563d13d227b34f0aa63c3",
+      "capture": {
+        "image": "devhero-20261127-083207-000.png",
+        "view": "static-wall-plus-hero-preview",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "available"
+        },
+        "snapshot_run": "b5a4d1c8b07b488c962fb0c486152f52",
+        "view_tile": 24678,
+        "preview_requested": true,
+        "scene_3d_enabled": true,
+        "scene_view": "full",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": true,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "authored",
+          "world_bounds": [
+            -38.041667,
+            -34.5625,
+            35.958333,
+            34.4375
+          ],
+          "planes": [
+            [
+              0.4472136,
+              0.8944272,
+              29.1434193
+            ],
+            [
+              -0.8320503,
+              0.5547002,
+              22.4653587
+            ],
+            [
+              -0.4472136,
+              -0.8944272,
+              28.0999203
+            ],
+            [
+              0.8320503,
+              -0.5547002,
+              24.1294594
+            ]
+          ]
+        },
+        "camera": "fixed eye=(38.14466,46.23085,85.71700), target=(-11.04167,0.00000,11.93750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+        "camera_turn": 0.0,
+        "wall_triangles": 48321,
+        "wall_pages": 6,
+        "hero": {
+          "tile": 25075,
+          "fid": 16777278,
+          "frame": 0,
+          "rotation": 3,
+          "world_anchor": [
+            -12.541666667,
+            12.6875
+          ]
+        },
+        "egg": {
+          "shown": true,
+          "rect": [
+            513,
+            148,
+            129,
+            98
+          ],
+          "zoom": 1.0,
+          "wall_rows_marked": 409,
+          "wall_rows_any": true
+        },
+        "objects": {
+          "drawn": 4602,
+          "skipped": 0
+        },
+        "preview_availability": "available",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": true,
+          "game_time": 432015,
+          "ambient": 65536,
+          "up": true,
+          "moon": false,
+          "height": 89.997,
+          "azimuth": 153.435,
+          "direction": [
+            -4e-05,
+            1.0,
+            2e-05
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 1.0
+        },
+        "resolution": "1920x1080",
+        "logical_resolution": "960x540",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "1920x1080",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "1920x1080",
+          "drawable_size": "1920x1080",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "962f829ef",
+        "tools_commit": "-",
+        "exe_sha256": "d682e8b4a469e826becff3b648d52c8bfc871d85310399a769dd629614bc218f",
+        "taken": "20261127-083207",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    },
+    "candidate_original": {
+      "source_sha256": "50b7c179548403445bb54bb3d5eaa8989529bd47a84a925d263bfe7ff99ce14f",
+      "capture": {
+        "image": "devhero-20261127-083225-000.png",
+        "view": "static-wall-plus-hero-preview",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "available"
+        },
+        "snapshot_run": "88d144376cbb46dd972ee8950c97e8c8",
+        "view_tile": 24678,
+        "preview_requested": true,
+        "scene_3d_enabled": true,
+        "scene_view": "full",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": true,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "authored",
+          "world_bounds": [
+            -38.041667,
+            -34.5625,
+            35.958333,
+            34.4375
+          ],
+          "planes": [
+            [
+              0.4472136,
+              0.8944272,
+              29.1434193
+            ],
+            [
+              -0.8320503,
+              0.5547002,
+              22.4653587
+            ],
+            [
+              -0.4472136,
+              -0.8944272,
+              28.0999203
+            ],
+            [
+              0.8320503,
+              -0.5547002,
+              24.1294594
+            ]
+          ]
+        },
+        "camera": "fixed eye=(38.14466,46.23085,85.71700), target=(-11.04167,0.00000,11.93750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+        "camera_turn": 0.0,
+        "wall_triangles": 48321,
+        "wall_pages": 6,
+        "hero": {
+          "tile": 25075,
+          "fid": 16777278,
+          "frame": 0,
+          "rotation": 3,
+          "world_anchor": [
+            -12.541666667,
+            12.6875
+          ]
+        },
+        "egg": {
+          "shown": true,
+          "rect": [
+            513,
+            148,
+            129,
+            98
+          ],
+          "zoom": 1.0,
+          "wall_rows_marked": 409,
+          "wall_rows_any": true
+        },
+        "objects": {
+          "drawn": 4603,
+          "skipped": 0
+        },
+        "preview_availability": "available",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": true,
+          "game_time": 432016,
+          "ambient": 65536,
+          "up": true,
+          "moon": false,
+          "height": 89.997,
+          "azimuth": 153.435,
+          "direction": [
+            -5e-05,
+            1.0,
+            2e-05
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 1.0
+        },
+        "resolution": "1920x1080",
+        "logical_resolution": "960x540",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "1920x1080",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "1920x1080",
+          "drawable_size": "1920x1080",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "962f829ef",
+        "tools_commit": "-",
+        "exe_sha256": "d682e8b4a469e826becff3b648d52c8bfc871d85310399a769dd629614bc218f",
+        "taken": "20261127-083225",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    }
+  },
+  {
+    "case": "3d-wide",
+    "main_ce_vs_candidate_ce_hud_differing_pixels": 0,
+    "original_vs_ce_center_differing_pixels": 0,
+    "base_ce": {
+      "source_sha256": "7d6ecae24015c9e382fa60db2bc7d568f128d64b6ebf2419fc74e50045f29319",
+      "capture": {
+        "image": "devhero-20261127-083241-000.png",
+        "view": "static-wall-plus-hero-preview",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "available"
+        },
+        "snapshot_run": "e45c1623ef1846998ac6d5ff7c16399f",
+        "view_tile": 23689,
+        "preview_requested": true,
+        "scene_3d_enabled": true,
+        "scene_view": "full",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": true,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "authored",
+          "world_bounds": [
+            -38.041667,
+            -34.5625,
+            35.958333,
+            34.4375
+          ],
+          "planes": [
+            [
+              0.4472136,
+              0.8944272,
+              29.1434193
+            ],
+            [
+              -0.8320503,
+              0.5547002,
+              22.4653587
+            ],
+            [
+              -0.4472136,
+              -0.8944272,
+              28.0999203
+            ],
+            [
+              0.8320503,
+              -0.5547002,
+              24.1294594
+            ]
+          ]
+        },
+        "camera": "fixed eye=(43.64466,46.23085,82.96700), target=(-5.54167,0.00000,9.18750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+        "camera_turn": 0.0,
+        "wall_triangles": 48321,
+        "wall_pages": 6,
+        "hero": {
+          "tile": 25075,
+          "fid": 16777278,
+          "frame": 0,
+          "rotation": 3,
+          "world_anchor": [
+            -12.541666667,
+            12.6875
+          ]
+        },
+        "egg": {
+          "shown": true,
+          "rect": [
+            1276,
+            238,
+            129,
+            98
+          ],
+          "zoom": 1.0,
+          "wall_rows_marked": 409,
+          "wall_rows_any": true
+        },
+        "objects": {
+          "drawn": 4603,
+          "skipped": 0
+        },
+        "preview_availability": "available",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": true,
+          "game_time": 432016,
+          "ambient": 65536,
+          "up": true,
+          "moon": false,
+          "height": 89.997,
+          "azimuth": 153.435,
+          "direction": [
+            -5e-05,
+            1.0,
+            2e-05
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 1.0
+        },
+        "resolution": "3440x1440",
+        "logical_resolution": "1720x720",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "3440x1440",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "3440x1440",
+          "drawable_size": "3440x1440",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "611c00c",
+        "tools_commit": "-",
+        "exe_sha256": "512dd6962328c5ac237da34f9f31ce9b241d713e631f32e93c01a23c99f5f6e2",
+        "taken": "20261127-083241",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    },
+    "candidate_ce": {
+      "source_sha256": "f391d30b6a156dd66962d2ef5a4454b9eaa83173b7ee5d0c14a541ae6287f775",
+      "capture": {
+        "image": "devhero-20261127-083259-000.png",
+        "view": "static-wall-plus-hero-preview",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "available"
+        },
+        "snapshot_run": "b928e10588cf411b9b04fcd78f1603cb",
+        "view_tile": 23689,
+        "preview_requested": true,
+        "scene_3d_enabled": true,
+        "scene_view": "full",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": true,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "authored",
+          "world_bounds": [
+            -38.041667,
+            -34.5625,
+            35.958333,
+            34.4375
+          ],
+          "planes": [
+            [
+              0.4472136,
+              0.8944272,
+              29.1434193
+            ],
+            [
+              -0.8320503,
+              0.5547002,
+              22.4653587
+            ],
+            [
+              -0.4472136,
+              -0.8944272,
+              28.0999203
+            ],
+            [
+              0.8320503,
+              -0.5547002,
+              24.1294594
+            ]
+          ]
+        },
+        "camera": "fixed eye=(43.64466,46.23085,82.96700), target=(-5.54167,0.00000,9.18750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+        "camera_turn": 0.0,
+        "wall_triangles": 48321,
+        "wall_pages": 6,
+        "hero": {
+          "tile": 25075,
+          "fid": 16777278,
+          "frame": 0,
+          "rotation": 3,
+          "world_anchor": [
+            -12.541666667,
+            12.6875
+          ]
+        },
+        "egg": {
+          "shown": true,
+          "rect": [
+            1276,
+            238,
+            129,
+            98
+          ],
+          "zoom": 1.0,
+          "wall_rows_marked": 409,
+          "wall_rows_any": true
+        },
+        "objects": {
+          "drawn": 4602,
+          "skipped": 0
+        },
+        "preview_availability": "available",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": true,
+          "game_time": 432016,
+          "ambient": 65536,
+          "up": true,
+          "moon": false,
+          "height": 89.997,
+          "azimuth": 153.435,
+          "direction": [
+            -5e-05,
+            1.0,
+            2e-05
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 1.0
+        },
+        "resolution": "3440x1440",
+        "logical_resolution": "1720x720",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "3440x1440",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "3440x1440",
+          "drawable_size": "3440x1440",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "962f829ef",
+        "tools_commit": "-",
+        "exe_sha256": "d682e8b4a469e826becff3b648d52c8bfc871d85310399a769dd629614bc218f",
+        "taken": "20261127-083259",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    },
+    "candidate_original": {
+      "source_sha256": "5e6f80ba92c625203dbea18cbe772f7fc99a9ea2b490770debd11d98193c883b",
+      "capture": {
+        "image": "devhero-20261127-083317-000.png",
+        "view": "static-wall-plus-hero-preview",
+        "map": "KLADWTWN.MAP",
+        "elevation": 0,
+        "still_snapshot": false,
+        "combat_fixture": {
+          "phase": "none",
+          "in_combat": false,
+          "player_turn": true,
+          "enemy_turn": false,
+          "scene_availability": "available"
+        },
+        "snapshot_run": "04f009928e4b4dd2937230d65f53e1c1",
+        "view_tile": 23689,
+        "preview_requested": true,
+        "scene_3d_enabled": true,
+        "scene_view": "full",
+        "sharp_text": {
+          "setting": false,
+          "active": false,
+          "drawn": false,
+          "runs": 0,
+          "glyphs": 0,
+          "restored_pixels": 0,
+          "prepare_ms": 0.0
+        },
+        "map_clip": {
+          "enabled": true,
+          "setting_enabled": true,
+          "variant": "authored",
+          "source": "authored",
+          "world_bounds": [
+            -38.041667,
+            -34.5625,
+            35.958333,
+            34.4375
+          ],
+          "planes": [
+            [
+              0.4472136,
+              0.8944272,
+              29.1434193
+            ],
+            [
+              -0.8320503,
+              0.5547002,
+              22.4653587
+            ],
+            [
+              -0.4472136,
+              -0.8944272,
+              28.0999203
+            ],
+            [
+              0.8320503,
+              -0.5547002,
+              24.1294594
+            ]
+          ]
+        },
+        "camera": "fixed eye=(43.64466,46.23085,82.96700), target=(-5.54167,0.00000,9.18750), fov_y=25.0, near=0.1, far=400.0, screen_right=-cross(forward,world_up)",
+        "camera_turn": 0.0,
+        "wall_triangles": 48321,
+        "wall_pages": 6,
+        "hero": {
+          "tile": 25075,
+          "fid": 16777278,
+          "frame": 0,
+          "rotation": 3,
+          "world_anchor": [
+            -12.541666667,
+            12.6875
+          ]
+        },
+        "egg": {
+          "shown": true,
+          "rect": [
+            1276,
+            238,
+            129,
+            98
+          ],
+          "zoom": 1.0,
+          "wall_rows_marked": 409,
+          "wall_rows_any": true
+        },
+        "objects": {
+          "drawn": 4602,
+          "skipped": 0
+        },
+        "preview_availability": "available",
+        "renderer": "scene-gl",
+        "light": "enabled",
+        "effect_emission": true,
+        "glow": {
+          "enabled": true,
+          "strength": 2.0
+        },
+        "weapon_effect": null,
+        "muzzle": null,
+        "sun": {
+          "setting": true,
+          "daylight": true,
+          "game_time": 432015,
+          "ambient": 65536,
+          "up": true,
+          "moon": false,
+          "height": 89.997,
+          "azimuth": 153.435,
+          "direction": [
+            -4e-05,
+            1.0,
+            2e-05
+          ],
+          "color": [
+            1.0,
+            0.96,
+            0.88
+          ],
+          "strength": 1.0
+        },
+        "resolution": "3440x1440",
+        "logical_resolution": "1720x720",
+        "scale": 2,
+        "scale_factor": 2.0,
+        "windowed": true,
+        "drawable": "3440x1440",
+        "sdl_window": {
+          "flags": 73734,
+          "window_position": "-20000,-20000",
+          "window_size": "3440x1440",
+          "drawable_size": "3440x1440",
+          "fullscreen": false,
+          "fullscreen_desktop": false,
+          "borderless": false
+        },
+        "ce_commit": "962f829ef",
+        "tools_commit": "-",
+        "exe_sha256": "d682e8b4a469e826becff3b648d52c8bfc871d85310399a769dd629614bc218f",
+        "taken": "20261127-083317",
+        "dialogue_answers": {
+          "coordinate_space": "logical",
+          "items": []
+        }
+      }
+    }
+  }
+]
