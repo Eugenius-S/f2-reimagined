@@ -104,3 +104,36 @@ Sheets rebuilt from the stable frames only:
 crop, the +px deltas named), `04-slime-3d-live-water-strip.jpg` (3D frames
 7/8/9/10, the pool crop at 1.5x). Raw frames and their mtimes stay in
 build/walk-286/vis-slime-cl and vis-slime-3d.
+
+## 2026-11-27, the fire round: classic confirmed, the 3D needs the scene camera
+
+Fire, kladwtwn woodfire (tiles 22958/22956, the live visible window):
+- Classic positive: the flame flicker clusters read 1300-5400 px per pair
+  across frames 10-17 and 35-41 of the raw run (the flame + the camp
+  critters together; the focus bursts freeze the world for a few pairs -
+  the visible window pauses on lost focus, documented in run-live's own
+  header - so the run reads as bursts).
+- 3D: the Ctrl+F10 chord flipped the live game into the scene view (the
+  flip seen at frame 8-9), and the scene view is LIVE - the three camp
+  critters' idle animations blink at 400-500 px per pair in the frame.
+  But the scene view's camera is spawn-centred (it framed the brahmin pen
+  at kladwtwn's spawn 25075), so the woodfire sits outside the frame and
+  the fire ROI was not captured. The scene camera does not follow
+  --dev-view-tile/--dev-hero-tile in the live toggle view.
+
+The spawn-distance audit (hex distance from each map's spawn to the
+nearest kind object, the scene view frames the spawn area):
+
+| map | spawn | nearest fire | nearest slime | nearest monitors |
+|---|---|---|---|---|
+| modmain | 20100 | atorch3 @20505, d=5 | - | - |
+| newr1 | 24305 | barrel @23512, d=7 | - | monitr8 @15062, d=46 |
+| klatoxcv | 20100 | - | goop02 @21507, d=7 (verified) | - |
+| sfdock | 20100 | barrel @22284, d=16 | goop01 @18093, d=10 | monitr3 @16251, d=49 |
+| vault13 | 17095 | - | - | monitr7 @13675, d=20 |
+| kladwtwn | 25075 | barrel @28701, d=26 | - | - |
+
+Verifiable now with the scene view (the kind in the spawn frame): modmain
+fire, newr1 fire, klatoxcv slime (done), probably sfdock slime. Need the
+scene camera control first: kladwtwn fire, vault13/newr1/sfdock monitors,
+the sfdock shoreline.
