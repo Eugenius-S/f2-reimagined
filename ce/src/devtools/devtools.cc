@@ -254,6 +254,7 @@ bool gViewTileApplied = false;
 int gHeroTile = -1; // --dev-hero-tile: the hero is put there before the scene starts
 char gSnapshotRun[33] = {};
 bool gDialogFixtureRequested = false;
+bool gDialogFixtureSynthetic = false;
 bool gDialogFixtureStarted = false;
 bool gDialogFixtureFinished = false;
 bool gDialogFixtureBaselineCaptured = false;
@@ -1198,6 +1199,10 @@ bool parseOption(const char* arg)
     }
     if (strcmp(arg, "--dev-dialog-fixture") == 0) {
         gDialogFixtureRequested = true;
+        return true;
+    }
+    if (strcmp(arg, "--dev-dialog-synthetic") == 0) {
+        gDialogFixtureSynthetic = true;
         return true;
     }
     if (strcmp(arg, "--dev-dialog-page-inspect") == 0) {
@@ -3662,6 +3667,7 @@ static void runDialogFixtureFrame()
         int replyOwnerId = -1;
         int replyOwnerY = -2147483647;
         int runCount = 0;
+        bool npcReplyVisible = false;
         int windowCount = 0;
         TextWindowSnapshot firstWindow;
         textCaptureGetWindowSnapshot(0, &firstWindow, &windowCount);
@@ -3677,6 +3683,7 @@ static void runDialogFixtureFrame()
             for (const scene::TextRecord& record : records) {
                 if (record.ownerWindow != window.id) continue;
                 hasEligibleRun = true;
+                if (window.width == 379 && window.height == 58 && !record.run.text.empty()) npcReplyVisible = true;
                 runCount++;
             }
             if (hasEligibleRun) {
@@ -3713,14 +3720,25 @@ static void runDialogFixtureFrame()
             }
             if (allOptionsLaidOut && static_cast<int>(layouts.size()) != optionCount) allOptionsLaidOut = false;
             std::vector<std::pair<int, std::string>> orderedDialogText;
+            std::vector<int> firstLineY(optionCount, -1);
+            std::vector<bool> observedOption(optionCount, false);
+            bool observedWrappedLines = false;
             int optionWindowId = -1;
             for (int index = 0; index < windowCount; index++) {
                 TextWindowSnapshot window;
                 if (!textCaptureGetWindowSnapshot(index, &window, nullptr) || window.hidden || window.pixels == nullptr
+                    || (gDialogFixtureSynthetic && (window.width != 393 || window.height != 117))
                     || layouts.empty() || layouts[0].buttonLeft < window.x || layouts[0].buttonTop < window.y
                     || layouts[0].buttonRight > window.x + window.width
                     || layouts[0].buttonBottom > window.y + window.height) {
                     continue;
+                }
+                if (gDialogFixtureSynthetic) {
+                    for (const GameDialogOptionLayout& layout : layouts) {
+                        if (layout.buttonLeft < window.x || layout.buttonTop < window.y
+                            || layout.buttonRight > window.x + window.width || layout.buttonBottom > window.y + window.height
+                            || layout.textTop < 0 || layout.textBottom > window.height) allOptionsLaidOut = false;
+                    }
                 }
                 optionWindowId = window.id;
                 const scene::TextBufferId buffer = textCaptureBufferId(window.pixels);
@@ -3729,6 +3747,16 @@ static void runDialogFixtureFrame()
                 for (const scene::TextRecord& record : records) {
                     if (record.ownerWindow == window.id) {
                         orderedDialogText.emplace_back(record.run.y, record.run.text);
+                        if (gDialogFixtureSynthetic && !record.run.text.empty()) {
+                            for (int row = 0; row < static_cast<int>(layouts.size()); row++) {
+                                if (record.run.y >= layouts[row].textTop && record.run.y < layouts[row].textBottom) {
+                                    observedOption[row] = true;
+                                    if (firstLineY[row] == -1) firstLineY[row] = record.run.y;
+                                    else if (firstLineY[row] != record.run.y
+                                        && layouts[row].textBottom - layouts[row].textTop > linePitch + 1) observedWrappedLines = true;
+                                }
+                            }
+                        }
                     }
                 }
                 break;
@@ -3775,8 +3803,17 @@ static void runDialogFixtureFrame()
                     gDialogFixtureSpeakerTile, runCount);
                 return;
             }
-            if (!gDialogPageInspectRequested && !gDialogCursorCheckRequested && !allOptionsLaidOut) return;
+            if (!gDialogPageInspectRequested && !gDialogCursorCheckRequested && !allOptionsLaidOut) {
+                // Buttons may not exist yet while the real dialogue is being built.
+                return;
+            }
             if (!gDialogPageInspectRequested && !gDialogCursorCheckRequested && wrappedOptions == 0) {
+                if (gDialogFixtureSynthetic) {
+                    printf("DIALOG_FIXTURE FAIL reason=synthetic-answer-not-wrapped\n");
+                    fflush(stdout);
+                    gDialogFixtureFinished = true;
+                    return;
+                }
                 if (optionWindowId < 0 || currentReplyText.empty()) {
                     printf("DIALOG_FIXTURE FAIL map=%s script=%s speaker=%d reason=option-window-text-not-captured option_window=%d\n",
                         gMapHeader.name, gDialogFixtureScript, gDialogFixtureSpeakerId, optionWindowId);
@@ -4234,6 +4271,15 @@ static void runDialogFixtureFrame()
                 fflush(stdout);
                 return;
             }
+            if (gDialogFixtureSynthetic && (optionCount != 7 || optionWindowId < 0 || !npcReplyVisible
+                    || std::find(observedOption.begin(), observedOption.end(), false) != observedOption.end()
+                    || !observedWrappedLines || wrappedOptions == 0)) {
+                printf("DIALOG_FIXTURE FAIL reason=synthetic-page-incomplete options=%d wrapped=%d option_window=%d runs=%zu npc=%d\n",
+                    optionCount, wrappedOptions, optionWindowId, currentReplyText.size(), npcReplyVisible ? 1 : 0);
+                fflush(stdout);
+                gDialogFixtureFinished = true;
+                return;
+            }
             const bool captured = takeSnapshot();
             if (captured) {
                 printf("DIALOG_FIXTURE PASS map=%s elevation=%d script=%s speaker=%d speaker_tile=%d hero=%d dialog_owners=%d,%d eligible_runs=%d answers=%zu wrapped_answers=%d advances=%d\n",
@@ -4259,7 +4305,7 @@ void vanillaPresented()
     if (gDialogCursorCheckCursorMoveInProgress) return;
     if (gCombatFixtureRequested && gCombatFixtureIsClassic) runCombatFixtureFrame();
     uiFixtureVanillaPresented();
-    runDialogFixtureFrame();
+    if (!gDialogFixtureSynthetic) runDialogFixtureFrame();
     if (!gSnapshotOncePending || !gEnabled || !sceneStartupReady() || !gStartupFloorPreviewAttempted
         || scene::activeView() != scene::View::Off) {
         return;
@@ -4275,7 +4321,23 @@ void vanillaPresented()
 void sceneOverlayPresented()
 {
     uiFixtureScenePresented();
+    if (!gDialogFixtureSynthetic) runDialogFixtureFrame();
+}
+
+void dialogFixtureBeforePresent()
+{
+    if (!gDialogFixtureSynthetic || !gDialogFixtureRequested || gDialogFixtureFinished) return;
+    if (!scene_renderer::isActive()) {
+        if (gameDialogWindowActive()) {
+            printf("DIALOG_FIXTURE FAIL reason=presented-frame-capture-unavailable\n");
+            fflush(stdout);
+            gDialogFixtureFinished = true;
+        }
+        return;
+    }
+    gForceLiveSnapshot = true;
     runDialogFixtureFrame();
+    gForceLiveSnapshot = false;
 }
 
 void sceneLiveFrameReady()
@@ -5054,7 +5116,8 @@ bool takeSnapshot()
         "  \"exe_sha256\": \"%s\",\n"
         "  \"taken\": \"%s\",\n",
         imageFile.c_str(),
-        heroPreview ? "static-wall-plus-hero-preview" : wallPreview ? "static-wall-preview"
+        gDialogFixtureSynthetic && gForceLiveSnapshot ? "presented-frame"
+            : heroPreview ? "static-wall-plus-hero-preview" : wallPreview ? "static-wall-preview"
             : preview ? "static-floor-preview" : "vanilla-framebuffer",
         snapshot_json::gameText(mapName).c_str(),
         static_cast<int>(gElevation),

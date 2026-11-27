@@ -397,6 +397,8 @@ if ($Combat) {
 } elseif ($CombatTarget -ge 0) {
     throw '-CombatTarget requires -Combat.'
 }
+$syntheticDialogFixture = $DialogFixture -and -not $DialogPageInspect -and -not $DialogCursorCheck -and -not $DialogLayoutCheck
+if ($syntheticDialogFixture -and -not $GameRoot) { throw '-DialogFixture requires an explicit isolated -GameRoot.' }
 if ($DialogFixture) {
     if ($Map -ne 'kladwtwn') { throw '-DialogFixture requires the resource-verified Klamath map kladwtwn.' }
     if ($Preferences -or $Classic -or $Probe -or $Tour -or $Still -or $NoPreview -or $PreferencesProbe) {
@@ -552,6 +554,11 @@ $runId = [guid]::NewGuid().ToString('N')
 # name, as the game's own paths stay within 260 characters.
 $runDirectory = Join-Path $exeDirectory "runs\$($runId.Substring(0, 12))"
 New-Item -ItemType Directory -Path $runDirectory -Force | Out-Null
+if ($syntheticDialogFixture) {
+    $fixtureLanguage = if ($Language) { $Language } else { 'english' }
+    & py -3 (Join-Path $PSScriptRoot 'dialog_fixture_resource.py') $GameDir $runDirectory $fixtureLanguage
+    if ($LASTEXITCODE -ne 0) { throw 'Could not stage the isolated dialogue fixture resource.' }
+}
 if ($DevLoadGameSlot -gt 0) {
     # The run's redirected state starts empty, so a save load would wait on
     # the load screen forever: seed this run's SAVEGAME from the game root.
@@ -603,6 +610,7 @@ if ($Font101PreviewScale) { $arguments += "--dev-font101-size-preview=$Font101Pr
 if ($Font101PreviewWeight) { $arguments += "--dev-font101-weight-preview=$Font101PreviewWeight" }
 if ($UiFixture -eq 'log') { $arguments += '--dev-classic' }
 if ($DialogFixture) { $arguments += '--dev-dialog-fixture' }
+if ($syntheticDialogFixture) { $arguments += '--dev-dialog-synthetic' }
 if ($DevPanel) { $arguments += '--dev-panel-snapshot' }
 if ($DialogPageInspect) { $arguments += '--dev-dialog-page-inspect' }
 if ($DialogCursorCheck) { $arguments += '--dev-dialog-cursor-check' }
@@ -1305,10 +1313,15 @@ if ($DialogFixture -and -not $DialogPageInspect -and -not $DialogCursorCheck) {
     if (-not $DialogLayoutCheck) {
         $dialogMetadata = Get-Content -Raw -LiteralPath $snapshots[0].FullName | ConvertFrom-Json
         $dialogAnswers = @($dialogMetadata.dialogue_answers.items)
+        if ($syntheticDialogFixture -and ($dialogMetadata.view -ne 'presented-frame' -or $dialogAnswers.Count -ne 7 -or $fixtureLog -notmatch 'DIALOG_FIXTURE PASS .*answers=7 wrapped_answers=[1-9]')) {
+            throw 'Dialog fixture image and sidecar do not report the complete seven-answer page.'
+        }
         if ($dialogMetadata.dialogue_answers.coordinate_space -ne 'logical' -or $dialogAnswers.Count -lt 1) {
             throw 'Dialog fixture sidecar lacks logical answer rectangles.'
         }
+        $expectedAnswerIndex = 0
         foreach ($answer in $dialogAnswers) {
+            if ($answer.index -ne $expectedAnswerIndex++) { throw 'Dialog fixture sidecar answer indices are incomplete.' }
             if (@($answer.rect).Count -ne 4 -or $answer.rect[2] -le $answer.rect[0] -or $answer.rect[3] -le $answer.rect[1]) {
                 throw "Dialog fixture sidecar has an invalid answer rectangle at index $($answer.index)."
             }

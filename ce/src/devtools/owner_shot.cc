@@ -937,6 +937,7 @@ void requestPresentedShot()
 
 void captureRequestedPresentedShot()
 {
+    devtools::dialogFixtureBeforePresent();
     if (!gPresentedShotRequested) return;
     gPresentedShotRequested = false;
     if (!takeShot(true)) {
