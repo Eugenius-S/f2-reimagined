@@ -65,6 +65,8 @@ int main()
     descriptors.push_back(descriptor("3d.future", "3d", SettingValueType::Text));
     descriptors.push_back(descriptor("preferences.mouse_sensitivity", "preferences", SettingValueType::Real));
     descriptors.back().numericRange = SettingNumericRange { 0.25, 2.5, 0.05 };
+    descriptors.push_back(descriptor("ui.hud_style", "ui", SettingValueType::Choice));
+    descriptors.back().choices = { { 1, "Original" }, { 0, "CE" } };
     std::vector<OptionsSettingEdit> edits {
         { &descriptors[0], SettingValue(false), SettingValue(true) },
         { &descriptors[1], SettingValue(false), SettingValue(false) },
@@ -72,10 +74,11 @@ int main()
         { &descriptors[3], SettingValue(0), SettingValue(1) },
         { &descriptors[4], SettingValue(std::string("old")), SettingValue(std::string("new")) },
         { &descriptors[5], SettingValue(1.0), SettingValue(1.5) },
+        { &descriptors[6], SettingValue(0), SettingValue(1) },
     };
 
     const auto rows = optionsPanelRows(edits, "3d");
-    if (!check(rows.size() == 5, "panel projection includes 3D settings and cursor speed")) return 1;
+    if (!check(rows.size() == 6, "panel projection includes 3D settings, cursor speed and HUD style")) return 1;
     if (!check(rows[0].edit == &edits[0] && std::get<bool>(rows[0].edit->value)
             && rows[0].control == OptionsPanelControl::Toggle,
             "boolean descriptor becomes a toggle in registry order")) return 1;
@@ -89,6 +92,9 @@ int main()
             "future unsupported descriptor remains visible as a value row")) return 1;
     if (!check(rows[4].edit == &edits[5] && rows[4].control == OptionsPanelControl::Slider,
             "cursor speed from preferences is exposed as a bounded slider")) return 1;
+
+    if (!check(rows[5].edit == &edits[6] && rows[5].control == OptionsPanelControl::Choice,
+            "HUD style from interface settings is exposed as a choice")) return 1;
 
     AbsoluteCursorSensitivity cursorSensitivity;
     auto cursor = cursorSensitivity.update(100, 100, 0.5, 639, 479);

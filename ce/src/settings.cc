@@ -365,6 +365,15 @@ void initSettingsRegistry(bool isMapper)
     SETTING(perks_progress_bar);
     SETTING_P(iface_bar_width, clamp(640, 4320));
     SETTING_P(iface_bar_side_art, clamp(0, 999));
+    SETTING_P(hud_style, clamp(0, 1));
+    SettingDescriptor& hudStyleDescriptor = settingDescriptors.back();
+    hudStyleDescriptor.valueType = SettingValueType::Choice;
+    hudStyleDescriptor.category = SettingCategory::Interface;
+    hudStyleDescriptor.applyPolicy = SettingApplyPolicy::OnClose;
+    hudStyleDescriptor.fallbackLabel = "HUD Style";
+    hudStyleDescriptor.fallbackDescription = "Choose the side panels of the game interface.";
+    hudStyleDescriptor.choices = { { 1, "Original" }, { 0, "CE" } };
+    settingsRegistry.back().descriptor = hudStyleDescriptor;
     SETTING(iface_bar_sides_ori);
     SETTING_P(alternate_ammo_meter, clamp(0, 2));
     SETTING_P(splash_screen_size, clamp(0, 2));

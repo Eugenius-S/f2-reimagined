@@ -182,7 +182,7 @@ static void sidePanelsInit();
 static void sidePanelsExit();
 static void sidePanelsHide();
 static void sidePanelsShow();
-static void sidePanelsDraw(const char* path, int win, bool isLeading);
+static void sidePanelsDraw(Art* image, int win, bool isLeading, bool original);
 
 // 0x518F08 insideInit
 static bool gInterfaceBarInitialized = false;
@@ -3005,7 +3005,13 @@ static void sidePanelsInit()
     }
 
     int sideArtId = settings.ui.iface_bar_side_art;
-    if (sideArtId <= 0) {
+    ArtPtr originalLeft { settings.ui.hud_style == 1 ? artLoad("art\\intrface\\HR_IFACELFT1.frm") : nullptr };
+    ArtPtr originalRight { settings.ui.hud_style == 1 ? artLoad("art\\intrface\\HR_IFACERHT1.frm") : nullptr };
+    bool original = originalLeft.get() != nullptr && originalRight.get() != nullptr;
+    if (settings.ui.hud_style == 1 && !original) {
+        debugPrint("INTRFACE: Original HUD side art is unavailable; using CE sides.\n");
+    }
+    if (sideArtId <= 0 && !original) {
         return;
     }
 
@@ -3018,13 +3024,19 @@ static void sidePanelsInit()
 
     gInterfaceSidePanelsLeadingWindow = windowCreate(0, windowRect.top, windowRect.left, windowRect.bottom - windowRect.top + 1, COLOR_FIRST, WINDOW_HIDDEN | WINDOW_DONT_MOVE_TOP);
     gInterfaceSidePanelsTrailingWindow = windowCreate(windowRect.right + 1, windowRect.top, screenGetWidth() - windowRect.right - 1, windowRect.bottom - windowRect.top + 1, COLOR_FIRST, WINDOW_HIDDEN | WINDOW_DONT_MOVE_TOP);
+    if (gInterfaceSidePanelsLeadingWindow == -1 || gInterfaceSidePanelsTrailingWindow == -1) {
+        sidePanelsExit();
+        return;
+    }
 
     char path[COMPAT_MAX_PATH];
-    snprintf(path, sizeof(path), "art\\intrface\\HR_IFACELFT%d.frm", sideArtId);
-    sidePanelsDraw(path, gInterfaceSidePanelsLeadingWindow, true);
+    snprintf(path, sizeof(path), "art\\intrface\\HR_IFACELFT%d.frm", original ? 1 : sideArtId);
+    ArtPtr left { original ? nullptr : artLoad(path) };
+    sidePanelsDraw(original ? originalLeft.get() : left.get(), gInterfaceSidePanelsLeadingWindow, true, original);
 
-    snprintf(path, sizeof(path), "art\\intrface\\HR_IFACERHT%d.frm", sideArtId);
-    sidePanelsDraw(path, gInterfaceSidePanelsTrailingWindow, false);
+    snprintf(path, sizeof(path), "art\\intrface\\HR_IFACERHT%d.frm", original ? 1 : sideArtId);
+    ArtPtr right { original ? nullptr : artLoad(path) };
+    sidePanelsDraw(original ? originalRight.get() : right.get(), gInterfaceSidePanelsTrailingWindow, false, original);
 }
 
 static void sidePanelsExit()
@@ -3062,10 +3074,24 @@ static void sidePanelsShow()
     }
 }
 
-static void sidePanelsDraw(const char* path, int win, bool isLeading)
+bool interfaceOriginalHudAvailable()
 {
-    Art* image = artLoad(path);
-    if (image == nullptr) {
+    ArtPtr left { artLoad("art\\intrface\\HR_IFACELFT1.frm") };
+    ArtPtr right { artLoad("art\\intrface\\HR_IFACERHT1.frm") };
+    return left.get() != nullptr && right.get() != nullptr;
+}
+
+void interfaceRefreshSidePanels()
+{
+    if (gInterfaceBarWindow == -1) return;
+    sidePanelsExit();
+    sidePanelsInit();
+    if (!gInterfaceBarHidden) sidePanelsShow();
+}
+
+static void sidePanelsDraw(Art* image, int win, bool isLeading, bool original)
+{
+    if (image == nullptr || win == -1) {
         return;
     }
 
@@ -3077,13 +3103,15 @@ static void sidePanelsDraw(const char* path, int win, bool isLeading)
     int windowWidth = windowGetWidth(win);
     int windowHeight = windowGetHeight(win);
 
-    int width = std::min(imageWidth, windowWidth);
+    // Both logos occupy the inner 150 source pixels; fit that region even
+    // when a narrow screen leaves less than 150 pixels for each side.
+    int width = std::min(imageWidth, original ? std::max(150, windowWidth) : windowWidth);
 
-    if (!settings.ui.iface_bar_sides_ori && isLeading) {
+    if ((original || !settings.ui.iface_bar_sides_ori) && isLeading) {
         imageData += imageWidth - width;
     }
 
-    if (settings.ui.iface_bar_sides_ori && !isLeading) {
+    if (!original && settings.ui.iface_bar_sides_ori && !isLeading) {
         imageData += imageWidth - width;
     }
 
@@ -3095,8 +3123,6 @@ static void sidePanelsDraw(const char* path, int win, bool isLeading)
         windowWidth,
         windowHeight,
         windowWidth);
-
-    internal_free(image);
 }
 
 // NOTE: Follows Sfall implementation of `GetCurrentAttackMode`. It slightly

@@ -1,9 +1,9 @@
 ---
 id: 247
-title: The options menu switches the bottom HUD bar between Original and RP (the belt)
+title: Switch the bottom HUD between Original and CE
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: gpt
 suggested: any
 priority: medium
 tier: 2
@@ -15,28 +15,38 @@ reviewed: no
 
 ## Goal
 
-The owner's ask (2026-11-10): the options menu gets a switch for the look
-of the bottom interface bar: **Original** (the vanilla bar) or **RP** (the
-Restoration Project's bar with the belt). The choice applies in play and is
-kept in the config.
+Offer Original and CE HUD side panels in game preferences. Preserve the
+existing CE appearance and player layout settings by default.
 
 ## Context
 
-- The options menu and its 3D panel: tasks 017, 112, 130, 133.
-- RP is installed by the launcher (186 part 3); its bar art ships in
-  `mods/rpu.dat`. Without RP on disk the switch shows Original only (or is
-  disabled with a reason).
-- The wide HUD bar art (128) is a separate question; keep both working.
+- The owner chose the standard game-mounted HR_IFACELFT1/HR_IFACERHT1
+  metallic pair; do not add game art to the repository.
+- The center, buttons, layout and existing CE side art configuration remain
+  unchanged. Missing Original art falls back to CE with an explicit menu label.
+- The former RP/Original proposal is superseded; task 268 is separate.
 
 ## Acceptance
 
-- The options menu has the switch with both choices, in English and Russian.
-- Each choice draws its bar in play, in 3D and in classic mode; the choice
-  survives a restart.
-- Without RP on disk the game still plays and the switch says why RP is not
-  available.
-- ctest passes; the regression stays green.
+- Original and CE are selectable in English and Russian, in Classic and 3D;
+  Save, Cancel, defaults and restart work.
+- Both sides show the full logos at ordinary and wide widths; compact mode,
+  user side selection and orientation, hitboxes and states remain intact.
+- Missing art has an honest CE fallback. Paired screenshots show both styles,
+  both views and widths; Windows build, tests and independent review pass.
+
+## Out of scope
+
+Bundled game art, changes to the owner's installation and saves, and release.
 
 ## Log
 
 - 2026-11-10 claude: cut from the owner's ask in chat.
+
+- 2026-11-27 gpt: implementation candidate. Added a persisted HUD style,
+  mounted-art pair detection and in-game side repaint; the original pair is
+  cropped toward the center and fitted for narrow sides. Existing CE layout
+  settings and center are retained. Next: Windows build, real Preferences
+  Save/Cancel/restart, absent-art fallback, Classic and 3D paired screenshots,
+  normal and wide layouts, clicks and independent review. Check: static diff
+  only so far; runtime and visual acceptance remain open.
