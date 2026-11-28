@@ -2,7 +2,7 @@
 id: 299
 title: The release checks every shipped wide-art group before upload
 milestone: M1
-status: todo
+status: done
 owner: any
 suggested: glm
 priority: normal

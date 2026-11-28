@@ -5,8 +5,8 @@ milestone: M1
 status: todo
 owner: gpt
 suggested: gpt
-priority: normal
-tier: 3
+priority: high
+tier: 2
 claude-only: no
 user-check: no
 depends-on: [270]

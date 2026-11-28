@@ -6,7 +6,7 @@ status: doing
 owner: glm
 suggested: gpt
 priority: high
-tier: 2
+tier: 0
 claude-only: no
 user-check: yes
 depends-on: []

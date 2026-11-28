@@ -2,7 +2,7 @@
 id: 186
 title: The Restoration Project plays in CE, in 3D, and the installer offers it
 milestone: M1
-status: doing
+status: done
 owner: claude
 suggested: claude
 priority: high

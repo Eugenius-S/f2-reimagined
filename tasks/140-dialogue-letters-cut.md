@@ -5,8 +5,8 @@ milestone: M1
 status: blocked
 owner: any
 suggested: any
-priority: normal
-tier: 3
+priority: high
+tier: 2
 claude-only: no
 user-check: yes
 depends-on: []
