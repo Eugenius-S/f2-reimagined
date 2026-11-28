@@ -321,3 +321,40 @@ Check: `ctest --test-dir build --output-on-failure` 34/34.
 Status stays `doing`.
 Next: the stairs driver, then the world-map-into-another-map row, then the
 full arrival table and the regression pairing.
+
+### 2026-11-28 GLM Windows: the stairs driver, and why KLAMALL has no floor route
+
+Done: the elevation-change driver. `--dev-stairs-probe` scans the current
+elevation for stairs and ladders whose built-tile destination is another
+elevation of the same map (the engine's `useStairs`/`useLadder*` move the
+hero with `objectSetLocation` in that case), teleports the hero to a free
+approach hex, projects the object's hex through the same offset scan the
+exit probe uses, and dispatches the normal use click (the arrow cursor, so
+the hover picks the stairs action); the existing pending machinery then
+waits for the hero to land on the destination tile and elevation. The
+boot-time overlay-sync kill switch (which finished any pick probe past
+stage 115 whose exit destination is empty) now exempts the stairs probe
+alongside the exit probe; without that, the boot's overlay switch killed
+the probe before its first step.
+
+The row it was built for does not exist on KLAMALL: the e0 scan counts
+`stairs=0 ladderUp=0 ladderDown=2 elevator=0` - the two ladder-downs carry
+junk built-tile data (`destMap=11`, destBuiltTile far beyond any tile) and
+travel by script to another map, so no standard input reaches klamall e1
+from e0 (the e1 scene exists in the cache; the authored route up is the
+scripted ladder). The exit probe aimed back at the same map confirms it:
+`exit probe failed: no reachable klamall exit grid on KLAMALL.MAP e0`.
+ARTEMPLE e0 likewise has no elevation-change scenery (782 scenery objects,
+none of the four interactive kinds). Evidence:
+`runs/147-map-transitions-keep-3d/klamall-stairs/stairs-scan-klamall.log`,
+`.../exit-same-map1-probe.log`, `.../artemple-stairs/stairs-scan-artemple.log`.
+
+So the stairs/floor matrix row stays open, and it is a map-choice question
+before it is a tooling question: the driver is ready and needs one map
+whose authored floor change is a stairs/ladder object with real built-tile
+data (or the script-route driver, if the RP maps only change floors through
+scripts).
+Check: `ctest --test-dir build --output-on-failure` 34/34.
+Status stays `doing`.
+Next: pick the map for the floor-change row, then the world-map-into-
+another-map row, then the full arrival table and the regression pairing.

@@ -297,6 +297,9 @@ int gPickProbeOutsideHeroTile = -1;
 bool gPickProbeOutsideClick = false;
 bool gPickProbeExitPending = false;
 int gPickProbeExitWaitFrames = 0;
+// --dev-stairs-probe: the nearest stairs to another elevation of this map,
+// clicked through the normal use path.
+bool gStairsProbe = false;
 char gExitProbeDestination[16] = {};
 char gExitProbeSource[16] = {};
 int gExitProbeSourceTile = -1;
@@ -1515,6 +1518,11 @@ bool parseOption(const char* arg)
         gPickProbeStage = 1;
         return true;
     }
+    if (strcmp(arg, "--dev-stairs-probe") == 0) {
+        gStairsProbe = true;
+        gPickProbeStage = 500;
+        return true;
+    }
     const char* exitProbePrefix = "--dev-exit-probe=";
     if (strncmp(arg, exitProbePrefix, strlen(exitProbePrefix)) == 0) {
         const char* value = arg + strlen(exitProbePrefix);
@@ -2708,7 +2716,8 @@ void update()
         _gmouse_handle_event(gPickProbeClick[0], gPickProbeClick[1], MOUSE_EVENT_LEFT_BUTTON_UP);
         if (gPickProbeExitPending) {
             if (FILE* log = fopen(devLogPath("devprobe.log").c_str(), "a")) {
-                fprintf(log, "exit click dispatched: map=%s hero=%d->%d busy=%d->%d at (%d,%d)\n",
+                fprintf(log, "%s click dispatched: map=%s hero=%d->%d busy=%d->%d at (%d,%d)\n",
+                    gStairsProbe ? "stairs" : "exit",
                     gMapHeader.name, heroTileBefore, gDude->tile, busyBefore, animationIsBusy(gDude) == -1,
                     gPickProbeClick[0], gPickProbeClick[1]);
                 fclose(log);
@@ -2742,7 +2751,8 @@ void update()
             : strcmp(gMapHeader.name, "KLADWTWN.MAP") == 0 && !expectedExit;
         if (expectedExit) {
             if (FILE* log = fopen(devLogPath("devprobe.log").c_str(), "a")) {
-                fprintf(log, "exit transition passed: source=%s/%d exit=%d target=%s map=%s index=%d elevation=%d tile=%d after=%d frames\n",
+                fprintf(log, "%s transition passed: source=%s/%d exit=%d target=%s map=%s index=%d elevation=%d tile=%d after=%d frames\n",
+                    gStairsProbe ? "stairs" : "exit",
                     gExitProbeDestination[0] != '\0' ? gExitProbeSource : "KLAMALL",
                     gExitProbeDestination[0] != '\0' ? gExitProbeSourceMap : 10,
                     gExitProbeDestination[0] != '\0' ? gExitProbeSourceTile : 28078,
@@ -3133,6 +3143,14 @@ void finishPickProbe()
     gPickProbeStage = 0;
 }
 
+// The point must sit inside an object's hex on the scene's picture: the
+// anchor alone round-trips to a neighbour (147, the KLAGRAZ exit), so a
+// small scan takes the first offset the ground pick names the hex with.
+static const int kHexScan[][2] = {
+    {16, 8}, {0, 0}, {16, 0}, {16, 16}, {0, 8}, {32, 8},
+    {16, -8}, {-16, 8}, {16, 24}, {24, 4}, {8, 4}, {24, 12},
+};
+
 // --dev-pick-probe, one step per presented frame of the scene.
 void runPickProbe()
 {
@@ -3394,10 +3412,6 @@ void runPickProbe()
         // exit), so a small scan takes the first offset the ground pick
         // names the exit's hex with.
         const bool gExitProbeScanDiag = std::getenv("F2CE_EXIT_PROBE_DIAG") != nullptr;
-        static const int kHexScan[][2] = {
-            {16, 8}, {0, 0}, {16, 0}, {16, 16}, {0, 8}, {32, 8},
-            {16, -8}, {-16, 8}, {16, 24}, {24, 4}, {8, 4}, {24, 12},
-        };
         if (projected) {
             scene_renderer::gameViewTilePixel(gExitProbeSourceTile, pixel);
             for (const auto& offset : kHexScan) {
@@ -3444,6 +3458,137 @@ void runPickProbe()
             note("exit probe queued: source=%s/%d dest=%s/%d/e%d at (%d,%d)\n",
                 gExitProbeSource, gExitProbeSourceTile, gExitProbeDestination,
                 gExitProbeTile, gExitProbeElevation, mx, my);
+        }
+    } else if (stage == 500 && gStairsProbe) {
+        if (animationIsBusy(gDude) == -1) {
+            gPickProbeStage = stage;
+            return;
+        }
+        // An exit grid does not block movement. Standing on a neighboring
+        // grid would trigger a transition before this probe can take a step.
+        std::bitset<HEX_GRID_SIZE> exitTiles;
+        for (Object* grid = objectFindFirstAtElevation(gElevation); grid != nullptr;
+             grid = objectFindNextAtElevation()) {
+            if (hexGridTileIsValid(grid->tile) && isExitGridProtoId(ProtoId(grid->pid))) {
+                exitTiles.set(grid->tile);
+            }
+        }
+        // The nearest stairs whose destination is another elevation of this
+        // map. The stairs work through the normal use click: the hero walks
+        // up to them and the engine's own useStairs moves them.
+        Object* chosen = nullptr;
+        int approachTile = -1;
+        int chosenDistance = 1 << 30;
+        int stairsSeen = 0, ladderUpSeen = 0, ladderDownSeen = 0, elevatorSeen = 0, otherSeen = 0;
+        for (Object* object = objectFindFirstAtElevation(gElevation); object != nullptr;
+             object = objectFindNextAtElevation()) {
+            if (ProtoId(object).objectType() != OBJ_TYPE_SCENERY) continue;
+            Proto* proto = nullptr;
+            if (protoGetProto(ProtoId(object), &proto) == -1 || proto == nullptr) continue;
+            if (proto->scenery.type == SCENERY_TYPE_STAIRS) {
+                ++stairsSeen;
+                note("stairs scan: stairs at %d destMap=%d destBuiltTile=%d\n", object->tile,
+                    object->data.scenery.stairs.destinationMap, object->data.scenery.stairs.destinationBuiltTile);
+            } else if (proto->scenery.type == SCENERY_TYPE_LADDER_UP) {
+                ++ladderUpSeen;
+                note("stairs scan: ladder up at %d destMap=%d destBuiltTile=%d\n", object->tile,
+                    object->data.scenery.ladder.destinationMap, object->data.scenery.ladder.destinationBuiltTile);
+            } else if (proto->scenery.type == SCENERY_TYPE_LADDER_DOWN) {
+                ++ladderDownSeen;
+                note("stairs scan: ladder down at %d destMap=%d destBuiltTile=%d\n", object->tile,
+                    object->data.scenery.ladder.destinationMap, object->data.scenery.ladder.destinationBuiltTile);
+            } else if (proto->scenery.type == SCENERY_TYPE_ELEVATOR) {
+                ++elevatorSeen;
+                note("stairs scan: elevator at %d\n", object->tile);
+            } else {
+                ++otherSeen;
+            }
+            int builtTile = -1;
+            int destinationMap = -1;
+            if (proto->scenery.type == SCENERY_TYPE_STAIRS) {
+                builtTile = object->data.scenery.stairs.destinationBuiltTile;
+                destinationMap = object->data.scenery.stairs.destinationMap;
+            } else if (proto->scenery.type == SCENERY_TYPE_LADDER_UP || proto->scenery.type == SCENERY_TYPE_LADDER_DOWN) {
+                builtTile = object->data.scenery.ladder.destinationBuiltTile;
+                destinationMap = object->data.scenery.ladder.destinationMap;
+            } else {
+                continue;
+            }
+            if (builtTile == -1) continue;
+            const MapElevation destinationElevation = builtTileGetElevation(builtTile);
+            if (destinationElevation == gElevation) continue;
+            if (destinationMap > 0 && destinationMap != gMapHeader.index) continue;
+            int nearTile = -1;
+            for (int direction = ROTATION_FIRST; direction <= ROTATION_LAST; direction++) {
+                const int candidate = tileGetTileInDirection(object->tile, static_cast<Rotation>(direction), 1);
+                if (hexGridTileIsValid(candidate) && !exitTiles.test(candidate)
+                    && elevationTileFree(candidate, gElevation)) {
+                    nearTile = candidate;
+                    break;
+                }
+            }
+            if (nearTile < 0) continue;
+            const int distance = tileDistanceBetween(gDude->tile, nearTile);
+            if (distance < chosenDistance) {
+                chosen = object;
+                approachTile = nearTile;
+                chosenDistance = distance;
+            }
+        }
+        if (chosen == nullptr || approachTile < 0) {
+            note("stairs probe failed: no reachable elevation-change stairs on %s e%d (stairs=%d ladderUp=%d ladderDown=%d elevator=%d otherScenery=%d)\n",
+                gMapHeader.name, static_cast<int>(gElevation), stairsSeen, ladderUpSeen, ladderDownSeen,
+                elevatorSeen, otherSeen);
+            finishPickProbe();
+        } else {
+            const int builtTile = chosen->data.scenery.stairs.destinationBuiltTile;
+            gExitProbeMap = gMapHeader.index;
+            gExitProbeTile = builtTileGetTile(builtTile);
+            gExitProbeElevation = builtTileGetElevation(builtTile);
+            gExitProbeSourceMap = gMapHeader.index;
+            stripMapExtension(gMapHeader.name, gExitProbeSource, sizeof(gExitProbeSource));
+            objectSetLocation(gDude, approachTile, gElevation, nullptr);
+            gEgg->x = 0;
+            gEgg->y = 0;
+            double pixel[2], x = -1.0, y = -1.0;
+            bool projected = false;
+            scene_renderer::gameViewTilePixel(chosen->tile, pixel);
+            for (const auto& offset : kHexScan) {
+                double sx = 0.0;
+                double sy = 0.0;
+                if (!scene_renderer::staticScreenFromGamePixel(pixel[0] + offset[0], pixel[1] + offset[1], &sx, &sy)) {
+                    continue;
+                }
+                const int cx = static_cast<int>(sx);
+                const int cy = static_cast<int>(sy);
+                if (windowGetAtPoint(cx, cy) != gIsoWindow) continue;
+                if (tileUnderMouse(cx, cy) != chosen->tile) continue;
+                x = sx;
+                y = sy;
+                projected = true;
+                break;
+            }
+            const int mx = projected ? static_cast<int>(x) : -1;
+            const int my = projected ? static_cast<int>(y) : -1;
+            const bool picked = projected && windowGetAtPoint(mx, my) == gIsoWindow
+                && tileUnderMouse(mx, my) == chosen->tile;
+            if (!picked) {
+                note("stairs probe failed: stairs not pickable stairs=%d projected=%d at (%d,%d) pickedTile=%d\n",
+                    chosen->tile, projected ? 1 : 0, mx, my, tileUnderMouse(mx, my));
+                finishPickProbe();
+            } else {
+                // An interactive object: the arrow lets the hover pick the
+                // stairs action; the click then walks the hero up and uses.
+                gameMouseSetMode(GAME_MOUSE_MODE_ARROW);
+                _mouse_set_position(mx, my);
+                gPickProbeClick[0] = mx;
+                gPickProbeClick[1] = my;
+                gPickProbeExitPending = true;
+                gPickProbeExitWaitFrames = 0;
+                note("stairs probe queued: source=%s/%d stairs=%d dest=e%d/%d approach=%d at (%d,%d)\n",
+                    gExitProbeSource, gExitProbeSourceMap, chosen->tile,
+                    static_cast<int>(gExitProbeElevation), gExitProbeTile, approachTile, mx, my);
+            }
         }
     } else if (stage == 500) {
         if (strcmp(gMapHeader.name, "KLAMALL.MAP") == 0) {
@@ -4275,7 +4420,12 @@ void sceneLiveFrameReady()
 void sceneOverlaySynced(bool on)
 {
     // --dev-pick-probe: the click took the game out of the scene (a dialog).
-    if (!on && gPickProbeStage > 115 && !gPickProbeExitPending && gExitProbeDestination[0] == '\0') finishPickProbe();
+    // The exit and stairs probes launch into the boot itself and must live
+    // through its overlay switches, so only the plain pick probe dies here.
+    if (!on && gPickProbeStage > 115 && !gPickProbeExitPending && gExitProbeDestination[0] == '\0'
+        && !gStairsProbe) {
+        finishPickProbe();
+    }
 }
 
 // Ctrl+F11: the window between 16:9 and 21:9. The engine sizes its screen once

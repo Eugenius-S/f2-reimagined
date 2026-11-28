@@ -1,0 +1,3 @@
+probe done: hero tile=29089 busy=0 scene=available
+pick probe stage=500 stairs=0 dest='klamall' hero=29089
+exit probe failed: no reachable klamall exit grid on KLAMALL.MAP e0
