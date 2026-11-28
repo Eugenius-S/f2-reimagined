@@ -1,0 +1,4 @@
+scene_renderer: OpenGL 4.1.0 NVIDIA 621.14; renderer=NVIDIA GeForce RTX 5070/PCIe/SSE2; profile=0x1 flags=0x1
+CASTERS: pages 2, ranges 2, vertices 124140, x -34.77..31.80, z -34.48..31.09, wall cards 24
+ROOF CASTERS: squares 875, vertices 5250, y 1.88, x -34.07..31.07, z -33.07..31.07
+SHADOW PASS: wall ranges 2/2, vertices 124140, roof vertices 5250
