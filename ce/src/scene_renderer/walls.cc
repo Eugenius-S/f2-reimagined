@@ -49,6 +49,11 @@ std::unordered_map<unsigned long long, BakedObject> gBakedObjects;
 int gSoloTile = -1;
 int gSoloRadius = 0;
 std::filesystem::path gWallsDirectory; // what loadStaticWalls last loaded, for a new solo
+// 274: the ground-plane rectangle the loaded walls cover. An upper floor's
+// walls from the elevation below stand outside the floor's own clip; the
+// map clip unions this so the map clip never hides a wall the scene has.
+double gWallExtent[4] = {0.0, 0.0, 0.0, 0.0}; // left, top, right, bottom (world x, z)
+bool gWallExtentValid = false;
 
 // The shadow pass's caster triangles (task 045), one buffer over all batches.
 unsigned int gShadowVao = 0;
@@ -116,6 +121,7 @@ void destroyStaticWalls()
     gShadowVao = 0;
     gShadowVbo = 0;
     gWallsLoaded = false;
+    gWallExtentValid = false;
     gBakedObjects.clear();
     gFlyOnlyRows.clear();
     gRowTotalRefs.clear();
@@ -918,6 +924,21 @@ bool loadStaticWalls(const std::filesystem::path& cacheDirectory, std::string* e
     gRowFlyRefs = std::move(rowFlyRefs);
     gWallTriangleCount = totalTriangles;
     gBakedObjects = std::move(bakedObjects);
+    gWallExtentValid = false;
+    for (const WallBatchData& batch : batches) {
+        for (const WallVertex& vertex : batch.vertices) {
+            if (!gWallExtentValid) {
+                gWallExtent[0] = gWallExtent[2] = vertex.vertex.x;
+                gWallExtent[1] = gWallExtent[3] = vertex.vertex.z;
+                gWallExtentValid = true;
+            } else {
+                gWallExtent[0] = std::min(gWallExtent[0], static_cast<double>(vertex.vertex.x));
+                gWallExtent[1] = std::min(gWallExtent[1], static_cast<double>(vertex.vertex.z));
+                gWallExtent[2] = std::max(gWallExtent[2], static_cast<double>(vertex.vertex.x));
+                gWallExtent[3] = std::max(gWallExtent[3], static_cast<double>(vertex.vertex.z));
+            }
+        }
+    }
     gWallsLoaded = true;
     loadBoardShadows(cacheDirectory, nullptr); // optional: a cache without it keeps the painted shadows
     if (error != nullptr) error->clear();
@@ -981,6 +1002,16 @@ void flushWallObjectTable()
 }
 
 } // namespace internal
+
+bool staticWallExtent(double rect[4])
+{
+    if (!gWallExtentValid) return false;
+    rect[0] = gWallExtent[0];
+    rect[1] = gWallExtent[1];
+    rect[2] = gWallExtent[2];
+    rect[3] = gWallExtent[3];
+    return true;
+}
 
 } // namespace scene_renderer
 } // namespace fallout

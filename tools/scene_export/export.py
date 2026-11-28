@@ -644,21 +644,23 @@ def export_scene(gf, game_root: Path, map_name: str, elevation: int, out_dir: Pa
         raise RuntimeError("SceneBuilder returned an unexpected map/elevation")
     live_boards, skip_props, skip_rests = live_solids(builder, scene)
     wall_back_pages = []
-    wall_payload = encode_wall_sidecar(scene, skip_props, skip_rests, builder.map.objects[elevation],
+    wall_payload = encode_wall_sidecar(scene, skip_props, skip_rests, builder.everything,
                                        builder.atlas.pages, builder.tile_sheet[..., 3],
                                        wall_back_pages=wall_back_pages, water=builder.water)
     for index, page in enumerate(wall_back_pages, start=len(builder.atlas.pages)):
         Image.fromarray(page, "RGBA").save(out_dir / f"sprites{index}.png", optimize=True)
     (out_dir / "walls.bin").write_bytes(wall_payload)
     wall_data = decode_wall_sidecar(wall_payload)
-    baked_payload = encode_baked_sidecar(baked_objects(scene, builder.map.objects[elevation], live_boards,
-                                                     FIXED_CARD_FRMS, gf.art.name))
+    # 274: the rows' serials name the builder's combined object list (this
+    # elevation's objects, then the walls below).
+    baked_payload = encode_baked_sidecar(baked_objects(scene, builder.everything, live_boards,
+                                                       FIXED_CARD_FRMS, gf.art.name))
     (out_dir / "baked.bin").write_bytes(baked_payload)
     baked_count = len(decode_baked_sidecar(baked_payload))
     projection_payload = encode_projection_sidecar(scene)
     (out_dir / "projection.bin").write_bytes(projection_payload)
     decode_projection_sidecar(projection_payload)
-    shadow_payload = encode_shadow_sidecar(scene, builder.atlas.images, builder.map.objects[elevation])
+    shadow_payload = encode_shadow_sidecar(scene, builder.atlas.images, builder.everything)
     (out_dir / "shadows.bin").write_bytes(shadow_payload)
     shadow_count = len(decode_shadow_sidecar(shadow_payload))
 
