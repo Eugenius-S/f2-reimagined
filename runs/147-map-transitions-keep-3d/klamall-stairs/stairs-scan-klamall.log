@@ -1,0 +1,5 @@
+probe done: hero tile=29089 busy=0 scene=available
+pick probe stage=500 stairs=1 dest='' hero=29089
+stairs scan: ladder down at 10690 destMap=11 destBuiltTile=201343540
+stairs scan: ladder down at 13469 destMap=11 destBuiltTile=738211182
+stairs probe failed: no reachable elevation-change stairs on KLAMALL.MAP e0 (stairs=0 ladderUp=0 ladderDown=2 elevator=0 otherScenery=2727)

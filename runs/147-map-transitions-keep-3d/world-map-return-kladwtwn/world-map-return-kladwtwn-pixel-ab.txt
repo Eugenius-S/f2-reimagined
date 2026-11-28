@@ -1,0 +1,21 @@
+147: pixel A/B, the clean main exe against this branch's exe.
+One scene cache (this checkout's exporter 1.13.0, exported once), one
+separate install, the arguments tools/regression.ps1 uses (-Still,
+1920x1080, scale 2). A pixel counts as changed when a channel differs by
+more than 2.
+main exe sha256   c0e1035345cad1982a77c4f1c3d3f148d8888850b399925fc173688a02f3d7bf (origin/main 1c893f5af)
+branch exe sha256 1bc2799cdf14f3c3ab1181768c37534621b80bd00758affce761985ba81a954d
+
+spot                 main exe vs branch   main exe vs reference
+arroyo-bridge-dead          0 changed px      280326 changed px
+corrals                     0 changed px          14 changed px
+den-brothel                 0 changed px      247171 changed px
+enc-city6                   0 changed px      222511 changed px
+encsp-mad-cow               0 changed px           0 changed px
+entrance                    0 changed px       56288 changed px
+klacanyn-e0                 0 changed px           0 changed px
+klagraz-e0                  0 changed px         170 changed px
+klamall-e0                  0 changed px       12692 changed px
+klaratcv-e2                 0 changed px        6393 changed px
+klatoxcv-e0                 0 changed px        3577 changed px
+newreno-stables             0 changed px      221992 changed px

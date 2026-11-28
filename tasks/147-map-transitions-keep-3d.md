@@ -172,3 +172,189 @@ the mall route's walk-based probe, the stairs' driver, the world map
 out/in, save on another map) and the arrival-crop table for every row.
 Next: teach the probe to walk onto the exit tile (the player's mechanic),
 which also covers the mall; a stairs/ladder driver; then the full table.
+
+### 2026-11-24 glm: the world map out and back from KLADWTWN shows 3D first; the watch records the hand-off frame
+
+Done: the route the camera note left open (`runs/316-windows-hotfix/camera-notes.md`:
+walk onto exit grid 23454, return from the world map) is driven end to end by
+the player's own input, as a scene script on a separate install. No game logic
+is changed on this branch: the test exe (sha256
+`1bc2799cdf14f3c3ab1181768c37534621b80bd00758affce761985ba81a954d`) is main
+`1c893f5af` plus the three test-tool fixes below. The untouched exe cannot run
+this route: its script driver has two defects (a script cannot act on the
+world map, and a scripted click lands in the screen corner of a background
+window), so the clean-main proof is this exe, not a byte-identical build.
+
+Evidence is in `runs/147-map-transitions-keep-3d/world-map-return-kladwtwn/`:
+the route script `route-kladwtwn-worldmap.txt`, the frame log
+`world-map-return-kladwtwn-transition.log` and a four panel sheet
+`world-map-return-kladwtwn-sheet.jpg` (start, world map, hand-off frame, first
+local frame).
+
+| Transition | First frame on arrival | 2D frame, old scene, loading screen |
+| --- | --- | --- |
+| KLADWTWN/e0 -> world map | The world map, 2D: every logged frame while it is up is `mode=2d ... iso=1` (sheet, panel 2) | No 3D frame under the world map flag (0 in the log); the block ends `first-3d-capture result=none superseded=1`. |
+| world map -> KLADWTWN/e0, entering tile 25075 | Frame 1030: 3D, `kladwtwn/e0/gm0#3`, view full, scene available, read back from the back buffer: `world-map-return-kladwtwn-first-3d-frame.jpg` and `.json`; the preview sidecar beside it has hero 25075 and `view_tile` 24678, the engine's centre for that tile, the same as a fresh load at the spawn (sheet, panel 4). | One 2D present between the click and it (frame 1029, 34 ms after the last world map frame): the map is loaded and the hero already on 25075, and the screen is still the world map with the party on Klamath (`world-map-return-kladwtwn-handoff-frame.json`, sheet, panel 3). No loading screen, no local map in 2D, no old 3D scene. The first 3D frame comes 222 ms after the last world map frame (188 ms in the second run); the watched run's own capture is part of that time. |
+
+Steps (twice on the final exe, the harness exiting 0 both times; the second
+run numbers the two frames 1030 and 1031): `dev-snapshot.ps1 -Map kladwtwn
+-Elevation 0 -HeroTile 23455 -ViewTile 23059 -GameRoot <isolated install>
+-CaptureConsole -SceneInput route-kladwtwn-worldmap.txt -DevInputShots 12
+-TransitionWatch`. The script waits 1.2 s, snapshots, clicks (640,220): the
+exit grid 23454, one hex right of the hero, who walks onto it and the world
+map opens 2.5 s later; snapshots; clicks (557,176), the party hotspot on
+Klamath; 3 s later snapshots. The location was not yet marked visited after
+the dev start, so the click enters Klamath's first map directly and no town
+map opens. The hero returns at the map's own entering tile 25075, not at the
+exit grid (the game's rule). Five runs in all gave the same frame sequence.
+
+Test tools changed (no render policy, no game content):
+- `ce/src/devtools/devtools.cc`: the world map runs its own loop inside the
+  map transition, where the main loop's `devtools::update()` never runs, so a
+  scene script could not act on it. `vanillaPresented()` pumps the script
+  while the world map mode flag is set.
+- `ce/src/dinput.cc`: a scripted mouse position was applied as a step from the
+  physical pointer's last sample (the absolute sensitivity tracker), so a
+  scripted click in a background window landed at (959,490). The tracker now
+  resets when a scripted position applies.
+- The transition watch did not see the hand-off frame: its key changed only
+  at the first 3D frame. The key now ends with the map load serial (`#N`,
+  `mapGetLoadSerial()` in `ce/src/map.cc`, bumped once the view and the hero
+  are on the loaded map), so the loaded map's first presented frame opens the
+  arrival block and gets the first 2D capture; a key change that follows
+  before the first 3D frame joins that block. A transition a map load cuts
+  short is written as `first-3d-capture result=none superseded=1` instead of
+  being lost. `first-2d-capture` names its JSON. `first-3d-frame-capture` is
+  a readback of the back buffer of the first 3D Full frame, the frame about
+  to be shown; the older `first-3d-capture` is a static preview taken before
+  that frame is drawn.
+
+Found, not fixed (test tools): a snapshot JSON with non-ASCII text is written
+in the game's CP1251 (the world map's map name), which is not valid UTF-8:
+two of the twelve sidecars in each run. The readback JSON keeps the label
+`view: vanilla-framebuffer` (it is not a static preview;
+`tools/dev-snapshot.ps1` matches that label for `-Classic`, so it was left).
+
+Not verified: entering a different map or elevation from the world map (this
+route returns to the same map, so a wrong scene could not show by content;
+only the camera and the hero moved), the town map path (T on a visited
+location), travel across the world map and random encounters, and a visible
+window with a real mouse (background runs only). `perf-check` was not run.
+
+Next: the remaining rows (the klacanyn walk stage, the mall's walk-based
+probe, the stairs driver, the world map into another map, a save made on
+another map); then the full arrival table. Status stays `doing`.
+Check: `ctest --test-dir build --output-on-failure` 34/34; tools unit tests
+scene_export 177, regression 12, tour 18, shapes 15, tools 47 (1 skipped);
+`tools/tasks.ps1 -SelfTest` and `-CheckMetadata` ok; `tools/test_snapshot_output.ps1`
+54 checks passed; the route twice with harness exit 0.
+
+The pixel regression is red on main's own build, and not from this branch.
+`tools/regression.ps1` with this checkout's exporter (1.13.0) and the
+separate install passes 29 of 154 spots against the committed references
+(last changed 2026-11-08); the counts are in
+`world-map-return-kladwtwn-regression-summary.txt`. The clean main exe
+(`c0e10353`) and the branch exe give 0 changed pixels on 12 spots sampled
+across the failing and the passing ones, with one cache and one install for
+both, and both differ from the references by the same counts
+(`world-map-return-kladwtwn-pixel-ab.txt`). The export read the same bytes
+as the main checkout's game folder (its 15 archives, `ddraw.ini` and
+`mods_order.txt` by sha256), so the separate install is not the cause. Why
+the references no longer match main was not determined here.
+
+### 2026-11-28 GLM Windows: the mall loop and the canyon walk, both directions
+
+Done: the first unclaimed matrix rows, on the isolated test copy with the
+scene cache from the worktree's own `build/scene-cache` (the harness sets
+`F2CE_SCENE_CACHE` there, so a map without a `mod-cache` scene still opens
+in 3D). The exe was the branch build (`ninja: no work to do` before the
+test-tool change below). The transition watch recorded every arrival.
+
+| Transition | First frame on arrival | 2D frame between the click and it |
+| --- | --- | --- |
+| KLADWTWN/e0 -> KLAMALL/e0, the mall door exit grid 26347 walked from the start 26348 (scripted click on the exit's hex) | 3D, `first-3d-capture result=pass map=klamall elevation=0 hero=29089` (twice: this session's run and the interrupted morning run of the same route; identical sequences) | one 2D present, the klamall map already loaded (`first-2d-capture result=pass`) |
+| KLAMALL/e0 -> KLADWTWN/e0, exit 29282, target kladwtwn 25142 | 3D, `first-3d-capture result=pass map=kladwtwn elevation=0 hero=25142`, twice from independent starts (journals `return2` and `return3`; `return1` keeps the arrival captures of the first pass) | one 2D present (devshot `-190136`) |
+| KLADWTWN/e0 -> KLACANYN/e0, exit 17341, target klacanyn 20060 | 3D, `first-3d-capture result=pass map=klacanyn elevation=0 hero=20060`; the 2D hand-off block before the first 3D frame lasts 8 frames (~80 ms, `available=iso-disabled`, the hero field shows the map header's entering tile 21871 before the exit destination applies) | present, short |
+| save on KLAMALL loaded from the in-game options menu on KLADWTWN | 3D, `first-3d-capture result=pass map=klamall elevation=0 hero=29089` (the saved position); the load registers as `change kladwtwn/e0/gm0#2 -> klamall/e0/gm40#2`, then the arrival block and two serial bumps, every capture pass | one 2D present during the load |
+
+Evidence, one folder per row under `runs/147-map-transitions-keep-3d/`:
+`mall-walk-loop/run1` (plus the morning run's identical transition log kept
+beside it), `mall-walk-loop/return2`, `mall-walk-loop/return3`,
+`kladwtwn-to-klacanyn/probe1`, `save-on-klamall/` (the save fixture record,
+the route, the load run's log, journal and arrival frame). Each keeps its
+transition journal, the probe record where the probe drove the leg, the
+arrival capture and a JPG of the first 3D frame.
+
+The KLAMALL -> KLADWTWN leg needed a computed click again: the interrupted
+session's route file clicked exit 29282 at a pixel computed for view centre
+29089, but the engine clamps the arrival view to 28493, so the hero walked
+the wrong way. The exit probe re-proved the leg twice from independent
+starts: it walks the hero to the exit's approach tile and dispatches the
+same standard click at the projected pixel ((448,220), the scan offset
+verified by `tileUnderMouse` naming the exit hex). The static-pixel route
+stays fragile whenever the engine clamps the view; the probe's projected
+click is the robust shape for walking legs.
+
+Test tools changed (no render policy, no game content): the classic options
+window, the save/load window and the dialog box each run their own loop
+where the main loop's `devtools::update()` never runs, so a scene script
+could not act there (the world map got the same pump fix earlier on this
+branch). `ce/src/options.cc`, `ce/src/loadsave.cc` and `ce/src/dbox.cc` now
+pump the script and honour its snapshot request per presented frame. With
+that, the save/load row runs entirely through the real UI: the save was
+made by the save fixture on KLAMALL (`SAVE_PREVIEW_FIXTURE PASS`, the slot
+kept in the test copy's `data/SAVEGAME/SLOT01`), and the load walks the
+options menu by keys (ESC, L, RETURN on the occupied slot, Y on the
+overwrite-free confirm). Launching that route needs the run's redirected
+state seeded with the save and the scene-input path passed verbatim
+(Start-Process ArgumentList mangled it; the cmd line form works).
+
+Not verified yet: the stairs/ladder elevation change (no driver yet), the
+world map into a map other than the departure one (the town-map path or a
+far-town click needs its own driver or calibration), and a visible window
+with a real mouse. The harness's exact-snapshot-count check counts the
+transition watch's own captures too, so `-TransitionWatch` runs end in its
+snapshot-count throw after the evidence is already on disk; the harness
+copy-out with these fixtures is best treated as partial and the run folder
+read directly.
+Check: `ctest --test-dir build --output-on-failure` 34/34.
+Status stays `doing`.
+Next: the stairs driver, then the world-map-into-another-map row, then the
+full arrival table and the regression pairing.
+
+### 2026-11-28 GLM Windows: the stairs driver, and why KLAMALL has no floor route
+
+Done: the elevation-change driver. `--dev-stairs-probe` scans the current
+elevation for stairs and ladders whose built-tile destination is another
+elevation of the same map (the engine's `useStairs`/`useLadder*` move the
+hero with `objectSetLocation` in that case), teleports the hero to a free
+approach hex, projects the object's hex through the same offset scan the
+exit probe uses, and dispatches the normal use click (the arrow cursor, so
+the hover picks the stairs action); the existing pending machinery then
+waits for the hero to land on the destination tile and elevation. The
+boot-time overlay-sync kill switch (which finished any pick probe past
+stage 115 whose exit destination is empty) now exempts the stairs probe
+alongside the exit probe; without that, the boot's overlay switch killed
+the probe before its first step.
+
+The row it was built for does not exist on KLAMALL: the e0 scan counts
+`stairs=0 ladderUp=0 ladderDown=2 elevator=0` - the two ladder-downs carry
+junk built-tile data (`destMap=11`, destBuiltTile far beyond any tile) and
+travel by script to another map, so no standard input reaches klamall e1
+from e0 (the e1 scene exists in the cache; the authored route up is the
+scripted ladder). The exit probe aimed back at the same map confirms it:
+`exit probe failed: no reachable klamall exit grid on KLAMALL.MAP e0`.
+ARTEMPLE e0 likewise has no elevation-change scenery (782 scenery objects,
+none of the four interactive kinds). Evidence:
+`runs/147-map-transitions-keep-3d/klamall-stairs/stairs-scan-klamall.log`,
+`.../exit-same-map1-probe.log`, `.../artemple-stairs/stairs-scan-artemple.log`.
+
+So the stairs/floor matrix row stays open, and it is a map-choice question
+before it is a tooling question: the driver is ready and needs one map
+whose authored floor change is a stairs/ladder object with real built-tile
+data (or the script-route driver, if the RP maps only change floors through
+scripts).
+Check: `ctest --test-dir build --output-on-failure` 34/34.
+Status stays `doing`.
+Next: pick the map for the floor-change row, then the world-map-into-
+another-map row, then the full arrival table and the regression pairing.

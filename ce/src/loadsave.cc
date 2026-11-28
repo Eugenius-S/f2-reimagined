@@ -24,6 +24,7 @@
 #include "debug.h"
 #include "delay.h"
 #include "devtools/devtools.h"
+#include "devtools/preferences_probe.h"
 #include "display_monitor.h"
 #include "draw.h"
 #include "file_utils.h"
@@ -674,6 +675,15 @@ int lsgSaveGame(int mode)
     int doubleClickSlot = -1;
     while (rc == -1) {
         sharedFpsLimiter.mark();
+
+        // The save/load window runs its own loop, where the main loop's
+        // devtools::update() never runs: pump a scene script per presented
+        // frame, like the world map and the options window do.
+        devtools::scriptedInputPump();
+        if (devtools::scriptedInputTakeSnapshotRequest()) {
+            renderPresent();
+            devtools::takeSnapshot();
+        }
 
         unsigned int tick = getTicks();
         int keyCode = inputGetInput();
@@ -1380,6 +1390,15 @@ int lsgLoadGame(int mode)
     int doubleClickSlot = -1;
     while (rc == -1) {
         sharedFpsLimiter.mark();
+
+        // The save/load window runs its own loop, where the main loop's
+        // devtools::update() never runs: pump a scene script per presented
+        // frame, like the world map and the options window do.
+        devtools::scriptedInputPump();
+        if (devtools::scriptedInputTakeSnapshotRequest()) {
+            renderPresent();
+            devtools::takeSnapshot();
+        }
 
         unsigned int time = getTicks();
         int keyCode = devAutoloadPending ? kLoadSaveActionDone : inputGetInput();

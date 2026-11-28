@@ -1,0 +1,167 @@
+baseline frame=0 ms=2194 mode=2d key=/e0/gm0#0 state=0 iso=1 view=off available=not-requested hero=-1
+change /e0/gm0#0 -> artemple/e0/gm0#0 frames=16
+first-2d-capture result=pass status=snapshot: devshot-20261128-194201.json
+first-3d-capture result=none superseded=1
+change artemple/e0/gm0#0 -> kladwtwn/e0/gm0#1 frames=200
+first-2d-capture result=pass status=snapshot: devshot-20261128-194201-001.json
+first-3d-capture result=none superseded=1
+change kladwtwn/e0/gm0#1 -> kladwtwn/e0/gm0#2 frames=38
+before frame=543 ms=10550 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=544 ms=10557 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=545 ms=10564 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=546 ms=10570 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=547 ms=10577 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=548 ms=10584 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=549 ms=10591 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=550 ms=10598 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=551 ms=10605 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=552 ms=10612 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=553 ms=10619 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=554 ms=10626 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=555 ms=10633 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=556 ms=10640 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=557 ms=10647 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=558 ms=10957 mode=3d key=kladwtwn/e0/gm0#2 state=0 iso=0 view=full available=available hero=25075
+frame=521 ms=10251 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=522 ms=10403 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=523 ms=10408 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=524 ms=10412 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=525 ms=10419 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=526 ms=10425 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=527 ms=10432 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=528 ms=10440 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=529 ms=10447 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=530 ms=10454 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=531 ms=10461 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=532 ms=10468 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=533 ms=10475 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=534 ms=10482 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=535 ms=10489 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=536 ms=10496 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=537 ms=10510 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=538 ms=10515 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=539 ms=10522 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=540 ms=10529 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=541 ms=10536 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=542 ms=10543 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=543 ms=10550 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=544 ms=10557 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=545 ms=10564 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=546 ms=10570 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=547 ms=10577 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=548 ms=10584 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=549 ms=10591 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=550 ms=10598 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=551 ms=10605 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=552 ms=10612 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=553 ms=10619 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=554 ms=10626 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=555 ms=10633 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=556 ms=10640 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=557 ms=10647 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=558 ms=10957 mode=3d key=kladwtwn/e0/gm0#2 state=0 iso=0 view=full available=available hero=25075
+first-2d-capture result=pass status=snapshot: devshot-20261128-194205.json
+first-3d-capture result=pass map=kladwtwn elevation=0 hero=25075 status=snapshot: devshot-20261128-194205-000.json
+first-3d-frame-capture result=pass status=snapshot: devshot-20261128-194206.json
+change kladwtwn/e0/gm0#2 -> klamall/e0/gm40#2 frames=200
+first-2d-capture result=pass status=snapshot: devshot-20261128-194231.json
+first-3d-capture result=none superseded=1
+change klamall/e0/gm40#2 -> klamall/e0/gm40#3 frames=39
+before frame=4315 ms=41240 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4316 ms=41248 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4317 ms=41255 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4318 ms=41262 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4319 ms=41269 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4320 ms=41276 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4321 ms=41288 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4322 ms=41294 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4323 ms=41300 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4324 ms=41308 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4325 ms=41314 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4326 ms=41321 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4327 ms=41328 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4328 ms=41335 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4329 ms=41341 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4330 ms=41557 mode=3d key=klamall/e0/gm40#3 state=0 iso=0 view=full available=available hero=29089
+frame=4292 ms=40879 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4293 ms=41090 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4294 ms=41097 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4295 ms=41104 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4296 ms=41111 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4297 ms=41116 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4298 ms=41123 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4299 ms=41130 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4300 ms=41135 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4301 ms=41142 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4302 ms=41149 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4303 ms=41156 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4304 ms=41163 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4305 ms=41170 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4306 ms=41177 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4307 ms=41184 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4308 ms=41191 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4309 ms=41198 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4310 ms=41205 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4311 ms=41212 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4312 ms=41219 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4313 ms=41226 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4314 ms=41233 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4315 ms=41240 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4316 ms=41248 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4317 ms=41255 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4318 ms=41262 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4319 ms=41269 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4320 ms=41276 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4321 ms=41288 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4322 ms=41294 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4323 ms=41300 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4324 ms=41308 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4325 ms=41314 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4326 ms=41321 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4327 ms=41328 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4328 ms=41335 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4329 ms=41341 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+frame=4330 ms=41557 mode=3d key=klamall/e0/gm40#3 state=0 iso=0 view=full available=available hero=29089
+first-2d-capture result=pass status=snapshot: devshot-20261128-194235.json
+first-3d-capture result=pass map=klamall elevation=0 hero=29089 status=snapshot: devshot-20261128-194236-000.json
+first-3d-frame-capture result=pass status=snapshot: devshot-20261128-194236.json
+change klamall/e0/gm40#3 -> klamall/e0/gm8#3 frames=1
+before frame=4316 ms=41248 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4317 ms=41255 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4318 ms=41262 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4319 ms=41269 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4320 ms=41276 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4321 ms=41288 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4322 ms=41294 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4323 ms=41300 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4324 ms=41308 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4325 ms=41314 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4326 ms=41321 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4327 ms=41328 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4328 ms=41335 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4329 ms=41341 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4330 ms=41557 mode=3d key=klamall/e0/gm40#3 state=0 iso=0 view=full available=available hero=29089
+before frame=4331 ms=42280 mode=3d key=klamall/e0/gm8#3 state=0 iso=0 view=full available=available hero=29089
+frame=4331 ms=42280 mode=3d key=klamall/e0/gm8#3 state=0 iso=0 view=full available=available hero=29089
+first-3d-capture result=pass map=klamall elevation=0 hero=29089 status=snapshot: devshot-20261128-194237-000.json
+first-3d-frame-capture result=pass status=snapshot: devshot-20261128-194237.json
+change klamall/e0/gm8#3 -> klamall/e0/gm0#3 frames=1
+before frame=4317 ms=41255 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4318 ms=41262 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4319 ms=41269 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4320 ms=41276 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4321 ms=41288 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4322 ms=41294 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4323 ms=41300 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4324 ms=41308 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4325 ms=41314 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4326 ms=41321 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4327 ms=41328 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4328 ms=41335 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4329 ms=41341 mode=2d key=klamall/e0/gm40#3 state=0 iso=1 view=full available=iso-disabled hero=29089
+before frame=4330 ms=41557 mode=3d key=klamall/e0/gm40#3 state=0 iso=0 view=full available=available hero=29089
+before frame=4331 ms=42280 mode=3d key=klamall/e0/gm8#3 state=0 iso=0 view=full available=available hero=29089
+before frame=4332 ms=42957 mode=3d key=klamall/e0/gm0#3 state=0 iso=0 view=full available=available hero=29089
+frame=4332 ms=42957 mode=3d key=klamall/e0/gm0#3 state=0 iso=0 view=full available=available hero=29089
+first-3d-capture result=pass map=klamall elevation=0 hero=29089 status=snapshot: devshot-20261128-194237-001.json
+first-3d-frame-capture result=pass status=snapshot: devshot-20261128-194238.json

@@ -1,0 +1,3 @@
+probe done: hero tile=17288 busy=0 scene=available
+pick probe stage=500 stairs=1 dest='' hero=17288
+stairs probe failed: no reachable elevation-change stairs on ARTEMPLE.MAP e0 (stairs=0 ladderUp=0 ladderDown=0 elevator=0 otherScenery=782)

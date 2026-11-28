@@ -1,0 +1,19 @@
+# 147: Klamath downtown to the world map and back, the player's own input.
+# Start: KLADWTWN e0, the hero on 23455 beside exit grid 23454, the view on 23059.
+waitms 1200
+snap
+move 640 220
+waitms 500
+down 640 220
+waitms 150
+up 640 220
+waitms 2500
+snap
+move 557 176
+waitms 400
+down 557 176
+waitms 150
+up 557 176
+waitms 3000
+snap
+waitms 500

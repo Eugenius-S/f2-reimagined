@@ -1,0 +1,7 @@
+exit probe placed: source=KLAMALL e0 from=-1 exit=29282 target=kladwtwn/25142/e0 approach=29481 distance=8
+exit probe scan: offset=(16,8) point=(463,228) tile=29482
+exit probe queued: source=KLAMALL/29282 dest=kladwtwn/25142/e0 at (448,220)
+exit click dispatched: map=KLAMALL.MAP hero=29481->29481 busy=0->1 at (448,220)
+probe click: hero busy=1 tile=29481
+exit transition passed: source=KLAMALL/10 exit=29282 target=kladwtwn map=KLADWTWN.MAP index=9 elevation=0 tile=25142 after=17 frames
+probe done: hero tile=25142 busy=0 scene=available

@@ -111,6 +111,9 @@ bool gTransitionMonitorInitialized = false;
 bool gTransitionArrivalCapturePending = false;
 bool gTransitionFirst2dCaptureDone = false;
 bool gTransitionFirst2dCapturePassed = false;
+char gTransitionFirst2dCaptureStatus[128] = {};
+bool gTransitionLiveCapturePending = false;
+int gTransitionMonitorSerial = 0;
 int gTransitionMonitorFrames = 0;
 int gTransitionMonitorPresentId = 0;
 int gTransitionArrivalFrameCount = 0;
@@ -296,6 +299,9 @@ int gPickProbeOutsideHeroTile = -1;
 bool gPickProbeOutsideClick = false;
 bool gPickProbeExitPending = false;
 int gPickProbeExitWaitFrames = 0;
+// --dev-stairs-probe: the nearest stairs to another elevation of this map,
+// clicked through the normal use path.
+bool gStairsProbe = false;
 char gExitProbeDestination[16] = {};
 char gExitProbeSource[16] = {};
 int gExitProbeSourceTile = -1;
@@ -524,6 +530,32 @@ void stripMapExtension(const char* name, char* out, size_t size)
     out[len] = '\0';
 }
 
+// `first3dLine` is the capture of the first 3D Full frame. A transition a map
+// load cuts short (the world map never shows one) passes nullptr: no frame
+// lists, since they would repeat the next transition's.
+static void writeTransitionBlock(const char* first3dLine)
+{
+    if (FILE* log = fopen(devLogPath("devtransitions.log").c_str(), "a")) {
+        fprintf(log, "change %s -> %s frames=%d\n", gTransitionMonitorPreviousKey,
+            gTransitionMonitorKey, gTransitionArrivalFrameCount);
+        if (first3dLine != nullptr) {
+            const int first = (gTransitionMonitorHistoryNext - gTransitionMonitorHistoryCount + 16) % 16;
+            for (int i = 0; i < gTransitionMonitorHistoryCount; ++i) {
+                fprintf(log, "before %s\n", gTransitionMonitorHistory[(first + i) % 16]);
+            }
+            for (int i = 0; i < gTransitionArrivalFrameCount; ++i) {
+                fprintf(log, "%s\n", gTransitionArrivalFrames[i]);
+            }
+        }
+        if (gTransitionFirst2dCaptureDone) {
+            fprintf(log, "first-2d-capture result=%s status=%s\n",
+                gTransitionFirst2dCapturePassed ? "pass" : "fail", gTransitionFirst2dCaptureStatus);
+        }
+        fprintf(log, "%s\n", first3dLine != nullptr ? first3dLine : "first-3d-capture result=none superseded=1");
+        fclose(log);
+    }
+}
+
 void observeTransitionFrame(const char* mode)
 {
     if (!gTransitionMonitor) return;
@@ -532,9 +564,10 @@ void observeTransitionFrame(const char* mode)
     stripMapExtension(gMapHeader.name, map, sizeof(map));
     std::transform(map, map + strlen(map), map,
         [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    const int serial = mapGetLoadSerial();
     char key[96];
-    snprintf(key, sizeof(key), "%s/e%d/gm%u", map, static_cast<int>(gElevation),
-        static_cast<unsigned int>(GameMode::getCurrentGameMode()));
+    snprintf(key, sizeof(key), "%s/e%d/gm%u#%d", map, static_cast<int>(gElevation),
+        static_cast<unsigned int>(GameMode::getCurrentGameMode()), serial);
     char line[224];
     snprintf(line, sizeof(line), "frame=%d ms=%u mode=%s key=%s state=%d iso=%d view=%s available=%s hero=%d",
         gTransitionMonitorPresentId++, SDL_GetTicks(), mode, key, static_cast<int>(gameGetState()), isoIsDisabled() ? 1 : 0,
@@ -546,18 +579,28 @@ void observeTransitionFrame(const char* mode)
     if (!gTransitionMonitorInitialized) {
         gTransitionMonitorInitialized = true;
         snprintf(gTransitionMonitorKey, sizeof(gTransitionMonitorKey), "%s", key);
+        gTransitionMonitorSerial = serial;
         if (FILE* log = fopen(devLogPath("devtransitions.log").c_str(), "a")) {
             fprintf(log, "baseline %s\n", line);
             fclose(log);
         }
     } else if (strcmp(gTransitionMonitorKey, key) != 0) {
-        snprintf(gTransitionMonitorPreviousKey, sizeof(gTransitionMonitorPreviousKey), "%s", gTransitionMonitorKey);
+        // A map load opens a transition once the view and the hero are in
+        // place. Any other key change joins the open one: the world map's
+        // mode flag outlives the load it starts, and the loaded map's first
+        // frame is the one to keep.
+        const bool loaded = serial != gTransitionMonitorSerial;
+        if (loaded || !gTransitionArrivalCapturePending) {
+            if (loaded && gTransitionArrivalCapturePending) writeTransitionBlock(nullptr);
+            snprintf(gTransitionMonitorPreviousKey, sizeof(gTransitionMonitorPreviousKey), "%s", gTransitionMonitorKey);
+            gTransitionMonitorFrames = 0;
+            gTransitionArrivalFrameCount = 0;
+            gTransitionFirst2dCaptureDone = false;
+            gTransitionFirst2dCapturePassed = false;
+            gTransitionArrivalCapturePending = true;
+        }
+        gTransitionMonitorSerial = serial;
         snprintf(gTransitionMonitorKey, sizeof(gTransitionMonitorKey), "%s", key);
-        gTransitionMonitorFrames = 0;
-        gTransitionArrivalFrameCount = 0;
-        gTransitionFirst2dCaptureDone = false;
-        gTransitionFirst2dCapturePassed = false;
-        gTransitionArrivalCapturePending = true;
     }
 
     if (gTransitionMonitorFrames < 120) gTransitionMonitorFrames++;
@@ -575,30 +618,19 @@ void observeTransitionFrame(const char* mode)
         && strcmp(mode, "2d") == 0) {
         gTransitionFirst2dCapturePassed = takeSnapshot();
         gTransitionFirst2dCaptureDone = true;
+        snprintf(gTransitionFirst2dCaptureStatus, sizeof(gTransitionFirst2dCaptureStatus), "%s", gStatus);
     }
 
     if (gTransitionArrivalCapturePending && strcmp(mode, "3d") == 0
         && sceneStartupReady() && scene::activeView() == scene::View::Full) {
         const bool captured = takeSnapshot();
-        if (FILE* log = fopen(devLogPath("devtransitions.log").c_str(), "a")) {
-            fprintf(log, "change %s -> %s frames=%d\n", gTransitionMonitorPreviousKey,
-                gTransitionMonitorKey, gTransitionArrivalFrameCount);
-            const int first = (gTransitionMonitorHistoryNext - gTransitionMonitorHistoryCount + 16) % 16;
-            for (int i = 0; i < gTransitionMonitorHistoryCount; ++i) {
-                fprintf(log, "before %s\n", gTransitionMonitorHistory[(first + i) % 16]);
-            }
-            for (int i = 0; i < gTransitionArrivalFrameCount; ++i) {
-                fprintf(log, "%s\n", gTransitionArrivalFrames[i]);
-            }
-            if (gTransitionFirst2dCaptureDone) {
-                fprintf(log, "first-2d-capture result=%s\n",
-                    gTransitionFirst2dCapturePassed ? "pass" : "fail");
-            }
-            fprintf(log, "first-3d-capture result=%s map=%s elevation=%d hero=%d status=%s\n",
-                captured ? "pass" : "fail", map, static_cast<int>(gElevation),
-                gDude != nullptr ? gDude->tile : -1, gStatus);
-            fclose(log);
-        }
+        char first3dLine[224];
+        snprintf(first3dLine, sizeof(first3dLine), "first-3d-capture result=%s map=%s elevation=%d hero=%d status=%s",
+            captured ? "pass" : "fail", map, static_cast<int>(gElevation),
+            gDude != nullptr ? gDude->tile : -1, gStatus);
+        writeTransitionBlock(first3dLine);
+        // Read the frame this present is about to show (sceneLiveFrameReady).
+        gTransitionLiveCapturePending = true;
         gTransitionArrivalCapturePending = false;
     }
 }
@@ -1490,6 +1522,11 @@ bool parseOption(const char* arg)
     }
     if (strcmp(arg, "--dev-pick-probe") == 0) {
         gPickProbeStage = 1;
+        return true;
+    }
+    if (strcmp(arg, "--dev-stairs-probe") == 0) {
+        gStairsProbe = true;
+        gPickProbeStage = 500;
         return true;
     }
     const char* exitProbePrefix = "--dev-exit-probe=";
@@ -2689,7 +2726,8 @@ void update()
         _gmouse_handle_event(gPickProbeClick[0], gPickProbeClick[1], MOUSE_EVENT_LEFT_BUTTON_UP);
         if (gPickProbeExitPending) {
             if (FILE* log = fopen(devLogPath("devprobe.log").c_str(), "a")) {
-                fprintf(log, "exit click dispatched: map=%s hero=%d->%d busy=%d->%d at (%d,%d)\n",
+                fprintf(log, "%s click dispatched: map=%s hero=%d->%d busy=%d->%d at (%d,%d)\n",
+                    gStairsProbe ? "stairs" : "exit",
                     gMapHeader.name, heroTileBefore, gDude->tile, busyBefore, animationIsBusy(gDude) == -1,
                     gPickProbeClick[0], gPickProbeClick[1]);
                 fclose(log);
@@ -2723,7 +2761,8 @@ void update()
             : strcmp(gMapHeader.name, "KLADWTWN.MAP") == 0 && !expectedExit;
         if (expectedExit) {
             if (FILE* log = fopen(devLogPath("devprobe.log").c_str(), "a")) {
-                fprintf(log, "exit transition passed: source=%s/%d exit=%d target=%s map=%s index=%d elevation=%d tile=%d after=%d frames\n",
+                fprintf(log, "%s transition passed: source=%s/%d exit=%d target=%s map=%s index=%d elevation=%d tile=%d after=%d frames\n",
+                    gStairsProbe ? "stairs" : "exit",
                     gExitProbeDestination[0] != '\0' ? gExitProbeSource : "KLAMALL",
                     gExitProbeDestination[0] != '\0' ? gExitProbeSourceMap : 10,
                     gExitProbeDestination[0] != '\0' ? gExitProbeSourceTile : 28078,
@@ -3114,6 +3153,14 @@ void finishPickProbe()
     gPickProbeStage = 0;
 }
 
+// The point must sit inside an object's hex on the scene's picture: the
+// anchor alone round-trips to a neighbour (147, the KLAGRAZ exit), so a
+// small scan takes the first offset the ground pick names the hex with.
+static const int kHexScan[][2] = {
+    {16, 8}, {0, 0}, {16, 0}, {16, 16}, {0, 8}, {32, 8},
+    {16, -8}, {-16, 8}, {16, 24}, {24, 4}, {8, 4}, {24, 12},
+};
+
 // --dev-pick-probe, one step per presented frame of the scene.
 void runPickProbe()
 {
@@ -3375,10 +3422,6 @@ void runPickProbe()
         // exit), so a small scan takes the first offset the ground pick
         // names the exit's hex with.
         const bool gExitProbeScanDiag = std::getenv("F2CE_EXIT_PROBE_DIAG") != nullptr;
-        static const int kHexScan[][2] = {
-            {16, 8}, {0, 0}, {16, 0}, {16, 16}, {0, 8}, {32, 8},
-            {16, -8}, {-16, 8}, {16, 24}, {24, 4}, {8, 4}, {24, 12},
-        };
         if (projected) {
             scene_renderer::gameViewTilePixel(gExitProbeSourceTile, pixel);
             for (const auto& offset : kHexScan) {
@@ -3425,6 +3468,137 @@ void runPickProbe()
             note("exit probe queued: source=%s/%d dest=%s/%d/e%d at (%d,%d)\n",
                 gExitProbeSource, gExitProbeSourceTile, gExitProbeDestination,
                 gExitProbeTile, gExitProbeElevation, mx, my);
+        }
+    } else if (stage == 500 && gStairsProbe) {
+        if (animationIsBusy(gDude) == -1) {
+            gPickProbeStage = stage;
+            return;
+        }
+        // An exit grid does not block movement. Standing on a neighboring
+        // grid would trigger a transition before this probe can take a step.
+        std::bitset<HEX_GRID_SIZE> exitTiles;
+        for (Object* grid = objectFindFirstAtElevation(gElevation); grid != nullptr;
+             grid = objectFindNextAtElevation()) {
+            if (hexGridTileIsValid(grid->tile) && isExitGridProtoId(ProtoId(grid->pid))) {
+                exitTiles.set(grid->tile);
+            }
+        }
+        // The nearest stairs whose destination is another elevation of this
+        // map. The stairs work through the normal use click: the hero walks
+        // up to them and the engine's own useStairs moves them.
+        Object* chosen = nullptr;
+        int approachTile = -1;
+        int chosenDistance = 1 << 30;
+        int stairsSeen = 0, ladderUpSeen = 0, ladderDownSeen = 0, elevatorSeen = 0, otherSeen = 0;
+        for (Object* object = objectFindFirstAtElevation(gElevation); object != nullptr;
+             object = objectFindNextAtElevation()) {
+            if (ProtoId(object).objectType() != OBJ_TYPE_SCENERY) continue;
+            Proto* proto = nullptr;
+            if (protoGetProto(ProtoId(object), &proto) == -1 || proto == nullptr) continue;
+            if (proto->scenery.type == SCENERY_TYPE_STAIRS) {
+                ++stairsSeen;
+                note("stairs scan: stairs at %d destMap=%d destBuiltTile=%d\n", object->tile,
+                    object->data.scenery.stairs.destinationMap, object->data.scenery.stairs.destinationBuiltTile);
+            } else if (proto->scenery.type == SCENERY_TYPE_LADDER_UP) {
+                ++ladderUpSeen;
+                note("stairs scan: ladder up at %d destMap=%d destBuiltTile=%d\n", object->tile,
+                    object->data.scenery.ladder.destinationMap, object->data.scenery.ladder.destinationBuiltTile);
+            } else if (proto->scenery.type == SCENERY_TYPE_LADDER_DOWN) {
+                ++ladderDownSeen;
+                note("stairs scan: ladder down at %d destMap=%d destBuiltTile=%d\n", object->tile,
+                    object->data.scenery.ladder.destinationMap, object->data.scenery.ladder.destinationBuiltTile);
+            } else if (proto->scenery.type == SCENERY_TYPE_ELEVATOR) {
+                ++elevatorSeen;
+                note("stairs scan: elevator at %d\n", object->tile);
+            } else {
+                ++otherSeen;
+            }
+            int builtTile = -1;
+            int destinationMap = -1;
+            if (proto->scenery.type == SCENERY_TYPE_STAIRS) {
+                builtTile = object->data.scenery.stairs.destinationBuiltTile;
+                destinationMap = object->data.scenery.stairs.destinationMap;
+            } else if (proto->scenery.type == SCENERY_TYPE_LADDER_UP || proto->scenery.type == SCENERY_TYPE_LADDER_DOWN) {
+                builtTile = object->data.scenery.ladder.destinationBuiltTile;
+                destinationMap = object->data.scenery.ladder.destinationMap;
+            } else {
+                continue;
+            }
+            if (builtTile == -1) continue;
+            const MapElevation destinationElevation = builtTileGetElevation(builtTile);
+            if (destinationElevation == gElevation) continue;
+            if (destinationMap > 0 && destinationMap != gMapHeader.index) continue;
+            int nearTile = -1;
+            for (int direction = ROTATION_FIRST; direction <= ROTATION_LAST; direction++) {
+                const int candidate = tileGetTileInDirection(object->tile, static_cast<Rotation>(direction), 1);
+                if (hexGridTileIsValid(candidate) && !exitTiles.test(candidate)
+                    && elevationTileFree(candidate, gElevation)) {
+                    nearTile = candidate;
+                    break;
+                }
+            }
+            if (nearTile < 0) continue;
+            const int distance = tileDistanceBetween(gDude->tile, nearTile);
+            if (distance < chosenDistance) {
+                chosen = object;
+                approachTile = nearTile;
+                chosenDistance = distance;
+            }
+        }
+        if (chosen == nullptr || approachTile < 0) {
+            note("stairs probe failed: no reachable elevation-change stairs on %s e%d (stairs=%d ladderUp=%d ladderDown=%d elevator=%d otherScenery=%d)\n",
+                gMapHeader.name, static_cast<int>(gElevation), stairsSeen, ladderUpSeen, ladderDownSeen,
+                elevatorSeen, otherSeen);
+            finishPickProbe();
+        } else {
+            const int builtTile = chosen->data.scenery.stairs.destinationBuiltTile;
+            gExitProbeMap = gMapHeader.index;
+            gExitProbeTile = builtTileGetTile(builtTile);
+            gExitProbeElevation = builtTileGetElevation(builtTile);
+            gExitProbeSourceMap = gMapHeader.index;
+            stripMapExtension(gMapHeader.name, gExitProbeSource, sizeof(gExitProbeSource));
+            objectSetLocation(gDude, approachTile, gElevation, nullptr);
+            gEgg->x = 0;
+            gEgg->y = 0;
+            double pixel[2], x = -1.0, y = -1.0;
+            bool projected = false;
+            scene_renderer::gameViewTilePixel(chosen->tile, pixel);
+            for (const auto& offset : kHexScan) {
+                double sx = 0.0;
+                double sy = 0.0;
+                if (!scene_renderer::staticScreenFromGamePixel(pixel[0] + offset[0], pixel[1] + offset[1], &sx, &sy)) {
+                    continue;
+                }
+                const int cx = static_cast<int>(sx);
+                const int cy = static_cast<int>(sy);
+                if (windowGetAtPoint(cx, cy) != gIsoWindow) continue;
+                if (tileUnderMouse(cx, cy) != chosen->tile) continue;
+                x = sx;
+                y = sy;
+                projected = true;
+                break;
+            }
+            const int mx = projected ? static_cast<int>(x) : -1;
+            const int my = projected ? static_cast<int>(y) : -1;
+            const bool picked = projected && windowGetAtPoint(mx, my) == gIsoWindow
+                && tileUnderMouse(mx, my) == chosen->tile;
+            if (!picked) {
+                note("stairs probe failed: stairs not pickable stairs=%d projected=%d at (%d,%d) pickedTile=%d\n",
+                    chosen->tile, projected ? 1 : 0, mx, my, tileUnderMouse(mx, my));
+                finishPickProbe();
+            } else {
+                // An interactive object: the arrow lets the hover pick the
+                // stairs action; the click then walks the hero up and uses.
+                gameMouseSetMode(GAME_MOUSE_MODE_ARROW);
+                _mouse_set_position(mx, my);
+                gPickProbeClick[0] = mx;
+                gPickProbeClick[1] = my;
+                gPickProbeExitPending = true;
+                gPickProbeExitWaitFrames = 0;
+                note("stairs probe queued: source=%s/%d stairs=%d dest=e%d/%d approach=%d at (%d,%d)\n",
+                    gExitProbeSource, gExitProbeSourceMap, chosen->tile,
+                    static_cast<int>(gExitProbeElevation), gExitProbeTile, approachTile, mx, my);
+            }
         }
     } else if (stage == 500) {
         if (strcmp(gMapHeader.name, "KLAMALL.MAP") == 0) {
@@ -4280,6 +4454,13 @@ static void runDialogFixtureFrame()
 void vanillaPresented()
 {
     observeTransitionFrame("2d");
+    // The world map loops inside mapHandleTransition, where the main loop's
+    // update() never runs: its presented frames pump a scene script instead.
+    if (scriptedInputActive() && scriptedInputStarted()
+        && (GameMode::getCurrentGameMode() & GameMode::kWorldmap) != GameMode::kNone) {
+        scriptedInputPump();
+        if (scriptedInputTakeSnapshotRequest()) takeSnapshot();
+    }
     if (gClockLadder && gClassic) classicClockLadderFrame();
     if (gDialogCursorCheckCursorMoveInProgress) return;
     if (gCombatFixtureRequested && gCombatFixtureIsClassic) runCombatFixtureFrame();
@@ -4321,6 +4502,17 @@ void dialogFixtureBeforePresent()
 
 void sceneLiveFrameReady()
 {
+    if (gTransitionLiveCapturePending) {
+        // The back buffer holds the frame about to be shown: read it back.
+        gTransitionLiveCapturePending = false;
+        gForceLiveSnapshot = true;
+        const bool captured = takeSnapshot();
+        gForceLiveSnapshot = false;
+        if (FILE* log = fopen(devLogPath("devtransitions.log").c_str(), "a")) {
+            fprintf(log, "first-3d-frame-capture result=%s status=%s\n", captured ? "pass" : "fail", gStatus);
+            fclose(log);
+        }
+    }
     if (!gLiveSnapshotOncePending || !scene_renderer::isActive() || !scene::shouldPresent()
         || scene::activeView() != scene::View::Full || gSdlTextureSurface == nullptr
         || gSdlTextureSurface->pixels == nullptr) return;
@@ -4336,7 +4528,12 @@ void sceneLiveFrameReady()
 void sceneOverlaySynced(bool on)
 {
     // --dev-pick-probe: the click took the game out of the scene (a dialog).
-    if (!on && gPickProbeStage > 115 && !gPickProbeExitPending && gExitProbeDestination[0] == '\0') finishPickProbe();
+    // The exit and stairs probes launch into the boot itself and must live
+    // through its overlay switches, so only the plain pick probe dies here.
+    if (!on && gPickProbeStage > 115 && !gPickProbeExitPending && gExitProbeDestination[0] == '\0'
+        && !gStairsProbe) {
+        finishPickProbe();
+    }
 }
 
 // Ctrl+F11: the window between 16:9 and 21:9. The engine sizes its screen once

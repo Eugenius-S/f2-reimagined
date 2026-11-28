@@ -1,0 +1,124 @@
+baseline frame=0 ms=2234 mode=2d key=/e0/gm0#0 state=0 iso=1 view=off available=not-requested hero=-1
+change /e0/gm0#0 -> artemple/e0/gm0#0 frames=16
+first-2d-capture result=pass status=snapshot: devshot-20261128-190347.json
+first-3d-capture result=none superseded=1
+change artemple/e0/gm0#0 -> kladwtwn/e0/gm0#1 frames=200
+first-2d-capture result=pass status=snapshot: devshot-20261128-190347-001.json
+first-3d-capture result=none superseded=1
+change kladwtwn/e0/gm0#1 -> kladwtwn/e0/gm0#2 frames=38
+before frame=497 ms=9604 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=498 ms=9611 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=499 ms=9618 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=500 ms=9625 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=501 ms=9632 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=502 ms=9640 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=503 ms=9647 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=504 ms=9654 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=505 ms=9661 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=506 ms=9668 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=507 ms=9675 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=508 ms=9682 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=509 ms=9689 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=510 ms=9696 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=511 ms=9703 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+before frame=512 ms=10125 mode=3d key=kladwtwn/e0/gm0#2 state=0 iso=0 view=full available=available hero=25075
+frame=475 ms=9285 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=476 ms=9462 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=477 ms=9467 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=478 ms=9471 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=479 ms=9476 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=480 ms=9485 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=481 ms=9491 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=482 ms=9498 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=483 ms=9505 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=484 ms=9512 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=485 ms=9519 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=486 ms=9526 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=487 ms=9533 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=488 ms=9540 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=489 ms=9547 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=490 ms=9554 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=491 ms=9562 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=492 ms=9569 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=493 ms=9576 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=494 ms=9583 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=495 ms=9590 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=496 ms=9597 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=497 ms=9604 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=498 ms=9611 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=499 ms=9618 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=500 ms=9625 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=501 ms=9632 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=502 ms=9640 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=503 ms=9647 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=504 ms=9654 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=505 ms=9661 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=506 ms=9668 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=507 ms=9675 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=508 ms=9682 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=509 ms=9689 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=510 ms=9696 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=511 ms=9703 mode=2d key=kladwtwn/e0/gm0#2 state=0 iso=1 view=off available=not-requested hero=25075
+frame=512 ms=10125 mode=3d key=kladwtwn/e0/gm0#2 state=0 iso=0 view=full available=available hero=25075
+first-2d-capture result=pass status=snapshot: devshot-20261128-190350.json
+first-3d-capture result=pass map=kladwtwn elevation=0 hero=25075 status=snapshot: devshot-20261128-190351-000.json
+first-3d-frame-capture result=pass status=snapshot: devshot-20261128-190351.json
+change kladwtwn/e0/gm0#2 -> klacanyn/e0/gm0#2 frames=16
+first-2d-capture result=pass status=snapshot: devshot-20261128-190351-001.json
+first-3d-capture result=none superseded=1
+change klacanyn/e0/gm0#2 -> klacanyn/e0/gm0#3 frames=36
+before frame=566 ms=11393 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=567 ms=11400 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=568 ms=11407 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=569 ms=11414 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=570 ms=11421 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=571 ms=11428 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=572 ms=11435 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=573 ms=11442 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=574 ms=11449 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=575 ms=11457 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=576 ms=11464 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=577 ms=11471 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=578 ms=11478 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=579 ms=11486 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=580 ms=11492 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+before frame=581 ms=11521 mode=3d key=klacanyn/e0/gm0#3 state=0 iso=0 view=full available=available hero=20060
+frame=546 ms=11163 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=547 ms=11265 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=548 ms=11265 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=549 ms=11272 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=550 ms=11279 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=551 ms=11286 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=552 ms=11294 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=553 ms=11301 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=554 ms=11308 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=555 ms=11315 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=556 ms=11322 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=557 ms=11329 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=558 ms=11336 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=559 ms=11343 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=560 ms=11350 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=561 ms=11357 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=562 ms=11364 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=563 ms=11372 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=564 ms=11379 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=565 ms=11386 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=566 ms=11393 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=567 ms=11400 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=568 ms=11407 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=569 ms=11414 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=570 ms=11421 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=571 ms=11428 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=572 ms=11435 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=573 ms=11442 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=574 ms=11449 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=575 ms=11457 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=576 ms=11464 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=577 ms=11471 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=578 ms=11478 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=579 ms=11486 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=580 ms=11492 mode=2d key=klacanyn/e0/gm0#3 state=0 iso=1 view=full available=iso-disabled hero=21871
+frame=581 ms=11521 mode=3d key=klacanyn/e0/gm0#3 state=0 iso=0 view=full available=available hero=20060
+first-2d-capture result=pass status=snapshot: devshot-20261128-190352.json
+first-3d-capture result=pass map=klacanyn elevation=0 hero=20060 status=snapshot: devshot-20261128-190352-000.json
+first-3d-frame-capture result=pass status=snapshot: devshot-20261128-190353.json

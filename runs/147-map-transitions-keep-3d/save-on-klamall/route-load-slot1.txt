@@ -1,0 +1,21 @@
+# 147: load slot 1 (the klamall save) from the in-game options menu, by keys.
+# Boot: kladwtwn e0 spawn 25075. The 3D scene needs ~25-30 s to go Full;
+# the script starts when the 2D view shows, so wait the build out first.
+# key 41 = ESC (options menu), key 15 = L (load game dialog),
+# key 40 = RETURN (done -> the occupied-slot confirm), key 28 = Y (confirm load).
+# The load itself (dialog close, loading screen, klamall scene rebuild)
+# takes ~20-30 s, so the last snap waits that out.
+waitms 25000
+snap
+key 41
+waitms 1500
+key 15
+waitms 1500
+key 40
+waitms 1200
+key 28
+waitms 30000
+snap
+waitms 1500
+snap
+waitms 800
