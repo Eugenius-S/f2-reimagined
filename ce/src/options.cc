@@ -4,6 +4,8 @@
 #include "color.h"
 #include "cycle.h"
 #include "debug.h"
+#include "devtools/devtools.h"
+#include "devtools/preferences_probe.h"
 #include "draw.h"
 #include "game.h"
 #include "game_mouse.h"
@@ -136,6 +138,15 @@ int showOptions()
     int rc = -1;
     while (rc == -1) {
         sharedFpsLimiter.mark();
+
+        // The options window runs its own loop, where the main loop's
+        // devtools::update() never runs: pump a scene script per presented
+        // frame, like the world map and the preferences panel do.
+        devtools::scriptedInputPump();
+        if (devtools::scriptedInputTakeSnapshotRequest()) {
+            renderPresent();
+            devtools::takeSnapshot();
+        }
 
         int keyCode = inputGetInput();
 

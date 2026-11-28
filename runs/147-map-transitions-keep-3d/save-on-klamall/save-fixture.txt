@@ -1,0 +1,1 @@
+SAVE_PREVIEW_FIXTURE PASS map=KLAMALL.MAP mode=3d save_ui=1 load_ui=1 saved=1 loaded=1

@@ -1,0 +1,22 @@
+# 147: the mall loop walked by the player's own clicks.
+# Start: KLADWTWN e0, hero 26348 beside the mall door exit grid 26347, view 26348.
+# Click 1: exit grid 26347 (hex centre 496,196) -> KLAMALL e0, entering 29089.
+# Click 2: the mall's downtown exit 29282 (hex centre 672,184 from the
+# arrival centre 29089) -> KLADWTWN e0.
+waitms 1500
+snap
+move 496 196
+waitms 400
+down 496 196
+waitms 150
+up 496 196
+waitms 9000
+snap
+move 672 184
+waitms 400
+down 672 184
+waitms 150
+up 672 184
+waitms 12000
+snap
+waitms 800

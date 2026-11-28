@@ -1,0 +1,7 @@
+exit probe placed: source=KLADWTWN e0 from=-1 exit=17341 target=klacanyn/20060/e0 approach=17340 distance=71
+exit probe scan: offset=(16,8) point=(463,228) tile=17541
+exit probe queued: source=KLADWTWN/17341 dest=klacanyn/20060/e0 at (448,220)
+exit click dispatched: map=KLADWTWN.MAP hero=17340->17340 busy=0->1 at (448,220)
+probe click: hero busy=1 tile=17340
+exit transition passed: source=KLADWTWN/9 exit=17341 target=klacanyn map=KLACANYN.MAP index=48 elevation=0 tile=20060 after=17 frames
+probe done: hero tile=20060 busy=0 scene=available

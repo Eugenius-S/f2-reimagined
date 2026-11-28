@@ -11,6 +11,8 @@
 #include "color.h"
 #include "debug.h"
 #include "delay.h"
+#include "devtools/devtools.h"
+#include "devtools/preferences_probe.h"
 #include "draw.h"
 #include "game.h"
 #include "game_sound.h"
@@ -616,6 +618,15 @@ int showDialogBox(const char* title, const char** body, int bodyLength, int x, i
     int rc = -1;
     while (rc == -1) {
         sharedFpsLimiter.mark();
+
+        // The dialog box runs its own loop, where the main loop's
+        // devtools::update() never runs: pump a scene script per presented
+        // frame, like the world map and the options window do.
+        devtools::scriptedInputPump();
+        if (devtools::scriptedInputTakeSnapshotRequest()) {
+            renderPresent();
+            devtools::takeSnapshot();
+        }
 
         int keyCode = inputGetInput();
 
