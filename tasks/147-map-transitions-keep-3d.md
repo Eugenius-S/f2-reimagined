@@ -41,6 +41,25 @@ from the old map, no long 2D frame, the camera on the hero.
 
 ## Log
 
+### 2026-11-28 independent Windows evidence review
+
+[PR #588](https://github.com/Eugenius-S/f2-reimagined/pull/588) passed 14/14 checks at `6f75676a5`. Its isolated Windows runs reached the expected destinations. Each row counts consecutive 2D presents after the destination load serial advanced, up to its first 3D present. Times include capture overhead.
+
+| Destination | Recorded runs | 2D presents | Time to 3D |
+| --- | ---: | ---: | ---: |
+| KLADWTWN to KLAMALL, tile 29089 | 1 in the PR | 8 | 192 ms |
+| KLAMALL to KLADWTWN, tile 25142 | 2 | 7 each | 227 ms each |
+| KLADWTWN to KLACANYN, tile 20060 | 1 | 35 | 358 ms |
+| Load a KLAMALL save through the options menu, tile 29089 | 1 | 38 | 678 ms |
+
+On load, the first 3D present (4330) still shows the Load Game window over the destination. The original [framebuffer PNG](../runs/147-map-transitions-keep-3d/reviewed-load-frame/scr00006.png) and [capture metadata](../runs/147-map-transitions-keep-3d/reviewed-load-frame/devshot-20261128-194236.json) come from the recorded run. The sidecar stamps the executable with base `1c893f5af` and its SHA-256. [Transition journals at the reviewed revision](https://github.com/Eugenius-S/f2-reimagined/tree/6f75676a56b00ae5953db8eb32a14381f495fe18/runs/147-map-transitions-keep-3d).
+
+Remaining work in #588:
+
+- Check stairs against the selected map, floor and tile. The current success condition falls back to KLADWTWN/e0/25142. Prove an authored floor change and a wrong-destination failure. The two KLAMALL ladders encode valid KLARATCV destinations.
+- Replace static previews with actual presented frames for each row. Record the last hand-off, first 3D present and first unobscured scene separately. Correct the table and check scripted input starts at the intended step in modal windows.
+- Finish the remaining Klamath exits, world-map entry to another location, player input checks and matched pixel regression. GLM retains the task and its existing PR.
+
 - 2026-11-01 Cut with the 146 pool.
 - 2026-11-02 Added opt-in `--dev-transition-watch` instrumentation to record
   present mode, map/elevation, iso state and hero tile across a map identity
