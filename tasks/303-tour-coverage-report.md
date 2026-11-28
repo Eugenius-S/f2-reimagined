@@ -2,8 +2,8 @@
 id: 303
 title: The fly tour reports which selected views it covers and misses
 milestone: M1
-status: todo
-owner: any
+status: done
+owner: claude
 suggested: glm
 priority: normal
 tier: 1

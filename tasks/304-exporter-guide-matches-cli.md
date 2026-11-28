@@ -6,7 +6,7 @@ status: todo
 owner: any
 suggested: glm
 priority: low
-tier: 3
+tier: 4
 claude-only: no
 user-check: no
 depends-on: []

@@ -2,8 +2,8 @@
 id: 301
 title: Snapshot output distinguishes the current run from older captures
 milestone: M1
-status: todo
-owner: any
+status: done
+owner: claude
 suggested: glm
 priority: normal
 tier: 1

@@ -5,8 +5,8 @@ milestone: M1
 status: todo
 owner: any
 suggested: glm
-priority: normal
-tier: 2
+priority: high
+tier: 1
 claude-only: no
 user-check: no
 depends-on: [293]

@@ -2,7 +2,7 @@
 id: 302
 title: The RP boot check writes a complete pass or failure summary
 milestone: M1
-status: todo
+status: done
 owner: any
 suggested: glm
 priority: normal

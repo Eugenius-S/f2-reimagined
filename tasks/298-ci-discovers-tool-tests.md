@@ -2,7 +2,7 @@
 id: 298
 title: CI discovers the current top-level Python tool tests
 milestone: M1
-status: todo
+status: done
 owner: any
 suggested: glm
 priority: normal

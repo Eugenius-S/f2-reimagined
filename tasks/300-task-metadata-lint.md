@@ -2,7 +2,7 @@
 id: 300
 title: Task metadata and dependency mistakes fail a small local check
 milestone: M1
-status: todo
+status: done
 owner: any
 suggested: glm
 priority: normal
