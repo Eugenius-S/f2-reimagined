@@ -2,8 +2,8 @@
 id: 189
 title: Walls across every map, one rule per PR
 milestone: M1
-status: todo
-owner: any
+status: blocked
+owner: gpt
 suggested: any
 priority: normal
 tier: 3
@@ -53,3 +53,8 @@ owner's shots that are not of this kind.
 - Build succeeded. CTest: 20/20; exporter tests: 128/128; regression unit tests: 12/12. Full regression passed after updating and rerunning the two Broken Hills references.
 - Acceptance remains open: the expected visible post effect is not present in the exact bathhouse acceptance view or the tested Kladwtwn/GSTFARM candidates. Modinn changes are visible, but this does not establish the rule across maps. PR remains draft. Next step is to diagnose visibility/face selection for these locations before claiming completion.
 - 2026-11-12 task 248 audit: missing implementation evidence for the painted-post rule at the required bathhouse, Kladwtwn, and GSTFARM views; diagnose face selection and make the general rule visible across maps before closing.
+
+### 2026-11-12 gpt: painted-post rule blocked
+Done: Confirmed that bathhouse rows 618 and 619 are thick corner pieces (`thickness=0.263` and `0.2227`) paired as `corners.pieces` and `decor`; their fly wall-front rows are clipped by `keep=(1,1)`. The post image is emitted by `_corner_decor`, whose current face choice follows camera nearness. Adjacent row 617 belongs to owner 2246 and supplies the second wall plane. The thin-post alpha-run helper is not a safe fix: the target sprites are nearly fully opaque (16/17 and 14/15 columns), so removing its thickness guard still finds no target stem and produces unrelated candidates.
+Next: Resume only with a new general rule for splitting thick corner decor at the painted post axis, plus matched visible fly evidence on KLADWTWN, GSTFARM, and MODINN. No safe rule is established by the available evidence.
+Check: Read-only inspection of the KLADWTWN scene cache and `_corner_fits`, `_decor_pieces`, and `_corner_decor`. Prior PR #170 diagnostics rejected thickness-guard removal (0 target pixels and unrelated candidates), twin-face routing (detached wall panel), mask-midpoint cuts (detached strips), and exact-mask routing (37 pixels at turn 0, 0 at turn 40). Current before captures are fixed-eye static previews; matched fly captures for all three maps, CTest, full regression, and any required renderer perf comparison remain unverified. Keep PR #471 draft and do not change code or regression references.
