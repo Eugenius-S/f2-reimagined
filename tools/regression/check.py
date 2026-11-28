@@ -45,11 +45,25 @@ def load_spots(path, selected=None):
     return config, spots
 
 
+def validate_effective_render_state(metadata):
+    render_state = metadata.get("effective_render_state")
+    booleans = ("sun_shadows", "cloud_shadows", "point_lights", "glow")
+    if (not isinstance(render_state, dict)
+            or set(render_state) != {*booleans, "ambient"}
+            or any(render_state.get(key) is not None and type(render_state[key]) is not bool
+                   for key in booleans)
+            or (render_state.get("ambient") is not None
+                and (type(render_state["ambient"]) not in (int, float)
+                     or not 0.0 <= render_state["ambient"] <= 1.0))):
+        raise ValueError("effective_render_state must contain booleans or null for sun_shadows, cloud_shadows, point_lights, and glow, plus ambient in [0, 1] or null")
+
+
 def read_capture(directory, spot, screen):
     files = list(directory.glob("devshot-*.json"))
     if len(files) != 1:
         raise ValueError("expected exactly one capture JSON")
     metadata = json.loads(files[0].read_text(encoding="utf-8-sig"))
+    validate_effective_render_state(metadata)
     expected = {"map": spot["map"].upper() + ".MAP", "elevation": spot["elevation"],
                 "view_tile": spot["tile"], "still_snapshot": True, "renderer": "scene-gl",
                 "view": "static-wall-plus-hero-preview", "preview_availability": "available"}

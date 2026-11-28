@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from check import load_spots, main, read_capture
+from check import load_spots, main, read_capture, validate_effective_render_state
 
 
 class CaptureValidationTests(unittest.TestCase):
@@ -17,6 +17,8 @@ class CaptureValidationTests(unittest.TestCase):
         self.screen = {"width": 640, "height": 480, "scale": 1}
         self.metadata = {"map": "KLADWTWN.MAP", "elevation": 0, "view_tile": 25075,
                          "still_snapshot": True, "renderer": "scene-gl", "preview_availability": "available",
+                         "effective_render_state": {"sun_shadows": True, "cloud_shadows": False,
+                                                     "point_lights": True, "glow": True, "ambient": 1.0},
                          "view": "static-wall-plus-hero-preview", "image": "scene.png", "resolution": "640x480",
                          "logical_resolution": "640x480", "scale": 1, "windowed": True}
         self.capture = self.root / "one"
@@ -32,6 +34,22 @@ class CaptureValidationTests(unittest.TestCase):
         self.write_metadata()
         with self.assertRaisesRegex(ValueError, "preview_availability"):
             read_capture(self.capture, self.spot, self.screen)
+
+    def test_missing_effective_render_state_is_rejected(self):
+        del self.metadata["effective_render_state"]
+        self.write_metadata()
+        with self.assertRaisesRegex(ValueError, "effective_render_state"):
+            read_capture(self.capture, self.spot, self.screen)
+
+    def test_unknown_2d_state_is_valid_json_nulls(self):
+        state = {"sun_shadows": None, "cloud_shadows": None, "point_lights": None,
+                 "glow": None, "ambient": None}
+        validate_effective_render_state({"effective_render_state": state})
+
+    def test_nonhero_preview_marks_unapplied_lighting_unknown(self):
+        state = {"sun_shadows": True, "cloud_shadows": False, "point_lights": None,
+                 "glow": None, "ambient": None}
+        validate_effective_render_state({"effective_render_state": state})
 
     def test_wrong_camera_hex_is_rejected(self):
         self.metadata["view_tile"] = 24481
