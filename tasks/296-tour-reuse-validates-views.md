@@ -2,8 +2,8 @@
 id: 296
 title: A reused fly tour passes the same capture checks as a fresh tour
 milestone: M1
-status: todo
-owner: any
+status: doing
+owner: claude
 suggested: glm
 priority: normal
 tier: 1
